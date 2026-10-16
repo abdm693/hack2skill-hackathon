@@ -69,7 +69,7 @@ function OrbitHud({ ctrl, commentMode }: { ctrl: ViewerController; commentMode: 
       {commentMode && (
         <div className="nq-banner nq-glass">
           <span className="nq-dot" />
-          Comment mode · click any surface to pin a note
+          <span>Comment mode · click any surface to pin a note</span>
         </div>
       )}
       <div ref={tipRef} className="nq-tip nq-glass" data-on={hover ? "1" : "0"} aria-hidden>

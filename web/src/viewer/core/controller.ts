@@ -483,22 +483,30 @@ export class ViewerController {
     this.markDirty();
   }
 
+  /**
+   * DPR per tier. Measured on the dev harness at 1440×900 CSS px (M-series laptop, Chrome): DPR 2 → ~46 fps,
+   * DPR 1.6 → 60 fps with full-res N8AO; SMAA keeps 1.6 crisp. The Canvas keeps dpr={[1, 2]} as its range.
+   */
   private applyQualityDpr() {
     const q = this.store.getState().quality;
     const dpr = window.devicePixelRatio || 1;
-    this.setDprFn?.(q === "high" ? Math.min(dpr, 2) : q === "balanced" ? Math.min(dpr, 1.3) : 1);
+    this.setDprFn?.(q === "high" ? Math.min(dpr, 1.6) : q === "balanced" ? Math.min(dpr, 1.25) : 1);
   }
 
+  /** Auto-detect slow GPUs from continuous frames only (orbit is demand-rendered): high → balanced → performance. */
   private monitorPerf(dt: number, now: number) {
     if (this.perf.locked || now < this.perf.settleUntil || dt <= 0 || dt > 0.2) return;
+    // only sample while frames are back-to-back: walking, or the orbit camera is moving
+    const continuous = this.store.getState().mode === "walk" || !!this.controls?.active;
+    if (!continuous) return;
     this.perf.sum += dt;
     if (++this.perf.samples < 120) return;
     const fps = this.perf.samples / this.perf.sum;
     this.perf.samples = 0;
     this.perf.sum = 0;
     const q = this.store.getState().quality;
-    if (fps < 36 && q === "high") this.setQuality("balanced");
-    else if (fps < 30 && q === "balanced") this.setQuality("performance");
+    if (fps < 50 && q === "high") this.setQuality("balanced");
+    else if (fps < 40 && q === "balanced") this.setQuality("performance");
   }
 
   // ───────────────────────────── orbit ─────────────────────────────
@@ -652,9 +660,9 @@ export class ViewerController {
     const plain = () => {
       try {
         const p2 = el.requestPointerLock();
-        if (p2 && typeof (p2 as Promise<void>).catch === "function") (p2 as Promise<void>).catch(() => this.fallbackDragLook());
+        if (p2 && typeof (p2 as Promise<void>).catch === "function") (p2 as Promise<void>).catch(() => this.onLockFailed());
       } catch {
-        this.fallbackDragLook();
+        this.onLockFailed();
       }
     };
     try {
@@ -663,6 +671,21 @@ export class ViewerController {
     } catch {
       plain();
     }
+  }
+
+  private lockEverSucceeded = false;
+
+  /**
+   * Chrome refuses a re-lock for ~1 s after the user pressed Esc. If lock has worked before in this session, that is
+   * the likely cause: ask for another click instead of dropping to drag-to-look for good.
+   */
+  private onLockFailed() {
+    if (this.lockEverSucceeded) {
+      if (this.store.getState().walk === "active" && !this.isLocked()) this.pauseWalk();
+      this.toast("Click again to resume walking");
+      return;
+    }
+    this.fallbackDragLook();
   }
 
   private fallbackDragLook() {
@@ -680,13 +703,14 @@ export class ViewerController {
 
   private onPointerLockChange = () => {
     if (this.isLocked()) {
+      this.lockEverSucceeded = true;
       this.dragLook = false;
       this.store.setState({ dragLook: false });
       if (this.store.getState().mode === "walk") this.activateWalk();
     } else if (this.store.getState().walk === "active") this.pauseWalk();
   };
 
-  private onPointerLockError = () => this.fallbackDragLook();
+  private onPointerLockError = () => this.onLockFailed();
 
   private onLockedMouseMove = (e: MouseEvent) => {
     if (!this.isLocked() || !this.walk.enabled) return;

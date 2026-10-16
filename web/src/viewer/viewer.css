@@ -71,8 +71,11 @@
 /* ── banners / toasts ───────────────────────────── */
 .nq-banner {
   position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; border-radius: 99px; font-size: 12.5px; white-space: nowrap; animation: nq-drop 320ms var(--nq-ease) both;
+  max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 99px; font-size: 12.5px; white-space: nowrap;
+  animation: nq-drop 320ms var(--nq-ease) both;
 }
+.nq-banner > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.nq-banner .nq-dot { flex: none; }
 .nq-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nq-amber); box-shadow: 0 0 0 4px rgba(245, 165, 36, 0.22); }
 .nq-toast {
   position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); padding: 9px 14px; border-radius: 12px;

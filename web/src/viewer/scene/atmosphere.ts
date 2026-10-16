@@ -58,7 +58,7 @@ export class Atmosphere {
     this.ground.receiveShadow = true;
     this.ground.userData = { noPick: true, viewer: "ground" };
     scene.add(this.ground);
-    scene.fog = new THREE.Fog("#d4d6d2", 160, 850);
+    scene.fog = new THREE.Fog("#d4d6d2", 70, 560);
 
     this.fallbackSun.castShadow = true;
     this.fallbackSun.userData = { viewer: "fallback-sun" };
@@ -120,11 +120,56 @@ export class Atmosphere {
     const d = this.daylight;
     const golden = 1 - smoothstep(0.08, 0.45, dir.y);
     this.scene.environmentIntensity = lerp(0.14, 0.36, d);
-    // haze colour ≈ sky near the horizon so the ground melts into it
+    // haze = the sky's own colour just above the horizon, so the ground plane melts into it
     const fog = this.scene.fog as THREE.Fog;
-    fog.color.set("#d3d7d6").lerp(new THREE.Color("#e6c6a4"), golden * 0.85).lerp(new THREE.Color("#5c5a63"), 1 - d);
+    const horizon = this.sampleHorizon();
+    if (horizon) fog.color.copy(horizon);
+    else fog.color.set("#d3d7d6").lerp(new THREE.Color("#e6c6a4"), golden * 0.85).lerp(new THREE.Color("#5c5a63"), 1 - d);
     (this.ground.material as THREE.MeshStandardMaterial).color.set("#a9a18f").lerp(new THREE.Color("#c19f7f"), golden * 0.35);
     this.exposure = lerp(1.45, 1.0, d) * (1 + golden * 0.08);
+  }
+
+  private probe: { rt: THREE.WebGLRenderTarget; cam: THREE.PerspectiveCamera; scene: THREE.Scene; buf: Uint16Array } | null = null;
+
+  /** Average linear colour of the sky 2° above the horizon (4 azimuths), read from a 1×1 half-float target. */
+  private sampleHorizon(): THREE.Color | null {
+    try {
+      if (!this.probe) {
+        const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+        const scene = new THREE.Scene();
+        const sky = new THREE.Mesh(this.sky.geometry, this.sky.material);
+        sky.scale.setScalar(100);
+        sky.frustumCulled = false;
+        scene.add(sky);
+        this.probe = { rt, cam: new THREE.PerspectiveCamera(6, 1, 0.1, 1000), scene, buf: new Uint16Array(4) };
+      }
+      const { rt, cam, scene, buf } = this.probe;
+      const prevTarget = this.gl.getRenderTarget();
+      const prevClip = this.gl.clippingPlanes;
+      this.gl.clippingPlanes = [];
+      const samples: THREE.Color[] = [];
+      const el = THREE.MathUtils.degToRad(3);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.2;
+        cam.position.set(0, 0, 0);
+        cam.lookAt(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
+        cam.updateMatrixWorld();
+        this.gl.setRenderTarget(rt);
+        this.gl.render(scene, cam);
+        this.gl.readRenderTargetPixels(rt, 0, 0, 1, 1, buf);
+        samples.push(new THREE.Color(THREE.DataUtils.fromHalfFloat(buf[0]), THREE.DataUtils.fromHalfFloat(buf[1]), THREE.DataUtils.fromHalfFloat(buf[2])));
+      }
+      this.gl.setRenderTarget(prevTarget);
+      this.gl.clippingPlanes = prevClip;
+      // median by luminance: the sun-side glow would otherwise wash the whole horizon out
+      samples.sort((p, q) => p.r + p.g + p.b - (q.r + q.g + q.b));
+      const acc = samples[3].clone().add(samples[4]).multiplyScalar(0.5 * 0.92);
+      const sum = acc.r + acc.g + acc.b;
+      if (!Number.isFinite(sum) || sum < 1e-4) return null; // unreadable target → keep the analytic fallback
+      return acc;
+    } catch {
+      return null;
+    }
   }
 
   baseIntensity(light: THREE.DirectionalLight) {
@@ -138,6 +183,8 @@ export class Atmosphere {
   }
 
   dispose() {
+    this.probe?.rt.dispose();
+    this.probe = null;
     this.scene.remove(this.sky, this.ground, this.fallbackSun, this.fallbackSun.target);
     this.sky.geometry.dispose();
     this.sky.material.dispose();
