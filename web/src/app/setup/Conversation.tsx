@@ -46,6 +46,8 @@ export function Conversation({
   send,
   onSuggestion,
   onPreferences,
+  failed,
+  onRetry,
   className,
   footer,
 }: {
@@ -59,6 +61,9 @@ export function Conversation({
   onSuggestion: (s: string) => void;
   /** Save the brief's preferences directly. */
   onPreferences: (prefs: string[]) => void;
+  /** The last turn didn't get a reply. */
+  failed?: boolean;
+  onRetry?: () => void;
   className?: string;
   footer?: ReactNode;
 }) {
@@ -114,6 +119,18 @@ export function Conversation({
         )}
 
         {busy && (draft ? <Draft text={draft} /> : <Thinking hints={messages.length ? THINKING : THINKING_FIRST} />)}
+
+        {!busy && failed && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-5 flex items-center gap-3" role="status">
+            <NaqshaMark />
+            <span className="text-[14px] text-ink-2">That didn't go through.</span>
+            {onRetry && (
+              <Chip tone="suggestion" onClick={onRetry}>
+                Try again
+              </Chip>
+            )}
+          </motion.div>
+        )}
 
         {!busy && lastAssistant?.suggestions?.length && last?.id === lastAssistant.id ? (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, delay: 0.1 }} className="mt-4 flex flex-wrap gap-2 pl-10">

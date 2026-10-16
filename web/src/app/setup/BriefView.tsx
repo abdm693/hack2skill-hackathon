@@ -28,6 +28,9 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
   const draft = useChat((s) => (s.pid === project.id ? s.draft : null));
   const busy = useChat((s) => s.pid === project.id && s.busy);
   const autopilot = useChat((s) => s.pid === project.id && s.autopilot);
+  const failed = useChat((s) => s.pid === project.id && !!s.failed);
+  // A turn that never got a reply (it failed, or the page was reloaded mid-turn).
+  const unanswered = !busy && messages[messages.length - 1]?.role === "user" ? messages[messages.length - 1].text : undefined;
   const preview = useChat((s) => (s.pid === project.id ? s.preview : null));
   const [sheet, setSheet] = useState(false);
 
@@ -154,6 +157,8 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
           send={send}
           onSuggestion={onSuggestion}
           onPreferences={(preferences) => void save({ preferences }, [])}
+          failed={failed || !!unanswered}
+          onRetry={() => void chat.retry(project.id, unanswered)}
           footer={nextCard}
         />
       </section>

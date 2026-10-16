@@ -75,6 +75,17 @@ export const chat = {
     if (useProject.getState().intakeFailed) useChat.setState({ autopilot: false });
   },
 
+  /**
+   * Send the turn that failed again. After a reload the failure is gone but the person's last message is still
+   * unanswered: send that text again without adding a second bubble.
+   */
+  async retry(pid: string, unanswered?: string) {
+    if (!live(pid)) return;
+    const st = useProject.getState();
+    if (!st.intakeFailed && unanswered) useProject.setState({ intakeFailed: { message: unanswered } });
+    await useProject.getState().retryIntake();
+  },
+
   setPreview(preview: PlotPreview | null) {
     useChat.setState({ preview });
   },

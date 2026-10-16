@@ -640,7 +640,11 @@ async def _turn(project: dict, message: str | None, action: str | None, chips: l
         user_text = "You decide."
     elif action == "skip_all":
         user_text = "Skip setup and design it for me."
-    if user_text:  # shown at once; written while the turn runs
+    if user_text and history and history[-1].get("role") == "user" and (history[-1].get("text") or "").strip() == user_text.strip():
+        # "Try again" on a turn that never got a reply: answer the same message instead of storing it twice.
+        yield "message", history[-1]
+        history = history[:-1]
+    elif user_text:  # shown at once; written while the turn runs
         um = db.make_message({"role": "user", "text": user_text})
         pending.append(asyncio.create_task(db.put_message(pid, um)))
         yield "message", um

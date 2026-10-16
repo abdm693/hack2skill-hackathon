@@ -64,7 +64,8 @@ def corner_splay_ft(band: dict, marla: float) -> float:
     v = band.get("corner_splay_ft")
     if isinstance(v, dict):
         exact, above = v.get("plot_exactly_10_marla"), v.get("plot_above_10_marla")
-        v = above if (above is not None and marla > 10.05) else exact if exact is not None else above
+        # 35×65 (≈10.1 marla) is the standard 10 marla plot; the plan canvas uses the same 10.15 cut-off.
+        v = above if (above is not None and marla > 10.15) else exact if exact is not None else above
     try:
         return float(v) if v is not None else 5.0
     except (TypeError, ValueError):
