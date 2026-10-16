@@ -60,7 +60,8 @@ export function railing(kit: Kit, glassKit: Kit, type: RailType, x0: number, y0:
   if (type === "metal_bars") {
     skewBox(kit.mb(handMat), A(0).add(up(H - 0.1)).add(side(-0.08)), along, up(0.1), side(0.16));
     skewBox(kit.mb(m.metal), A(0).add(up(0.28)).add(side(-0.04)), along, up(0.07), side(0.08));
-    const n = Math.max(2, Math.round(len / 0.38));
+    // balusters at no more than 4 in clear (IBC 1015.4: a 4 in sphere must not pass)
+    const n = Math.max(2, Math.ceil(len / 0.32));
     for (let k = 0; k <= n; k++) {
       const p = A(k / n).add(up(0.28));
       const mm = new THREE.Matrix4().makeTranslation(p.x, p.y + ((H - 0.38) * FT) / 2, p.z).multiply(new THREE.Matrix4().makeScale(0.016, (H - 0.38) * FT, 0.016));

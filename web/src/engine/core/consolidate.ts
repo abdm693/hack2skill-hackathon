@@ -188,7 +188,8 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
   // colliders: one position-only mesh per level
   const byLevel = new Map<string, Src[]>();
   for (const s of colliderSrc) {
-    const k = s.tags.level ?? "_";
+    // vehicles get their own collider meshes (kind "vehicle") so a viewer can drop them with the cars
+    const k = (s.tags.level ?? "_") + (groupOf(s.mesh) === "vehicle" ? "|vehicle" : "");
     byLevel.set(k, [...(byLevel.get(k) ?? []), s]);
   }
   const colliders: THREE.Mesh[] = [];
@@ -223,7 +224,8 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
     geo.computeBoundingSphere();
     const cm = new THREE.Mesh(geo, COLLIDER_MAT);
     cm.visible = false;
-    cm.userData = { layer: "structure", kind: "collider", level: lv === "_" ? undefined : lv, id: `collider_${lv}`, label: "Collider", collide: true };
+    const [lvId, grp] = lv.split("|");
+    cm.userData = { layer: grp ? "furniture" : "structure", kind: grp === "vehicle" ? "vehicle" : "collider", level: lvId === "_" ? undefined : lvId, id: `collider_${lv.replace("|", "_")}`, label: grp === "vehicle" ? "Vehicle collider" : "Collider", collide: true };
     colliderGroup.add(cm);
     colliders.push(cm);
   }

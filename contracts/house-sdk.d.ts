@@ -62,7 +62,9 @@ export interface Tags {
   layer: Layer;
   level?: string;
   room?: string;
-  kind?: string; // "wall" | "slab" | "window" | "door" | "stair" | "railing" | "furniture:<type>" | "facade:<what>" | ...
+  /** "wall" | "slab" | "window" | "door" | "stair" | "railing:stair" | "furniture:<type>" | "facade:<what>" | "solar" |
+   *  "vehicle" (cars, motorbikes: viewers hide or ghost them) | "context" (road, footpaths, poles, neighbours: ghosted) */
+  kind?: string;
   label?: string; // human label shown on hover/comment, e.g. "Front stone cladding"
   id?: string; // stable id; auto-generated if omitted
 }
@@ -140,7 +142,12 @@ export interface HouseSDK {
   /**
    * Build everything structural from the plan: walls (with real door and window openings, frames, glass, sills and
    * lintels), floor slabs and finishes, ceilings, skirting, stairs with railings, porch columns, balcony and terrace
-   * railings, roof parapet, mumty, water tank, plinth, boundary wall and gates. Call exactly once, in `structure`.
+   * railings, roof parapet, mumty, water tank, solar panels, plinth, boundary wall and gates. Call exactly once, in
+   * `structure`. The engine guarantees, whatever the plan says: code stairs (treads ≥ 10 in, landings, a 3 ft clear
+   * strip at the foot) with a flight up to the roof; a 3.5 ft guard at every stairwell edge and every drop; a mumty
+   * that covers the top flight with its door AT the top landing, at roof level; openings only in the wall between the
+   * two rooms they name, on their own level. plan.roof.water_tank.material "plastic" = blue ribbed tank, "concrete" =
+   * rendered RCC box; plan.roof.solar keeps a roof area clear ("panels" also builds tilted rows on a steel frame).
    * Example: s.structure({ exterior_wall: "plaster_white", interior_wall: { preset: "paint", color: "#efe9df" },
    *   floors: { default: "porcelain_tile", drawing: "marble_white", bedroom: "wood_floor_oak", bath: "ceramic_tile",
    *   porch: "paving" }, window_frame: "metal_black", door: "wood_teak", railing: "glass", boundary_wall: "plaster_grey",
@@ -195,7 +202,15 @@ export interface HouseSDK {
     downlights(o: { room: string; rows?: number; cols?: number; color?: string }): void;
   };
 
-  /** Place one furniture item. Returns the group so you can tweak it. */
+  /**
+   * Place one furniture item. Returns the group so you can tweak it. The engine keeps clearances and may move it:
+   * floor items never stand in a door's swing or doorway (3 ft deep), an open-plan crossing, on a stair or its
+   * landings, or (tall items) in front of a window; they slide along their wall, move to another wall, get up to 15%
+   * narrower, or are left out (reported). Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on
+   * solid wall, never over a door or window; a tv lines up over its tv_unit, a mirror over a dresser or vanity, a
+   * painting over a sofa or sideboard. Cars go into a parking bay that keeps the gate-to-main-door walkway clear
+   * (one bay per car; an extra car is left out). After each section every door and stair landing keeps a 3 ft path.
+   */
   furnish(item: FurnitureType, o: FurnishOptions): THREE_NS.Object3D;
   /** Sensible default layout for a room by its type (use when no specific intent). */
   auto_furnish(room: string, o?: { style?: "modern" | "classic" | "minimal" | "traditional"; palette?: string[] }): void;
@@ -206,7 +221,8 @@ export interface HouseSDK {
     planter(rect: Rect, o?: { height_ft?: number; material?: MaterialSpec }): void;
     tree(at: Pt, o?: { kind?: "palm" | "ashoka" | "neem" | "ornamental" | "bush"; height_ft?: number }): void;
     hedge(from: Pt, to: Pt, o?: { height_ft?: number }): void;
-    /** Street, kerb and pavement in front of the plot (y < 0), plus simple neighbouring houses for context. */
+    /** Street, kerb and pavement in front of the plot (y < 0), plus simple neighbouring houses for context
+     *  (tagged kind "context": viewers ghost them when they block the view). */
     street(o?: { road_width_ft?: number; neighbours?: boolean; streetlights?: boolean }): void;
   };
 

@@ -66,6 +66,8 @@ export interface StairM {
   riser_in: number;
   tread_in: number;
   start: "+x" | "-x" | "+y" | "-y";
+  /** added by the engine (e.g. the missing flight from the top storey to the roof) */
+  synthetic?: boolean;
 }
 
 const DECK: RoomType[] = ["balcony", "terrace"];
@@ -245,7 +247,12 @@ export class PlanModel {
     const mumty = plan.roof?.mumty;
     const mumtyH = num(mumty?.height_ft, 9.5, 7, 13);
     this.mumtyHeight = mumtyH;
-    if (mumty?.rect && !this.rooms.some((r) => r.level === this.roof.id && r.cat === "enclosed")) {
+    // (the structure model later reconciles this rect with the stair as laid out: it always covers the top flight
+    // and its top landing, and an enclosed roof room that contains the top stair is used as the tower instead)
+    const mr0 = mumty?.rect;
+    const overlapsRoofRoom = (x: number, y: number, w: number, d: number) =>
+      this.rooms.some((r) => r.level === this.roof.id && r.cat === "enclosed" && r.rect.x < x + w - 0.5 && x < r.rect.x + r.rect.w - 0.5 && r.rect.y < y + d - 0.5 && y < r.rect.y + r.rect.d - 0.5);
+    if (mr0 && !overlapsRoofRoom(num(mr0.x, 0), num(mr0.y, 0), num(mr0.w, 8), num(mr0.d, 12))) {
       const mr = mumty.rect;
       const rect = {
         x: snapX(clamp(num(mr.x, 0), 0, this.plotW)),
@@ -264,19 +271,7 @@ export class PlanModel {
     }
 
     // floor + ceiling heights
-    for (const r of this.rooms) {
-      const l = r.lv;
-      if (l === this.ground || l.i === 0) {
-        if (r.cat === "outdoor") r.floorH = this.grade;
-        else if (r.cat === "porch") r.floorH = Math.max(this.grade + 0.25, l.elev - 0.5);
-        else r.floorH = l.elev;
-      } else r.floorH = l.elev;
-      const src = rawRooms.find((x) => x && x.id === r.id);
-      const slabBottom = l.next - l.slab;
-      if (l.isRoof) r.ceilH = l.elev + mumtyH - l.slab;
-      else if (r.cat === "enclosed" && src?.ceiling_height_ft) r.ceilH = clamp(r.floorH + num(src.ceiling_height_ft, 10), r.floorH + 7, slabBottom);
-      else r.ceilH = slabBottom;
-    }
+    for (const r of this.rooms) this.setHeights(r, rawRooms.find((x) => x && x.id === r.id));
 
     // ── openings ────────────────────────────────────────────────────────────────
     const ops: Opening[] = Array.isArray(plan.openings) ? plan.openings : [];
@@ -348,6 +343,38 @@ export class PlanModel {
   }
 
   readonly mumtyHeight: number;
+
+  private setHeights(r: RoomM, src?: Room): void {
+    const l = r.lv;
+    if (l === this.ground || l.i === 0) {
+      if (r.cat === "outdoor") r.floorH = this.grade;
+      else if (r.cat === "porch") r.floorH = Math.max(this.grade + 0.25, l.elev - 0.5);
+      else r.floorH = l.elev;
+    } else r.floorH = l.elev;
+    const slabBottom = l.next - l.slab;
+    if (l.isRoof) r.ceilH = l.elev + this.mumtyHeight - l.slab;
+    else if (r.cat === "enclosed" && src?.ceiling_height_ft) r.ceilH = clamp(r.floorH + num(src.ceiling_height_ft, 10), r.floorH + 7, slabBottom);
+    else r.ceilH = slabBottom;
+  }
+
+  /** Add a synthesized room (e.g. the stair tower) after construction; level grids are rebuilt lazily. */
+  addRoom(room: RoomM): void {
+    this.rooms.push(room);
+    this.roomById.set(room.id, room);
+    this.setHeights(room);
+    this.grids.delete(room.level);
+  }
+
+  /** Replace a room's rect (e.g. when the stair tower grows to cover the stair as laid out). */
+  setRoomRect(room: RoomM, rect: Rect): void {
+    room.rect = { ...rect };
+    this.grids.delete(room.level);
+  }
+
+  /** Synthesized stair (e.g. a missing top flight to the roof). */
+  addStair(s: StairM): void {
+    this.stairs.push(s);
+  }
 
   get storeys(): LevelM[] {
     return this.levels.filter((l) => !l.isRoof);

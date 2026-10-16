@@ -135,6 +135,7 @@ interface AsBuiltSummary {
   objects: { id: string; layer: Layer; kind?: string; level?: string; room?: string;
              bbox_ft: { min: [number, number, number]; max: [number, number, number] } }[];  // plan ft: [x, y, h]
   section_errors: { section: string; error: string }[];
+  checks?: { id: string; title: string; status: "pass" | "warn" | "fail"; message: string; element_ids?: string[] }[];
 }
 ```
 
@@ -248,3 +249,6 @@ interface AsBuiltSummary {
 - **Clone**: `{fresh: true}` forces a new copy of a sample.
 - **Errors**: an invalid or expired Bearer token returns **401** ("Your sign-in has expired…"); refresh the token and retry.
   A role that may not do something gets **403**; a project you can't see is **404**.
+`checks` lists what the engine had to repair or could not repair while building (stair fit, roof door moved to the
+top landing, guard rails added, openings not built, furniture moved or dropped, blocked walking paths, cars that
+had no parking bay). The backend can append them to the as-built report with `category: "livable"`.

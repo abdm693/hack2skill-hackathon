@@ -4,6 +4,7 @@ import type { Layer } from "@contracts/house-sdk";
 import type { PlanModel } from "../plan/model";
 import { MaterialLib, type Quality } from "../materials/library";
 import { applyTags, type ObjTags } from "./tags";
+import { NoteLog } from "./notes";
 import type { StructureModel } from "../structure/model";
 
 export interface PlacedItem {
@@ -19,6 +20,21 @@ export interface PlacedItem {
   topH: number | null;
   group: THREE.Object3D;
   against?: string;
+  /** unrotated size (ft) and plan rotation (deg), for later moves (walking-path repair) */
+  w?: number;
+  d?: number;
+  rot?: number;
+}
+
+/** A guard (railing) along a straight, axis-aligned line on a level: runs along `axis` at `c`, from a to b. */
+export interface GuardSeg {
+  level: string;
+  axis: "x" | "y";
+  c: number;
+  a: number;
+  b: number;
+  /** top of the guard above that level's floor (ft) */
+  h: number;
 }
 
 export interface GroundSurf {
@@ -47,6 +63,10 @@ export class BuildCtx {
   modelFactory: ((ctx: BuildCtx) => StructureModel) | null = null;
   readonly items: PlacedItem[] = [];
   readonly ground: GroundSurf[] = [];
+  /** level-floor guards built so far (hole rails, deck railings, catch-all rails), axis-aligned, plan ft */
+  readonly guards: GuardSeg[] = [];
+  /** as-built notes from furnishing and other passes (the structure model keeps its own) */
+  readonly notes = new NoteLog();
   /** facade elements registered as mounting surfaces for lights */
   readonly facadeSurfs: { side: string; plane: number; u0: number; u1: number; h0: number; h1: number }[] = [];
   /** callbacks run at the end of the current section (e.g. auto dining chairs) */

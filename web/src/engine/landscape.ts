@@ -45,6 +45,8 @@ export function landscapeAPI(ctx: BuildCtx) {
     o.userData.mergeGroup = "context";
     return o;
   };
+  /** street context (road, footpaths, poles, neighbours): kind "context" so viewers can ghost or hide it */
+  const ctag = (label: string) => ({ kind: "context", label, level: plan.levels[0].id });
 
   function surface(rect: Rect, mat: THREE.Material, kind: string, label: string, lift: number): number {
     // skip if a site surface already covers ≥ 90% of this rect with the same material
@@ -163,7 +165,7 @@ export function landscapeAPI(ctx: BuildCtx) {
     road.faceY(0, (-ext) * FT, (W + ext) * FT, (rY0 - FOOTPATH - 0.5) * FT, rY1 * FT, 1);
     const roadMesh = new THREE.Mesh(road.build()!, M.get("asphalt"));
     roadMesh.receiveShadow = true;
-    ctx.add(context(roadMesh), tag("road", "Road"));
+    ctx.add(context(roadMesh), ctag("Road"));
     ctx.collider(roadMesh);
     // markings
     const paint = M.basic("#e9e6dc", { roughness: 0.6 });
@@ -171,7 +173,7 @@ export function landscapeAPI(ctx: BuildCtx) {
     const mid = (rY0 + rY1) / 2;
     for (let x = -ext + 4; x < W + ext - 8; x += 18) mk.box(paint, (x + 4) * FT, 0.004, mid * FT, 8 * FT, 0.006, 0.35 * FT);
     for (const yy of [rY0 + 1.2, rY1 - 1.2]) mk.box(paint, (W / 2) * FT, 0.004, yy * FT, (W + 2 * ext) * FT, 0.006, 0.3 * FT);
-    ctx.add(context(mk.build(new THREE.Group(), false)), tag("road_marking", "Road markings"));
+    ctx.add(context(mk.build(new THREE.Group(), false)), ctag("Road markings"));
     // footpaths + kerbs on both sides (skip parts already landscaped)
     const near: R[] = [{ x: -ext, y: fpY0, w: W + 2 * ext, d: FOOTPATH }];
     const far: R[] = [{ x: -ext, y: rY0 - FOOTPATH, w: W + 2 * ext, d: FOOTPATH }];
@@ -185,11 +187,11 @@ export function landscapeAPI(ctx: BuildCtx) {
       for (const rr of g.rects((v) => v === true)) mb.faceY(plan.grade * FT, rr.x * FT, (rr.x + rr.w) * FT, rr.y * FT, (rr.y + rr.d) * FT, 1);
       const m = new THREE.Mesh(mb.build()!, fpMat);
       m.receiveShadow = true;
-      ctx.add(context(m), tag("footpath", "Footpath"));
+      ctx.add(context(m), ctag("Footpath"));
       ctx.collider(m);
       const kerb = new Kit();
       kerb.box(M.get({ preset: "concrete", color: "#cfcac1" }), (W / 2) * FT, (plan.grade / 2) * FT, (kerbY + sign * 0.35) * FT, (W + 2 * ext) * FT, plan.grade * FT + 0.01, 0.7 * FT);
-      ctx.add(context(kerb.build()), tag("kerb", "Kerb"));
+      ctx.add(context(kerb.build()), ctag("Kerb"));
     }
     // street trees in the verge
     const r = rng(hashStr(`street${W}`));
@@ -208,7 +210,7 @@ export function landscapeAPI(ctx: BuildCtx) {
         kit.rbox(pole, x * FT, (plan.grade + 14.2) * FT, (y - 5) * FT, 0.18, 0.08, 0.6, 0.02, 2);
         kit.box(head, x * FT, (plan.grade + 14.2) * FT - 0.045, (y - 5) * FT, 0.14, 0.01, 0.5);
       }
-      ctx.add(context(kit.build()), tag("streetlight", "Streetlights"));
+      ctx.add(context(kit.build()), ctag("Streetlights"));
       utilityPoles(ctx, W, fpY0 + 0.5, ext);
     }
     if (o?.neighbours !== false) neighbours(ctx, W, D, RW, FOOTPATH);
@@ -400,6 +402,13 @@ export function plantTree(ctx: BuildCtx, x: number, y: number, base: number, kin
   const X = x * FT, Y = base * FT, Z = y * FT;
   const Hm = H * FT;
   const tagLv = ctx.plan.levels[0].id;
+  // street trees outside the plot are context, like the road and the neighbours
+  const outside = x < 0 || y < 0 || x > ctx.plan.plotW || y > ctx.plan.plotD;
+  const treeKind = outside ? "context" : "landscape:tree";
+  const ctxMark = (o: THREE.Object3D) => {
+    if (outside) o.userData.mergeGroup = "context";
+    return o;
+  };
   if (kind === "palm") {
     // curved ringed trunk + arching fronds
     const trunkH = Hm * 0.78;
@@ -431,7 +440,7 @@ export function plantTree(ctx: BuildCtx, x: number, y: number, base: number, kin
     if (g1) {
       const m = new THREE.Mesh(g1, leafCardMat(ctx, "palm"));
       m.castShadow = m.receiveShadow = true;
-      ctx.add(m, { kind: "landscape:tree", label: "Palm", level: tagLv });
+      ctx.add(ctxMark(m), { kind: treeKind, label: "Palm", level: tagLv });
     }
   } else {
     // trunk + crown of cards
@@ -479,10 +488,10 @@ export function plantTree(ctx: BuildCtx, x: number, y: number, base: number, kin
     if (g2) {
       const m = new THREE.Mesh(g2, leafCardMat(ctx, kind));
       m.castShadow = m.receiveShadow = true;
-      ctx.add(m, { kind: "landscape:tree", label: kind === "bush" ? "Shrub" : `${kind[0].toUpperCase()}${kind.slice(1)} tree`, level: tagLv });
+      ctx.add(ctxMark(m), { kind: treeKind, label: kind === "bush" ? "Shrub" : `${kind[0].toUpperCase()}${kind.slice(1)} tree`, level: tagLv });
     }
   }
-  if (!kit.empty) ctx.add(kit.build(), { kind: "landscape:tree", label: "Tree", level: tagLv });
+  if (!kit.empty) ctx.add(ctxMark(kit.build()), { kind: treeKind, label: "Tree", level: tagLv });
 }
 
 /** An arching palm frond as a ribbon with the frond texture (u along, v across). */
@@ -544,12 +553,12 @@ function utilityPoles(ctx: BuildCtx, W: number, y: number, ext: number): void {
     }
   const poles = kit.build();
   poles.userData.mergeGroup = "context";
-  ctx.add(poles, { kind: "landscape:utility_pole", label: "Utility poles", level: ctx.plan.levels[0].id });
+  ctx.add(poles, { kind: "context", label: "Utility poles", level: ctx.plan.levels[0].id });
   const wg = wires.build();
   if (wg) {
     const m = new THREE.Mesh(wg, dark);
     m.userData.mergeGroup = "context";
-    ctx.add(m, { kind: "landscape:wires", label: "Power lines", level: ctx.plan.levels[0].id });
+    ctx.add(m, { kind: "context", label: "Power lines", level: ctx.plan.levels[0].id });
   }
 }
 
@@ -627,7 +636,7 @@ function neighbours(ctx: BuildCtx, W: number, D: number, RW: number, FP: number)
   for (let i = -1; i <= 2; i++) house(-30 + i * 36, 35, yAcross, 44, -1, r() < 0.6 ? 2 : 3);
   const g = kit.build();
   g.userData.mergeGroup = "context";
-  ctx.add(g, { kind: "landscape:neighbour", label: "Neighbouring houses", level: ctx.plan.levels[0].id });
+  ctx.add(g, { kind: "context", label: "Neighbouring houses", level: ctx.plan.levels[0].id });
   g.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh) m.castShadow = false;

@@ -137,7 +137,9 @@ export function interiorLights(ctx: BuildCtx, o: { warmth?: "warm" | "neutral"; 
     let kit = kits.get(r.level);
     if (!kit) kits.set(r.level, (kit = new Kit()));
     const ch = ceilingAt(ctx, r);
-    const cx = (r.rect.x + r.rect.w / 2) * FT, cz = (r.rect.y + r.rect.d / 2) * FT;
+    // never in the stairwell: a fixture there would float in mid-air (it read as a hole in the stair wall)
+    const [fx, fy] = ceilingSpot(ctx, r, r.rect.x + r.rect.w / 2, r.rect.y + r.rect.d / 2);
+    const cx = fx * FT, cz = fy * FT;
     const fan = ctx.items.some((it) => it.room === r.id && it.type === "ceiling_fan" && Math.hypot((it.x0 + it.x1) / 2 - (r.rect.x + r.rect.w / 2), (it.y0 + it.y1) / 2 - (r.rect.y + r.rect.d / 2)) < 2);
     const offs: [number, number][] = fan ? [[-r.rect.w * 0.28, 0], [r.rect.w * 0.28, 0]] : [[0, 0]];
     for (const [ox, oy] of offs) {
@@ -153,6 +155,29 @@ export function interiorLights(ctx: BuildCtx, o: { warmth?: "warm" | "neutral"; 
     g.traverse((o2) => (o2.userData.collide = false));
   }
   void withReal;
+}
+
+/**
+ * A point on a room's ceiling for a fixture, as close to (x, y) as possible but never over a stairwell cut in the
+ * slab above (plan ft).
+ */
+export function ceilingSpot(ctx: BuildCtx, r: RoomM, x: number, y: number): [number, number] {
+  const above = ctx.plan.levelAbove(r.lv);
+  if (!above || !ctx.structureBuilt) return [x, y];
+  const holes = ctx.model.stairs.filter((s) => s.holeLevel === above.id).flatMap((s) => s.holes);
+  const inHole = (px: number, py: number) => holes.some((h) => px > h.x - 0.8 && px < h.x + h.w + 0.8 && py > h.y - 0.8 && py < h.y + h.d + 0.8);
+  if (!inHole(x, y)) return [x, y];
+  let best: [number, number] | null = null, bd = Infinity;
+  for (let px = r.rect.x + 1; px <= r.rect.x + r.rect.w - 1; px += 0.5)
+    for (let py = r.rect.y + 1; py <= r.rect.y + r.rect.d - 1; py += 0.5) {
+      if (inHole(px, py)) continue;
+      const d = Math.hypot(px - x, py - y);
+      if (d < bd) {
+        bd = d;
+        best = [px, py];
+      }
+    }
+  return best ?? [x, y];
 }
 
 /** Ceiling height for a room, honouring false ceilings placed earlier. */

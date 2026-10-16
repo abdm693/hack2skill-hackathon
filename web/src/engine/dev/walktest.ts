@@ -137,7 +137,8 @@ export function walk(collider: THREE.Mesh, start: THREE.Vector3, waypoints: THRE
       last.copy(feet);
       if (stuck > 3) {
         const miss = waypoints[wi].clone().sub(feet).setY(0).length();
-        if (miss < 0.9) {
+        // (only on the same floor: a waypoint straight above or below is not reached)
+        if (miss < 0.9 && Math.abs(waypoints[wi].y - feet.y) < 0.5) {
           log.push(`wp${wi} near-miss (${miss.toFixed(2)} m, wall clearance) at y=${feet.y.toFixed(2)}`);
           wi++;
           stuck = 0;

@@ -2,9 +2,12 @@
  * StructureModel: derives walls, junctions, openings, stair layouts, slabs, parapets and facade surfaces
  * from the PlanModel. Pure geometry in plan feet; no THREE objects here.
  */
-import { CellGrid, expandRect, type R } from "../core/grid";
+import { CellGrid, expandRect, rectContains, type R } from "../core/grid";
+import { NoteLog } from "../core/notes";
 import { clamp, warn } from "../core/util";
-import { DOOR_TYPES, type LevelM, type OpeningM, type PlanModel, type RoomM, type Side, type StairM } from "../plan/model";
+import { DOOR_TYPES, type LevelM, type OpeningM, type PlanModel, type RoomM, type Side } from "../plan/model";
+import { ensureStairChain, layoutStairs, reconcileTower, type StairLayout, type TowerDoor } from "./stairs-plan";
+export type { Flight, StairLayout, TowerDoor } from "./stairs-plan";
 
 export const EXT_T = 0.75;
 export const INT_T = 0.375;
@@ -69,32 +72,6 @@ export interface EdgeFeature {
   out: -1 | 1;
 }
 
-export interface Flight {
-  axis: "x" | "y";
-  sign: 1 | -1;
-  /** across extent */
-  c0: number;
-  c1: number;
-  /** along coordinate of the first riser */
-  s0: number;
-  n: number;
-  riser: number;
-  tread: number;
-  h0: number;
-}
-
-export interface StairLayout {
-  stair: StairM;
-  flights: Flight[];
-  landings: { rect: R; h: number }[];
-  holes: R[];
-  /** across ranges per flight side that are "open" decided later by the builder */
-  rect: R;
-  /** upper level id where the hole is cut */
-  holeLevel: string;
-  arrival: { x: number; y: number };
-}
-
 export interface SlabSpec {
   /** level whose floor this slab is (the level above the gap) */
   level: LevelM;
@@ -125,6 +102,10 @@ export class StructureModel {
   readonly parapets: WallRun[] = [];
   plinth!: CellGrid<number>;
   readonly surfaces: FacadeSurf[] = [];
+  /** as-built notes: what the engine repaired or could not repair */
+  readonly notes = new NoteLog();
+  /** the stair tower's door at the top landing (null when no stair reaches the roof and the plan has no mumty) */
+  tower: TowerDoor | null = null;
   /** building footprint on the lowest level (rect list, expanded to wall faces) */
   footprint: R[] = [];
   /**
@@ -140,6 +121,10 @@ export class StructureModel {
   constructor(plan: PlanModel) {
     this.plan = plan;
     this.computeEnvelope();
+    // stairs first: the stair tower grows to cover the stair as laid out before any wall is derived
+    ensureStairChain(plan, this.notes);
+    this.stairs.push(...layoutStairs(plan, this.notes));
+    this.tower = reconcileTower(plan, this.stairs, this.envelope, this.notes);
     for (const lv of plan.levels) {
       const runs = this.computeRuns(lv);
       this.runsByLevel.set(lv.id, runs);
@@ -148,7 +133,7 @@ export class StructureModel {
     this.computeParapets();
     for (const lv of plan.levels) resolveJunctions(this.runsByLevel.get(lv.id) ?? []);
     this.placeOpenings();
-    this.computeStairs();
+    this.checkTowerDoor();
     this.computeSlabs();
     this.computePlinth();
     this.computeSurfaces();
@@ -229,7 +214,8 @@ export class StructureModel {
       if (U.i === 0) continue;
       const L = plan.levels[U.i - 1];
       const below = plan.roomsOn(L.id).filter((r) => r.cat === "enclosed" || r.cat === "porch");
-      const upper = plan.roomsOn(U.id).filter((r) => r.cat !== "outdoor");
+      // a roof terrace (a deck on the roof level) stands behind the roof parapet like the rest of the roof
+      const upper = plan.roomsOn(U.id).filter((r) => r.cat !== "outdoor" && !(U.isRoof && r.cat === "deck"));
       if (!below.length) continue;
       type V = "x" | "r";
       const items: { rect: R; val: V }[] = [
@@ -278,24 +264,24 @@ export class StructureModel {
   private placeOpenings(): void {
     const plan = this.plan;
     const list = [...plan.openings];
-    // synthetic mumty door
-    const mumty = plan.rooms.find((r) => r.synthetic && r.id === "roof_mumty");
-    if (mumty) {
-      const side = plan.plan.roof?.mumty?.door_side ?? "front";
-      const rr = mumty.rect;
-      const stair = plan.stairs.find((s) => s.to === mumty.lv);
-      let at: [number, number];
-      const along = (lo: number, hi: number, pref: number) => clamp(pref, lo + 2.2, hi - 2.2);
-      const sp = stair ? stairStartPoint(stair) : { x: rr.x + rr.w / 2, y: rr.y + rr.d / 2 };
-      if (side === "front") at = [along(rr.x, rr.x + rr.w, sp.x), rr.y];
-      else if (side === "back") at = [along(rr.x, rr.x + rr.w, sp.x), rr.y + rr.d];
-      else if (side === "left") at = [rr.x, along(rr.y, rr.y + rr.d, sp.y)];
-      else at = [rr.x + rr.w, along(rr.y, rr.y + rr.d, sp.y)];
-      if (!list.some((o) => o.level === mumty.level)) {
-        list.push({ id: "roof_mumty_door", level: mumty.level, type: "door", at, width: 3, height: 7, sill: 0, between: [mumty.id, "exterior"], swing: "out", synthetic: true });
-      }
+    // the stair tower's door, at the top landing (B.3); kept unless a plan door on the tower already opens onto it
+    const tw = this.tower;
+    if (tw) {
+      const own = list.some(
+        (o) => o.level === tw.room.level && DOOR_TYPES.includes(o.type) && o.between.includes(tw.room.id) && Math.hypot(o.at[0] - tw.at[0], o.at[1] - tw.at[1]) < 2.2,
+      );
+      if (!own) list.push({ id: "roof_mumty_door", level: tw.room.level, type: "door", at: tw.at, width: tw.width, height: 7, sill: 0, between: [tw.room.id, "exterior"], swing: "out", synthetic: true });
     }
     for (const op of list) {
+      // B.7: an opening joins rooms on its own level, and is cut only into the wall between exactly those rooms
+      const named = op.between.filter((b) => b && b !== "exterior");
+      const other = named.map((id) => plan.room(id)).filter((r): r is RoomM => !!r && r.level !== op.level);
+      if (other.length) {
+        this.skipOpening(op, `${op.id} joins ${other.map((r) => r.name).join(", ")} on another floor; openings only join rooms on the same floor, so it was not built.`);
+        continue;
+      }
+      const known = named.filter((id) => plan.room(id));
+      const wantExt = op.between.includes("exterior");
       const runs = (this.runsByLevel.get(op.level) ?? []).filter((r) => r.kind === "exterior" || r.kind === "interior");
       let best: { run: WallRun; score: number; along: number } | null = null;
       for (const run of runs) {
@@ -303,21 +289,17 @@ export class StructureModel {
         const across = run.axis === "x" ? op.at[1] : op.at[0];
         const dA = Math.abs(across - run.c);
         const dL = along < run.a ? run.a - along : along > run.b ? along - run.b : 0;
-        const dist = Math.hypot(dA, dL);
+        if (dA > 1.5 || dL > 1.5) continue;
         const ids = [run.neg?.id, run.pos?.id];
-        const want = op.between.filter((b) => b && b !== "exterior");
-        let match = 0;
-        for (const w of want) if (ids.includes(w)) match++;
-        if (op.between.includes("exterior") && run.kind === "exterior") match++;
-        const miss = Math.max(0, 2 - match);
-        const score = dist + miss * 0.8;
-        const lim = miss === 0 ? 3 : miss === 1 ? 2 : 1.5;
-        if (dist <= lim && (!best || score < best.score)) best = { run, score, along };
+        if (!known.every((id) => ids.includes(id))) continue;
+        if (wantExt && run.kind !== "exterior") continue;
+        const score = Math.hypot(dA, dL);
+        if (!best || score < best.score) best = { run, score, along };
       }
       if (!best) {
         // openings on porch/deck edges are simply open; anything else is reported
         const onEdge = this.edges.some((e) => e.level.id === op.level && distToEdge(e, op.at) < 1.5);
-        if (!onEdge) warn(`opening ${op.id}: no wall within 1.5 ft of [${op.at}] on ${op.level}, skipped`);
+        if (!onEdge) this.skipOpening(op, `${op.id} is not on the wall between ${op.between.map((b) => plan.room(b)?.name ?? b).join(" and ")}, so it was not built.`);
         continue;
       }
       const run = best.run;
@@ -376,6 +358,12 @@ export class StructureModel {
       else if (run.out !== 0) swingSide = (-run.out) as -1 | 1;
       else swingSide = run.neg && run.neg.cat === "enclosed" ? -1 : 1;
       if (op.swing === "out" && run.out !== 0 && target === "exterior") swingSide = run.out as -1 | 1;
+      // a tiny WC or bath (under 36 sq ft): its door opens outward, as architects draw it,
+      // so the leaf never sweeps over the WC or basin
+      const into = swingSide < 0 ? run.neg : run.pos;
+      const away = swingSide < 0 ? run.pos : run.neg;
+      if (into && (into.type === "powder" || into.type === "bath") && into.rect.w * into.rect.d < 36 && away && away.cat === "enclosed" && !(away.type === "powder" || away.type === "bath"))
+        swingSide = (-swingSide) as -1 | 1;
       const hingeAtA = u0 - run.a <= run.b - (u0 + w);
       const frameOff = run.out !== 0 && !isDoor ? run.out * run.t * 0.18 : run.out !== 0 && op.type === "sliding_door" ? run.out * run.t * 0.12 : 0;
       const po: PlacedOpening = { op, run, u0, u1: u0 + w, bottom, top, floor, swingSide, hingeAtA, frameOff, isDoor };
@@ -385,12 +373,32 @@ export class StructureModel {
     }
   }
 
-  // ── stairs ─────────────────────────────────────────────────────────────────────────────────────────
-  private computeStairs(): void {
-    for (const s of this.plan.stairs) {
-      const lay = layoutStair(this.plan, s, this);
-      if (lay) this.stairs.push(lay);
+  private skipOpening(op: OpeningM, message: string): void {
+    warn(`opening ${op.id}: ${message}`);
+    this.notes.add({ id: `asbuilt.opening_skipped:${op.id}`, title: "Opening not built", status: "warn", message, element_ids: [op.id] });
+  }
+
+  /** B.3.5: the 3 x 3 ft inside the roof door must be floor, never the stairwell. */
+  private checkTowerDoor(): void {
+    const tw = this.tower;
+    if (!tw) return;
+    const door = this.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.run.neg === tw.room || o.run.pos === tw.room));
+    if (!door) {
+      this.notes.add({ id: "asbuilt.roof_door_missing", title: "No roof door", status: "fail", message: "The stair tower has no door onto the roof.", element_ids: [tw.room.id] });
+      return;
     }
+    const run = door.run;
+    const into = run.neg === tw.room ? -1 : 1;
+    const holes = this.stairs.filter((s) => s.holeLevel === door.op.level).flatMap((s) => s.holes);
+    let bad = 0, n = 0;
+    for (let i = 0; i <= 6; i++)
+      for (let j = 1; j <= 6; j++) {
+        const u = door.u0 + ((door.u1 - door.u0) * i) / 6, w = run.c + into * (run.t / 2 + (3 * j) / 6);
+        const [x, y] = run.axis === "x" ? [u, w] : [w, u];
+        n++;
+        if (holes.some((h) => rectContains(h, x, y, -0.02))) bad++;
+      }
+    if (bad) this.notes.add({ id: "asbuilt.roof_door_over_void", title: "Roof door opens over the stairwell", status: "fail", message: `${Math.round((bad / n) * 100)}% of the 3 ft landing inside the roof door is stairwell.`, element_ids: [door.op.id] });
   }
 
   // ── slabs ──────────────────────────────────────────────────────────────────────────────────────────
@@ -649,154 +657,3 @@ export function resolveJunctions(runs: WallRun[]): void {
   }
 }
 
-// ── stair layout ───────────────────────────────────────────────────────────────────────────────────────
-function stairStartPoint(s: StairM): { x: number; y: number } {
-  const r = s.rect;
-  // arrival of a dogleg is at the start edge
-  switch (s.start) {
-    case "+y": return { x: r.x + r.w / 2, y: r.y + 1 };
-    case "-y": return { x: r.x + r.w / 2, y: r.y + r.d - 1 };
-    case "+x": return { x: r.x + 1, y: r.y + r.d / 2 };
-    default: return { x: r.x + r.w - 1, y: r.y + r.d / 2 };
-  }
-}
-
-function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLayout | null {
-  const R0 = s.rect;
-  const axis: "x" | "y" = s.start === "+x" || s.start === "-x" ? "x" : "y";
-  const sign: 1 | -1 = s.start === "+x" || s.start === "+y" ? 1 : -1;
-  let A0 = axis === "x" ? R0.x : R0.y, A1 = axis === "x" ? R0.x + R0.w : R0.y + R0.d;
-  const C0 = axis === "x" ? R0.y : R0.x, C1 = axis === "x" ? R0.y + R0.d : R0.x + R0.w;
-  const breadth = C1 - C0;
-  const fromRoom = plan.roomAt(s.from.id, R0.x + R0.w / 2, R0.y + R0.d / 2);
-  const h0 = fromRoom ? fromRoom.floorH : s.from.elev;
-  const rise = s.to.elev - h0;
-  if (rise < 3) return null;
-  const N = Math.max(3, Math.round((rise * 12) / s.riser_in));
-  const r = rise / N;
-  let T = s.tread_in / 12;
-  const isDog = s.kind === "dogleg" && breadth >= 2 * 2.4 + 0.1;
-  const isL = s.kind === "l_shape" && breadth >= 4.5;
-  // ── walkability: keep a clear strip (≥ 0.9 m) in front of the bottom step (a dog-leg also arrives at that end).
-  // Use the stair ROOM's free space beyond the rect; compress treads slightly (≥ 9.5") and the landing (≥ 3 ft) if needed.
-  if (fromRoom) {
-    const face = (side: Side): number => {
-      const ws = model.roomWalls(fromRoom, side);
-      const rr = fromRoom.rect;
-      const edge = side === "front" ? rr.y : side === "back" ? rr.y + rr.d : side === "left" ? rr.x : rr.x + rr.w;
-      return ws.length ? ws[0].inner : edge;
-    };
-    const U0 = axis === "y" ? face("front") : face("left");
-    const U1 = axis === "y" ? face("back") : face("right");
-    const need = 2.95;
-    const strip = sign > 0 ? A0 - U0 : U1 - A1;
-    if (strip < need) {
-      const n1 = isDog || isL ? Math.ceil(N / 2) : N;
-      const wf = isDog ? Math.min(s.width, (breadth - 0.15) / 2) : Math.min(s.width, breadth);
-      const tMin = Math.max(9.5 / 12, Math.min(T, (s.tread_in / 12) * 0.95));
-      const minRun = (n1 - 1) * tMin + (isDog ? Math.max(3.0, Math.min(wf, 3.5) * 0.86) : isL ? wf : 0);
-      const farSlack = Math.max(0, sign > 0 ? U1 - 0.05 - A1 : A0 - (U0 + 0.05));
-      const shift = Math.min(need - strip, farSlack);
-      A0 += sign * shift;
-      A1 += sign * shift;
-      const deficit = need - strip - shift;
-      if (deficit > 0.05) {
-        const cut = Math.min(deficit, Math.max(0, A1 - A0 - minRun));
-        if (sign > 0) A0 += cut;
-        else A1 -= cut;
-      }
-    }
-  }
-  const startA = sign > 0 ? A0 : A1;
-  const farA = sign > 0 ? A1 : A0;
-  const length = A1 - A0;
-  const rectAdj: R = axis === "x" ? { x: A0, y: C0, w: A1 - A0, d: C1 - C0 } : { x: C0, y: A0, w: C1 - C0, d: A1 - A0 };
-  const flights: Flight[] = [];
-  const landings: { rect: R; h: number }[] = [];
-  const holes: R[] = [];
-  const mk = (a0: number, a1: number, c0: number, c1: number): R =>
-    axis === "x" ? { x: Math.min(a0, a1), y: Math.min(c0, c1), w: Math.abs(a1 - a0), d: Math.abs(c1 - c0) } : { x: Math.min(c0, c1), y: Math.min(a0, a1), w: Math.abs(c1 - c0), d: Math.abs(a1 - a0) };
-
-  // which across side should the user ARRIVE on? the side nearer the upper level's access (open_to / doors)
-  const upRoom = plan.roomAt(s.to.id, R0.x + R0.w / 2, R0.y + R0.d / 2);
-  let accessC = (C0 + C1) / 2 + (axis === "y" ? (plan.plotW / 2 > (C0 + C1) / 2 ? 0.1 : -0.1) : 0.1);
-  if (upRoom) {
-    const pts: number[] = [];
-    for (const o of plan.roomsOn(s.to.id)) {
-      if (!plan.isOpen(upRoom, o)) continue;
-      pts.push(axis === "y" ? o.rect.x + o.rect.w / 2 : o.rect.y + o.rect.d / 2);
-    }
-    for (const op of model.openings) {
-      if (op.op.level !== s.to.id || (op.run.neg !== upRoom && op.run.pos !== upRoom)) continue;
-      pts.push(axis === "y" ? op.op.at[0] : op.op.at[1]);
-    }
-    if (pts.length) accessC = pts.reduce((a, b) => a + b, 0) / pts.length;
-  }
-  const arriveHigh = accessC > (C0 + C1) / 2;
-
-  if (isDog) {
-    const wf = Math.min(s.width, (breadth - 0.15) / 2);
-    const n1 = Math.ceil(N / 2), n2 = N - n1;
-    const Lmin = Math.max(3.0, Math.min(wf, 3.5) * 0.86);
-    let L = length - (n1 - 1) * T;
-    if (L < Lmin) {
-      T = Math.max(0.62, (length - Lmin) / Math.max(1, n1 - 1));
-      L = length - (n1 - 1) * T;
-      if (T < 0.78) warn(`stair ${s.id}: treads compressed to ${(T * 12).toFixed(1)} in to fit the room`);
-    }
-    // flight 1 on the side opposite the arrival
-    const f1c: [number, number] = arriveHigh ? [C0, C0 + wf] : [C1 - wf, C1];
-    const f2c: [number, number] = arriveHigh ? [C1 - wf, C1] : [C0, C0 + wf];
-    flights.push({ axis, sign, c0: f1c[0], c1: f1c[1], s0: startA, n: n1, riser: r, tread: T, h0 });
-    const landNear = farA - sign * L;
-    landings.push({ rect: mk(landNear, farA, C0, C1), h: h0 + n1 * r });
-    flights.push({ axis, sign: (-sign) as 1 | -1, c0: f2c[0], c1: f2c[1], s0: landNear, n: n2, riser: r, tread: T, h0: h0 + n1 * r });
-    const end2 = landNear - sign * (n2 - 1) * T; // along position of flight 2's top riser
-    // headroom on flight 1 under the upper slab
-    const slabBottom = s.to.elev - s.from.slab;
-    const kMax = Math.floor((slabBottom - 6.75 - h0) / r) - 1;
-    const safe1 = startA + sign * Math.max(0, kMax) * T;
-    const cut1 = sign > 0 ? Math.min(end2, safe1) : Math.max(end2, safe1);
-    holes.push(mk(end2, farA, f2c[0], f2c[1]));
-    holes.push(mk(cut1, farA, f1c[0], f1c[1]));
-    if (f2c[0] > f1c[1] + 1e-3) holes.push(mk(cut1, farA, f1c[1], f2c[0]));
-    if (f1c[0] > f2c[1] + 1e-3) holes.push(mk(cut1, farA, f2c[1], f1c[0]));
-    const ac = (f2c[0] + f2c[1]) / 2;
-    const aa = end2 - sign * 1.2;
-    return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: ac } : { x: ac, y: aa } };
-  }
-
-  if (isL && length >= 4.5) {
-    const wf = Math.min(s.width, breadth * 0.5, length * 0.5);
-    const n1 = Math.ceil(N / 2), n2 = N - n1;
-    let T1 = T, T2 = T;
-    if ((n1 - 1) * T1 + wf > length) T1 = Math.max(0.6, (length - wf) / Math.max(1, n1 - 1));
-    if ((n2 - 1) * T2 + wf > breadth) T2 = Math.max(0.6, (breadth - wf) / Math.max(1, n2 - 1));
-    const f1c: [number, number] = arriveHigh ? [C0, C0 + wf] : [C1 - wf, C1];
-    flights.push({ axis, sign, c0: f1c[0], c1: f1c[1], s0: startA, n: n1, riser: r, tread: T1, h0 });
-    const landA0 = startA + sign * (n1 - 1) * T1;
-    const landA1 = landA0 + sign * wf;
-    landings.push({ rect: mk(landA0, landA1, f1c[0], f1c[1]), h: h0 + n1 * r });
-    const axis2: "x" | "y" = axis === "x" ? "y" : "x";
-    const sign2: 1 | -1 = arriveHigh ? 1 : -1;
-    const s02 = arriveHigh ? f1c[1] : f1c[0];
-    flights.push({ axis: axis2, sign: sign2, c0: Math.min(landA0, landA1), c1: Math.max(landA0, landA1), s0: s02, n: n2, riser: r, tread: T2, h0: h0 + n1 * r });
-    holes.push(rectAdj);
-    const end = s02 + sign2 * (n2 - 1) * T2 + sign2 * 1.2;
-    const ac = (landA0 + landA1) / 2;
-    return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: ac, y: end } : { x: end, y: ac } };
-  }
-
-  // straight (also the fallback)
-  const wf = Math.min(s.width, breadth);
-  if ((N - 1) * T > length) {
-    T = Math.max(0.6, length / (N - 1));
-    if (T < 0.75) warn(`stair ${s.id}: straight flight compressed to ${(T * 12).toFixed(1)} in treads`);
-  }
-  const cMid = (C0 + C1) / 2;
-  flights.push({ axis, sign, c0: cMid - wf / 2, c1: cMid + wf / 2, s0: startA, n: N, riser: r, tread: T, h0 });
-  const end = startA + sign * (N - 1) * T;
-  holes.push(mk(startA, end, cMid - wf / 2 - 0.05, cMid + wf / 2 + 0.05));
-  const aa = end + sign * 1.2;
-  return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: cMid } : { x: cMid, y: aa } };
-}

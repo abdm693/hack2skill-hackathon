@@ -25,7 +25,8 @@ export interface BuildResult {
   sections: SectionResult[];
   levels: { id: string; name: string; floor_y: number; top_y: number }[];   // meters, for level toggles/section cut
   colliders: THREE.Mesh[];      // static meshes for walkthrough collision (walls, slabs, stairs ramps, big furniture, boundary)
-  spawn: { position: THREE.Vector3; lookAt: THREE.Vector3 };  // walkthrough start (at the main door, outside)
+  spawn: { position: THREE.Vector3; lookAt: THREE.Vector3 };  // walkthrough start: on the gate-to-door walkway, ~7 ft before the main door, door in view
+  landings?: { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[]; // (additive) per floor: stair landing at eye height, looking into the floor
   dispose(): void;
 }
 /** Build the house. Runs sections in order and calls onSection after each (the viewer re-renders = "layers assembling"). */
@@ -39,6 +40,12 @@ World mapping (all tracks): `x_m = x_ft·0.3048`, **`z_m = −y_ft·0.3048`**, `
 
 Every created `Object3D` carries
 `userData = { layer, level, room, kind, id, label }`. The viewer relies on this for layer and level toggles, for hover labels, and for comment anchors.
+
+Kinds the viewer acts on (engine overhaul, additive):
+- `kind: "vehicle"`: cars and motorbikes (layer furniture). They never merge with other meshes (`userData.mergeGroup = "vehicle"`), and their walk colliders are separate meshes in `colliders` with `userData.kind === "vehicle"`, so `hideVehicles` can drop both.
+- `kind: "context"`: road, footpaths, kerbs, streetlights, utility poles and wires, street trees and neighbouring houses (layer landscape, `mergeGroup = "context"`), for `ghostContext`.
+- Stairwell guards are tagged with the floor they stand on (`kind: "railing:stair"`), flights with the floor they start from.
+- `BuildResult.summary.checks` lists what the engine repaired or could not repair (`contracts/api-types.ts` `AsBuiltSummary.checks`).
 
 ## viewer/: scene host, modes, walkthrough, comments (track: VIEWER)
 

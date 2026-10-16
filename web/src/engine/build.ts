@@ -13,6 +13,10 @@ import { buildStructure } from "./structure";
 import { createSDK, lenientThree } from "./sdk";
 import { addSun, sunDirection } from "./lights";
 import { floorBelow } from "./facade";
+import { ensurePaths } from "./furniture/paths";
+import { parking } from "./furniture/parking";
+import { ITEMS } from "./furniture/items";
+import { solarRect } from "./furniture/zones";
 
 const LAYERS: Layer[] = ["structure", "facade", "interior", "furniture", "landscape", "lighting", "custom"];
 
@@ -78,6 +82,7 @@ export async function buildHouseImpl(
     ctx.layer = layer;
     ctx.section = name;
     ctx.objectsThisSection = 0;
+    const itemsBefore = ctx.items.length;
     const t = performance.now();
     let ok = true;
     let error: string | undefined;
@@ -109,6 +114,14 @@ export async function buildHouseImpl(
         ctx.endOfSection.shift()!();
       } catch (e) {
         warn(`end-of-section hook failed: ${e}`);
+      }
+    }
+    // B.5: keep 3 ft walking paths between the doors and stairs of every room this section furnished
+    if (ctx.structureBuilt && ctx.items.length > itemsBefore) {
+      try {
+        ensurePaths(ctx, new Set(ctx.items.slice(itemsBefore).map((it) => it.room)));
+      } catch (e) {
+        warn(`walking-path check failed: ${e}`);
       }
     }
     const r: SectionResult = { name, layer, ok, error, ms: Math.round((performance.now() - t) * 10) / 10, objects: ctx.objectsThisSection };
@@ -162,20 +175,23 @@ export async function buildHouseImpl(
   }));
 
   const spawn = computeSpawn(ctx);
+  if (ctx.structureBuilt) roofChecks(ctx, cons.summary);
   const summary: AsBuiltSummary = {
     objects: cons.summary,
     section_errors: results.filter((r) => !r.ok).map((r) => ({ section: r.name, error: r.error ?? "error" })),
+    checks: [...(ctx.structureBuilt ? ctx.model.notes.list : []), ...ctx.notes.list],
   };
   const root = ctx.root;
   root.userData.stats = { mergedMeshes: cons.mergedMeshes, meshesBefore, meshesAfter };
   const totalMs = performance.now() - t0;
-  return {
+  const result = {
     root,
     summary,
     sections: results,
     levels,
     colliders: cons.colliders,
     spawn,
+    landings: ctx.structureBuilt ? computeLandings(ctx) : [],
     stats: { totalMs, sectionsMs: tSections - t0, consolidateMs, meshesBefore, meshesAfter },
     dispose() {
       root.traverse((o) => {
@@ -186,10 +202,36 @@ export async function buildHouseImpl(
       root.removeFromParent();
     },
   };
+  // the build context, for dev tools and checks (not part of the contract; not enumerable)
+  Object.defineProperty(result, "ctx", { value: ctx, enumerable: false });
+  return result;
 }
 
 function computeSpawn(ctx: BuildCtx): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
   const plan = ctx.plan;
+  // B.6: on the gate-to-door walkway, about 7 ft before the main door, facing it with nothing tall in between
+  const P = ctx.structureBuilt ? parking(ctx) : null;
+  if (P && P.door && P.doorCentre && P.path.length > 1) {
+    const pts = P.path;
+    // look at the door, but test the view only up to the door step (furniture inside the house does not count)
+    const [dx, dy] = P.approach ?? P.doorCentre;
+    const tall = ctx.items.filter((it) => it.cls === "floor" && it.h1 - it.h0 > 2.5 && ITEMS[it.type as keyof typeof ITEMS]?.collide && ctx.plan.room(it.room)?.cat !== "enclosed");
+    const sees = (x: number, y: number) => !tall.some((it) => segHitsBox(x, y, dx, dy, it.x0 - 0.3, it.x1 + 0.3, it.y0 - 0.3, it.y1 + 0.3));
+    let acc = 0, idx = pts.length - 1;
+    for (let k = pts.length - 1; k > 0; k--) {
+      acc += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+      idx = k - 1;
+      if (acc >= 7) break;
+    }
+    while (idx > 0 && !sees(pts[idx][0], pts[idx][1])) idx--;
+    const [px, py] = pts[idx];
+    const eye = 1.6;
+    const floor = floorBelow(ctx, px, py, P.door.bottom + 3);
+    return {
+      position: new THREE.Vector3(px * FT, floor * FT + eye, -py * FT),
+      lookAt: new THREE.Vector3(P.doorCentre[0] * FT, (P.door.bottom + 0.04) * FT + eye, -P.doorCentre[1] * FT),
+    };
+  }
   const ops = ctx.structureBuilt ? ctx.model.openings : [];
   const main =
     ops.find((o) => o.op.type === "main_door") ??
@@ -258,4 +300,74 @@ export function setTimeOfDay(root: THREE.Object3D, plan: Pick<BuildingPlan, "sit
       }
     }
   });
+}
+
+/** Per floor: the stair's landing on it (top landing, or the foot of the lowest stair), facing into the floor. */
+function computeLandings(ctx: BuildCtx): { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[] {
+  const plan = ctx.plan;
+  const out: { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[] = [];
+  const eye = 1.6;
+  for (const lv of plan.levels) {
+    const up = ctx.model.stairs.find((l) => l.holeLevel === lv.id);
+    const foot = ctx.model.stairs.filter((l) => l.stair.from.id === lv.id).sort((a, b) => a.stair.from.elev - b.stair.from.elev)[0];
+    const zone = up ? up.landing : foot ? foot.foot : null;
+    if (!zone) continue;
+    const px = zone.x + zone.w / 2, py = zone.y + zone.d / 2;
+    const here = plan.roomAt(lv.id, px, py);
+    // look toward the biggest room this landing opens to (its open-plan group), else the biggest room on the floor
+    const group = here ? [here, ...[...here.open].map((id) => plan.room(id)).filter((r): r is NonNullable<typeof r> => !!r && r.level === lv.id)] : [];
+    const pool = (group.length > 1 ? group.filter((r) => r !== here) : plan.roomsOn(lv.id).filter((r) => r.cat !== "outdoor" && r !== here)).sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d);
+    const t = pool[0];
+    let tx = t ? t.rect.x + t.rect.w / 2 : px + (up ? up.outDir[0] : 0) * 5, ty = t ? t.rect.y + t.rect.d / 2 : py + (up ? up.outDir[1] : 0) * 5;
+    if (lv.isRoof && ctx.model.tower) {
+      // on the roof: through the tower door
+      const tw = ctx.model.tower;
+      tx = tw.at[0] + (tw.side === "left" ? -6 : tw.side === "right" ? 6 : 0);
+      ty = tw.at[1] + (tw.side === "front" ? -6 : tw.side === "back" ? 6 : 0);
+    }
+    const floor = lv.elev;
+    out.push({ level: lv.id, position: new THREE.Vector3(px * FT, floor * FT + eye, -py * FT), lookAt: new THREE.Vector3(tx * FT, floor * FT + eye, -ty * FT) });
+  }
+  return out;
+}
+
+/**
+ * B.8 as-built roof checks: anything standing in the area kept clear for solar (a cupola, a pergola, a chhatri,
+ * terrace furniture) and decorative roof structures in general are reported, so Argon can be asked to remove them.
+ */
+function roofChecks(ctx: BuildCtx, objects: AsBuiltSummary["objects"]): void {
+  const plan = ctx.plan;
+  const roof = plan.roof;
+  const sol = solarRect(ctx);
+  const deco = /dome|cupola|minaret|chhatri|chattri|pergola|gazebo|turret|spire|finial/i;
+  for (const o of objects) {
+    if (o.layer !== "facade" && o.layer !== "custom") continue;
+    const [x0, y0, h0] = o.bbox_ft.min, [x1, y1, h1] = o.bbox_ft.max;
+    if (h1 < roof.elev + 1 || h0 < roof.elev - 1.5) continue; // not a rooftop object
+    const name = `${o.kind ?? ""} ${o.id}`;
+    const inSolar = !!sol && x0 < sol.x + sol.w && x1 > sol.x && y0 < sol.y + sol.d && y1 > sol.y;
+    if (inSolar)
+      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${cap1((o.kind ?? o.id).split(":").pop()!.replace(/_/g, " "))} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
+    else if (deco.test(name))
+      ctx.notes.add({ id: `asbuilt.roof_decoration:${o.id}`, title: "Decorative roof structure", status: "warn", message: `A decorative ${(name.match(deco)?.[0] ?? "structure").toLowerCase()} stands on the roof; keep the roof clear unless the brief asks for it.`, element_ids: [o.id] });
+  }
+}
+
+const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** Does the segment (x0,y0)-(x1,y1) cross the box? (slab test) */
+function segHitsBox(x0: number, y0: number, x1: number, y1: number, bx0: number, bx1: number, by0: number, by1: number): boolean {
+  let t0 = 0, t1 = 1;
+  const dx = x1 - x0, dy = y1 - y0;
+  for (const [p, q] of [[-dx, x0 - bx0], [dx, bx1 - x0], [-dy, y0 - by0], [dy, by1 - y0]]) {
+    if (Math.abs(p) < 1e-9) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return false;
+  }
+  return true;
 }
