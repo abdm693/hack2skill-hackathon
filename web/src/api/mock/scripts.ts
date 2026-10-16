@@ -187,7 +187,8 @@ type Kind = "projection" | "bigger" | "material" | "remove" | "general";
 
 function classify(text: string): Kind {
   const t = text.toLowerCase();
-  if (/porch|balcon|extend|forward|front lawn|setback|cantilever|project|another (floor|storey)|4th|fourth/.test(t)) return "projection";
+  const outward = /\b(extend|forward|outward|project|cantilever|push (it )?out)|into the (front|lawn|setback|road)|another (floor|storey)|4th|fourth/.test(t);
+  if (outward) return "projection";
   if (/bigger|larger|wider|deeper|more space|spacious|enlarge|cramped|small|tight/.test(t)) return "bigger";
   if (/material|wood|marble|stone|colou?r|paint|tile|glass|brick|finish|darker|lighter|louver|cladding/.test(t)) return "material";
   if (/remove|delete|get rid|no need|don't need/.test(t)) return "remove";
