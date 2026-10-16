@@ -122,6 +122,12 @@ Output ONE BuildingPlan JSON (schema enforced). Follow the conventions in the Ty
   - the master bedroom upstairs at the front with a balcony;
   - a servant quarter at the rear or on the roof for larger plots;
   - a prayer corner if requested.
+- DAYLIGHT SELF-CHECK before answering (the most common LDA failure). Every habitable room (drawing, lounge, dining,
+  bedrooms, study, servant, prayer) and every kitchen or dirty kitchen needs windows (or a sliding door) whose total
+  width×height ≥ 8% of its floor area. Those windows must open onto an exterior edge facing a setback or open space, or onto a
+  porch, balcony, terrace, courtyard or open_space room. A stair hall, corridor or another room does NOT count. Rooms in the
+  middle of a narrow house need a side space, a courtyard/light well, or rearranging so they touch the outside. Put the dirty
+  kitchen on the rear or side exterior edge with a window. Check each room against this rule before you answer.
 - Style: palette (hex) and materials matching the brief and the chosen concept image.
 - notes: 3–6 short sentences explaining key decisions and how LDA rules shaped the plan.
 Write ids as <level-initial>_<name>, e.g. g_drawing, f_master, f_master_bath."""
