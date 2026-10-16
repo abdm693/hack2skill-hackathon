@@ -347,11 +347,13 @@ function roofChecks(ctx: BuildCtx, objects: AsBuiltSummary["objects"]): void {
     const name = `${o.kind ?? ""} ${o.id}`;
     const inSolar = !!sol && x0 < sol.x + sol.w && x1 > sol.x && y0 < sol.y + sol.d && y1 > sol.y;
     if (inSolar)
-      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${(o.kind ?? o.id).split(":").pop()!.replace(/_/g, " ")} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
+      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${cap1((o.kind ?? o.id).split(":").pop()!.replace(/_/g, " "))} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
     else if (deco.test(name))
       ctx.notes.add({ id: `asbuilt.roof_decoration:${o.id}`, title: "Decorative roof structure", status: "warn", message: `A decorative ${(name.match(deco)?.[0] ?? "structure").toLowerCase()} stands on the roof; keep the roof clear unless the brief asks for it.`, element_ids: [o.id] });
   }
 }
+
+const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Does the segment (x0,y0)-(x1,y1) cross the box? (slab test) */
 function segHitsBox(x0: number, y0: number, x1: number, y1: number, bx0: number, bx1: number, by0: number, by1: number): boolean {

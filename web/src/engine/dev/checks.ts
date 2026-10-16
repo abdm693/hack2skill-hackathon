@@ -348,6 +348,6 @@ function checkStairs(ctx: BuildCtx): Check {
     id: "stairs",
     title: "Stairs at code, tower over the top flight",
     status,
-    detail: `${ctx.model.stairs.length} flights pairs, treads ≥ ${minT.toFixed(1)} in, foot strip ≥ ${(strips.length ? Math.min(...strips) : 0).toFixed(1)} ft; ${uncovered.length ? "the roof stairwell is NOT inside the tower" : "the tower covers the top flight and its landing"}${notes.length ? `; ${notes.map((n) => n.message).join(" ")}` : ""}`,
+    detail: `${ctx.model.stairs.length} stairs, treads ≥ ${minT.toFixed(1)} in, foot strip ≥ ${(strips.length ? Math.min(...strips) : 0).toFixed(1)} ft; ${uncovered.length ? "the roof stairwell is NOT inside the tower" : "the tower covers the top flight and its landing"}${notes.length ? `; ${notes.map((n) => n.message).join(" ")}` : ""}`,
   };
 }
