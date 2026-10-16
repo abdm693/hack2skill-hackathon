@@ -15,5 +15,6 @@ export { Spinner, BreathingDot } from "./Spinner";
 export { Kbd, modKey } from "./Kbd";
 export { Menu, type MenuItem } from "./Menu";
 export { Switch } from "./Switch";
+export { ErrorBoundary } from "./ErrorBoundary";
 export { Wordmark, PlotSketch } from "./brand";
 export { spring, ease, dur } from "./motion";

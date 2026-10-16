@@ -122,7 +122,7 @@ export function CommentsSheet({
         </p>
       ) : (
         list.length > 0 && (
-          <div className="no-scrollbar -mx-5 mb-2 flex gap-1.5 overflow-x-auto px-5 pb-1" role="group" aria-label="Filter comments">
+          <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Filter comments">
             {FILTERS.map((f) => (
               <Chip key={f.id} size="sm" selected={filter === f.id} onClick={() => setFilter(f.id)}>
                 {f.label}

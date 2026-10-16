@@ -7,7 +7,7 @@
  *   /s/:token              the client view of a shared home
  * Old links (/p/:id/setup|design|explore…) redirect to their new places.
  */
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { MotionConfig } from "motion/react";
 import { LEGACY_VIEW } from "./lib/views";
@@ -19,6 +19,7 @@ import { ProjectShell } from "./shell/ProjectShell";
 import { ClientView } from "./share/ClientView";
 import { Toaster } from "./ui/Toast";
 import { buttonClass } from "./ui/Button";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 
 /** A new page starts at the top (views inside a home keep their own scroll). */
 function ScrollToTop() {
@@ -28,6 +29,16 @@ function ScrollToTop() {
     window.scrollTo(0, 0);
   }, [key]);
   return null;
+}
+
+/** A crash anywhere shows a calm message instead of a blank page; moving to another page tries again. */
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary resetKey={pathname} label="This page didn't load" className="min-h-[100dvh]">
+      {children}
+    </ErrorBoundary>
+  );
 }
 
 function LegacyProject() {
@@ -61,22 +72,24 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/app" element={<Workspace />} />
-          <Route path="/app/signin" element={<AuthPage mode="signin" />} />
-          <Route path="/app/signup" element={<AuthPage mode="signup" />} />
-          {/* Nested so relative links between views ("../plan") resolve inside the home. */}
-          <Route path="/app/p/:id" element={<ProjectShell />}>
-            <Route index element={null} />
-            <Route path=":view" element={null} />
-          </Route>
-          <Route path="/s/:token" element={<ClientView />} />
-          <Route path="/signin" element={<Navigate to="/app/signin" replace />} />
-          <Route path="/signup" element={<Navigate to="/app/signup" replace />} />
-          <Route path="/p/:id/*" element={<LegacyProject />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <RouteBoundary>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/app" element={<Workspace />} />
+            <Route path="/app/signin" element={<AuthPage mode="signin" />} />
+            <Route path="/app/signup" element={<AuthPage mode="signup" />} />
+            {/* Nested so relative links between views ("../plan") resolve inside the home. */}
+            <Route path="/app/p/:id" element={<ProjectShell />}>
+              <Route index element={null} />
+              <Route path=":view" element={null} />
+            </Route>
+            <Route path="/s/:token" element={<ClientView />} />
+            <Route path="/signin" element={<Navigate to="/app/signin" replace />} />
+            <Route path="/signup" element={<Navigate to="/app/signup" replace />} />
+            <Route path="/p/:id/*" element={<LegacyProject />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </RouteBoundary>
         <AuthDialog />
       </BrowserRouter>
       <Toaster />

@@ -72,6 +72,12 @@ export function AuthForm({
     return () => clearTimeout(t);
   }, [mode]);
 
+  // Take the person straight to the field that needs fixing.
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (field) form.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus();
+  }, [field, error]);
+
   const [title, line] =
     mode === "reset"
       ? ["Reset your password", "We'll email you a link to choose a new one."]
@@ -127,7 +133,7 @@ export function AuthForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form ref={form} onSubmit={submit} noValidate>
       <H className="pr-8 text-heading text-ink">{title}</H>
       <p className="mt-1.5 text-[15px] leading-[22px] text-ink-2">{line}</p>
 

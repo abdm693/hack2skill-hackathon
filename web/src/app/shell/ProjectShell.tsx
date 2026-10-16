@@ -13,6 +13,7 @@ import { requireAccount, useAuth } from "@/app/store/auth";
 import { useMembers } from "@/app/store/members";
 import { useProject } from "@/app/store/project";
 import { Button } from "@/app/ui/Button";
+import { ErrorBoundary } from "@/app/ui/ErrorBoundary";
 import { Spinner } from "@/app/ui/Spinner";
 import { CommentsSheet } from "@/app/comments/CommentsSheet";
 import { ShareDialog } from "@/app/share/ShareDialog";
@@ -25,7 +26,7 @@ import { buildCommands } from "./commands";
 import { ConversationSheet } from "./ConversationSheet";
 import { DetailsDialog } from "./DetailsDialog";
 import { Dock } from "./Dock";
-import { complianceCounts, useLastLine } from "./narration";
+import { complianceCounts, setRoomNames, useLastLine } from "./narration";
 import { markVersionSeen, startShare, useDefaultNext } from "./next";
 import { People } from "./People";
 import { useShell } from "./state";
@@ -126,6 +127,10 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   useEffect(() => {
     if (view === "revisions") markVersionSeen(current);
   }, [view, current]);
+  // Narration names rooms in words ("the kitchen"), not ids.
+  useEffect(() => {
+    setRoomNames(version?.plan.rooms);
+  }, [version]);
 
   // ── Keyboard: ⌘1–4 views, ⌘K or / Ask, ⌘J conversation, C comments outside House ──────────────
   useEffect(() => {
@@ -275,9 +280,11 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
       <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
-        <Suspense fallback={<ViewLoading tone={tone} />}>
-          <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />
-        </Suspense>
+        <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
+          <Suspense fallback={<ViewLoading tone={tone} />}>
+            <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       {/* Top: title capsule · view switch · people */}

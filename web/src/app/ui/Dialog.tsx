@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { useEscape, useFocusTrap, useMediaQuery } from "@/app/lib/hooks";
 import { ease } from "./motion";
+import { useModalOpen } from "./overlay";
 
 /**
  * A modal dialog (DESIGN.md §4): 480px, radius 28, e3, over a scrim with an 8px blur.
@@ -47,6 +48,7 @@ export function Dialog({
   const descId = useId();
   useFocusTrap(panel, open);
   useEscape(open, () => dismissible && onClose());
+  useModalOpen(open);
 
   if (typeof document === "undefined") return null;
   return createPortal(

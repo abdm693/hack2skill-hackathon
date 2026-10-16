@@ -68,7 +68,7 @@ export const Composer = forwardRef<
         className,
       )}
     >
-      {leading && <div className="flex shrink-0 items-center self-end">{leading}</div>}
+      {leading && <div className="flex h-9 shrink-0 items-center self-end">{leading}</div>}
       <textarea
         ref={setRef}
         rows={1}
@@ -92,7 +92,7 @@ export const Composer = forwardRef<
           hud ? "text-hud-ink placeholder:text-hud-ink-2" : "text-ink placeholder:text-ink-4",
         )}
       />
-      {!has && trailing && <div className="flex shrink-0 items-center self-center pr-1">{trailing}</div>}
+      {!has && trailing && <div className="flex h-9 shrink-0 items-center self-end pr-1">{trailing}</div>}
       <AnimatePresence initial={false}>
         {has && (
           <motion.button

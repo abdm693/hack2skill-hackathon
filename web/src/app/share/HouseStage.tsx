@@ -36,7 +36,8 @@ export function HouseStage({ project, version, clientView }: { project: Project;
   const viewer = useRef<ViewerHandle>(null);
   const [commentMode, setCommentMode] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [build, setBuild] = useState<{ done: number; total: number } | null>({ done: 0, total: version.sections.length });
+  // The viewer shows its own build progress; we only need to know when the house is ready.
+  const [building, setBuilding] = useState(true);
 
   const mode: "orbit" | "walk" = params.get("mode") === "walk" ? "walk" : "orbit";
   const setMode = useCallback(
@@ -68,14 +69,14 @@ export function HouseStage({ project, version, clientView }: { project: Project;
   // ?comment=<id>: fly to that pin once the house is built.
   const focusId = params.get("comment");
   useEffect(() => {
-    if (!focusId || build) return;
+    if (!focusId || building) return;
     const c = shown.find((x) => x.id === focusId);
     if (c) viewer.current?.flyTo(c);
-  }, [focusId, build, shown]);
+  }, [focusId, building, shown]);
 
   const onReady = useCallback(
     async () => {
-      setBuild(null);
+      setBuilding(false);
       if (clientView || roleOf(project) === "client") return;
       // First build of a version: keep a real 3D thumbnail for the homes grid.
       const key = `naqsha.thumb.${version.id}`;
@@ -119,28 +120,9 @@ export function HouseStage({ project, version, clientView }: { project: Project;
         commentMode={commentMode || mode === "walk"}
         onAddComment={(d) => setDraft(d)}
         onSelectComment={(id) => openComments({ focus: id })}
-        onBuildProgress={(_, done, total) => setBuild({ done, total })}
         onReady={() => void onReady()}
         onExitWalk={() => setMode("orbit")}
       />
-
-      {/* Building */}
-      <AnimatePresence>
-        {build && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, transition: { duration: 0.3 } }}
-            className="pointer-events-none absolute inset-x-0 z-[5] flex justify-center"
-            style={{ top: phone ? 128 : 84 }}
-          >
-            <span className="glass-hud inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-[13px] font-medium">
-              <span className="size-1.5 rounded-full bg-hud-accent animate-breathe" />
-              {build.total ? `Building your home, ${Math.min(build.done, build.total)} of ${build.total}` : "Building your home…"}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Orbit · Walk, Comment */}
       <div className="pointer-events-none absolute z-[6] flex items-center gap-2" style={{ left: "var(--chrome)", bottom: hudBottom }}>

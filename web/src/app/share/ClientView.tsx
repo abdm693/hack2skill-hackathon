@@ -191,9 +191,9 @@ function ClientShell({ token }: { token: string }) {
             <HouseStage project={project} version={version} clientView />
           </Suspense>
         ) : (
-          <div className="absolute inset-0 overflow-auto" style={{ paddingTop: "var(--chrome-top)", paddingBottom: "calc(var(--dock-h) + var(--chrome))" }}>
-            <div className="mx-auto max-w-[1100px] px-3 sm:px-6">
-              <div className="overflow-hidden rounded-panel bg-surface p-3 shadow-e1 sm:p-6">
+          <div className="absolute inset-0" style={{ paddingTop: "var(--chrome-top)", paddingBottom: "calc(var(--dock-h) + var(--chrome))" }}>
+            <div className="mx-auto h-full max-w-[1100px] px-3 sm:px-6" style={{ paddingRight: sheetRight ? "calc(380px + var(--chrome) * 2)" : undefined }}>
+              <div className="h-full overflow-hidden rounded-panel bg-surface p-3 shadow-e1 sm:p-6">
                 <FloorPlan plan={version.plan} />
               </div>
             </div>
@@ -250,13 +250,17 @@ function ClientShell({ token }: { token: string }) {
               defaultNext={
                 tab === "plan"
                   ? { label: "Walk through it", run: () => setParams({ mode: "walk" }) }
-                  : version
-                    ? approved
-                      ? { label: `Approved v${version.n}`, run: () => openComments(), disabled: false, hint: "You approved this version" }
-                      : { label: `Approve v${version.n}`, run: () => void approve() }
+                  : version && !approved
+                    ? { label: `Approve v${version.n}`, run: () => void approve() }
                     : null
               }
-              defaultLine={tab === "house" ? "Click a spot on the house to leave a note, or walk through it room by room." : `This is version ${version?.n ?? 1}, checked against LDA rules.`}
+              defaultLine={
+                approved && version
+                  ? `You approved version ${version.n}. ${sharedBy ?? "The owner"} can see it in the comments.`
+                  : tab === "house"
+                    ? "Click a spot on the house to leave a note, or walk through it room by room."
+                    : `This is version ${version?.n ?? 1}, checked against LDA rules.`
+              }
               defaultPlaceholder={`Leave a note for ${owner}`}
               defaultSuggestions={[]}
               defaultSubmit={submit}

@@ -95,7 +95,11 @@ export function Dock(props: DockProps) {
   }, [focusTick]);
 
   const allCommands = useMemo(() => [...(ctx.commands ?? []), ...commands], [ctx.commands, commands]);
-  const matches = useMemo(() => matchCommands(allCommands, draft, draft.trim() ? 6 : 8), [allCommands, draft]);
+  // Nothing typed yet: the places and the actions. Typing searches everything (floors, rooms, versions too).
+  const matches = useMemo(
+    () => (draft.trim() ? matchCommands(allCommands, draft, 6) : allCommands.filter((c) => c.group === "do" || c.id.startsWith("view-")).slice(0, 9)),
+    [allCommands, draft],
+  );
   const askItem = draft.trim().length > 0;
   const items: ({ kind: "ask" } | { kind: "cmd"; cmd: Command })[] = [
     ...(askItem ? [{ kind: "ask" as const }] : []),
@@ -201,7 +205,7 @@ export function Dock(props: DockProps) {
             aria-label="Ask Naqsha, go to or do"
             className={cn(
               "absolute inset-x-0 bottom-full mb-2 max-h-[min(420px,60dvh)] origin-bottom overflow-y-auto rounded-[20px] p-1.5 scrollbar-thin",
-              hud ? "glass-hud" : "bg-surface shadow-e3",
+              hud ? "bg-[rgb(24_24_27/.92)] text-hud-ink shadow-[inset_0_0_0_1px_rgb(255_255_255/.1),0_24px_60px_-20px_rgb(0_0_0/.6)] backdrop-blur-xl" : "bg-surface shadow-e3",
             )}
           >
             <PaletteList items={items} active={active} setActive={setActive} run={runItem} draft={draft} hud={hud} />

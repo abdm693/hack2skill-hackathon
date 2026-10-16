@@ -13,9 +13,11 @@ import { Tooltip } from "@/app/ui/Tooltip";
 import { startShare } from "./next";
 import { useShell } from "./state";
 
+const NOBODY: never[] = [];
+
 export function usePeople(project: Project): { id: string; name: string; role: AvatarRole }[] {
   const user = useAuth((s) => s.user);
-  const members = useMembers((s) => (s.pid === project.id ? s.members : []));
+  const members = useMembers((s) => (s.pid === project.id ? s.members : NOBODY));
   const me = user ? { id: user.uid, name: user.name || user.email, role: roleOf(project) as AvatarRole } : null;
   const others = members
     .filter((m) => m.email.toLowerCase() !== user?.email.toLowerCase())

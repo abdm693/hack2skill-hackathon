@@ -6,6 +6,7 @@
 import type { Author, Comment, Member, Project, Role } from "@contracts/api-types";
 import type { Api, Reply } from "../client";
 import { currentUser } from "../auth";
+import { mockUserName } from "./auth";
 import { ApiError } from "../errors";
 import { userId } from "../mode";
 import { clone, db, latency, now, save, sleep, touch, uid } from "./db";
@@ -530,8 +531,7 @@ export const mockApi: Api = {
       const vid = project.current_version_id;
       const version = vid ? d.versions[vid] : undefined;
       if (!version) throw httpError(404, "This home has no design to show yet.");
-      const owner = d.owners[pid];
-      const ownerName = d.ownerNames[pid] ?? (owner && owner === currentUser()?.uid ? displayName() : undefined);
+      const ownerName = d.ownerNames[pid] ?? mockUserName(d.owners[pid]);
       return {
         project: { ...clone(project), role: "client" as const },
         version: clone(version),

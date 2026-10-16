@@ -28,6 +28,13 @@ function tokens(u: MockUser): TokenSet {
   return { idToken: `mock.${u.uid}.${Date.now()}`, refreshToken: `mockr.${u.uid}`, expiresIn: 3600, uid: u.uid, email: u.email, name: u.name };
 }
 
+/** The display name of a mock account (for "Shared by …"). */
+export function mockUserName(uid: string | undefined): string | undefined {
+  if (!uid) return undefined;
+  const u = Object.values(users()).find((x) => x.uid === uid);
+  return u ? u.name || u.email.split("@")[0] : undefined;
+}
+
 export const mockIdentity: IdentityProvider = {
   async signUp(email, password, name) {
     await sleep(500);
