@@ -139,7 +139,7 @@ def _plan_prompt(brief: dict, env: dict, concept_url: str | None) -> str:
         f"LDA ENVELOPE (deterministic, from the regulations):\n{json.dumps({k: v for k, v in env.items() if k != '_band'}, indent=1)}\n\n"
         f"TYPESCRIPT REFERENCE for the plan (conventions + types):\n{_read(CONTRACTS / 'plan.ts')}\n\n"
         f"EXAMPLE of a good, compliant plan for a 10 marla LDA plot (style reference only; design for THIS brief):\n"
-        f"{_read(CONTRACTS / 'fixtures' / 'plan-10-marla.json')}\n\n"
+        f"{json.dumps(json.loads(_read(CONTRACTS / 'fixtures' / 'plan-10-marla.json')), separators=(',', ':'))}\n\n"
         + ("The attached image is the concept the family chose: match its massing (porch side, balcony, roof features, "
            "window rhythm) where the LDA rules allow.\n" if concept_url else "")
         + "Now produce the BuildingPlan JSON for this brief."
@@ -196,7 +196,7 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
         yield "compliance", {"report": report, "attempt": attempt}
         if report["ok"]:
             break
-        contents += [types.Content(role="model", parts=[types.Part.from_text(text=text)]),
+        contents = contents[:1] + [types.Content(role="model", parts=[types.Part.from_text(text=json.dumps(plan, separators=(",", ":")))]),
                      types.Content(role="user", parts=[types.Part.from_text(text=(
                          "The LDA compliance engine reported these problems with your plan:\n" + lda.violations_text(report) +
                          "\n\nReturn the corrected COMPLETE BuildingPlan JSON. Fix every FAIL; fix WARNs where reasonable. "

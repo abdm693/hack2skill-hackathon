@@ -12,11 +12,13 @@ import json
 from typing import AsyncIterator
 
 from google.adk import Agent, Runner
+from google.adk.models import Gemini
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from .. import config
 from ..compliance import lda
+from ..gemini import RETRY
 from ..store import blobs, db
 from .architect import BUILD_SYSTEM, CONTRACTS, _read
 from .reviser import apply_ops, merge_sections
@@ -167,7 +169,7 @@ async def revise(project: dict, version: dict, comments: list[dict]) -> AsyncIte
     await db.update_project(pid, stage="revising")
     yield "stage", {"stage": "changes", "message": f"Argon is reviewing your {len(comments)} comment(s)…"}
     ws = Workspace(version, comments)
-    agent = Agent(name="reviser", model=config.MODEL_ARCHITECT, instruction=INSTRUCTION, tools=ws.tools(),
+    agent = Agent(name="reviser", model=Gemini(model=config.MODEL_ARCHITECT, retry_options=RETRY), instruction=INSTRUCTION, tools=ws.tools(),
                   generate_content_config=types.GenerateContentConfig(max_output_tokens=32768))
     sessions = InMemorySessionService()
     runner = Runner(app_name=APP, agent=agent, session_service=sessions)
