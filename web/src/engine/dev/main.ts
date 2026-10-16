@@ -35,7 +35,7 @@ controls.maxPolarAngle = Math.PI * 0.495;
 const pmrem = new THREE.PMREMGenerator(renderer);
 const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
 scene.environment = envRT.texture;
-scene.environmentIntensity = 0.5;
+scene.environmentIntensity = 0.32;
 
 const sky = new Sky();
 sky.scale.setScalar(4000);
@@ -180,24 +180,27 @@ function roomCenter(type: string, level?: string): { x: number; y: number; w: nu
 }
 
 function setView(name: string): void {
-  const W = currentPlan.site.plot.width_ft * FT, D = currentPlan.site.plot.depth_ft * FT;
+  // world mapping: x = x_ft·FT, z = −y_ft·FT (the road is at +z)
+  const Wf = currentPlan.site.plot.width_ft, Df = currentPlan.site.plot.depth_ft;
+  const P = (xf: number, yf: number, hm: number) => new THREE.Vector3(xf * FT, hm, -yf * FT);
   visibleLevels = null;
   clip = null;
   camera.fov = 42;
+  let pos: THREE.Vector3, tgt: THREE.Vector3;
   switch (name) {
     case "front":
-      camera.position.set(W / 2, 1.75, -14.5);
-      controls.target.set(W / 2, 4.6, D * 0.22);
+      pos = P(Wf / 2, -48, 1.75);
+      tgt = P(Wf / 2, Df * 0.22, 4.6);
       break;
     case "back":
-      camera.position.set(W * 0.2, 9, D + 16);
-      controls.target.set(W / 2, 4, D * 0.6);
+      pos = P(Wf * 0.2, Df + 52, 9);
+      tgt = P(Wf / 2, Df * 0.6, 4);
       break;
     case "dollhouse": {
       const ids = current?.levels.map((l) => l.id) ?? [];
       visibleLevels = new Set(ids.slice(0, 1));
-      camera.position.set(W + 7, 16, D * 0.05 - 4);
-      controls.target.set(W * 0.45, 0, D * 0.52);
+      pos = P(Wf + 22, -14, 16);
+      tgt = P(Wf * 0.45, Df * 0.52, 0);
       break;
     }
     case "lounge":
@@ -205,16 +208,20 @@ function setView(name: string): void {
       const r = name === "lounge" ? roomCenter("lounge", "ground") ?? roomCenter("lounge") : roomCenter("master_bedroom") ?? roomCenter("bedroom");
       if (r) {
         camera.fov = 62;
-        camera.position.set((r.x + r.w - 1.6) * FT, (r.floor + 5.2) * FT, (r.y + r.d - 1.4) * FT);
-        controls.target.set((r.x + r.w * 0.3) * FT, (r.floor + 3.6) * FT, (r.y + r.d * 0.3) * FT);
-        if (name === "master") visibleLevels = null;
+        pos = P(r.x + r.w - 1.6, r.y + r.d - 1.4, (r.floor + 5.2) * FT);
+        tgt = P(r.x + r.w * 0.3, r.y + r.d * 0.3, (r.floor + 3.6) * FT);
+      } else {
+        pos = P(Wf / 2, -40, 10);
+        tgt = P(Wf / 2, Df / 2, 3);
       }
       break;
     }
     default:
-      camera.position.set(-W * 0.55, 15, -11);
-      controls.target.set(W * 0.5, 3.2, D * 0.42);
+      pos = P(-Wf * 0.55, -36, 15);
+      tgt = P(Wf * 0.5, Df * 0.42, 3.2);
   }
+  camera.position.copy(pos);
+  controls.target.copy(tgt);
   camera.updateProjectionMatrix();
   controls.update();
   applyLevels();
@@ -299,4 +306,67 @@ renderer.setAnimationLoop(() => {
   },
 };
 
-void rebuild();
+async function swatches(): Promise<void> {
+  const { MaterialLib, PRESETS, texturesReady: ready } = await import("../materials/library");
+  const lib = new MaterialLib("high");
+  const names = Object.keys(PRESETS);
+  const g = new THREE.Group();
+  const cols = 8;
+  const geo = new THREE.SphereGeometry(0.42, 48, 32);
+  const box = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  // box-projected UVs in meters so textures show true scale
+  for (const gg of [geo, box]) {
+    const p = gg.getAttribute("position"), n = gg.getAttribute("normal");
+    const uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) {
+      const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+      const [u, v] = ax >= ay && ax >= az ? [p.getZ(i), p.getY(i)] : ay >= az ? [p.getX(i), p.getZ(i)] : [p.getX(i), p.getY(i)];
+      uv[i * 2] = u;
+      uv[i * 2 + 1] = v;
+    }
+    gg.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  }
+  names.forEach((name, i) => {
+    const m = lib.get(name as never);
+    const x = (i % cols) * 2.1, z = Math.floor(i / cols) * 2.3;
+    const s1 = new THREE.Mesh(box, m);
+    s1.position.set(x - 0.45, 0.4, z);
+    const s2 = new THREE.Mesh(geo, m);
+    s2.position.set(x + 0.5, 0.42, z);
+    s1.castShadow = s2.castShadow = s1.receiveShadow = s2.receiveShadow = true;
+    const cv = document.createElement("canvas");
+    cv.width = 256;
+    cv.height = 48;
+    const c2 = cv.getContext("2d")!;
+    c2.fillStyle = "#111";
+    c2.fillRect(0, 0, 256, 48);
+    c2.fillStyle = "#eee";
+    c2.font = "26px Inter, sans-serif";
+    c2.fillText(name, 8, 33);
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), toneMapped: false }));
+    lab.position.set(x, 0.01, z + 0.85);
+    lab.rotation.x = -Math.PI / 2;
+    g.add(s1, s2, lab);
+  });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.9 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(7, 0, 6);
+  floor.receiveShadow = true;
+  g.add(floor);
+  const sun = new THREE.DirectionalLight(0xfff1e0, 3);
+  sun.position.set(-6, 10, -4);
+  sun.target.position.set(7, 0, 6);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16 });
+  g.add(sun, sun.target, new THREE.HemisphereLight(0xbcd4ee, 0x6d5a47, 0.5));
+  scene.add(g);
+  camera.position.set(7, 9, -6);
+  controls.target.set(7, 0, 6);
+  controls.update();
+  await ready();
+  $("stats").textContent = `${names.length} presets`;
+}
+
+if (params.has("swatches")) void swatches();
+else void rebuild();

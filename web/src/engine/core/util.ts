@@ -5,10 +5,14 @@ export const FT = 0.3048;
 export const ft = (n: number): number => n * FT;
 export const toFt = (m: number): number => m / FT;
 
-/** Plan feet (x, y, h) → world meters (x, h, y). */
+/** Plan feet (x, y, h) → world meters per the contract: x_m = x·0.3048, Y_m = h·0.3048, z_m = −y·0.3048. */
 export function w3(x_ft: number, y_ft: number, h_ft = 0): THREE.Vector3 {
-  return new THREE.Vector3(x_ft * FT, h_ft * FT, y_ft * FT);
+  return new THREE.Vector3(x_ft * FT, h_ft * FT, -y_ft * FT);
 }
+/** World z (m) for a plan y (ft). */
+export const wz = (y_ft: number): number => -y_ft * FT;
+/** Plan y (ft) for a world z (m). */
+export const planY = (z_m: number): number => -z_m / FT;
 
 export const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;

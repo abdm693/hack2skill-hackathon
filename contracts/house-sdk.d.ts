@@ -5,7 +5,8 @@
  *
  * Coordinates: plan feet (see contracts/plan.ts). x = along the road (left→right), y = into the plot
  * (front→back), h = height in ft above the road crown (ground floor level ≈ plinth, e.g. 1.5).
- * World space is meters with +Y up; x_m = x_ft·0.3048, z_m = y_ft·0.3048, Y_m = h_ft·0.3048.
+ * World space is meters with +Y up; x_m = x_ft·0.3048, z_m = −y_ft·0.3048, Y_m = h_ft·0.3048
+ * (z is negated: the road is at +z, so from the street plan +x is on the viewer's right).
  * The SDK is forgiving: it clamps items inside rooms, snaps to walls and fills defaults, but never throws on bad
  * numbers. Every object it creates is tagged (layer, level, room, kind, id) for layers, comments and checks.
  *

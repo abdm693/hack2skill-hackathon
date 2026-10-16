@@ -154,12 +154,26 @@ export class MeshBuilder {
 
   build(): THREE.BufferGeometry | null {
     if (this.idx.length === 0) return null;
+    // Builders work in a plan-aligned frame (x = x_ft, z = +y_ft). The contract world is z = -y_ft
+    // (road at +z), so mirror z here, once: negate z of positions and normals and flip the winding.
+    const pos = Float32Array.from(this.pos);
+    const nor = Float32Array.from(this.nor);
+    for (let i = 2; i < pos.length; i += 3) {
+      pos[i] = -pos[i];
+      nor[i] = -nor[i];
+    }
+    const vc = pos.length / 3;
+    const idx = vc > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx);
+    for (let i = 0; i < idx.length; i += 3) {
+      const t = idx[i + 1];
+      idx[i + 1] = idx[i + 2];
+      idx[i + 2] = t;
+    }
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
-    const vc = this.pos.length / 3;
-    g.setIndex(vc > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();
     return g;

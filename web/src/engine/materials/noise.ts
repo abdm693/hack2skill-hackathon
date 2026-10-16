@@ -64,11 +64,11 @@ function perlinTable(seed: number, basePeriod: number, octaves: number, ridged =
 
 const cache = new Map<string, Float32Array>();
 /** fBm table (values 0..1). kind "fbm" | "ridged" | "smooth"(fewer octaves). */
-export function table(seed: number, kind: "fbm" | "ridged" | "smooth" = "fbm"): Float32Array {
+export function table(seed: number, kind: "fbm" | "ridged" | "smooth" | "vlow" = "fbm"): Float32Array {
   const key = `${kind}:${seed}`;
   let t = cache.get(key);
   if (!t) {
-    t = kind === "smooth" ? perlinTable(seed, 2, 3) : kind === "ridged" ? perlinTable(seed, 4, 5, true) : perlinTable(seed, 4, 5);
+    t = kind === "vlow" ? perlinTable(seed, 1, 2) : kind === "smooth" ? perlinTable(seed, 2, 3) : kind === "ridged" ? perlinTable(seed, 4, 5, true) : perlinTable(seed, 4, 5);
     cache.set(key, t);
   }
   return t;

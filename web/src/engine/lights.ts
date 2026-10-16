@@ -7,7 +7,7 @@ import { Kit } from "./core/shapes";
 import type { RoomM } from "./plan/model";
 
 const LAT = 31.5 * DEG; // Lahore
-const DECL = 10 * DEG; // spring / late-summer sun: 17.5h ≈ golden hour
+const DECL = 18 * DEG; // early-summer sun: 17.5h ≈ golden hour, grazing light on north-facing fronts
 const FACING: Record<string, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
 
 /** Unit vector (world) pointing from the house toward the sun, plus altitude (radians). */
@@ -25,7 +25,8 @@ export function sunDirection(plan: Pick<BuildingPlan, "site">, hour: number): { 
   // plan direction for a compass bearing relative to the plot front (front = -y)
   const dx = -Math.sin(th), dy = -Math.cos(th);
   const altC = Math.max(alt, 2.5 * DEG);
-  const dir = new THREE.Vector3(dx * Math.cos(altC), Math.sin(altC), dy * Math.cos(altC)).normalize();
+  // world mapping: z = -y
+  const dir = new THREE.Vector3(dx * Math.cos(altC), Math.sin(altC), -dy * Math.cos(altC)).normalize();
   return { dir, altitude: alt };
 }
 
@@ -33,10 +34,10 @@ export function sunLook(altitude: number): { color: THREE.Color; intensity: numb
   const a = altitude / DEG;
   const warm = new THREE.Color("#ffad66"), gold = new THREE.Color("#ffd6a3"), day = new THREE.Color("#fff3e4");
   const c = a < 12 ? warm.clone().lerp(gold, smoothstep(0, 12, a)) : gold.clone().lerp(day, smoothstep(12, 40, a));
-  const intensity = 3.4 * smoothstep(-3, 8, a) * lerp(0.62, 1, smoothstep(5, 45, a));
-  const sky = new THREE.Color("#f3c9a2").lerp(new THREE.Color("#b9d1ec"), smoothstep(4, 30, a));
-  const ground = new THREE.Color("#6d5a47");
-  const hemi = lerp(0.25, 0.55, smoothstep(-5, 30, a));
+  const intensity = 5.2 * smoothstep(-3, 8, a) * lerp(0.72, 1, smoothstep(5, 45, a));
+  const sky = new THREE.Color("#e9c3a3").lerp(new THREE.Color("#b3cbe6"), smoothstep(4, 30, a));
+  const ground = new THREE.Color("#5f4f40");
+  const hemi = lerp(0.12, 0.32, smoothstep(-5, 30, a));
   return { color: c, intensity, sky, ground, hemi };
 }
 
@@ -66,7 +67,7 @@ export function addSun(ctx: BuildCtx, o: { hour?: number; intensity?: number } =
   ctx.sunHour = hour;
   const W = plan.plotW * FT, D = plan.plotD * FT;
   const target = new THREE.Object3D();
-  target.position.set(W / 2, 0, D / 2);
+  target.position.set(W / 2, 0, -D / 2);
   const sun = new THREE.DirectionalLight(0xffffff, 3);
   sun.name = "sun";
   sun.target = target;
@@ -122,7 +123,7 @@ export function interiorLights(ctx: BuildCtx, o: { warmth?: "warm" | "neutral"; 
     withReal.add(r.id);
     const lightH = ceilingAt(ctx, r) - 1.2;
     const l = new THREE.PointLight(color(hex), 7 * k * clamp((r.rect.w * r.rect.d) / 200, 0.7, 1.8), Math.hypot(r.rect.w, r.rect.d) * FT * 1.3, 2);
-    l.position.set((r.rect.x + r.rect.w / 2) * FT, lightH * FT, (r.rect.y + r.rect.d / 2) * FT);
+    l.position.set((r.rect.x + r.rect.w / 2) * FT, lightH * FT, -(r.rect.y + r.rect.d / 2) * FT);
     l.castShadow = false;
     ctx.add(l, { kind: "light:interior", level: r.level, room: r.id, id: `light_${r.id}`, label: `${r.name} light` });
   }
@@ -164,11 +165,11 @@ export function pointLight(ctx: BuildCtx, o: { at: Pt; h_ft: number; color?: str
   const x = num(at[0], ctx.plan.plotW / 2), y = num(at[1], ctx.plan.plotD / 2), h = num(o?.h_ft, 8, -5, 60);
   const c = color(o?.color, "#ffd9a8");
   const k = clamp(num(o?.intensity, 1), 0, 20);
-  const pos = new THREE.Vector3(x * FT, h * FT, y * FT);
+  const pos = new THREE.Vector3(x * FT, h * FT, y * FT); // build frame (Kit/MeshBuilder mirrors z)
   const level = levelAtHeight(ctx, h);
   if (ctx.takeLight()) {
     const l = new THREE.PointLight(c, 8 * k, num(o?.distance_ft, 16, 2, 120) * FT, 2);
-    l.position.copy(pos);
+    l.position.set(pos.x, pos.y, -pos.z);
     ctx.add(l, { kind: "light:point", level, id: ctx.uid("point_light"), label: "Light" });
   } else warn("light budget (12 real lights) reached; adding an emissive bulb instead");
   const kit = new Kit();

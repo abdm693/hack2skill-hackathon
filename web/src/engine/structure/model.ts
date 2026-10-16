@@ -594,11 +594,9 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
   const R0 = s.rect;
   const axis: "x" | "y" = s.start === "+x" || s.start === "-x" ? "x" : "y";
   const sign: 1 | -1 = s.start === "+x" || s.start === "+y" ? 1 : -1;
-  const A0 = axis === "x" ? R0.x : R0.y, A1 = axis === "x" ? R0.x + R0.w : R0.y + R0.d;
+  let A0 = axis === "x" ? R0.x : R0.y, A1 = axis === "x" ? R0.x + R0.w : R0.y + R0.d;
   const C0 = axis === "x" ? R0.y : R0.x, C1 = axis === "x" ? R0.y + R0.d : R0.x + R0.w;
-  const startA = sign > 0 ? A0 : A1;
-  const farA = sign > 0 ? A1 : A0;
-  const length = A1 - A0, breadth = C1 - C0;
+  const breadth = C1 - C0;
   const fromRoom = plan.roomAt(s.from.id, R0.x + R0.w / 2, R0.y + R0.d / 2);
   const h0 = fromRoom ? fromRoom.floorH : s.from.elev;
   const rise = s.to.elev - h0;
@@ -606,6 +604,42 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
   const N = Math.max(3, Math.round((rise * 12) / s.riser_in));
   const r = rise / N;
   let T = s.tread_in / 12;
+  const isDog = s.kind === "dogleg" && breadth >= 2 * 2.4 + 0.1;
+  const isL = s.kind === "l_shape" && breadth >= 4.5;
+  // ── walkability: keep a clear strip (≥ 0.9 m) in front of the bottom step (a dog-leg also arrives at that end).
+  // Use the stair ROOM's free space beyond the rect; compress treads slightly (≥ 9.5") and the landing (≥ 3 ft) if needed.
+  if (fromRoom) {
+    const face = (side: Side): number => {
+      const ws = model.roomWalls(fromRoom, side);
+      const rr = fromRoom.rect;
+      const edge = side === "front" ? rr.y : side === "back" ? rr.y + rr.d : side === "left" ? rr.x : rr.x + rr.w;
+      return ws.length ? ws[0].inner : edge;
+    };
+    const U0 = axis === "y" ? face("front") : face("left");
+    const U1 = axis === "y" ? face("back") : face("right");
+    const need = 2.95;
+    const strip = sign > 0 ? A0 - U0 : U1 - A1;
+    if (strip < need) {
+      const n1 = isDog || isL ? Math.ceil(N / 2) : N;
+      const wf = isDog ? Math.min(s.width, (breadth - 0.15) / 2) : Math.min(s.width, breadth);
+      const tMin = Math.max(9.5 / 12, Math.min(T, (s.tread_in / 12) * 0.95));
+      const minRun = (n1 - 1) * tMin + (isDog ? Math.max(3.0, Math.min(wf, 3.5) * 0.86) : isL ? wf : 0);
+      const farSlack = Math.max(0, sign > 0 ? U1 - 0.05 - A1 : A0 - (U0 + 0.05));
+      const shift = Math.min(need - strip, farSlack);
+      A0 += sign * shift;
+      A1 += sign * shift;
+      const deficit = need - strip - shift;
+      if (deficit > 0.05) {
+        const cut = Math.min(deficit, Math.max(0, A1 - A0 - minRun));
+        if (sign > 0) A0 += cut;
+        else A1 -= cut;
+      }
+    }
+  }
+  const startA = sign > 0 ? A0 : A1;
+  const farA = sign > 0 ? A1 : A0;
+  const length = A1 - A0;
+  const rectAdj: R = axis === "x" ? { x: A0, y: C0, w: A1 - A0, d: C1 - C0 } : { x: C0, y: A0, w: C1 - C0, d: A1 - A0 };
   const flights: Flight[] = [];
   const landings: { rect: R; h: number }[] = [];
   const holes: R[] = [];
@@ -629,14 +663,15 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
   }
   const arriveHigh = accessC > (C0 + C1) / 2;
 
-  if (s.kind === "dogleg" && breadth >= 2 * 2.4 + 0.1) {
+  if (isDog) {
     const wf = Math.min(s.width, (breadth - 0.15) / 2);
     const n1 = Math.ceil(N / 2), n2 = N - n1;
+    const Lmin = Math.max(3.0, Math.min(wf, 3.5) * 0.86);
     let L = length - (n1 - 1) * T;
-    if (L < wf * 0.8) {
-      T = Math.max(0.6, (length - wf * 0.9) / Math.max(1, n1 - 1));
+    if (L < Lmin) {
+      T = Math.max(0.62, (length - Lmin) / Math.max(1, n1 - 1));
       L = length - (n1 - 1) * T;
-      if (T < 0.75) warn(`stair ${s.id}: treads compressed to ${(T * 12).toFixed(1)} in to fit the rect`);
+      if (T < 0.78) warn(`stair ${s.id}: treads compressed to ${(T * 12).toFixed(1)} in to fit the room`);
     }
     // flight 1 on the side opposite the arrival
     const f1c: [number, number] = arriveHigh ? [C0, C0 + wf] : [C1 - wf, C1];
@@ -657,10 +692,10 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
     if (f1c[0] > f2c[1] + 1e-3) holes.push(mk(cut1, farA, f2c[1], f1c[0]));
     const ac = (f2c[0] + f2c[1]) / 2;
     const aa = end2 - sign * 1.2;
-    return { stair: s, flights, landings, holes, rect: R0, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: ac } : { x: ac, y: aa } };
+    return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: ac } : { x: ac, y: aa } };
   }
 
-  if (s.kind === "l_shape" && breadth >= 4.5 && length >= 4.5) {
+  if (isL && length >= 4.5) {
     const wf = Math.min(s.width, breadth * 0.5, length * 0.5);
     const n1 = Math.ceil(N / 2), n2 = N - n1;
     let T1 = T, T2 = T;
@@ -675,10 +710,10 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
     const sign2: 1 | -1 = arriveHigh ? 1 : -1;
     const s02 = arriveHigh ? f1c[1] : f1c[0];
     flights.push({ axis: axis2, sign: sign2, c0: Math.min(landA0, landA1), c1: Math.max(landA0, landA1), s0: s02, n: n2, riser: r, tread: T2, h0: h0 + n1 * r });
-    holes.push(R0);
+    holes.push(rectAdj);
     const end = s02 + sign2 * (n2 - 1) * T2 + sign2 * 1.2;
     const ac = (landA0 + landA1) / 2;
-    return { stair: s, flights, landings, holes, rect: R0, holeLevel: s.to.id, arrival: axis === "x" ? { x: ac, y: end } : { x: end, y: ac } };
+    return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: ac, y: end } : { x: end, y: ac } };
   }
 
   // straight (also the fallback)
@@ -692,5 +727,5 @@ function layoutStair(plan: PlanModel, s: StairM, model: StructureModel): StairLa
   const end = startA + sign * (N - 1) * T;
   holes.push(mk(startA, end, cMid - wf / 2 - 0.05, cMid + wf / 2 + 0.05));
   const aa = end + sign * 1.2;
-  return { stair: s, flights, landings, holes, rect: R0, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: cMid } : { x: cMid, y: aa } };
+  return { stair: s, flights, landings, holes, rect: rectAdj, holeLevel: s.to.id, arrival: axis === "x" ? { x: aa, y: cMid } : { x: cMid, y: aa } };
 }

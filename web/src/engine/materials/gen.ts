@@ -37,17 +37,18 @@ const pnum = (p: GenParams, k: string, d: number): number => (typeof p[k] === "n
 // ── plaster / paint (grayscale, tinted by material.color) ─────────────────────────────────────────────
 const plaster: Gen = (N, _base, seed, p) => {
   const d = alloc(N, true, true);
-  const A = sampler(table(seed), N), B = sampler(table(seed + 1), N), C = sampler(table(seed + 2), N);
+  const B = sampler(table(seed + 1), N), C = sampler(table(seed + 2), N), E = sampler(table(seed + 3, "ridged"), N);
   const trowel = pnum(p, "trowel", 1);
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const i = y * N + x;
-      const low = A(x, y, 1), mid = B(x, y, 4), fine = C(x, y, 16);
+      const mid = B(x, y, 6), fine = C(x, y, 24), sweep = E(x, y, 3, 5);
       const grain = hash2(x, y, seed) - 0.5;
-      const v = 0.955 + 0.035 * (low - 0.5) + 0.02 * (mid - 0.5) * trowel + 0.018 * (fine - 0.5) + 0.012 * grain;
+      // very low contrast so large walls never show a tiling grid
+      const v = 0.965 + 0.008 * (mid - 0.5) + 0.01 * (fine - 0.5) + 0.01 * grain - 0.012 * trowel * Math.max(0, sweep - 0.82);
       put(d, i, v, v, v);
-      d.height![i] = fine * 0.55 + mid * 0.3 * trowel + grain * 0.12;
-      d.rough![i] = 0.5 + 0.35 * (mid - 0.5) + 0.2 * (fine - 0.5);
+      d.height![i] = fine * 0.45 + grain * 0.25 + trowel * 0.35 * (mid - 0.5) + trowel * 0.25 * Math.max(0, sweep - 0.8);
+      d.rough![i] = 0.55 + 0.25 * (mid - 0.5) + 0.12 * (fine - 0.5);
     }
   return d;
 };
@@ -278,24 +279,26 @@ function woodColor(base: RGB, rings: number, fiber: number, tone: number): RGB {
   return [c[0] * f, c[1] * f, c[2] * f];
 }
 
-/** Continuous joinery grain (along u). */
+/** Continuous joinery grain (along u): rift-sawn veneer look, near-parallel bands with gentle waves. */
 const woodGrain: Gen = (N, base, seed, p) => {
   const d = alloc(N, true, true);
-  const ringF = pnum(p, "rings", 22), warpA = pnum(p, "warp", 2.2);
-  const S1 = sampler(table(seed), N), S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2), N);
+  const ringF = pnum(p, "rings", 44), warpA = pnum(p, "warp", 1.0);
+  const W1 = sampler(table(seed, "vlow"), N), W2 = sampler(table(seed + 5, "smooth"), N);
+  const S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2), N);
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const i = y * N + x;
-      const w = S1(x, y, 1, 3);
-      const t = (y / N) * ringF + w * warpA;
+      const w = W1(x, y, 1, 2), w2 = W2(x, y, 1, 5);
+      const t = (y / N) * ringF + (w - 0.5) * warpA * 1.6 + (w2 - 0.5) * 0.55;
       const s = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-      const rings = Math.pow(s, 3);
-      const fiber = S2(x, y, 2, 96);
-      const fleck = S3(x, y, 6, 40);
-      const c = woodColor(base, rings, fiber, 0.92 + 0.12 * (fleck - 0.5));
+      const rings = Math.pow(smoothstep(0.3, 1, s), 1.4) * 0.6;
+      const fiber = S2(x, y, 1, 128);
+      const fleck = S3(x, y, 2, 16);
+      const pore = hash2(x, y, seed) > 0.992 && fiber < 0.45 ? 0.8 : 1;
+      const c = woodColor(base, rings, fiber, (0.94 + 0.1 * (fleck - 0.5)) * pore);
       put(d, i, c[0], c[1], c[2]);
-      d.height![i] = 0.5 + 0.18 * (fiber - 0.5) - 0.12 * rings;
-      d.rough![i] = 0.5 + 0.18 * rings + 0.1 * (fiber - 0.5);
+      d.height![i] = 0.5 + 0.16 * (fiber - 0.5) - 0.08 * rings - (pore < 1 ? 0.12 : 0);
+      d.rough![i] = 0.48 + 0.14 * rings + 0.1 * (fiber - 0.5);
     }
   return d;
 };
@@ -327,7 +330,7 @@ const planks: Gen = (N, base, seed, p) => {
     const so = starts.map(() => [r() * 256, r() * 256, 0.6 + r() * 0.8] as const);
     return { off, starts, ends, of, col, so };
   });
-  const S1 = sampler(table(seed + 11), N), S2 = sampler(table(seed + 12), N), S3 = sampler(table(seed + 13), N);
+  const S1 = sampler(table(seed + 11, "vlow"), N), S2 = sampler(table(seed + 12), N), S3 = sampler(table(seed + 13), N);
   for (let y = 0; y < N; y++) {
     const rk = Math.min(rowsN - 1, Math.floor(y / rh));
     const row = rows[rk];
@@ -341,8 +344,8 @@ const planks: Gen = (N, base, seed, p) => {
       const le = row.ends[k] - xs;
       const e = Math.min(lv, rh - lv, lu * 3, le * 3);
       const [ou, ov, rf] = row.so[k];
-      const w = S1(x, y, 1, 4, ou, ov);
-      const t = (lv / rh) * ringF * rf + w * 2.4 + ou * 0.01;
+      const w = S1(x, y, 1, 2, ou, ov);
+      const t = (lv / rh) * ringF * rf + (w - 0.5) * 1.5 + ou * 0.01;
       const s = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
       const rings = Math.pow(s, 3);
       const fiber = S2(x, y, 2, 128, ou, ov);
@@ -364,7 +367,7 @@ const planks: Gen = (N, base, seed, p) => {
   return d;
 };
 
-// ── marble ────────────────────────────────────────────────────────────────────────────────────────────
+// ── marble: soft clouds, a few long interrupted veins with a grey halo ─────────────────────────────────
 const marble: Gen = (N, base, seed, p) => {
   const d = alloc(N, true, true);
   const vein: RGB = p.vein ? hexToRGB(p.vein as string) : [0.55, 0.55, 0.57];
@@ -372,38 +375,39 @@ const marble: Gen = (N, base, seed, p) => {
   const warpA = pnum(p, "warp", 1.6);
   const slabs = pnum(p, "slabs", 2);
   const cloud = pnum(p, "cloud", 0.07);
-  const S1 = sampler(table(seed), N), S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2, "ridged"), N), S4 = sampler(table(seed + 3), N);
+  const S1 = sampler(table(seed), N), S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2, "smooth"), N), S4 = sampler(table(seed + 3), N);
   const sw = N / slabs;
   const r = rng(seed);
-  const slabP = Array.from({ length: slabs * slabs }, () => ({ ox: r() * 256, oy: r() * 256, a: 0.5 + r() * 1.2, b: 1 + r() * 1.5, t: (r() - 0.5) * 0.05 }));
+  const slabP = Array.from({ length: slabs * slabs }, () => ({ ox: r() * 256, oy: r() * 256, a: 0.35 + r() * 0.5, b: 0.8 + r() * 0.6, t: (r() - 0.5) * 0.04, a2: 0.9 + r(), b2: 0.2 + r() * 0.4 }));
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const i = y * N + x;
       const sx = Math.floor(x / sw), sy = Math.floor(y / sw);
       const sp = slabP[sy * slabs + sx];
       const lu = x - sx * sw, lv = y - sy * sw;
-      const wx = S1(x, y, 1, 1, sp.ox, sp.oy), wy = S2(x, y, 2, 2, sp.ox, sp.oy);
-      const t = (lu * sp.a + lv * sp.b) / sw + (wx - 0.5) * warpA + (wy - 0.5) * warpA * 0.5;
-      const s1 = Math.abs(Math.sin(t * Math.PI * 2.2));
-      const major = 1 - smoothstep(0.0, 0.06 + 0.06 * wy, s1);
-      const s2 = Math.abs(Math.sin((t * 3.1 + (wy - 0.5) * 2) * Math.PI * 2));
-      const minor = (1 - smoothstep(0, 0.035, s2)) * 0.45;
-      const ridge = S3(x, y, 3, 3, sp.ox, sp.oy);
-      const crack = smoothstep(0.93, 0.99, ridge) * 0.5;
+      const w1 = S1(x, y, 1, 1, sp.ox, sp.oy), w2 = S2(x, y, 3, 3, sp.oy, sp.ox);
+      const t = (lu * sp.a + lv * sp.b) / sw + (w1 - 0.5) * warpA + (w2 - 0.5) * 0.35;
+      const s1 = Math.abs(Math.sin(t * Math.PI * 1.35));
+      const mask = smoothstep(0.38, 0.62, S3(x, y, 1, 1, sp.ox * 0.5, sp.oy * 0.5));
+      const major = (1 - smoothstep(0.0, 0.03 + 0.03 * w2, s1)) * (0.35 + 0.65 * mask);
+      const halo = Math.exp(-s1 * 7) * 0.45 * (0.4 + 0.6 * mask);
+      const t2 = (lu * sp.b2 - lv * sp.a2) / sw * 1.8 + (w2 - 0.5) * 1.6 + (w1 - 0.5) * 0.6;
+      const s2 = Math.abs(Math.sin(t2 * Math.PI * 1.7));
+      const minor = (1 - smoothstep(0, 0.018, s2)) * 0.28 * smoothstep(0.45, 0.7, S4(x, y, 2, 2, sp.ox, sp.oy));
       const cl = S4(x, y, 2, 2, sp.oy, sp.ox);
-      const v = clamp((major * (0.55 + 0.45 * wx) + minor + crack) * veinAmt, 0, 1);
+      const v = clamp((major + minor + halo * 0.35) * veinAmt, 0, 1);
       const tone = 1 + cloud * (cl - 0.5) * 2 + sp.t;
       const c = mix(mul(base, tone), vein, v);
       const e = Math.min(lu, sw - lu, lv, sw - lv);
-      if (e < 1) {
-        put(d, i, c[0] * 0.86, c[1] * 0.86, c[2] * 0.86);
-        d.height![i] = 0.4;
-        d.rough![i] = 0.5;
+      if (e < 0.8) {
+        put(d, i, c[0] * 0.9, c[1] * 0.9, c[2] * 0.9);
+        d.height![i] = 0.5;
+        d.rough![i] = 0.4;
         continue;
       }
       put(d, i, c[0], c[1], c[2]);
-      d.height![i] = 0.9 - v * 0.03;
-      d.rough![i] = 0.07 + 0.06 * (cl - 0.5) + v * 0.04;
+      d.height![i] = 0.9 - v * 0.02;
+      d.rough![i] = 0.06 + 0.04 * (cl - 0.5) + v * 0.03;
     }
   return d;
 };

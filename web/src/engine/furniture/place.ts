@@ -335,8 +335,9 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
       }
     });
   };
-  group.position.set(cx * FT, base * FT, cy * FT);
-  group.rotation.y = -rot * DEG;
+  // world: z = -y; built geometry faces local -z, so a plan CCW rotation θ is rotation.y = +θ
+  group.position.set(cx * FT, base * FT, -cy * FT);
+  group.rotation.y = rot * DEG;
   if (type === "prayer_mat") group.rotation.y += Math.PI;
   const label = `${room.name} ${type.replace(/_/g, " ")}`;
   const topH = topHeight(type, base, h, b);
@@ -415,11 +416,11 @@ function addOutdoorUnit(ctx: BuildCtx, room: RoomM, side: Side, cx: number, cy: 
   acOutdoor(kit, mats);
   const g = kit.build();
   const px = run.axis === "x" ? u : outer, py = run.axis === "x" ? outer : u;
-  g.position.set(px * FT, h * FT, py * FT);
+  g.position.set(px * FT, h * FT, -py * FT);
   // outward facing
   const face: Side = run.axis === "x" ? (run.out < 0 ? "front" : "back") : run.out < 0 ? "left" : "right";
   const rot = face === "back" ? 0 : face === "front" ? 180 : face === "left" ? 90 : -90;
-  g.rotation.y = -rot * DEG;
+  g.rotation.y = rot * DEG;
   ctx.add(g, { kind: "furniture:ac_outdoor", room: room.id, level: room.level, label: "AC outdoor unit" });
   g.traverse((x) => (x.userData.collide = false));
 }

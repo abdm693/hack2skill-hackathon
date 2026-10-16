@@ -72,7 +72,7 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
     if (!m.isMesh) {
       if ((o as THREE.Light).isLight && o.userData.id) {
         const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).applyMatrix4(inv);
-        const pf: [number, number, number] = [p.x / FT, p.z / FT, p.y / FT];
+        const pf: [number, number, number] = [p.x / FT, -p.z / FT, p.y / FT];
         addBox(readTags(o), { min: pf, max: [...pf] });
       }
       return;
@@ -125,7 +125,7 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
         nor[k] = _n.x; nor[k + 1] = _n.y; nor[k + 2] = _n.z;
         uv[(vo + i) * 2] = U.getX(i);
         uv[(vo + i) * 2 + 1] = U.getY(i);
-        const px = _v.x / FT, py = _v.z / FT, ph = _v.y / FT;
+        const px = _v.x / FT, py = -_v.z / FT, ph = _v.y / FT;
         if (px < bb.min[0]) bb.min[0] = px; if (px > bb.max[0]) bb.max[0] = px;
         if (py < bb.min[1]) bb.min[1] = py; if (py > bb.max[1]) bb.max[1] = py;
         if (ph < bb.min[2]) bb.min[2] = ph; if (ph > bb.max[2]) bb.max[2] = ph;
@@ -243,7 +243,7 @@ const COLLIDER_MAT = new THREE.MeshBasicMaterial({ visible: false });
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function toPlanBox(b: THREE.Box3): BBox {
-  return { min: [b.min.x / FT, b.min.z / FT, b.min.y / FT], max: [b.max.x / FT, b.max.z / FT, b.max.y / FT] };
+  return { min: [b.min.x / FT, -b.max.z / FT, b.min.y / FT], max: [b.max.x / FT, -b.min.z / FT, b.max.y / FT] };
 }
 
 function isInside(o: THREE.Object3D, g: THREE.Object3D): boolean {

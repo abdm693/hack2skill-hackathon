@@ -40,8 +40,8 @@ const WOOD = (base: string, rings = 18): PresetDef => ({
 });
 const PLASTER = (base: string, trowel = 1): PresetDef => ({
   base,
-  tex: { gen: "plaster", size: [1.8, 1.8], N: 512, normal: 1.1 * trowel + 0.3, tint: true, params: { trowel } },
-  roughness: 0.9,
+  tex: { gen: "plaster", size: [2.4, 2.4], N: 512, normal: 0.45 * trowel + 0.25, tint: true, params: { trowel } },
+  roughness: 0.88,
 });
 
 export const PRESETS: Record<MaterialPreset, PresetDef> = {
@@ -64,7 +64,7 @@ export const PRESETS: Record<MaterialPreset, PresetDef> = {
   brick_exposed: { base: "#8c4b36", tex: { gen: "brick", size: [0.92, 0.66], N: 512, normal: 3.4, params: { cols: 4, rows: 8, mortar: "#6c625a", recess: 0.7 } }, roughness: 0.9 },
   concrete: { base: "#a9a7a1", tex: { gen: "concrete", size: [2.4, 2.4], N: 512, normal: 1.0, params: { panels: 2 } }, roughness: 0.8 },
   wood_cladding: { base: "#9e6739", tex: { gen: "planks", size: [1.8, 1.8], N: 1024, normal: 2.2, params: { rows: 12, lenMin: 0.5, lenMax: 1.0, gap: 2.2, rings: 6 } }, roughness: 0.62 },
-  marble_white: { base: "#eeece8", tex: { gen: "marble", size: [2.4, 2.4], N: 1024, normal: 0.25, params: { vein: "#8b8b90", veinAmt: 0.85, cloud: 0.06 } }, roughness: 0.1 },
+  marble_white: { base: "#efedea", tex: { gen: "marble", size: [2.4, 2.4], N: 1024, normal: 0.25, params: { vein: "#77777d", veinAmt: 1.15, cloud: 0.05 } }, roughness: 0.1 },
   marble_beige: { base: "#ddd0b9", tex: { gen: "marble", size: [2.4, 2.4], N: 1024, normal: 0.25, params: { vein: "#f3ece0", veinAmt: 0.55, cloud: 0.09, warp: 2.2 } }, roughness: 0.12 },
   marble_black: { base: "#1d1d20", tex: { gen: "marble", size: [2.4, 2.4], N: 1024, normal: 0.25, params: { vein: "#e6e2da", veinAmt: 0.9, cloud: 0.12 } }, roughness: 0.1 },
   terrazzo: { base: "#e7e3dc", tex: { gen: "terrazzo", size: [1.2, 1.2], N: 1024, normal: 0.2 }, roughness: 0.24 },
@@ -447,7 +447,7 @@ export class MaterialLib {
   private glass(def: PresetDef, s: NormSpec): THREE.Material {
     const col = toColor(s.color ?? def.base);
     const rough = s.roughness ?? def.roughness;
-    if (this.quality === "high") {
+    if (this.quality === "high" && def.glass !== "frosted") {
       const m = new THREE.MeshPhysicalMaterial({
         color: col,
         metalness: 0,

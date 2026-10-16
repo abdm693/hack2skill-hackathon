@@ -54,7 +54,12 @@ export function parseDesign(code: string): DesignSectionSrc[] {
 
 /** Serialize back (used for display/download). */
 export function serializeDesign(sections: DesignSectionSrc[]): string {
-  return sections.map((s) => `// @section ${s.name} [${s.layer}]\n${s.body.replace(/\n$/, "")}\n// @end`).join("\n");
+  return (sections ?? [])
+    .map((s) => {
+      const body = String((s as DesignSectionSrc & { code?: string }).body ?? (s as { code?: string }).code ?? "");
+      return `// @section ${s.name} [${s.layer}]\n${body.replace(/\n$/, "")}\n// @end`;
+    })
+    .join("\n");
 }
 
 /** Blank out comments and string literal text (template ${…} expressions are kept) so the screen sees only code. */
@@ -146,7 +151,8 @@ export function screenSection(body: string): string[] {
 
 /** Fallback design when Argon code is missing: structure + auto_furnish every room + landscape + lights. */
 export function defaultDesign(plan: BuildingPlan): DesignSectionSrc[] {
-  return defaultDesignImpl(plan);
+  // also carry `code` (alias of `body`) so the result can be used as API DesignSection[] directly
+  return defaultDesignImpl(plan).map((s) => Object.assign(s, { code: s.body }));
 }
 
 /** Build the house. Runs sections in order and calls onSection after each (the viewer re-renders = "layers assembling"). */

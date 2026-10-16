@@ -57,7 +57,16 @@ export async function buildHouseImpl(
   const sdk = createSDK(ctx);
   const THREE_L = lenientThree();
   const results: SectionResult[] = [];
-  const sections = (Array.isArray(sectionsIn) ? sectionsIn : []).filter((s) => s && typeof s.body === "string" && typeof s.name === "string");
+  // accept {name, layer, body} and the API shape {name, layer, code}
+  const sections: DesignSectionSrc[] = [];
+  for (const raw of Array.isArray(sectionsIn) ? sectionsIn : []) {
+    if (!raw || typeof raw !== "object") continue;
+    const sec = raw as DesignSectionSrc & { code?: unknown };
+    const body = typeof sec.body === "string" ? sec.body : typeof sec.code === "string" ? sec.code : null;
+    if (body === null) continue;
+    const name = typeof sec.name === "string" && sec.name ? sec.name : `section_${sections.length}`;
+    sections.push({ name, layer: sec.layer, body });
+  }
 
   const runSection = async (name: string, layerIn: string, body: string | (() => void)) => {
     const layer: Layer = LAYERS.includes(layerIn as Layer) ? (layerIn as Layer) : inferLayer(name);
@@ -191,22 +200,35 @@ function computeSpawn(ctx: BuildCtx): { position: THREE.Vector3; lookAt: THREE.V
     const run = main.run;
     const u = (main.u0 + main.u1) / 2;
     const outward = run.out !== 0 ? run.out : main.swingSide === -1 ? 1 : -1;
-    const dist = 6.5;
-    const px = run.axis === "x" ? u : run.c + outward * dist;
-    const py = run.axis === "x" ? run.c + outward * dist : u;
+    // first free spot outside the door (avoid parked cars, planters, other furniture)
+    const blocked = (x: number, y: number) =>
+      ctx.items.some((it) => (it.cls === "floor" || it.cls === "top") && x > it.x0 - 1.3 && x < it.x1 + 1.3 && y > it.y0 - 1.3 && y < it.y1 + 1.3) ||
+      x < 0.8 || y < -20 || x > plan.plotW - 0.8 || y > plan.plotD;
+    let px = run.axis === "x" ? u : run.c + outward * 6.5;
+    let py = run.axis === "x" ? run.c + outward * 6.5 : u;
+    search: for (const dist of [6.5, 4.5, 8.5, 3.5, 10.5, 2.8])
+      for (const lat of [0, 2.5, -2.5, 4.5, -4.5]) {
+        const cx = run.axis === "x" ? u + lat : run.c + outward * dist;
+        const cy = run.axis === "x" ? run.c + outward * dist : u + lat;
+        if (!blocked(cx, cy)) {
+          px = cx;
+          py = cy;
+          break search;
+        }
+      }
     const dx = run.axis === "x" ? u : run.c;
     const dy = run.axis === "x" ? run.c : u;
     const floor = floorBelow(ctx, px, py, main.bottom + 3);
     const doorFloor = main.bottom + 0.04;
     return {
-      position: new THREE.Vector3(px * FT, floor * FT + eye, py * FT),
-      lookAt: new THREE.Vector3(dx * FT, doorFloor * FT + eye, dy * FT),
+      position: new THREE.Vector3(px * FT, floor * FT + eye, -py * FT),
+      lookAt: new THREE.Vector3(dx * FT, doorFloor * FT + eye, -dy * FT),
     };
   }
   const x = plan.plotW / 2, y = 4;
   return {
-    position: new THREE.Vector3(x * FT, plan.grade * FT + eye, y * FT),
-    lookAt: new THREE.Vector3(x * FT, plan.grade * FT + eye, (y + 10) * FT),
+    position: new THREE.Vector3(x * FT, plan.grade * FT + eye, -y * FT),
+    lookAt: new THREE.Vector3(x * FT, plan.grade * FT + eye, -(y + 10) * FT),
   };
 }
 

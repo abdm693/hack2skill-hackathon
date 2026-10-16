@@ -53,31 +53,37 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
       kit.mb(m.body).box(r.x * FT, (L.h - 0.55) * FT, r.y * FT, (r.x + r.w) * FT, (L.h - FINISH) * FT, (r.y + r.d) * FT);
       kit.mb(tread).box(r.x * FT, (L.h - FINISH) * FT, r.y * FT, (r.x + r.w) * FT, L.h * FT, (r.y + r.d) * FT);
     }
-    // flights: stringer + balustrade on open sides; the inner well always gets a balustrade
-    for (const f of lay.flights) {
+    // flights: stringer + balustrade on open sides; the inner well always gets a balustrade.
+    // Balustrades stop ~2 treads short of ends that meet a floor so people can step on/off sideways.
+    lay.flights.forEach((f, fi) => {
       const sEnd = f.s0 + f.sign * (f.n - 1) * f.tread;
-      const lo = Math.min(f.s0, sEnd), hi = Math.max(f.s0, sEnd);
+      const lo0 = Math.min(f.s0, sEnd), hi0 = Math.max(f.s0, sEnd);
+      const gapStart = fi === 0 ? 2 * f.tread : 0;
+      const gapEnd = fi === lay.flights.length - 1 ? 2 * f.tread : 0;
+      const lo = lo0 + (f.sign > 0 ? gapStart : gapEnd), hi = hi0 - (f.sign > 0 ? gapEnd : gapStart);
+      // along-coordinate → nosing-line height
+      const hAt = (a: number) => f.h0 + f.riser + (f.n - 1) * f.riser * ((a - f.s0) / (sEnd - f.s0 || 1));
       for (const [c, out] of [[f.c0, -1], [f.c1, 1]] as const) {
         const isWell = lay.flights.some((o) => o !== f && o.axis === f.axis && (out > 0 ? o.c0 > c - 0.05 && o.c0 - c < 1.5 : c > o.c1 - 0.05 && c - o.c1 < 1.5));
-        const spans = isWell ? [[lo, hi] as [number, number]] : openSpans(f.axis, c, lo, hi, s.from.id);
-        for (const [p, q] of spans) {
-          const ka = (p - f.s0) / (sEnd - f.s0 || 1), kb = (q - f.s0) / (sEnd - f.s0 || 1);
-          const k0 = Math.min(ka, kb), k1 = Math.max(ka, kb);
-          const aS = f.s0 + (sEnd - f.s0) * k0, bS = f.s0 + (sEnd - f.s0) * k1;
-          const hA = f.h0 + f.riser + (f.n - 1) * f.riser * k0, hB = f.h0 + f.riser + (f.n - 1) * f.riser * k1;
-          // stringer plate (outside face of the flight)
+        const fullSpans = isWell ? [[lo0, hi0] as [number, number]] : openSpans(f.axis, c, lo0, hi0, s.from.id);
+        for (const [p, q] of fullSpans) {
+          // stringer plate along the whole open side
           const cs = c + out * 0.04;
-          const [ax, ay] = pt(f, aS - (k0 === 0 ? f.sign * 0.05 : 0), cs);
-          const [bx, by] = pt(f, bS, cs);
-          const o = P3(ax, ay, hA - 1.0);
-          const along = P3(bx - ax, by - ay, hB - hA);
-          skewBox(kit.mb(m.stringer), o, along, new THREE.Vector3(0, 1.08 * FT, 0), side(f, out, 0.07));
-          const [rx0, ry0] = pt(f, aS, c - out * 0.05);
-          const [rx1, ry1] = pt(f, bS, c - out * 0.05);
-          railing(kit, glassKit, m.railType, rx0, ry0, hA + 0.12, rx1, ry1, hB + 0.12, 3.0, m.rail, { shoe: false, handrailWood: true });
+          const startEnd = f.sign > 0 ? p : q, endEnd = f.sign > 0 ? q : p;
+          const [ax, ay] = pt(f, startEnd - (Math.abs(startEnd - f.s0) < 1e-3 ? f.sign * 0.05 : 0), cs);
+          const [bx, by] = pt(f, endEnd, cs);
+          const hA = hAt(startEnd), hB = hAt(endEnd);
+          skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 1.0), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 1.08 * FT, 0), side(f, out, 0.07));
+          // balustrade, stopped short of floor-connected ends
+          const p2 = Math.max(p, lo), q2 = Math.min(q, hi);
+          if (q2 - p2 < 0.6) continue;
+          const sa = f.sign > 0 ? p2 : q2, sb = f.sign > 0 ? q2 : p2;
+          const [rx0, ry0] = pt(f, sa, c - out * 0.05);
+          const [rx1, ry1] = pt(f, sb, c - out * 0.05);
+          railing(kit, glassKit, m.railType, rx0, ry0, hAt(sa) + 0.12, rx1, ry1, hAt(sb) + 0.12, 3.0, m.rail, { shoe: false, handrailWood: true });
         }
       }
-    }
+    });
     for (const L of lay.landings) {
       const r = L.rect;
       const edges: ["x" | "y", number, number, number][] = [
@@ -142,12 +148,13 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
     }
     // invisible ramp colliders so the walkthrough glides up the flights
     lay.flights.forEach((f, i) => {
+      // ramp through the riser midpoints: meets the lower floor/landing at s0 - T/2 and the upper one at end + T/2
       const mb = new MeshBuilder();
-      const s0 = f.s0 - f.sign * f.tread;
-      const s1 = f.s0 + f.sign * (f.n - 1) * f.tread;
+      const s0 = f.s0 - f.sign * f.tread * 0.5;
+      const s1 = f.s0 + f.sign * (f.n - 0.5) * f.tread;
       const [ax, ay] = pt(f, s0, f.c0);
       const [bx, by] = pt(f, s1, f.c0);
-      const o = P3(ax, ay, f.h0 + 0.03);
+      const o = P3(ax, ay, f.h0);
       const along = P3(bx - ax, by - ay, f.n * f.riser);
       const across = f.axis === "x" ? new THREE.Vector3(0, 0, (f.c1 - f.c0) * FT) : new THREE.Vector3((f.c1 - f.c0) * FT, 0, 0);
       skewBox(mb, o.clone().add(new THREE.Vector3(0, -0.1, 0)), along, new THREE.Vector3(0, 0.1, 0), across);
@@ -157,7 +164,7 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
     for (const L of lay.landings) {
       const mb = new MeshBuilder();
       const r = L.rect;
-      mb.box(r.x * FT, (L.h - 0.3) * FT, r.y * FT, (r.x + r.w) * FT, (L.h + 0.03) * FT, (r.y + r.d) * FT);
+      mb.box(r.x * FT, (L.h - 0.3) * FT, r.y * FT, (r.x + r.w) * FT, L.h * FT, (r.y + r.d) * FT);
       const geo = mb.build();
       if (geo) ctx.addColliderOnly(geo, { kind: "stair:landing", level: s.from.id, id: ctx.uid(`${s.id}_landing`) });
     }

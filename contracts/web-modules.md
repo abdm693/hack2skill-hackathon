@@ -35,6 +35,8 @@ export function buildHouse(plan: BuildingPlan, sections: DesignSectionSrc[], opt
 }): Promise<BuildResult>;
 ```
 
+World mapping (all tracks): `x_m = x_ft·0.3048`, **`z_m = −y_ft·0.3048`**, `Y_m = h_ft·0.3048`. The road is at +z. The engine also accepts sections shaped as `{name, layer, code}` (API `DesignSection`), treating `code` as an alias for `body`.
+
 Every created `Object3D` carries
 `userData = { layer, level, room, kind, id, label }`. The viewer relies on this for layer and level toggles, for hover labels, and for comment anchors.
 
