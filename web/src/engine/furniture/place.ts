@@ -65,7 +65,7 @@ const TALL_EXEMPT = new Set<string>(["kitchen_counter", "vanity", "shower", "wc"
 /** may be narrowed up to 15 % to fit */
 const SHRINK = new Set<string>(["wardrobe", "sideboard", "kitchen_counter", "bookshelf", "tv_unit", "dresser", "console_table", "bed_king", "bed_queen", "sofa_3", "sofa_l", "shower", "vanity", "study_desk", "dressing_table"]);
 /** never left out: if nothing is free they may touch other furniture, but never a door, stair or walkway */
-const ESSENTIAL = new Set<string>(["wc", "vanity", "shower", "bed_king", "bed_queen", "bed_single", "kitchen_counter", "fridge", "dining_table_4", "dining_table_6", "dining_table_8", "sofa_3", "sofa_l", "sofa_2", "wardrobe", "tv_unit", "washing_machine"]);
+const ESSENTIAL = new Set<string>(["wc", "vanity", "shower", "bed_king", "bed_queen", "bed_single", "kitchen_counter", "fridge", "dining_table_4", "dining_table_6", "dining_table_8", "sofa_3", "sofa_l", "sofa_2", "wardrobe", "washing_machine"]);
 
 /** purely decorative pieces: when one has no free spot it is simply not placed (no note: nothing the family relies on) */
 export const DECOR = new Set<string>(["plant_floor", "plant_small", "floor_lamp", "painting", "ottoman", "swing", "outdoor_chair", "outdoor_table", "console_table"]);
@@ -134,6 +134,80 @@ export function ensureDefining(ctx: BuildCtx, run?: (fn: () => void) => Promise<
   return run ? run(work) : work();
 }
 
+/** EN-08: 1.5 ft around every door and arch frame of a room, as keep-out boxes for a TV unit. */
+function tvFrameZones(ctx: BuildCtx, room: RoomM): Zone[] {
+  const out: Zone[] = [];
+  for (const o of ctx.model.openingsOfRoom(room)) {
+    if (!o.isDoor) continue;
+    const run = o.run;
+    const into = run.neg === room ? -1 : 1;
+    const c0 = run.c + (into * run.t) / 2, c1 = c0 + into * 1.5;
+    const z = run.axis === "x" ? { x0: o.u0 - 1.5, x1: o.u1 + 1.5, y0: Math.min(c0, c1), y1: Math.max(c0, c1) } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: o.u0 - 1.5, y1: o.u1 + 1.5 };
+    out.push({ ...z, kind: "door", core: { ...z }, id: o.op.id });
+  }
+  return out;
+}
+
+/** The wall a living room is entered through: the one holding the house's main door (null for other rooms). */
+function entranceWall(ctx: BuildCtx, room: RoomM): Side | null {
+  if (!["lounge", "drawing", "dining", "lobby"].includes(room.type)) return null;
+  const main = ctx.model.openingsOfRoom(room).find((o) => o.op.type === "main_door");
+  if (!main) return null;
+  const run = main.run;
+  const into = run.neg === room ? -1 : 1;
+  // the room lies on the `into` side of the wall: a wall at the room's low edge is its front/left wall
+  return run.axis === "x" ? (into > 0 ? "front" : "back") : into > 0 ? "left" : "right";
+}
+
+/**
+ * EN-08: the TV wall of a living room is not the wall it is entered through. When a design puts the TV unit there,
+ * the whole media group placed in that section (TV unit, TV, sofas, armchairs, coffee table, rug, lamps) is mirrored
+ * to the opposite wall, keeping how the pieces face each other, if every piece is free there.
+ */
+function mirrorMedia(ctx: BuildCtx, room: RoomM, S: Side): void {
+  const MEDIA = /^(tv_unit|tv$|sofa_|armchair|coffee_table|ottoman|rug|floor_lamp|side_table|table_lamp)/;
+  const group = ctx.items.filter((it) => it.room === room.id && MEDIA.test(it.type) && it.cls !== "ceiling");
+  const unit = group.find((it) => it.type === "tv_unit" && it.against === S);
+  if (!unit) return;
+  const ax: "x" | "y" = S === "front" || S === "back" ? "y" : "x";
+  const inner = innerRect(ctx, room);
+  const m = ax === "y" ? (inner.y0 + inner.y1) / 2 : (inner.x0 + inner.x1) / 2;
+  const box = (it: Rect4): Rect4 => (ax === "y" ? { x0: it.x0, x1: it.x1, y0: 2 * m - it.y1, y1: 2 * m - it.y0 } : { x0: 2 * m - it.x1, x1: 2 * m - it.x0, y0: it.y0, y1: it.y1 });
+  const zones = keepOut(ctx, room).filter((z) => z.kind !== "window");
+  const frames = tvFrameZones(ctx, room);
+  const others = ctx.items.filter((it) => it.room === room.id && it.cls === "floor" && !group.includes(it));
+  const inside = (b: Rect4) => b.x0 >= inner.x0 - 0.05 && b.x1 <= inner.x1 + 0.05 && b.y0 >= inner.y0 - 0.05 && b.y1 <= inner.y1 + 0.05;
+  const O = OPP[S];
+  for (const it of group) {
+    const b = box(it);
+    if (!inside(b)) return;
+    if (it.cls === "floor") {
+      const zs = it.type === "tv_unit" ? [...zones, ...frames] : zones;
+      if (zs.some((z) => overlaps(b, z.core ?? z, 0.04))) return;
+      if (others.some((o) => overlaps(b, o, 0.08))) return;
+    }
+    if ((it.cls === "wall" || it.type === "tv_unit") && it.against === S) {
+      const [a, c] = ax === "y" ? [b.x0, b.x1] : [b.y0, b.y1];
+      if (it.cls === "wall" && !solidIntervals(ctx, room, O).some(([p, q]) => a >= p - 0.05 && c <= q + 0.05)) return;
+      if (it.type === "tv_unit" && !ctx.model.roomWalls(room, O).some((wl) => a >= wl.a - 0.3 && c <= wl.b + 0.3)) return;
+    }
+  }
+  for (const it of group) {
+    const b = box(it);
+    const dx = b.x0 - it.x0, dy = b.y0 - it.y0;
+    it.group.position.x += dx * FT;
+    it.group.position.z -= dy * FT;
+    const r0 = it.rot ?? 0;
+    const r1 = ax === "y" ? 180 - r0 : -r0;
+    it.group.rotation.y += (r1 - r0) * DEG;
+    it.rot = r1;
+    if (it.against === S) it.against = O;
+    else if (it.against === O) it.against = S;
+    Object.assign(it, b);
+  }
+  ctx.notes.add({ id: `asbuilt.tv_wall:${room.id}`, title: "TV moved off the entrance wall", status: "warn", message: `${roomLabel(ctx, room)}: the TV and its seating were turned to face the ${O} wall, away from the main door.`, element_ids: [room.id] });
+}
+
 /** Take a piece out again (it gave way to a fixture), with whatever stands on it. */
 function evict(ctx: BuildCtx, it: PlacedItem, forType: string): void {
   const deps = ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "top" && (q.x0 + q.x1) / 2 > it.x0 && (q.x0 + q.x1) / 2 < it.x1 && (q.y0 + q.y1) / 2 > it.y0 && (q.y0 + q.y1) / 2 < it.y1);
@@ -184,11 +258,13 @@ function pairPartner(ctx: BuildCtx, room: RoomM, type: string, side: Side, u: nu
 }
 
 /** B.4.1: a solid stretch of wall for a wall item: the requested wall, then the opposite one, then the adjacent ones. */
-function placeOnWall(ctx: BuildCtx, room: RoomM, type: string, side: Side, u: number, w: number): { side: Side; u: number } | null {
+function placeOnWall(ctx: BuildCtx, room: RoomM, type: string, side: Side, u: number, w: number, onlyThisWall = false): { side: Side; u: number } | null {
   const high = (t: string) => t === "ac_split";
   const others = ctx.items.filter((it) => it.room === room.id && it.cls === "wall" && it.type !== "curtains" && high(it.type) === high(type));
-  for (const s of [side, OPP[side], ...ADJ[side]]) {
+  for (const s of onlyThisWall ? [side] : [side, OPP[side], ...ADJ[side]]) {
     let ints = solidIntervals(ctx, room, s);
+    // EN-08: a TV keeps 1.5 ft from every door and arch frame on its wall
+    if (type === "tv") ints = subtract(ints, ctx.model.roomWalls(room, s).flatMap((wl) => wl.run.openings.filter((o) => o.isDoor).map((o) => [o.u0 - 1.5, o.u1 + 1.5] as [number, number])));
     ints = subtract(ints, others.filter((it) => it.against === s).map((it) => { const [a, b] = alongOf(s, it); return [a - 0.25, b + 0.25] as [number, number]; }));
     const fits = ints.filter(([a, b]) => b - a >= w + 0.2);
     if (!fits.length) continue;
@@ -323,6 +399,8 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   // keep-out zones for floor items: doors, open-plan gates, stairs, roof door, tank, solar area; windows for tall items
   const tallH = type === "tv_unit" ? 5.6 : h;
   const zones: Zone[] = (def.cls === "floor" || def.cls === "top") && ctx.structureBuilt ? keepOut(ctx, room).filter((z) => z.kind !== "window" || (!TALL_EXEMPT.has(type) && tallH > (z.sill ?? 3) + 0.5)) : [];
+  // EN-08: a TV unit keeps 1.5 ft from every door and arch frame (never wedged between two openings)
+  if (type === "tv_unit" && ctx.structureBuilt) zones.push(...tvFrameZones(ctx, room));
   let rot = 0;
   let cx: number, cy: number;
   let wallInfo: { axis: "x" | "y"; inner: number; into: number; lo: number; hi: number } | null = null;
@@ -419,9 +497,19 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
       if (partner) {
         against = partner.side;
         u = partner.u;
+        rot = ROT[against];
+        wallInfo = faceOf(against);
       }
-      const spot = placeOnWall(ctx, room, type, against, u, w);
-      if (!spot) return dropped("no wall in the room has a clear stretch for it (it may not hang over a door or window)");
+      // a TV hangs over its unit's wall only (never across the room from it); in a bedroom, on the wall the bed faces
+      const bedTv = type === "tv" && !partner && ["master_bedroom", "bedroom", "guest_bedroom"].includes(room.type) ? ctx.items.find((it) => it.room === room.id && it.type.startsWith("bed_") && it.against) : undefined;
+      if (bedTv) {
+        against = OPP[bedTv.against as Side];
+        rot = ROT[against];
+        wallInfo = faceOf(against);
+        u = against === "front" || against === "back" ? (bedTv.x0 + bedTv.x1) / 2 : (bedTv.y0 + bedTv.y1) / 2;
+      }
+      const spot = placeOnWall(ctx, room, type, against, u, w, type === "tv" && (!!partner || !!bedTv));
+      if (!spot) return type === "tv" ? { group } : dropped("no wall in the room has a clear stretch for it (it may not hang over a door or window)");
       if (spot.side !== against) {
         against = spot.side;
         rot = ROT[against];
@@ -459,12 +547,13 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
     const kinds = TOP_SUPPORTS[type];
     const ok = (it: PlacedItem) => it.room === room.id && it.topH !== null && it.cls === "floor" && (!kinds || kinds.some((k) => it.type.startsWith(k)));
     const inside = (it: PlacedItem) => cx > it.x0 && cx < it.x1 && cy > it.y0 && cy < it.y1;
-    const under = ctx.items.find((it) => ok(it) && inside(it));
+    const sameOn = (sup: PlacedItem) => ctx.items.some((q) => q.cls === "top" && q.type === type && q.room === room.id && (q.x0 + q.x1) / 2 > sup.x0 && (q.x0 + q.x1) / 2 < sup.x1 && (q.y0 + q.y1) / 2 > sup.y0 && (q.y0 + q.y1) / 2 < sup.y1);
+    const under = ctx.items.find((it) => ok(it) && inside(it) && !(type === "table_lamp" && sameOn(it)));
     if (under) topSupported = true;
     else {
       const holds = (s: PlacedItem) => ctx.items.some((q) => q.cls === "top" && q.type === type && q.room === room.id && (q.x0 + q.x1) / 2 > s.x0 && (q.x0 + q.x1) / 2 < s.x1 && (q.y0 + q.y1) / 2 > s.y0 && (q.y0 + q.y1) / 2 < s.y1);
       const dist = (s: PlacedItem) => Math.hypot(Math.max(s.x0 - cx, 0, cx - s.x1), Math.max(s.y0 - cy, 0, cy - s.y1)) + (holds(s) ? 20 : 0);
-      const sups = ctx.items.filter(ok).sort((a, b) => dist(a) - dist(b));
+      const sups = ctx.items.filter((it) => ok(it) && !holds(it)).sort((a, b) => dist(a) - dist(b));
       for (const s of sups) {
         const r2 = s.rot ?? rot;
         const f0 = footprint(0, 0, w, d, r2);
@@ -500,6 +589,11 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   // B.4/B.6: floor items never in a keep-out zone, on the walkway or in a parking bay. Search: the requested wall
   // (full clearances, then the core clearances that still keep every door leaf, doorway and stair free), the other
   // walls, a narrower size, and for essential fixtures a spot that may touch other furniture; else leave it out.
+  // a table lamp with no free nightstand, console or desk is not stood on the floor: it is simply not placed
+  if (type === "table_lamp" && ctx.structureBuilt && !topSupported) {
+    warn(`furnish table_lamp in ${room.id}: nothing free to stand on; left out`);
+    return { group };
+  }
   if ((def.cls === "floor" || (def.cls === "top" && !topSupported && ctx.structureBuilt)) && !isVehicle) {
     const otherItems = ctx.items.filter((it) => it.room === room.id && it.cls === "floor" && (def.cls === "top" || !companions(type, it.type)));
     const others = otherItems.map((it) => ({ x0: it.x0, x1: it.x1, y0: it.y0, y1: it.y1 }));
@@ -517,7 +611,61 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
       !blockers(tier).some((ob) => overlaps(f, ob, 0.08)) &&
       !bays.some((b) => overlaps(f, b, 0.02)) &&
       !(park && onWalkwayRect(park, f));
-    if (!free(fp)) {
+    // EN-08: a nightstand stands beside the bed, one on each side (never both on one side, never across the room)
+    let flanked = false;
+    if (type === "side_table") {
+      const bed = ctx.items.filter((it) => it.room === room.id && it.type.startsWith("bed_") && it.against).sort((a, b) => Math.hypot((a.x0 + a.x1) / 2 - cx, (a.y0 + a.y1) / 2 - cy) - Math.hypot((b.x0 + b.x1) / 2 - cx, (b.y0 + b.y1) / 2 - cy))[0];
+      if (bed) {
+        const side = bed.against as Side;
+        const ax = side === "front" || side === "back";
+        const [ba, bb] = ax ? [bed.x0, bed.x1] : [bed.y0, bed.y1];
+        const half = w / 2;
+        const mid = (it: PlacedItem) => (ax ? (it.x0 + it.x1) / 2 : (it.y0 + it.y1) / 2);
+        const taken = (u: number) => ctx.items.some((q) => q.room === room.id && q.type === "side_table" && q.against === side && Math.abs(mid(q) - u) < half + 0.4);
+        const uReq = ax ? cx : cy;
+        const flanks = [-1, 1].filter((k) => !taken(k < 0 ? ba - 0.1 - half : bb + 0.1 + half)).sort((p, q) => Math.abs((p < 0 ? ba : bb) - uReq) - Math.abs((q < 0 ? ba : bb) - uReq));
+        const w0 = w;
+        for (const k of flanks) {
+          // the stand's own width, else a slim 1.3 ft one
+          for (const ww of w0 > 1.3 ? [w0, 1.3] : [w0]) {
+            const u = k < 0 ? ba - 0.1 - ww / 2 : bb + 0.1 + ww / 2;
+            const save = { against, rot, wallInfo };
+            against = side;
+            rot = ROT[side];
+            wallInfo = faceOf(side);
+            w = ww;
+            const [px, py] = poseOn(side, u);
+            const f = footprint(px, py, w, d, rot);
+            if (free(f, 1)) {
+              cx = px;
+              cy = py;
+              fp = f;
+              flanked = true;
+              break;
+            }
+            w = w0;
+            ({ against, rot, wallInfo } = save);
+          }
+          if (flanked) break;
+        }
+        if (!flanked) return dropped("there is no free side of the bed for it");
+      }
+    }
+    // a bedroom's TV unit belongs on the wall the bed faces, or nowhere (EN-08)
+    const bedFaces = type === "tv_unit" && ["master_bedroom", "bedroom", "guest_bedroom"].includes(room.type) && ctx.items.some((it) => it.room === room.id && it.type.startsWith("bed_") && it.against);
+    if (bedFaces) {
+      const bed = ctx.items.find((it) => it.room === room.id && it.type.startsWith("bed_") && it.against)!;
+      const face = OPP[bed.against as Side];
+      if (against !== face) {
+        against = face;
+        rot = ROT[face];
+        wallInfo = faceOf(face);
+        const bu = face === "front" || face === "back" ? (bed.x0 + bed.x1) / 2 : (bed.y0 + bed.y1) / 2;
+        [cx, cy] = poseOn(face, bu);
+        fp = footprint(cx, cy, w, d, rot);
+      }
+    }
+    if (!flanked && !free(fp)) {
       const start = { side: against, rot, w, cx, cy };
       let found: { x: number; y: number; side: Side | null; rot: number; w: number } | null = null;
       // an item that stands against a wall only moves to stretches where a wall really stands behind it
@@ -600,7 +748,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
       /** the widest clear stretch of any wall, for items that can be made shorter (counters, wardrobes) */
       const fitSpan = (tier: number): boolean => {
         const spans: { side: Side; u: number; len: number }[] = [];
-        for (const s of [start.side!, OPP[start.side!], ...ADJ[start.side!]]) {
+        for (const s of bedFaces ? [start.side!] : [start.side!, OPP[start.side!], ...ADJ[start.side!]]) {
           if (!ctx.model.roomWalls(room, s).length) continue;
           const f0 = faceOf(s);
           let run0: number | null = null;
@@ -628,12 +776,14 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
         const s0 = start.side;
         const uNow = wallInfo!.axis === "x" ? cx : cy;
         const proj = (side: Side) => (side === "front" || side === "back" ? cx : cy);
-        const rest: Side[] = [OPP[s0], ...ADJ[s0]];
+        const rest: Side[] = bedFaces ? [] : [OPP[s0], ...ADJ[s0]];
         const all = [s0, ...rest];
         const at = (s: Side) => (s === s0 ? uNow : proj(s));
         const ok =
           tryWall(s0, uNow, w, 0) ||
           tryWall(s0, uNow, w, 1) ||
+          // a TV unit stays on the wall the seating faces: a shorter unit there before another wall
+          (type === "tv_unit" && [0.9, 0.8, 0.7, 0.6].some((k) => start.w * k >= 3 && (tryWall(s0, uNow, start.w * k, 0) || tryWall(s0, uNow, start.w * k, 1)))) ||
           rest.some((s) => tryWall(s, proj(s), start.w, 0)) ||
           rest.some((s) => tryWall(s, proj(s), start.w, 1)) ||
           (SHRINK.has(type) && [0.95, 0.9, 0.85].some((k) => all.some((s) => tryWall(s, at(s), start.w * k, 1)))) ||
@@ -673,6 +823,34 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
       fp = footprint(cx, cy, w, d, rot);
       // anything soft it now stands on gives way (EN-03: a fridge before a water dispenser)
       for (const it of otherItems) if (SOFT.has(it.type) && overlaps(fp, it, 0.08)) evict(ctx, it, type);
+    }
+    // EN-08: a double or king bed against a wall keeps room for a nightstand on each side: when a door zone or a
+    // piece takes one side, the bed slides along its wall (up to 3 ft) to where both sides are free
+    if ((type === "bed_king" || type === "bed_queen") && against && ctx.structureBuilt) {
+      const side = against;
+      const ax = side === "front" || side === "back";
+      const nsW = 1.3, nsD = ITEMS.side_table.dims[1]; // the slimmest nightstand the flank may take
+      const sideOk = (bx0: number, bx1: number) =>
+        [bx0 - 0.1 - nsW / 2, bx1 + 0.1 + nsW / 2].every((u) => {
+          const f = faceOf(side);
+          const across = f.inner + f.into * (nsD / 2 + 0.02);
+          const nf = ax ? footprint(u, across, nsW, nsD, 0) : footprint(across, u, nsD, nsW, 0);
+          return free(nf, 1);
+        });
+      const [a0, a1] = ax ? [fp.x0, fp.x1] : [fp.y0, fp.y1];
+      if (!sideOk(a0, a1)) {
+        for (let k = 1; k <= 12; k++) {
+          const off = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
+          const nx = ax ? cx + off : cx, ny = ax ? cy : cy + off;
+          const nfp = footprint(nx, ny, w, d, rot);
+          if (!free(nfp, 1)) continue;
+          if (!sideOk(a0 + off, a1 + off)) continue;
+          cx = nx;
+          cy = ny;
+          fp = nfp;
+          break;
+        }
+      }
     }
   }
   if (def.cls === "wall" && type === "tv" && ctx.structureBuilt) {
@@ -815,6 +993,15 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   }
 
   if (type === "ac_split" && wallInfo && against) addOutdoorUnit(ctx, room, against, cx, cy, base, mats);
+  if (type === "tv_unit" && against && ctx.structureBuilt && entranceWall(ctx, room) === against) {
+    const key = `${room.id}|${ctx.section}`;
+    const done = ((ctx as unknown as { mediaMirror?: Set<string> }).mediaMirror ??= new Set<string>());
+    if (!done.has(key)) {
+      done.add(key);
+      const side0 = against;
+      ctx.endOfSection.push(() => mirrorMedia(ctx, room, side0));
+    }
+  }
   return { group, item };
 }
 
