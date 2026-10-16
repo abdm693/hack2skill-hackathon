@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { Envelope } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
 
@@ -22,17 +22,16 @@ export function Wordmark({ className, compact }: { className?: string; compact?:
   );
 }
 
-const d = (delay: number, dur = 1.4): CSSProperties => ({
-  strokeDasharray: 1,
-  strokeDashoffset: 1,
-  animation: `draw ${dur}s cubic-bezier(0.22,1,0.36,1) ${delay}s forwards`,
-});
-
 /**
  * The hero elevation: a two-storey Lahore house that draws itself, then gets stamped.
  * Scale 8 px/ft; ground at y=290, plinth 278, first floor 190, roof 102, parapet 74.
+ * If the page opens in a background tab, it renders fully drawn instead of animating.
  */
 export function HouseLineArt({ className }: { className?: string }) {
+  const [animate] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+  const d = (delay: number, dur = 1.4): CSSProperties | undefined =>
+    animate ? { strokeDasharray: 1, strokeDashoffset: 1, animation: `draw ${dur}s cubic-bezier(0.22,1,0.36,1) ${delay}s forwards` } : undefined;
+  const fade = (animation: string): CSSProperties | undefined => (animate ? { opacity: 0, animation } : undefined);
   const ink = "var(--color-ink)";
   const faint = "rgb(30 27 23 / 0.16)";
   return (
@@ -51,7 +50,7 @@ export function HouseLineArt({ className }: { className?: string }) {
         <path pathLength={1} d="M18 102H402" style={d(0.19, 1.1)} />
         <path pathLength={1} d="M60 20V312M340 20V312" style={d(0.26, 1.1)} />
       </g>
-      <g fill="var(--color-pencil)" fontFamily="Inter, sans-serif" fontSize="7.5" style={{ opacity: 0, animation: "appear 0.6s ease-out 1s forwards" }}>
+      <g fill="var(--color-pencil)" fontFamily="Inter, sans-serif" fontSize="7.5" style={fade("appear 0.6s ease-out 1s forwards")}>
         <text x="20" y="274">+1'6"</text>
         <text x="20" y="186">+12'6"</text>
         <text x="20" y="98">+23'6"</text>
@@ -81,7 +80,7 @@ export function HouseLineArt({ className }: { className?: string }) {
       </g>
 
       {/* stone pier */}
-      <g style={{ opacity: 0, animation: "appear 0.8s ease-out 1.25s forwards" }}>
+      <g style={fade("appear 0.8s ease-out 1.25s forwards")}>
         <rect x="270" y="74" width="30" height="204" fill="url(#stone)" />
       </g>
       <path pathLength={1} d="M270 74V278" stroke={ink} strokeWidth="1" style={d(1.0)} />
@@ -145,14 +144,14 @@ export function HouseLineArt({ className }: { className?: string }) {
         <path pathLength={1} d="M60 306H340M56 310L64 302M336 310L344 302M60 300V312M340 300V312" style={d(1.9, 1)} />
         <path pathLength={1} d="M380 74V278M376 82L384 70M376 286L384 274M374 74H386M374 278H386" style={d(1.95, 1)} />
       </g>
-      <g fill="var(--color-graphite)" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="500" style={{ opacity: 0, animation: "appear 0.5s ease-out 2.4s forwards" }}>
+      <g fill="var(--color-graphite)" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="500" style={fade("appear 0.5s ease-out 2.4s forwards")}>
         <text x="200" y="320" textAnchor="middle">35'-0"</text>
         <text x="394" y="180" textAnchor="middle" transform="rotate(-90 394 180)">25'-6" to parapet</text>
       </g>
 
       {/* approval stamp */}
       <g transform="translate(222 46) rotate(-12)">
-        <g style={{ opacity: 0, animation: "stamp 0.55s cubic-bezier(0.2,0.9,0.2,1.2) 2.7s forwards", transformOrigin: "0 0" }}>
+        <g style={{ ...fade("stamp 0.55s cubic-bezier(0.2,0.9,0.2,1.2) 2.7s forwards"), transformOrigin: "0 0" }}>
           <circle r="40" fill="var(--color-paper)" fillOpacity="0.92" stroke="var(--color-brick)" strokeWidth="1.6" />
           <circle r="35" stroke="var(--color-brick)" strokeWidth="0.7" />
           <circle r="22" stroke="var(--color-brick)" strokeWidth="0.7" />

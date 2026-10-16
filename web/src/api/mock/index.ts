@@ -7,6 +7,7 @@ import { RENDER_IMAGE } from "./fixtures";
 import { intakeScript } from "./intake";
 import { envelopeFor, recheck } from "./lda";
 import { conceptsScript, designScript, reviseScript } from "./scripts";
+import { seedIfEmpty } from "./seed";
 import { play } from "./stream";
 
 function wrap<T>(fn: () => T): T {
@@ -63,6 +64,7 @@ export const mockApi: Api = {
 
   async listProjects() {
     await latency();
+    seedIfEmpty();
     return clone([...db().projects].sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
   },
 
@@ -76,6 +78,7 @@ export const mockApi: Api = {
 
   async getProject(pid) {
     await latency(120);
+    seedIfEmpty();
     return wrap(() => clone(findProject(pid)));
   },
 

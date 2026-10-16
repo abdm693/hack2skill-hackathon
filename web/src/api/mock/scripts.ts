@@ -195,14 +195,14 @@ function classify(text: string): Kind {
   return "general";
 }
 
-const PORCH_REJECTION =
+export const PORCH_REJECTION =
   "Under LDA Building & Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.";
 
 const BALCONY_REJECTION =
   "A balcony or extension here would project into the 10 ft front open space, which LDA doesn't allow for houses (B&ZR 2019 §5.1.8). As an alternative I can add a 3 ft sunshade (chajja), the most the front setback permits, or deepen the existing balcony inward.";
 
 /** Deepen Bedroom 2 by 2 ft into the front balcony (110 → 130 sq ft). */
-function deepenBedroom2(plan: BuildingPlan): boolean {
+export function deepenBedroom2(plan: BuildingPlan): boolean {
   const bed = plan.rooms.find((r) => r.id === "f_bed2");
   const balcony = plan.rooms.find((r) => r.id === "f_balcony");
   const bath = plan.rooms.find((r) => r.id === "f_bath2");

@@ -1,6 +1,6 @@
 /** App shell (track: APP): routes, motion defaults and toasts. */
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import { MotionConfig } from "motion/react";
 import { Workspace } from "./routes/Workspace";
 import { ProjectLayout, StepGate } from "./routes/ProjectLayout";
@@ -23,6 +23,16 @@ function Loading() {
   );
 }
 
+/** New page, top of the page (the project shell is a fixed-height app view). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  const first = pathname.split("/").slice(0, 3).join("/");
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [first]);
+  return null;
+}
+
 function NotFound() {
   return (
     <div className="grid min-h-[100dvh] place-items-center bg-paper p-6 text-center">
@@ -41,6 +51,7 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Workspace />} />
           <Route path="/p/:id" element={<ProjectLayout />}>

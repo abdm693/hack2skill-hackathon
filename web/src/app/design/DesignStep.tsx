@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight, Box, CodeXml, Play, RefreshCw, Ruler, ShieldCheck } from "lucide-react";
 import type { BuildingPlan, ComplianceCheck } from "@contracts/plan";
 import type { Version } from "@contracts/api-types";
 import { cn, num } from "@/app/lib/utils";
+import { loadFixLoop } from "@/app/lib/fixloop";
 import { useProject, type FeedItem, type Run } from "@/app/store/project";
 import { FloorPlan } from "@/app/plan/FloorPlan";
 import { EnvelopeDiagram } from "@/app/setup/EnvelopeDiagram";
@@ -31,6 +32,7 @@ function staticItems(v: Version): FeedItem[] {
 export function DesignStep() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [params] = useSearchParams();
   const project = useProject((s) => s.project)!;
   const run = useProject((s) => s.design);
   const runDesign = useProject((s) => s.runDesign);
@@ -43,7 +45,7 @@ export function DesignStep() {
   const [rightTab, setRightTab] = useState<"drawing" | "compliance">("drawing");
   const [level, setLevel] = useState<string | undefined>(undefined);
 
-  const currentVid = project.current_version_id;
+  const currentVid = params.get("v") ?? project.current_version_id;
   useEffect(() => {
     if (currentVid) void loadVersion(currentVid);
   }, [currentVid, loadVersion]);
@@ -214,7 +216,14 @@ export function DesignStep() {
           <div className="xl:hidden">
             <RightTabs value={rightTab} onChange={setRightTab} />
           </div>
-          <CompliancePanel report={report} attempt={attempt} failures={run.failures} selectedId={check?.id} onSelect={select} running={running} />
+          <CompliancePanel
+            report={report}
+            attempt={attempt}
+            failures={run.failures.length > 1 ? run.failures : loadFixLoop(version?.id)}
+            selectedId={check?.id}
+            onSelect={select}
+            running={running}
+          />
         </section>
       </div>
     </div>

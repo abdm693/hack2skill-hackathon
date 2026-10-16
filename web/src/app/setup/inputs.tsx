@@ -96,11 +96,11 @@ const MAX_W = Math.max(...PLOT_PRESETS.map((p) => p.width_ft));
 const MAX_D = Math.max(...PLOT_PRESETS.map((p) => p.depth_ft));
 
 export function PlotInput({ onSend, disabled, brief }: { onSend: Send; disabled?: boolean; brief: Brief | null }) {
-  const initial = brief?.plot.width_ft ? { w: brief.plot.width_ft, d: brief.plot.depth_ft } : null;
+  const initial = brief?.plot?.width_ft ? { w: brief.plot.width_ft, d: brief.plot.depth_ft } : null;
   const [presetId, setPresetId] = useState<string | null>(initial ? null : null);
   const [w, setW] = useState<string>(initial ? String(initial.w) : "");
   const [d, setD] = useState<string>(initial ? String(initial.d) : "");
-  const [corner, setCorner] = useState<boolean>(brief?.plot.corner ?? false);
+  const [corner, setCorner] = useState<boolean>(brief?.plot?.corner ?? false);
   const setPreview = useSetupUI((s) => s.setPreview);
 
   const width = Number(w);
@@ -313,16 +313,16 @@ function Stepper({ label, value, min, max, onChange, hint }: { label: string; va
 }
 
 export function RoomsInput({ onSend, disabled, brief }: { onSend: Send; disabled?: boolean; brief: Brief | null }) {
-  const m = brief?.plot.area_marla || 10;
+  const m = brief?.plot?.area_marla || 10;
   const defBeds = brief?.bedrooms || (m < 5 ? 2 : m < 10 ? 3 : m < 20 ? 4 : m < 40 ? 5 : 6);
   const [beds, setBeds] = useState(defBeds);
   const [baths, setBaths] = useState(brief?.bathrooms || defBeds + 1);
   const [storeys, setStoreys] = useState(String(brief?.storeys || (m < 5 ? 2 : 2)));
   const [spaces, setSpaces] = useState<string[]>(
-    brief?.spaces.length ? brief.spaces.filter((s) => ROOM_TOGGLES.includes(s)) : ["drawing", "tv_lounge", ...(m >= 10 ? ["lawn"] : [])],
+    brief?.spaces?.length ? brief.spaces.filter((s) => ROOM_TOGGLES.includes(s)) : ["drawing", "tv_lounge", ...(m >= 10 ? ["lawn"] : [])],
   );
   const [porch, setPorch] = useState(() => {
-    const p = brief?.spaces.find((s) => s.startsWith("car_porch"));
+    const p = brief?.spaces?.find((s) => s.startsWith("car_porch"));
     return p ? (p.split(":")[1] ?? "1") : m >= 10 ? "1" : m >= 5 ? "1" : "0";
   });
 

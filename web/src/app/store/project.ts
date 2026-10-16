@@ -16,6 +16,7 @@ import {
   type SSEHandlers,
   type StreamOptions,
 } from "@/api/client";
+import { saveFixLoop } from "@/app/lib/fixloop";
 import { toast } from "./toast";
 
 export interface ConceptSlot {
@@ -186,6 +187,7 @@ export const useProject = create<ProjectState>((set, get) => {
     version: ({ version }) => {
       if (!live(pid)) return;
       const k = key();
+      if (k === "design") saveFixLoop(version.id, get().design.failures);
       set({ versions: { ...get().versions, [version.id]: version } });
       patchRun(k, k === "design" ? { version, plan: version.plan, compliance: version.compliance, sections: version.sections } : { version });
       pushItem(k, { kind: "version", version });

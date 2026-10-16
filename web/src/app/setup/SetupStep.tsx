@@ -60,7 +60,10 @@ export function SetupStep() {
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6">
           <div className="min-w-0">
-            <h1 className="font-display-text text-[19px] font-medium leading-tight text-ink">Tell the architect about your home</h1>
+            <h1 className="font-display-text text-[19px] font-medium leading-tight text-ink">
+              <span className="hidden sm:inline">Tell the architect about your home</span>
+              <span className="sm:hidden">Your brief</span>
+            </h1>
             <p className="hidden text-[12.5px] text-graphite sm:block">One tap per question. Skip anything and the AI chooses for you.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

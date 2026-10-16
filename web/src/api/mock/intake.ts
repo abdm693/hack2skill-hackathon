@@ -299,6 +299,27 @@ function messageFor(text: string, q?: Question): ChatMessage {
   };
 }
 
+/**
+ * A conversation paused at the rooms question (scheme, a corner 1-kanal plot and facing answered),
+ * built with the same question flow, for the seeded demo workspace.
+ */
+export function demoSetupState(): { messages: ChatMessage[]; brief: Brief; step: number } {
+  const brief = blankBrief();
+  const messages: ChatMessage[] = [];
+  const user = (text: string) => messages.push({ id: uid("msg"), role: "user", text, created_at: now() });
+  messages.push(messageFor(`${GREETING}\n\n${QUESTIONS[0].text}`, QUESTIONS[0]));
+  user("Wapda Town");
+  let ack = applyAnswer(brief, "scheme", { message: "Wapda Town", chips: ["LDA:Wapda Town"] });
+  messages.push(messageFor(`${ack}\n\n${QUESTIONS[1].text}`, QUESTIONS[1]));
+  user("1 kanal plot, 50 × 90 ft, corner");
+  ack = applyAnswer(brief, "plot", { message: "1 kanal plot, 50 × 90 ft, corner", chips: ["plot:50x90", "corner:true"] });
+  messages.push(messageFor(`${ack}\n\n${QUESTIONS[2].text}`, QUESTIONS[2]));
+  user("North");
+  ack = applyAnswer(brief, "facing", { message: "North", chips: ["N"] });
+  messages.push(messageFor(`${ack}\n\n${QUESTIONS[3].text}`, QUESTIONS[3]));
+  return { messages, brief, step: 3 };
+}
+
 /** The live intake agent answers in one structured call (~8 s) without deltas; mirror that. */
 async function* say(pid: string, text: string, q?: Question): AsyncGenerator<Step> {
   const msg = messageFor(text, q);

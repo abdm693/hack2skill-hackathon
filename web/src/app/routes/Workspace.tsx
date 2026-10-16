@@ -94,8 +94,8 @@ export function Workspace() {
 
       <main className="relative z-[2] mx-auto max-w-[1320px] px-4 sm:px-8">
         {/* Hero */}
-        <section className="grid gap-10 pb-16 pt-12 sm:pt-16 lg:grid-cols-12 lg:gap-12 lg:pb-24 lg:pt-20">
-          <div className="lg:col-span-7 lg:pt-6">
+        <section className="grid gap-10 pb-16 pt-12 sm:pt-16 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:gap-y-0 lg:pb-24 lg:pt-20">
+          <div className="lg:col-span-7 lg:row-start-1 lg:pt-6">
             <h1 className="font-display-tight text-[44px] font-medium leading-[1.02] text-ink sm:text-[64px] xl:text-[78px]">
               From idea to a walkable, LDA-compliant home.
             </h1>
@@ -103,20 +103,21 @@ export function Workspace() {
               Tell the AI architect about your plot and family. You get photoreal concepts, a dimensioned naqsha checked against Lahore's
               building rules, and a 3D house you can walk through and mark up.
             </p>
-            <ol className="mt-12 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-line pt-6 sm:grid-cols-5 sm:gap-x-5">
-              {JOURNEY.map((j, i) => (
-                <li key={j.title} className="relative">
-                  <span className="font-display-text text-[13px] text-brick">{i + 1}</span>
-                  <p className="mt-1 text-[14px] font-semibold text-ink">{j.title}</p>
-                  <p className="mt-1 text-[12.5px] leading-snug text-graphite">{j.body}</p>
-                </li>
-              ))}
-            </ol>
           </div>
 
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
             <NewProjectCard onCreate={create} creating={creating} />
           </div>
+
+          <ol className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-line pt-6 sm:grid-cols-5 sm:gap-x-5 lg:col-span-7 lg:row-start-2 lg:mt-12 lg:self-start">
+            {JOURNEY.map((j, i) => (
+              <li key={j.title} className="relative">
+                <span className="font-display-text text-[13px] text-brick">{i + 1}</span>
+                <p className="mt-1 text-[14px] font-semibold text-ink">{j.title}</p>
+                <p className="mt-1 text-[12.5px] leading-snug text-graphite">{j.body}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
         {/* Projects */}
@@ -266,7 +267,7 @@ function ProjectCard({ project: p, onRename, onDelete }: { project: Project; onR
   };
 
   const meta = [
-    brief?.plot.area_marla ? plotLabel(brief.plot.area_marla) : null,
+    brief?.plot?.area_marla ? plotLabel(brief.plot.area_marla) : null,
     brief?.style || null,
     brief?.bedrooms ? `${brief.bedrooms} bed` : null,
   ].filter(Boolean) as string[];
@@ -280,7 +281,7 @@ function ProjectCard({ project: p, onRename, onDelete }: { project: Project; onR
           ) : (
             <div className="bg-drafting-faint grid h-full w-full place-items-center bg-sheet">
               <div className="h-[78%] w-[78%]">
-                <PlotSketch envelope={p.envelope} width={brief?.plot.width_ft} depth={brief?.plot.depth_ft} />
+                <PlotSketch envelope={p.envelope} width={brief?.plot?.width_ft} depth={brief?.plot?.depth_ft} />
               </div>
             </div>
           )}
