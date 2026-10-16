@@ -186,7 +186,8 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
     pid,
     status: r.status,
     startedAt: r.startedAt ?? Date.now(),
-    resumed: !!r.resumed,
+    // A re-attached run whose start time the server sent is shown like a fresh one (with its clock).
+    resumed: !!r.resumed && !r.serverStart,
     stage,
     reached,
     plan: r.plan,

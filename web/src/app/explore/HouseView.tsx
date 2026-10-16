@@ -282,10 +282,10 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
     latestVid
       ? {
           placeholder: "Tell Naqsha what to change…",
-          suggestions: openComments.length && isLatest ? [`Revise with ${openComments.length} ${openComments.length === 1 ? "comment" : "comments"}`] : undefined,
+          // "Revise with N comments" is the shell's Next pill; typed, it opens the same choice.
           busy: revise?.status === "running",
           onSubmit: (text) => {
-            if (/^revise with \d+ comments?$/i.test(text.trim())) setFinishOpen(true);
+            if (/^revise with \d+ comments?$/i.test(text.trim())) useShell.getState().openComments({ apply: true });
             else startRevise([], text);
           },
         }

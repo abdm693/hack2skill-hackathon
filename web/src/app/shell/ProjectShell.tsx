@@ -120,6 +120,13 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   useEffect(() => {
     if (current && !commentsFor) void loadComments(current);
   }, [current, commentsFor, loadComments]);
+  // Notes from clients and teammates show up without a reload.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") void useProject.getState().refreshComments();
+    }, 20_000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     if (user) void loadMembers(project.id);
     else useMembers.getState().reset();

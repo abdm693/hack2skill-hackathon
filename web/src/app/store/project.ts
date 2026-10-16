@@ -72,6 +72,8 @@ export interface Run {
   version?: Version;
   error?: string;
   startedAt?: number;
+  /** startedAt came from the server's `run` event (so a re-attached run can show its real time). */
+  serverStart?: boolean;
   resumed?: boolean;
   baseVersionId?: string;
   /** Revise: what was typed into Ask, and which comments were picked. */
@@ -130,6 +132,8 @@ interface ProjectState {
   cacheVersion(v: Version): void;
 
   loadComments(versionId: string): Promise<void>;
+  /** Quietly pick up comments and replies others added (a client's notes) for the loaded version. */
+  refreshComments(): Promise<void>;
   addComment(body: NewComment): Promise<Comment | null>;
   updateComment(cid: string, patch: { text?: string; status?: Comment["status"] }): Promise<void>;
   /** Removes it at once and offers Undo for 5 s; the server delete follows (sooner if the page is hidden). */
@@ -223,7 +227,7 @@ export const useProject = create<ProjectState>((set, get) => {
     run: ({ started_at }) => {
       if (!live(pid)) return;
       const t = Date.parse(started_at);
-      if (Number.isFinite(t)) patchRun(key(), { startedAt: t });
+      if (Number.isFinite(t)) patchRun(key(), { startedAt: t, serverStart: true });
     },
     stage: ({ stage, message }) => {
       if (!live(pid)) return;
@@ -686,6 +690,27 @@ export const useProject = create<ProjectState>((set, get) => {
       })();
       commentLoads.set(key, load);
       return load;
+    },
+
+    async refreshComments() {
+      const pid = get().pid;
+      const vid = get().commentsFor;
+      if (!pid || !vid || get().shareToken || commentLoads.size) return;
+      try {
+        const list = await api.listComments(pid, vid);
+        if (!live(pid) || get().commentsFor !== vid) return;
+        // Keep replies still on their way to the server.
+        const pending = new Map(get().comments.map((c) => [c.id, (c.replies ?? []).filter((r) => r.id.startsWith("reply-"))]));
+        const next = list
+          .filter((c) => !pendingDeletes.has(c.id))
+          .map((c) => {
+            const mine = pending.get(c.id);
+            return mine?.length ? { ...c, replies: [...(c.replies ?? []), ...mine] } : c;
+          });
+        if (JSON.stringify(next) !== JSON.stringify(get().comments)) set({ comments: next });
+      } catch {
+        /* quiet: try again next time */
+      }
     },
 
     async addComment(body) {
