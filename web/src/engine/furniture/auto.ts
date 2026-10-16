@@ -530,10 +530,19 @@ class Layout {
   }
 
   laundry(): void {
-    const sp = SIDES.flatMap((s) => this.free(s, 3, 0.4).map((x) => ({ s, x }))).filter((c) => c.x[1] - c.x[0] >= 2.2);
-    if (sp[0]) this.against("washing_machine", sp[0].s, sp[0].x[0] + 1.1);
-    if (sp[0] && sp[0].x[1] - sp[0].x[0] > 5.5) this.against("sink_kitchen", sp[0].s, sp[0].x[0] + 4);
-    else if (sp[1]) this.against("sink_kitchen", sp[1].s, (sp[1].x[0] + sp[1].x[1]) / 2);
+    // a 2 ft deep machine needs 2.5 ft clear in front of it; units on facing walls need 7 ft between the walls
+    const sp = SIDES.flatMap((s) => this.free(s, 3, 0.4).map((x) => ({ s, x })))
+      .filter((c) => c.x[1] - c.x[0] >= 2.2 && this.depthFrom(c.s) >= 4.5)
+      .sort((a, b) => b.x[1] - b.x[0] - (a.x[1] - a.x[0]));
+    const m = sp[0];
+    if (!m) return;
+    this.against("washing_machine", m.s, m.x[0] + 1.1);
+    if (m.x[1] - m.x[0] >= 5.6) {
+      this.against("sink_kitchen", m.s, m.x[0] + 4);
+      return;
+    }
+    const other = sp.find((c) => c.s !== m.s && c.x[1] - c.x[0] >= 3.2 && (c.s !== OPP[m.s] || this.depthFrom(c.s) >= 7));
+    if (other) this.against("sink_kitchen", other.s, (other.x[0] + other.x[1]) / 2);
   }
 
   hall(): void {

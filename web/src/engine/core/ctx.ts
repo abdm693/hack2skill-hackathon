@@ -20,6 +20,10 @@ export interface PlacedItem {
   topH: number | null;
   group: THREE.Object3D;
   against?: string;
+  /** unrotated size (ft) and plan rotation (deg), for later moves (walking-path repair) */
+  w?: number;
+  d?: number;
+  rot?: number;
 }
 
 /** A guard (railing) along a straight, axis-aligned line on a level: runs along `axis` at `c`, from a to b. */

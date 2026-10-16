@@ -14,6 +14,8 @@ import planKanal from "@contracts/fixtures/argon-1kanal-plan.json";
 import designKanal from "@contracts/fixtures/argon-1kanal-design.js?raw";
 import { buildHouse, defaultDesign, parseDesign, setTimeOfDay, sunDirection, texturesReady, updateSun, type BuildResult, type DesignSectionSrc } from "../index";
 import { asBuiltCheck } from "./asbuilt";
+import { runChecks, type Check } from "./checks";
+import { drawPlan } from "./planview";
 
 const app = document.getElementById("app")!;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
@@ -150,7 +152,56 @@ async function rebuild(): Promise<void> {
   setView(params.get("view") ?? "aerial");
   frame();
   updateStats(st);
+  buildPlanButtons(res);
+  if (params.get("checks") !== "0") setTimeout(() => void showChecks(), 30);
 }
+
+// ── livability checklist + plan overlay ──────────────────────────────────────────────────────────────────
+let lastChecks: Check[] = [];
+let planLevel: string | null = null;
+async function showChecks(): Promise<Check[]> {
+  if (!current) return [];
+  $("chkList").innerHTML = '<div class="d">running…</div>';
+  await new Promise((r) => setTimeout(r, 0));
+  const t0 = performance.now();
+  lastChecks = runChecks(current);
+  const ms = performance.now() - t0;
+  const n = { pass: 0, warn: 0, fail: 0 };
+  for (const c of lastChecks) n[c.status]++;
+  $("chkSum").textContent = `${n.pass} pass · ${n.warn} warn · ${n.fail} fail · ${ms.toFixed(0)} ms`;
+  $("chkList").innerHTML = lastChecks
+    .map((c) => `<div class="chk ${c.status}"><span class="dot"></span><span class="t">${escapeHtml(c.title)}</span><span class="d">${escapeHtml(c.detail)}${c.spots?.length ? `<br>at ${c.spots.slice(0, 6).map((sp) => `${sp.level} (${sp.x}, ${sp.y}) ${escapeHtml(sp.note)}`).join("; ")}` : ""}</span></div>`)
+    .join("");
+  const notes = current.summary.checks ?? [];
+  if (notes.length)
+    $("chkList").innerHTML += `<div class="chk warn"><span class="dot"></span><span class="t">As-built notes (${notes.length})</span><span class="d">${notes.map((x) => escapeHtml(x.message)).join("<br>")}</span></div>`;
+  (window as unknown as { __checks?: Check[] }).__checks = lastChecks;
+  if (planLevel) drawPlan($("plan") as HTMLCanvasElement, current, planLevel, lastChecks);
+  return lastChecks;
+}
+function buildPlanButtons(res: BuildResult): void {
+  const box = $("planBtns");
+  box.innerHTML = "";
+  const mk = (label: string, id: string | null) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = () => setPlan(id);
+    b.dataset.lv = id ?? "";
+    box.appendChild(b);
+  };
+  for (const l of res.levels) mk(`Plan ${l.name.replace(/ Floor$/, "")}`, l.id);
+  if (planLevel && !res.levels.some((l) => l.id === planLevel)) planLevel = null;
+  setPlan(planLevel);
+}
+function setPlan(id: string | null): void {
+  planLevel = planLevel === id ? null : id;
+  const cv = $("plan") as HTMLCanvasElement;
+  cv.classList.toggle("on", !!planLevel);
+  document.querySelectorAll("#planBtns button").forEach((b) => b.classList.toggle("on", (b as HTMLElement).dataset.lv === planLevel));
+  if (planLevel && current) drawPlan(cv, current, planLevel, lastChecks);
+}
+$("runChecks").onclick = () => void showChecks();
+$("chkToggle").onclick = () => $("checks").classList.toggle("min");
 
 function buildLevelButtons(res: BuildResult): void {
   const box = $("levels");
@@ -460,6 +511,17 @@ renderer.setAnimationLoop(() => {
     return out;
   },
   renderer,
+  /** Livability checklist on the current build (also shown in the Checks panel). */
+  checks: () => showChecks().then((cs) => cs.map((c) => ({ id: c.id, status: c.status, detail: c.detail, spots: c.spots }))),
+  plan: (id: string | null) => setPlan(id),
+  /** The 2D as-built plan of one level as a PNG data URL (for reports). */
+  planImage: (id: string, w = 900, h = 1500) => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    if (current) drawPlan(c, current, id, lastChecks);
+    return c.toDataURL("image/png");
+  },
   /** Replica of the backend's as-built projection check on the current build (empty = pass). */
   asBuilt: () => (current ? asBuiltCheck(currentPlan, current.summary) : null),
   texturesReady,

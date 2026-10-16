@@ -13,6 +13,9 @@ import { buildStructure } from "./structure";
 import { createSDK, lenientThree } from "./sdk";
 import { addSun, sunDirection } from "./lights";
 import { floorBelow } from "./facade";
+import { ensurePaths } from "./furniture/paths";
+import { parking } from "./furniture/parking";
+import { ITEMS } from "./furniture/items";
 
 const LAYERS: Layer[] = ["structure", "facade", "interior", "furniture", "landscape", "lighting", "custom"];
 
@@ -78,6 +81,7 @@ export async function buildHouseImpl(
     ctx.layer = layer;
     ctx.section = name;
     ctx.objectsThisSection = 0;
+    const itemsBefore = ctx.items.length;
     const t = performance.now();
     let ok = true;
     let error: string | undefined;
@@ -109,6 +113,14 @@ export async function buildHouseImpl(
         ctx.endOfSection.shift()!();
       } catch (e) {
         warn(`end-of-section hook failed: ${e}`);
+      }
+    }
+    // B.5: keep 3 ft walking paths between the doors and stairs of every room this section furnished
+    if (ctx.structureBuilt && ctx.items.length > itemsBefore) {
+      try {
+        ensurePaths(ctx, new Set(ctx.items.slice(itemsBefore).map((it) => it.room)));
+      } catch (e) {
+        warn(`walking-path check failed: ${e}`);
       }
     }
     const r: SectionResult = { name, layer, ok, error, ms: Math.round((performance.now() - t) * 10) / 10, objects: ctx.objectsThisSection };
@@ -194,6 +206,29 @@ export async function buildHouseImpl(
 
 function computeSpawn(ctx: BuildCtx): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
   const plan = ctx.plan;
+  // B.6: on the gate-to-door walkway, about 7 ft before the main door, facing it with nothing tall in between
+  const P = ctx.structureBuilt ? parking(ctx) : null;
+  if (P && P.door && P.doorCentre && P.path.length > 1) {
+    const pts = P.path;
+    // look at the door, but test the view only up to the door step (furniture inside the house does not count)
+    const [dx, dy] = P.approach ?? P.doorCentre;
+    const tall = ctx.items.filter((it) => it.cls === "floor" && it.h1 - it.h0 > 2.5 && ITEMS[it.type as keyof typeof ITEMS]?.collide && ctx.plan.room(it.room)?.cat !== "enclosed");
+    const sees = (x: number, y: number) => !tall.some((it) => segHitsBox(x, y, dx, dy, it.x0 - 0.3, it.x1 + 0.3, it.y0 - 0.3, it.y1 + 0.3));
+    let acc = 0, idx = pts.length - 1;
+    for (let k = pts.length - 1; k > 0; k--) {
+      acc += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+      idx = k - 1;
+      if (acc >= 7) break;
+    }
+    while (idx > 0 && !sees(pts[idx][0], pts[idx][1])) idx--;
+    const [px, py] = pts[idx];
+    const eye = 1.6;
+    const floor = floorBelow(ctx, px, py, P.door.bottom + 3);
+    return {
+      position: new THREE.Vector3(px * FT, floor * FT + eye, -py * FT),
+      lookAt: new THREE.Vector3(P.doorCentre[0] * FT, (P.door.bottom + 0.04) * FT + eye, -P.doorCentre[1] * FT),
+    };
+  }
   const ops = ctx.structureBuilt ? ctx.model.openings : [];
   const main =
     ops.find((o) => o.op.type === "main_door") ??
@@ -262,4 +297,21 @@ export function setTimeOfDay(root: THREE.Object3D, plan: Pick<BuildingPlan, "sit
       }
     }
   });
+}
+
+/** Does the segment (x0,y0)-(x1,y1) cross the box? (slab test) */
+function segHitsBox(x0: number, y0: number, x1: number, y1: number, bx0: number, bx1: number, by0: number, by1: number): boolean {
+  let t0 = 0, t1 = 1;
+  const dx = x1 - x0, dy = y1 - y0;
+  for (const [p, q] of [[-dx, x0 - bx0], [dx, bx1 - x0], [-dy, y0 - by0], [dy, by1 - y0]]) {
+    if (Math.abs(p) < 1e-9) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return false;
+  }
+  return true;
 }

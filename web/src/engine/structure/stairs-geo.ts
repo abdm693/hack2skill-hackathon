@@ -64,6 +64,8 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
     const kit = new Kit(); // treads, risers, waist, landings: walked on via the ramp colliders
     const railKit = new Kit(); // stringers, balustrades, guards: walk colliders
     const glassKit = new Kit();
+    const holeKit = new Kit(); // guards around the stairwell on the upper floor (tagged with that floor)
+    const holeGlass = new Kit();
     for (const f of lay.flights) flightGeo(kit, f, tread, m.body);
     for (const L of lay.landings) {
       const r = L.rect;
@@ -79,16 +81,20 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
       for (const [c, out] of [[f.c0, -1], [f.c1, 1]] as const) {
         const isWell = lay.flights.some((o) => o !== f && o.axis === f.axis && (out > 0 ? o.c0 > c - 0.05 && o.c0 - c < 1.5 : c > o.c1 - 0.05 && c - o.c1 < 1.5));
         const fullSpans: Span[] = isWell ? [[lo0, hi0]] : unguarded(ctx, s.from.id, f.axis, c, lo0, hi0, 0.6, 0.5, false);
+        // the first one or two treads stay open on a side only where solid floor lies beside them (nothing to
+        // fall from): people step on sideways there, e.g. from under the upper flight of a dog-leg
         let gapStart = 0;
-        if (fi === 0 && !isWell) {
-          let solid = true;
-          for (let k = 0; k <= 4; k++) {
-            const a = f.s0 + f.sign * (k / 4) * 2 * f.tread;
-            const [x, y] = pt(f, a, c + out * 0.6);
-            if (!floorAt(s.from.id, x, y)) solid = false;
+        if (fi === 0)
+          for (let k = 1; k <= 2; k++) {
+            let solid = true;
+            for (let q = 0; q <= 3; q++) {
+              const a = f.s0 + f.sign * (k - 1 + q / 3) * f.tread;
+              const [x, y] = pt(f, a, c + out * 0.6);
+              if (!floorAt(s.from.id, x, y)) solid = false;
+            }
+            if (!solid) break;
+            gapStart = k * f.tread;
           }
-          if (solid) gapStart = 2 * f.tread;
-        }
         const lo = lo0 + (f.sign > 0 ? gapStart : 0), hi = hi0 - (f.sign > 0 ? 0 : gapStart);
         for (const [p, q] of fullSpans) {
           // stringer plate along the whole open side
@@ -97,7 +103,8 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
           const [ax, ay] = pt(f, startEnd - (Math.abs(startEnd - f.s0) < 1e-3 ? f.sign * 0.05 : 0), cs);
           const [bx, by] = pt(f, endEnd, cs);
           const hA = hAt(startEnd), hB = hAt(endEnd);
-          skewBox(railKit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
+          // (the stringer sits below the treads' edge: not a collider, so it never trips the walker stepping on)
+          skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
           const p2 = Math.max(p, lo), q2 = Math.min(q, hi);
           if (q2 - p2 < 0.6) continue;
           // run the balustrade on past the last nosing so it meets the landing / floor guard without a gap
@@ -149,7 +156,7 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
         const p1 = openAt(p) ? p : p - 0.15, q1 = openAt(q) ? q : q + 0.15;
         const [x0, y0] = e.axis === "x" ? [p1, c] : [c, p1];
         const [x1, y1] = e.axis === "x" ? [q1, c] : [c, q1];
-        railing(railKit, glassKit, m.railType, x0, y0, upper.elev, x1, y1, upper.elev, GUARD_H, m.rail, { handrailWood: true });
+        railing(holeKit, holeGlass, m.railType, x0, y0, upper.elev, x1, y1, upper.elev, GUARD_H, m.rail, { handrailWood: true });
         ctx.guards.push({ level: upper.id, axis: e.axis, c: e.c, a: p1, b: q1, h: GUARD_H });
       }
     }
@@ -174,6 +181,18 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
       gg.traverse((o) => {
         if ((o as THREE.Mesh).isMesh) {
           (o as THREE.Mesh).renderOrder = 2;
+          o.userData.collide = true;
+          ctx.collider(o as THREE.Mesh);
+        }
+      });
+    }
+    for (const [k, glass, tagKind] of [[holeKit, false, "railing:stair"], [holeGlass, true, "railing:glass"]] as const) {
+      if (k.empty) continue;
+      const hg = glass ? k.build(new THREE.Group(), false) : k.build();
+      ctx.add(hg, { kind: tagKind, level: lay.holeLevel, id: `${s.id}_well_guard${glass ? "_glass" : ""}`, label: "Stairwell guard" });
+      hg.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) {
+          if (glass) (o as THREE.Mesh).renderOrder = 2;
           o.userData.collide = true;
           ctx.collider(o as THREE.Mesh);
         }

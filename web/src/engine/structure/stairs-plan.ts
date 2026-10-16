@@ -420,7 +420,7 @@ export function reconcileTower(
     return !!r && (r.cat === "enclosed" || r.cat === "porch");
   };
   const pointOK = (x: number, y: number, margin = 0) =>
-    x > 0.05 && y > 0.05 && x < plan.plotW - 0.05 && y < plan.plotD - 0.05 &&
+    x > -0.01 && y > -0.01 && x < plan.plotW + 0.01 && y < plan.plotD + 0.01 &&
     x >= env.x0 - 1e-3 && x <= env.x1 + 1e-3 && y >= env.y0 - 1e-3 && y <= env.y1 + 1e-3 &&
     slabAt(x, y) && (margin <= 0 || (slabAt(x - margin, y) && slabAt(x + margin, y) && slabAt(x, y - margin) && slabAt(x, y + margin))) &&
     !otherRoof.some((r) => rectContains(r.rect, x, y, -0.05)) && !holesRoof.some((h) => rectContains(h, x, y, -0.05));

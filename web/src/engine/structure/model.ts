@@ -358,6 +358,12 @@ export class StructureModel {
       else if (run.out !== 0) swingSide = (-run.out) as -1 | 1;
       else swingSide = run.neg && run.neg.cat === "enclosed" ? -1 : 1;
       if (op.swing === "out" && run.out !== 0 && target === "exterior") swingSide = run.out as -1 | 1;
+      // a tiny WC or bath (under 36 sq ft): its door opens outward, as architects draw it,
+      // so the leaf never sweeps over the WC or basin
+      const into = swingSide < 0 ? run.neg : run.pos;
+      const away = swingSide < 0 ? run.pos : run.neg;
+      if (into && (into.type === "powder" || into.type === "bath") && into.rect.w * into.rect.d < 36 && away && away.cat === "enclosed" && !(away.type === "powder" || away.type === "bath"))
+        swingSide = (-swingSide) as -1 | 1;
       const hingeAtA = u0 - run.a <= run.b - (u0 + w);
       const frameOff = run.out !== 0 && !isDoor ? run.out * run.t * 0.18 : run.out !== 0 && op.type === "sliding_door" ? run.out * run.t * 0.12 : 0;
       const po: PlacedOpening = { op, run, u0, u1: u0 + w, bottom, top, floor, swingSide, hingeAtA, frameOff, isDoor };
