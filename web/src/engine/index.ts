@@ -19,6 +19,11 @@ export interface BuildResult {
   levels: { id: string; name: string; floor_y: number; top_y: number }[];
   colliders: THREE.Mesh[];
   spawn: { position: THREE.Vector3; lookAt: THREE.Vector3 };
+  /**
+   * (additive) Where the walk lands on each floor: the stair's top landing on upper floors (the foot of the stair on
+   * the lowest one), at eye height (1.6 m), looking into the floor rather than at a wall. Use for "go to floor".
+   */
+  landings?: { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[];
   dispose(): void;
 }
 

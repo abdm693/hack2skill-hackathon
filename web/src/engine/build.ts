@@ -191,6 +191,7 @@ export async function buildHouseImpl(
     levels,
     colliders: cons.colliders,
     spawn,
+    landings: ctx.structureBuilt ? computeLandings(ctx) : [],
     stats: { totalMs, sectionsMs: tSections - t0, consolidateMs, meshesBefore, meshesAfter },
     dispose() {
       root.traverse((o) => {
@@ -299,6 +300,35 @@ export function setTimeOfDay(root: THREE.Object3D, plan: Pick<BuildingPlan, "sit
       }
     }
   });
+}
+
+/** Per floor: the stair's landing on it (top landing, or the foot of the lowest stair), facing into the floor. */
+function computeLandings(ctx: BuildCtx): { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[] {
+  const plan = ctx.plan;
+  const out: { level: string; position: THREE.Vector3; lookAt: THREE.Vector3 }[] = [];
+  const eye = 1.6;
+  for (const lv of plan.levels) {
+    const up = ctx.model.stairs.find((l) => l.holeLevel === lv.id);
+    const foot = ctx.model.stairs.filter((l) => l.stair.from.id === lv.id).sort((a, b) => a.stair.from.elev - b.stair.from.elev)[0];
+    const zone = up ? up.landing : foot ? foot.foot : null;
+    if (!zone) continue;
+    const px = zone.x + zone.w / 2, py = zone.y + zone.d / 2;
+    const here = plan.roomAt(lv.id, px, py);
+    // look toward the biggest room this landing opens to (its open-plan group), else the biggest room on the floor
+    const group = here ? [here, ...[...here.open].map((id) => plan.room(id)).filter((r): r is NonNullable<typeof r> => !!r && r.level === lv.id)] : [];
+    const pool = (group.length > 1 ? group.filter((r) => r !== here) : plan.roomsOn(lv.id).filter((r) => r.cat !== "outdoor" && r !== here)).sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d);
+    const t = pool[0];
+    let tx = t ? t.rect.x + t.rect.w / 2 : px + (up ? up.outDir[0] : 0) * 5, ty = t ? t.rect.y + t.rect.d / 2 : py + (up ? up.outDir[1] : 0) * 5;
+    if (lv.isRoof && ctx.model.tower) {
+      // on the roof: through the tower door
+      const tw = ctx.model.tower;
+      tx = tw.at[0] + (tw.side === "left" ? -6 : tw.side === "right" ? 6 : 0);
+      ty = tw.at[1] + (tw.side === "front" ? -6 : tw.side === "back" ? 6 : 0);
+    }
+    const floor = lv.elev;
+    out.push({ level: lv.id, position: new THREE.Vector3(px * FT, floor * FT + eye, -py * FT), lookAt: new THREE.Vector3(tx * FT, floor * FT + eye, -ty * FT) });
+  }
+  return out;
 }
 
 /**
