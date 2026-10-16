@@ -49,6 +49,12 @@ export interface ViewerHandle {
   capture(opts?: { width?: number; height?: number }): Promise<string>;  // PNG data URL of the current view (for AI render + comment snapshots)
   flyTo(comment: Comment): void;
   setMode(mode: "orbit" | "walk"): void;
+  /** Walk: glide from the current position to the room (through doors and stairs). Orbit: frame the room in a dollhouse cut. */
+  goToRoom(roomId: string): void;
+  /** Walk: move to that floor's stair landing, facing into the floor. Orbit: show up to that floor. */
+  setFloor(levelId: string): void;
+  /** Back to the hero view (orbit). */
+  resetView(): void;
 }
 export interface HouseViewerProps {
   plan: BuildingPlan;
@@ -64,7 +70,17 @@ export interface HouseViewerProps {
   onSelectComment?: (id: string) => void;
   onBuildProgress?: (r: SectionResult, done: number, total: number) => void;
   onReady?: (result: { summary: AsBuiltSummary; sections: SectionResult[] }) => void;
-  onExitWalk?: () => void;
+  onExitWalk?: (reason?: "exit" | "flyTo" | "finish") => void;
+  /** Make neighbours and context objects that sit between the camera and the house translucent (default true). */
+  ghostContext?: boolean;
+  /** Hide cars and motorbikes (default: hidden in walk mode, shown in orbit). */
+  hideVehicles?: boolean;
+  /** Night lighting: sky dark, interior and facade lights on. */
+  night?: boolean;
+  /** Walk: fires when the walker enters a different room (for the room navigator). */
+  onRoomChange?: (roomId: string | null, levelId: string | null) => void;
+  /** Keep the camera when plan/sections change (version switch); default true. */
+  preserveCamera?: boolean;
 }
 export const HouseViewer: React.ForwardRefExoticComponent<HouseViewerProps & React.RefAttributes<ViewerHandle>>;
 ```

@@ -137,3 +137,86 @@ interface AsBuiltSummary {
   section_errors: { section: string; error: string }[];
 }
 ```
+
+## Accounts and collaboration (simple by default)
+
+### Identity
+- **Google Identity Platform**, email + password (already enabled). The SPA calls the Identity Toolkit REST API (`accounts:signUp`, `accounts:signInWithPassword`, `securetoken.googleapis.com/v1/token` to refresh) with the browser key from `GET /api/config`.
+- The ID token goes in `Authorization: Bearer <idToken>`. The backend verifies it with `google.oauth2.id_token.verify_firebase_token(token, audience=PROJECT)`.
+- **Guests still work.** With no token, `X-Naqsha-User: <guest uuid>` is used as today. Sign-in is offered, never forced. The prompts are "Save your work: create an account" and "Share".
+- On the first sign-in, `POST /api/me/claim {guest_id}` moves the guest's projects to the account, so nothing is lost.
+
+### Roles: three, named in plain words
+| Role | Who | Can do |
+|---|---|---|
+| **Owner** | Creator | Everything: share, invite, design, revise, delete |
+| **Team** | Architects and colleagues invited by email | Design, comment, run revisions |
+| **Client** | Anyone with the client link, or invited as client | View the plan and 3D, walk, comment and reply. No editing or revising |
+
+### Sharing UX: one "Share" button and one dialog
+- **Invite by email**, with a role select (Team / Client) and an "Invite" button. People who already have access show as avatar rows with a role menu and Remove.
+- **Client link**: a toggle labelled "Anyone with the link can view and comment", with Copy link. It opens `/s/<token>`, a calm read-only client view (plan, 3D and walk, comments). The visitor's name is asked once, on their first comment, if they aren't signed in.
+
+### Comments become a conversation
+- Every comment has an **author** `{id, name, role}` and an initials avatar coloured by role. Replies form a thread under it.
+- Filter chips: All · Mine · Team · Client · Open · Resolved.
+- **Revise uses the open comments.** The owner or team sees "Apply 5 open comments" and can untick any. The agent's resolution is posted as a reply from "Naqsha" in the thread, so clients see the answer where they asked.
+
+### API additions
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/config` | | `{auth: {api_key, project_id}}` |
+| GET | `/api/me` | | `{user: {uid, email, name}}` or 401 |
+| POST | `/api/me/claim` | `{guest_id}` | `{moved: n}` |
+| GET | `/api/projects/{pid}/members` | | `{members: [{uid?, email, name?, role, status: "active" \| "invited"}], share: {enabled, url?}}` |
+| POST | `/api/projects/{pid}/members` | `{email, role: "team" \| "client"}` | member |
+| PATCH / DELETE | `/api/projects/{pid}/members/{email}` | `{role}` | |
+| POST | `/api/projects/{pid}/share` | `{enabled}` | `{enabled, token, url}` |
+| GET | `/api/share/{token}` | | `{project (public fields), version, comments, role: "client"}` |
+| POST | `/api/share/{token}/comments` | `{author_name, text, anchor, camera, snapshot_data_url?}` | Comment |
+| POST | `/api/projects/{pid}/comments/{cid}/replies` (and `/api/share/{token}/comments/{cid}/replies`) | `{text, author_name?}` | Comment |
+| POST | `/api/projects/{pid}/revise` | adds `{instruction?: string}` | Conversational edits without pins ("make the kitchen bigger") |
+
+- `Comment` gains `author {id, name, role}` and `replies: [{id, author, text, created_at}]`.
+- `Project` gains `role` (the caller's role) and `members_count`.
+
+## Overhaul additions (2026-10-17)
+
+### Brief additions
+`floors` is the per-floor program, `water_tank` the tank type, `solar` the rooftop plan, and `preferences` the soft wishes, recorded verbatim. Example:
+
+```json
+{
+  "floors": [{"level": "ground", "rooms": ["drawing", "kitchen", "dirty_kitchen", "bedroom:1", "bath:2"]},
+             {"level": "first", "rooms": ["bedroom:3", "bath:3", "lounge"]}],
+  "water_tank": "plastic | concrete",
+  "solar": "none | ready | panels",
+  "preferences": ["open kitchen", "parents' bedroom on ground floor"]
+}
+```
+
+- `ready` means the roof is kept clear for panels later; `panels` means they are included now.
+- `notes` are appended to, never overwritten.
+
+### Concepts
+- `Concept.night_url?`: the same image at night, with the same camera, made by editing the day image.
+- `POST /api/projects/{pid}/concepts/night` `{ids?: string[]}` is an **SSE** stream: `concept {index, concept}` (with `night_url` filled in), then `done`. The UI's Day/Night toggle calls it once, lazily.
+
+### Compliance
+- `ComplianceCheck.category`: `"lda"` (regulation) or `"livable"` (Naqsha planning rules: room independence, reachability, stairs to the roof, guards, doors, walking space).
+- The UI shows two groups: **LDA rules** and **Livable home**.
+
+### Revise
+`POST /api/projects/{pid}/revise` takes `{version_id, comment_ids?: string[], instruction?: string}`.
+- With `instruction` and no comments, it runs a conversational edit, e.g. "make the kitchen bigger" typed into the Ask field.
+- `comment_ids` lets the owner choose which comments are applied.
+- The agent's resolutions are also added as a reply from `{id: "naqsha", name: "Naqsha", role: "agent"}`.
+
+### Samples
+`POST /api/projects/{sample}/clone` returns the caller's existing clone of that sample if one exists (no duplicates). Pass `{fresh: true}` to force a new copy.
+
+### Setup messages
+- `ChatMessage.understood?` is `{guaranteed[], preferences[], assumptions[]}`, the "Here's what I understood" card.
+- `ChatMessage.suggestions?` holds what's-next prompt chips.
+- `input: "floors"` opens the per-floor program editor. It sends chips such as `floor:ground=drawing,kitchen,dirty_kitchen,bedroom:1,bath:2` and `floor:first=bedroom:3,bath:3,lounge`.
+- Tank and solar answers use chips: `tank:plastic` or `tank:concrete`, and `solar:none`, `solar:ready` or `solar:panels`.
