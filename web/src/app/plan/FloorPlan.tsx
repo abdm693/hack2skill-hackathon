@@ -4,7 +4,7 @@
  * stairs with treads and an UP arrow, setback lines, plot boundary wall and gates, the road,
  * chain dimensions, a north arrow from site.facing, a scale bar, hover read-outs and highlights.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BuildingPlan, Opening, Room, RoomType } from "@contracts/plan";
 import { cn, feetInches, num, sizeLabel } from "@/app/lib/utils";
 import {
@@ -166,9 +166,14 @@ export function FloorPlan({
   const D = plan.site.plot.depth_ft;
   const vb = { x: -M.l, y: -M.t, w: W + M.l + M.r, h: D + M.t + M.b };
   const ppf = Math.max(2, Math.min(size.w / vb.w, size.h / vb.h)); // px per ft
-  const px = (n: number) => n / ppf; // css px → ft
 
   const [hover, setHover] = useState<{ room: Room; x: number; y: number } | null>(null);
+  // Stable callback so the (memoised) drawing only re-renders when the hovered room changes.
+  const onHover = useCallback((room: Room | null, e: React.PointerEvent) => {
+    const r = box.current?.getBoundingClientRect();
+    if (!room || !r) return setHover(null);
+    setHover({ room, x: e.clientX - r.left, y: e.clientY - r.top });
+  }, []);
   const level = levels.find((l) => l.id === levelId) ?? levels[0];
   const roofish = level && (level.id === "roof" || level.index === Math.max(...levels.map((l) => l.index))) && !plan.rooms.some((r) => r.level === level.id && !SITE_TYPES.has(r.type));
 
@@ -205,13 +210,17 @@ export function FloorPlan({
           aria-label={`${level?.name ?? "Floor"} plan`}
         >
           <Defs ppf={ppf} />
-          <Sheet plan={plan} levelId={level?.id ?? ""} roofish={!!roofish} px={px} ppf={ppf} setbacks={setbacks ?? plan.site.setbacks_ft}
-            highlight={highlight} tone={highlightTone} issues={issues} changed={changed}
-            onHover={(room, e) => {
-              const r = box.current?.getBoundingClientRect();
-              if (!room || !r) return setHover(null);
-              setHover({ room, x: e.clientX - r.left, y: e.clientY - r.top });
-            }}
+          <Sheet
+            plan={plan}
+            levelId={level?.id ?? ""}
+            roofish={!!roofish}
+            ppf={ppf}
+            setbacks={setbacks ?? plan.site.setbacks_ft}
+            highlight={highlight}
+            tone={highlightTone}
+            issues={issues}
+            changed={changed}
+            onHover={onHover}
             hovered={hover?.room.id}
           />
         </svg>
@@ -293,7 +302,6 @@ interface SheetProps {
   plan: BuildingPlan;
   levelId: string;
   roofish: boolean;
-  px: (n: number) => number;
   ppf: number;
   setbacks: { front: number; rear: number; left: number; right: number };
   highlight?: string[];
@@ -304,7 +312,8 @@ interface SheetProps {
   hovered?: string;
 }
 
-function Sheet({ plan, levelId, roofish, px, ppf, setbacks, highlight, tone, issues, changed, onHover, hovered }: SheetProps) {
+const Sheet = memo(function Sheet({ plan, levelId, roofish, ppf, setbacks, highlight, tone, issues, changed, onHover, hovered }: SheetProps) {
+  const px = (n: number) => n / ppf; // css px → plan ft
   const W = plan.site.plot.width_ft;
   const D = plan.site.plot.depth_ft;
   const Y = (y: number) => D - y;
@@ -502,7 +511,7 @@ function Sheet({ plan, levelId, roofish, px, ppf, setbacks, highlight, tone, iss
       <ScaleBar x={-M.l + 1.5} y={D + 12} px={px} />
     </g>
   );
-}
+});
 
 /**
  * Shorter forms of a room name for tight rooms: "Master Bath" → "M. Bath" → "Bath".
