@@ -65,21 +65,32 @@ export class VisibilityController {
     const u = o.userData ?? {};
     if (typeof u.layer === "string" && this.layersOff.has(u.layer)) return true;
     if (typeof u.level === "string" && this.levelsShown && this.known.has(u.level) && !this.levelsShown.has(u.level)) return true;
-    if (this.dollhouse && this.topVisible && u.level === this.topVisible.id) {
-      const kind = typeof u.kind === "string" ? u.kind : "";
-      if (CEILING_KIND.test(kind)) return true;
-      if (SLAB_KIND.test(kind) && this.isAboveFloor(o, this.topVisible)) return true;
+    if (this.dollhouse && this.topVisible) {
+      if (u.level === this.topVisible.id) {
+        const kind = typeof u.kind === "string" ? u.kind : "";
+        if (CEILING_KIND.test(kind)) return true;
+        if (SLAB_KIND.test(kind) && this.isAboveFloor(o, this.topVisible)) return true;
+      } else if (!u.level && (u.layer === "facade" || u.layer === "structure") && (u.kind || u.id)) {
+        // full-height facade pieces (piers, fins, cladding) would otherwise stand over the cut-away floors
+        const b = this.boxOf(o);
+        if (!b.isEmpty() && b.max.y > this.topVisible.top_y + 0.6) return true;
+      }
     }
     return false;
   }
 
-  private isAboveFloor(o: THREE.Object3D, band: LevelBand) {
+  private boxOf(o: THREE.Object3D) {
     let b = this.bbox.get(o);
     if (!b) {
       o.updateWorldMatrix(true, true);
       b = new THREE.Box3().setFromObject(o, false);
       this.bbox.set(o, b);
     }
+    return b;
+  }
+
+  private isAboveFloor(o: THREE.Object3D, band: LevelBand) {
+    const b = this.boxOf(o);
     return !b.isEmpty() && b.min.y > band.floor_y + 1.2;
   }
 

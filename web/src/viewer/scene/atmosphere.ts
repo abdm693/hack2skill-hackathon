@@ -10,6 +10,41 @@ import type { Quality } from "../core/store";
 import { lerp, smoothstep } from "../core/units";
 import type { SunState } from "../core/sun";
 
+/**
+ * Ground plane texture (no network): lighter, warmer near the plot and darker, cooler toward the horizon, with soft
+ * low-frequency mottling so the big plane doesn't read as a flat desert. Mapped once across the 900 m disc.
+ */
+function groundTexture(): THREE.Texture {
+  const N = 512;
+  const c = document.createElement("canvas");
+  c.width = c.height = N;
+  const g = c.getContext("2d")!;
+  const rad = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+  rad.addColorStop(0, "#ffffff");
+  rad.addColorStop(0.035, "#f6f5f2");
+  rad.addColorStop(0.12, "#e6e5e1");
+  rad.addColorStop(0.45, "#d8d8d5");
+  rad.addColorStop(1, "#d0d1cf");
+  g.fillStyle = rad;
+  g.fillRect(0, 0, N, N);
+  // mottling: a few hundred soft blotches
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 420; i++) {
+    const x = rnd() * N, y = rnd() * N, r = 6 + rnd() * 34;
+    const dark = rnd() < 0.55;
+    const blot = g.createRadialGradient(x, y, 0, x, y, r);
+    blot.addColorStop(0, dark ? "rgba(70,62,48,0.10)" : "rgba(255,250,235,0.10)");
+    blot.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = blot;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 export class Atmosphere {
   readonly sky = new Sky();
   readonly ground: THREE.Mesh;
@@ -51,7 +86,7 @@ export class Atmosphere {
     this.sky.userData = { noPick: true, viewer: "sky" };
     scene.add(this.sky);
 
-    const groundMat = new THREE.MeshStandardMaterial({ color: "#a9a18f", roughness: 1, metalness: 0 });
+    const groundMat = new THREE.MeshStandardMaterial({ color: "#c4c2bb", roughness: 1, metalness: 0, map: groundTexture() });
     this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 72), groundMat);
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -0.06;
@@ -125,7 +160,7 @@ export class Atmosphere {
     const horizon = this.sampleHorizon();
     if (horizon) fog.color.copy(horizon);
     else fog.color.set("#d3d7d6").lerp(new THREE.Color("#e6c6a4"), golden * 0.85).lerp(new THREE.Color("#5c5a63"), 1 - d);
-    (this.ground.material as THREE.MeshStandardMaterial).color.set("#a9a18f").lerp(new THREE.Color("#c19f7f"), golden * 0.35);
+    (this.ground.material as THREE.MeshStandardMaterial).color.set("#c4c2bb").lerp(new THREE.Color("#b9aa98"), golden * 0.2);
     this.exposure = lerp(1.45, 1.0, d) * (1 + golden * 0.08);
   }
 
@@ -189,6 +224,7 @@ export class Atmosphere {
     this.sky.geometry.dispose();
     this.sky.material.dispose();
     this.ground.geometry.dispose();
+    (this.ground.material as THREE.MeshStandardMaterial).map?.dispose();
     (this.ground.material as THREE.Material).dispose();
     this.fallbackSun.shadow.map?.dispose();
     this.fallbackSun.dispose();

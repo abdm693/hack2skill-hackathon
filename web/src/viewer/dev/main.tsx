@@ -1,6 +1,7 @@
 /**
  * Viewer dev harness (web/dev/viewer.html): mounts HouseViewer with fixture plans + design.js and a control panel.
- * URL params: ?fixture=argon-v1|plan-10-marla &mode=walk &hour=17.5 &panel=0
+ * URL params: ?fixture=argon-v1|plan-10-marla &mode=walk &hour=17.5 &panel=0 &levels=ground,first &cut=4.6 &comment=1
+ * Dev builds expose window.__viewerDebug (activate walk without pointer lock, hold keys, teleport, capture…).
  */
 import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -39,12 +40,15 @@ function Harness() {
   const fixture = FIXTURES.find((f) => f.id === fixtureId) ?? FIXTURES[0];
   const sections = useMemo(() => (fixture.design ? parseDesign(fixture.design) : []), [fixture]);
   const [mode, setMode] = useState<"orbit" | "walk">(qs.get("mode") === "walk" ? "walk" : "orbit");
-  const [levels, setLevels] = useState<Record<string, boolean>>({});
+  const [levels, setLevels] = useState<Record<string, boolean>>(() => {
+    const only = qs.get("levels")?.split(",");
+    return only ? Object.fromEntries(fixture.plan.levels.map((l) => [l.id, only.includes(l.id)])) : {};
+  });
   const [layers, setLayers] = useState<Partial<Record<Layer, boolean>>>({});
-  const [cutOn, setCutOn] = useState(false);
-  const [cut, setCut] = useState(4.6);
+  const [cutOn, setCutOn] = useState(qs.has("cut"));
+  const [cut, setCut] = useState(Number(qs.get("cut") ?? 4.6));
   const [hour, setHour] = useState(Number(qs.get("hour") ?? 16.5));
-  const [commentMode, setCommentMode] = useState(false);
+  const [commentMode, setCommentMode] = useState(qs.get("comment") === "1");
   const [comments, setComments] = useState<Comment[]>([]);
   const [snaps, setSnaps] = useState<Record<string, string>>({});
   const [capture, setCapture] = useState<string | null>(null);

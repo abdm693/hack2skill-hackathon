@@ -17,6 +17,7 @@ import type { Layer } from "@contracts/house-sdk";
 import type { AsBuiltSummary, Comment, CommentAnchor } from "@contracts/api-types";
 import type { DesignSectionSrc, SectionResult } from "@/engine";
 import { ViewerController } from "./core/controller";
+import type { Quality } from "./core/store";
 import { SceneRoot } from "./scene/SceneRoot";
 import { OrbitRig } from "./scene/OrbitRig";
 import { PostFX } from "./scene/PostFX";
@@ -47,6 +48,12 @@ export interface HouseViewerProps {
   onExitWalk?: () => void;
 }
 
+/**
+ * Device-pixel-ratio range per quality tier (R3F re-applies the `dpr` prop on every render, so the tier must drive
+ * the prop). Measured in the harness at 1440×900 CSS px on a laptop: DPR 2 → ~46 fps, DPR 1.6 → 60 fps with full AO.
+ */
+const DPR: Record<Quality, [number, number]> = { high: [1, 1.6], balanced: [1, 1.25], performance: [1, 1] };
+
 const GL_PROPS = {
   antialias: false,
   preserveDrawingBuffer: false,
@@ -63,6 +70,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
   const mode = useStore(ctrl.store, (s) => s.mode);
   const walkPhase = useStore(ctrl.store, (s) => s.walk);
   const dragLook = useStore(ctrl.store, (s) => s.dragLook);
+  const quality = useStore(ctrl.store, (s) => s.quality);
 
   useEffect(() => {
     ctrl.mount();
@@ -111,7 +119,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
     >
       <Canvas
         shadows="percentage"
-        dpr={[1, 2]}
+        dpr={DPR[quality]}
         gl={GL_PROPS}
         camera={{ fov: 50, near: 0.08, far: 3000, position: [30, 22, -26] }}
         frameloop={mode === "walk" ? "always" : "demand"}

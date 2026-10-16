@@ -9,12 +9,11 @@ export function SceneRoot({ ctrl }: { ctrl: ViewerController }) {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
-  const setDpr = useThree((s) => s.setDpr);
 
   useLayoutEffect(() => {
-    ctrl.attachThree({ gl, scene, camera: camera as THREE.PerspectiveCamera, invalidate: () => invalidate(), setDpr });
+    ctrl.attachThree({ gl, scene, camera: camera as THREE.PerspectiveCamera, invalidate: () => invalidate() });
     return () => ctrl.detachThree();
-  }, [ctrl, gl, scene, camera, invalidate, setDpr]);
+  }, [ctrl, gl, scene, camera, invalidate]);
 
   // runs after CameraControls (−1) and before the EffectComposer renders (1)
   useFrame((_, dt) => ctrl.frame(dt), 0);

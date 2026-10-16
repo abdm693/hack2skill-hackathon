@@ -43,7 +43,6 @@ export interface ThreeBits {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   invalidate: () => void;
-  setDpr: (dpr: number) => void;
 }
 
 export class ViewerController {
@@ -67,7 +66,6 @@ export class ViewerController {
   minimapMarker: SVGGElement | null = null;
 
   private r3fInvalidate: (() => void) | null = null;
-  private setDprFn: ((dpr: number) => void) | null = null;
   private raycaster = new THREE.Raycaster();
   private collider: ColliderBVH | null = null;
   private colliderDirty = true;
@@ -183,7 +181,6 @@ export class ViewerController {
     this.scene = t.scene;
     this.camera = t.camera;
     this.r3fInvalidate = t.invalidate;
-    this.setDprFn = t.setDpr;
     t.scene.add(this.holder);
     t.gl.shadowMap.autoUpdate = false;
     t.gl.shadowMap.needsUpdate = true;
@@ -194,8 +191,9 @@ export class ViewerController {
     t.camera.updateProjectionMatrix();
     this.atmosphere = new Atmosphere(t.gl, t.scene);
     this.atmosphere.shadowFocus.copy(houseBox(this.plan)).expandByScalar(1.5);
+    const plotCenter = plotBox(this.plan).getCenter(new THREE.Vector3());
+    this.atmosphere.ground.position.set(plotCenter.x, -0.06, plotCenter.z);
     this.atmosphere.configureShadow(this.atmosphere.fallbackSun, this.store.getState().quality);
-    this.applyQualityDpr();
     this.syncSun();
     this.syncSectionCut();
     this.syncVisibility();
@@ -475,22 +473,12 @@ export class ViewerController {
   setQuality(q: Quality, lock = false) {
     if (lock) this.perf.locked = true;
     if (this.store.getState().quality === q) return;
+    // DPR follows the tier through the Canvas `dpr` prop (HouseViewer re-renders on quality changes)
     this.store.setState({ quality: q });
-    this.applyQualityDpr();
     const sun = this.engineSun ?? this.atmosphere?.fallbackSun;
     if (sun && this.atmosphere) this.atmosphere.configureShadow(sun, q);
     this.perf.settleUntil = performance.now() + 2500;
     this.markDirty();
-  }
-
-  /**
-   * DPR per tier. Measured on the dev harness at 1440×900 CSS px (M-series laptop, Chrome): DPR 2 → ~46 fps,
-   * DPR 1.6 → 60 fps with full-res N8AO; SMAA keeps 1.6 crisp. The Canvas keeps dpr={[1, 2]} as its range.
-   */
-  private applyQualityDpr() {
-    const q = this.store.getState().quality;
-    const dpr = window.devicePixelRatio || 1;
-    this.setDprFn?.(q === "high" ? Math.min(dpr, 1.6) : q === "balanced" ? Math.min(dpr, 1.25) : 1);
   }
 
   /** Auto-detect slow GPUs from continuous frames only (orbit is demand-rendered): high → balanced → performance. */
@@ -570,7 +558,11 @@ export class ViewerController {
     const res = this.result;
     if (res && (force || !this.spawnedFor.has(res))) {
       this.spawnedFor.add(res);
-      this.walk.setSpawn(res.spawn.position.clone(), res.spawn.lookAt.clone());
+      const p = res.spawn.position.clone();
+      // the finished floor of the plan level the spawn is on (spawn may be given at feet or eye height)
+      const levels = [...this.plan.levels].sort((a, b) => b.elevation_ft - a.elevation_ft);
+      const lvl = levels.find((l) => l.elevation_ft * FT <= p.y + 0.35) ?? levels[levels.length - 1];
+      this.walk.setSpawn(p, res.spawn.lookAt.clone(), lvl ? lvl.elevation_ft * FT : undefined);
       this.walkerOnFallback = false;
     } else if (!this.walk.ready) {
       // no house yet: stand on the road facing the plot until the build lands
@@ -1008,7 +1000,8 @@ export class ViewerController {
     const where = this.locate(hit.point.clone().addScaledVector(normal, 0.05));
     const label = tags.label ?? displayLabel(tags, this.plan).title;
     const anchor: CommentAnchor = { position: v3(hit.point), normal: v3(normal) };
-    const level = tags.level ?? where.level, room = tags.room ?? where.room;
+    // untagged hits: infer level/room from the plan, but only when the point is inside a room (not a street tree)
+    const level = tags.level ?? (where.room ? where.level : undefined), room = tags.room ?? where.room;
     if (level) anchor.level = level;
     if (room) anchor.room = room;
     if (tags.id) anchor.element_id = tags.id;

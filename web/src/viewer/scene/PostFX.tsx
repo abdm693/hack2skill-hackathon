@@ -25,9 +25,9 @@ export function PostFX({ ctrl }: { ctrl: ViewerController }) {
         enabled={quality !== "performance"}
         halfRes={quality !== "high"}
         quality={quality === "high" ? "medium" : "low"}
-        aoRadius={walk ? 0.6 : 1.4}
+        aoRadius={walk ? 0.6 : 1.6}
         distanceFalloff={walk ? 0.8 : 1.2}
-        intensity={walk ? 2.3 : 2.8}
+        intensity={walk ? 2.3 : 3.2}
         color="black"
       />
       <SMAA />

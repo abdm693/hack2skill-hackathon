@@ -125,10 +125,15 @@ export class WalkController {
     return null;
   }
 
-  /** Place the walker (feet on the floor below `pos`, nudged to a free spot) looking at `lookAt`. */
-  teleport(pos: THREE.Vector3, lookAt?: THREE.Vector3) {
+  /**
+   * Place the walker (feet on the floor below `pos`, nudged to a free spot) looking at `lookAt`.
+   * `preferFloorY` (e.g. the plan level's finished floor) wins over whatever the probe hits first (a car roof…).
+   */
+  teleport(pos: THREE.Vector3, lookAt?: THREE.Vector3, preferFloorY?: number) {
     const floor = this.groundAt(pos, pos.y + 0.3, pos.y - 3);
-    const spot = floor !== null ? this.findFreeSpot(pos, floor) : null;
+    let spot: THREE.Vector3 | null = null;
+    if (preferFloorY !== undefined) spot = this.findFreeSpot(pos, preferFloorY);
+    if (!spot && floor !== null) spot = this.findFreeSpot(pos, floor);
     const g = spot ? spot.y : floor;
     this.feet.set(spot?.x ?? pos.x, g ?? pos.y, spot?.z ?? pos.z);
     if (lookAt) {
@@ -143,8 +148,8 @@ export class WalkController {
     this.hasPose = true;
   }
 
-  setSpawn(pos: THREE.Vector3, lookAt: THREE.Vector3) {
-    this.teleport(pos, lookAt);
+  setSpawn(pos: THREE.Vector3, lookAt: THREE.Vector3, preferFloorY?: number) {
+    this.teleport(pos, lookAt, preferFloorY);
     this.spawn.feet.copy(this.feet);
     this.spawn.yaw = this.yaw;
     this.spawn.pitch = this.pitch;
