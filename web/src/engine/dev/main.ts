@@ -214,6 +214,9 @@ function setPlan(id: string | null): void {
   if (planLevel && current) drawPlan(cv, current, planLevel, lastChecks);
 }
 $("runChecks").onclick = () => void showChecks();
+window.addEventListener("resize", () => {
+  if (planLevel && current) drawPlan($("plan") as HTMLCanvasElement, current, planLevel, lastChecks);
+});
 $("chkToggle").onclick = () => $("checks").classList.toggle("min");
 
 function buildLevelButtons(res: BuildResult): void {

@@ -248,5 +248,5 @@ export function drawPlan(canvas: HTMLCanvasElement, res: BuildResult, levelId: s
     }
   g.fillStyle = "#6b675f";
   g.font = "11px Inter, system-ui, sans-serif";
-  g.fillText(`${level.name}  ·  road ↓  ·  green: 3 ft path area, dots: entries · orange: guards · dashed: door/gate/stair cores · black: wall items`, pad, ch - 8);
+  g.fillText(`${level.name} · road ↓ · green 3 ft path · dots entries · orange guards · dashed keep-out cores`, pad, ch - 8);
 }
