@@ -321,35 +321,43 @@ def violations_text(report: dict) -> str:
 
 
 def check_asbuilt(plan: dict, summary: dict) -> dict:
-    """As-built checks on the 3D result: facade/structure elements must not project into setbacks beyond allowed sunshades."""
+    """As-built checks on the 3D result: nothing built may project into a mandatory open space beyond what LDA allows
+    for sunshades/chajjas (3 ft where that open space is ≥ 10 ft, otherwise 1.5 ft; 0 against a party wall).
+    Light fixtures and glows are ignored; a 0.5 ft tolerance covers exterior wall thickness and finishes."""
     site = plan.get("site", {})
     W, D = site["plot"]["width_ft"], site["plot"]["depth_ft"]
-    sb = site.get("setbacks_ft") or {}
+    sb = {**{"front": 0, "rear": 0, "left": 0, "right": 0}, **(site.get("setbacks_ft") or {})}
     env = envelope(W, D, site.get("authority", "LDA"))
     band = env.pop("_band")
-    proj = band.get("sunshade_max_projection_ft") or {}
-    allow_front = 3.0 if sb.get("front", 0) >= 10 else float(proj.get("front") or 1.5)
-    allow_rear = 3.0 if sb.get("rear", 0) >= 10 else float(proj.get("rear") or 1.5)
-    x0, y0, x1, y1 = sb.get("left", 0), sb.get("front", 0), W - sb.get("right", 0), D - sb.get("rear", 0)
+
+    def allow(space: float) -> float:
+        return 0.0 if space <= 0 else (3.0 if space >= 10 else 1.5)
+
+    tol = 0.5
+    lim = {k: allow(v) + tol for k, v in sb.items()}
+    x0, y0, x1, y1 = sb["left"], sb["front"], W - sb["right"], D - sb["rear"]
+    skip = ("site", "boundary", "gate", "light", "glow", "facade:wall_light", "facade:led_strip", "lamp", "fixture", "street", "tree")
     checks = []
     for o in summary.get("objects", []):
-        if o.get("layer") not in ("facade", "structure", "custom") or (o.get("kind") or "").startswith(("site", "boundary", "gate")):
+        kind = (o.get("kind") or "").lower()
+        if o.get("layer") not in ("facade", "structure", "custom") or kind.startswith(skip) or any(t in kind for t in ("light", "glow")):
             continue
         mn, mx = o["bbox_ft"]["min"], o["bbox_ft"]["max"]
         if mx[2] < 3:  # at ground level (plinth, paving), not a projection
             continue
-        over_front, over_rear = y0 - mn[1], mx[1] - y1
-        over_side = max(x0 - mn[0], mx[0] - x1)
-        if over_front > allow_front + 0.1 or over_rear > allow_rear + 0.1 or over_side > 0.6:
-            what = o.get("kind") or o.get("id")
+        over = {"front": y0 - mn[1], "rear": mx[1] - y1, "left": x0 - mn[0], "right": mx[0] - x1}
+        side, amount = max(over.items(), key=lambda kv: kv[1] - lim[kv[0]])
+        if amount > lim[side]:
+            what = (o.get("kind") or o.get("id") or "element").split(":")[-1].replace("_", " ")
             checks.append({"id": f"asbuilt.projection:{o['id']}", "title": "Projection into open space", "status": "fail",
-                           "message": f"{what} projects {max(over_front, over_rear, over_side):.1f} ft into a mandatory open space "
-                                      f"(sunshades may project up to {allow_front:g} ft at the front).",
+                           "message": f"The {what} project{'' if what.endswith('s') else 's'} {amount:.1f} ft into the {side} open space (LDA allows "
+                                      f"{allow(sb[side]):g} ft for sunshades there).",
                            "rule_ref": f"{REF} §2.7 (projections)", "element_ids": [o["id"]]})
     for e in summary.get("section_errors", []):
         checks.append({"id": f"asbuilt.section:{e['section']}", "title": "3D section error", "status": "warn",
                        "message": f"Section {e['section']} failed: {e['error'][:200]}", "element_ids": []})
     return {"authority": site.get("authority", "LDA"), "band": band["label"], "ok": not any(c["status"] == "fail" for c in checks),
             "checks": checks or [{"id": "asbuilt.ok", "title": "As-built projections", "status": "pass",
-                                  "message": "No facade element projects into mandatory open spaces.", "element_ids": []}],
+                                  "message": "Nothing projects into the mandatory open spaces beyond LDA's sunshade allowance.",
+                                  "element_ids": []}],
             "envelope": {}, "metrics": {}}
