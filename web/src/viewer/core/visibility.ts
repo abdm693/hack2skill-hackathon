@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import type { Layer } from "@contracts/house-sdk";
 import type { Level } from "@contracts/plan";
+import { isContainer } from "./tags";
 
 export interface VisibilitySpec {
   visibleLevels?: string[];
@@ -62,6 +63,9 @@ export class VisibilityController {
 
   /** Is an object hidden by its OWN tags (ignores its `visible` flag)? */
   hiddenByTags(o: THREE.Object3D): boolean {
+    // engine containers (a design.js section, the "merged" group that holds every consolidated mesh) carry a layer
+    // but contain objects of all layers/levels: only their children are toggled
+    if (isContainer(o)) return false;
     const u = o.userData ?? {};
     if (typeof u.layer === "string" && this.layersOff.has(u.layer)) return true;
     if (typeof u.level === "string" && this.levelsShown && this.known.has(u.level) && !this.levelsShown.has(u.level)) return true;
