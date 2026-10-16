@@ -1,0 +1,8 @@
+{
+  "env": {
+    "GOOGLE_CLOUD_PROJECT": "project-d5fe6dd3-2b61-40b3-932",
+    "GOOGLE_CLOUD_LOCATION": "global",
+    "GOOGLE_GENAI_USE_VERTEXAI": "TRUE",
+    "GCP_REGION": "us-central1"
+  }
+}

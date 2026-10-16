@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "gcp-firestore": {
+      "type": "http",
+      "url": "https://firestore.googleapis.com/mcp",
+      "headersHelper": "./scripts/gcp-mcp-headers.sh"
+    },
+    "gcp-cloud-run": {
+      "type": "http",
+      "url": "https://run.googleapis.com/mcp",
+      "headersHelper": "./scripts/gcp-mcp-headers.sh"
+    },
+    "gcp-logging": {
+      "type": "http",
+      "url": "https://logging.googleapis.com/mcp",
+      "headersHelper": "./scripts/gcp-mcp-headers.sh"
+    },
+    "gcp-docs": {
+      "type": "http",
+      "url": "https://developerknowledge.googleapis.com/mcp",
+      "headersHelper": "./scripts/gcp-mcp-headers.sh"
+    }
+  }
+}
