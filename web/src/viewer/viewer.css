@@ -122,6 +122,7 @@
 .nq-mini { position: absolute; right: 14px; top: 14px; padding: 8px; border-radius: 14px; }
 .nq-mini svg { display: block; }
 .nq-mini-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nq-muted); margin: 0 2px 6px; display: flex; justify-content: space-between; gap: 10px; }
+.nq-mini-north { display: inline-flex; align-items: center; gap: 3px; }
 
 /* walk gates (ready / paused / commenting) */
 .nq-gate { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.42)); animation: nq-fade 260ms ease both; }

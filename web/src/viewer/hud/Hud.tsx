@@ -129,7 +129,7 @@ function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: Bu
 
 function WalkGate({ ctrl, phase, touch, floors }: { ctrl: ViewerController; phase: string; touch: boolean; floors: number }) {
   const start = useCallback(() => ctrl.requestLock(), [ctrl]);
-  const exit = useCallback(() => ctrl.finishWalk(), [ctrl]);
+  const exit = useCallback(() => ctrl.exitWalk(), [ctrl]);
   const startRef = useRef<HTMLButtonElement>(null);
   if (phase === "ready" || phase === "paused") {
     const paused = phase === "paused";

@@ -4,8 +4,8 @@
  *
  * - Latitude 31.5°N, fixed declination 18° (early summer: 17.5 h ≈ golden hour), hour angle (h − 12)·15°.
  * - Directions follow the PLAN's semantics: the plot front (−y) faces `site.facing`, and a compass bearing θ relative
- *   to the front maps to plan (−sin θ, −cos θ); world = (x_ft, y_ft) → (x_m, z_m). For a north-facing plot the
- *   morning sun therefore rises over the plan's left side (min x, "left as seen from the road").
+ *   to the front maps to plan (−sin θ, −cos θ); world = (x_ft, −y_ft) → (x_m, z_m) (road at +z). For a north-facing
+ *   plot the morning sun therefore rises over the plan's left side (min x, "left as seen from the road" = east).
  */
 import * as THREE from "three";
 import { clamp, lerp, smoothstep } from "./units";
@@ -47,8 +47,9 @@ function solar(hour: number) {
 
 function planDir(az: number, facing: Facing, alt: number) {
   const th = az - (FACING_AZ[facing] ?? 0) * DEG;
-  const dx = -Math.sin(th), dy = -Math.cos(th);
-  return new THREE.Vector3(dx * Math.cos(alt), Math.sin(alt), dy * Math.cos(alt)).normalize();
+  const dx = -Math.sin(th), dy = -Math.cos(th); // plan direction (front = −y)
+  // world: x = x_ft, z = −y_ft (road at +z)
+  return new THREE.Vector3(dx * Math.cos(alt), Math.sin(alt), -dy * Math.cos(alt)).normalize();
 }
 
 export function sunState(hour: number, facing: Facing = "N"): SunState {

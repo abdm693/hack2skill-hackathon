@@ -17,7 +17,7 @@ import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
 import { displayLabel, resolveHitTags, type PartRange } from "./tags";
-import { FT, damp, isCoarsePointer, prefersReducedMotion } from "./units";
+import { FT, damp, isCoarsePointer, planToWorld, prefersReducedMotion, worldToPlan } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
 import { buildColliderBVH, disposeCollider, type ColliderBVH } from "../walk/collider";
@@ -25,7 +25,7 @@ import { EYE, WalkController } from "../walk/WalkController";
 
 export type SuspendableControls = CameraControlsImpl & { suspended: boolean };
 
-type ModeSource = "props" | "handle" | "user" | "flyTo";
+type ModeSource = "props" | "handle" | "user" | "finish" | "flyTo";
 
 const ORBIT_FOV = 50;
 const WALK_FOV = 70;
@@ -355,8 +355,10 @@ export class ViewerController {
     this.walk.update(dt, cam);
     if (wasIntro && !this.walk.transition) this.onIntroDone();
     if (this.minimapMarker) {
-      const x = this.walk.feet.x / FT, y = this.walk.feet.z / FT;
-      this.minimapMarker.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${((-this.walk.yaw * 180) / Math.PI).toFixed(1)})`);
+      // minimap draws the plan with the road at the bottom (SVG y = D − y_ft); heading: yaw 0 looks into the plot (up)
+      const p = worldToPlan(this.walk.feet);
+      const D = this.plan.site.plot.depth_ft;
+      this.minimapMarker.setAttribute("transform", `translate(${p.x.toFixed(2)} ${(D - p.y).toFixed(2)}) rotate(${((-this.walk.yaw * 180) / Math.PI).toFixed(1)})`);
     }
     if (now - this.roomAt > 200) {
       this.roomAt = now;
@@ -635,7 +637,7 @@ export class ViewerController {
     } else if (!this.walk.ready) {
       // no house yet: stand on the road facing the plot until the build lands
       const W = this.plan.site.plot.width_ft;
-      this.walk.setSpawn(new THREE.Vector3((W / 2) * FT, 0, -2), new THREE.Vector3((W / 2) * FT, 1.6, 8));
+      this.walk.setSpawn(planToWorld(W / 2, -6, 0), planToWorld(W / 2, 26, 5.2));
       this.walkerOnFallback = true;
     }
   }
@@ -675,8 +677,7 @@ export class ViewerController {
     this.invalidate();
     if (source !== "props" && this.props.mode !== "orbit") {
       try {
-        // the contract's onExitWalk takes no args; the reason is passed for apps that want it
-        (this.props.onExitWalk as ((reason?: string) => void) | undefined)?.(source === "flyTo" ? "flyTo" : "exit");
+        this.props.onExitWalk?.(source === "flyTo" ? "flyTo" : source === "finish" ? "finish" : "exit");
       } catch (e) {
         console.warn("[viewer] onExitWalk threw", e);
       }
@@ -697,12 +698,12 @@ export class ViewerController {
     const enclosed = rooms.filter((r) => !["lawn", "driveway", "open_space", "courtyard", "porch", "balcony", "terrace"].includes(r.type));
     const pickRoom = enclosed.find((r) => r.type === "stair") ?? [...enclosed].sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d)[0];
     let target: THREE.Vector3;
-    if (pickRoom) target = new THREE.Vector3((pickRoom.rect.x + pickRoom.rect.w / 2) * FT, lvl.elevation_ft * FT, (pickRoom.rect.y + pickRoom.rect.d / 2) * FT);
+    if (pickRoom) target = planToWorld(pickRoom.rect.x + pickRoom.rect.w / 2, pickRoom.rect.y + pickRoom.rect.d / 2, lvl.elevation_ft);
     else {
       // e.g. the roof: stand near the stair tower if there is one, else mid-plot
       const m = this.plan.roof?.mumty?.rect;
       const W = this.plan.site.plot.width_ft, D = this.plan.site.plot.depth_ft;
-      target = m ? new THREE.Vector3((m.x + m.w + 3) * FT, lvl.elevation_ft * FT, (m.y + m.d / 2) * FT) : new THREE.Vector3((W / 2) * FT, lvl.elevation_ft * FT, (D / 2) * FT);
+      target = m ? planToWorld(m.x + m.w + 3, m.y + m.d / 2, lvl.elevation_ft) : planToWorld(W / 2, D / 2, lvl.elevation_ft);
     }
     const spot = this.walk.findFreeSpot(target, lvl.elevation_ft * FT) ?? this.walk.findFreeSpot(target.clone().setY(target.y + 0.3), lvl.elevation_ft * FT);
     if (!spot) {
@@ -718,8 +719,14 @@ export class ViewerController {
     this.toast(lvl.name);
   }
 
-  /** "Finish walkthrough" (F): leave walk mode and tell the app. */
+  /** "Finish walkthrough" (F, touch Finish): leave walk mode, onExitWalk("finish"). */
   finishWalk() {
+    if (this.store.getState().mode !== "walk") return;
+    this.leaveWalk("finish");
+  }
+
+  /** Exit / Back-to-overview buttons: leave walk mode, onExitWalk("exit"). */
+  exitWalk() {
     if (this.store.getState().mode !== "walk") return;
     this.leaveWalk("user");
   }
@@ -1016,7 +1023,7 @@ export class ViewerController {
     let level = levels[0];
     for (const l of levels) if (l.elevation_ft * FT <= p.y + tolerance) level = l;
     if (!level) return {};
-    const x = p.x / FT, y = p.z / FT;
+    const { x, y } = worldToPlan(p);
     const rooms = this.plan.rooms.filter((r) => r.level === level.id && x >= r.rect.x - 0.3 && x <= r.rect.x + r.rect.w + 0.3 && y >= r.rect.y - 0.3 && y <= r.rect.y + r.rect.d + 0.3);
     rooms.sort((a, b) => a.rect.w * a.rect.d - b.rect.w * b.rect.d);
     return { level: level.id, room: rooms[0]?.id };
@@ -1268,7 +1275,7 @@ export class ViewerController {
         ctrl.walk.pitch = THREE.MathUtils.degToRad(pitchDeg);
       },
       teleport: (x: number, y: number, z: number) => ctrl.walk.teleport(new THREE.Vector3(x, y, z)),
-      teleportPlan: (xFt: number, yFt: number, hFt = 30) => ctrl.walk.teleport(new THREE.Vector3(xFt * FT, hFt * FT, yFt * FT)),
+      teleportPlan: (xFt: number, yFt: number, hFt = 30) => ctrl.walk.teleport(planToWorld(xFt, yFt, hFt)),
       comment: () => ctrl.placeComment(0, 0, ctrl.store.getState().mode === "walk"),
       commentAt: (x: number, y: number) => ctrl.placeComment(x, y, false),
       hero: () => ctrl.placeHero(true),

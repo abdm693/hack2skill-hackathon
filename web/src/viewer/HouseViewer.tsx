@@ -45,7 +45,8 @@ export interface HouseViewerProps {
   onSelectComment?: (id: string) => void;
   onBuildProgress?: (r: SectionResult, done: number, total: number) => void;
   onReady?: (result: { summary: AsBuiltSummary; sections: SectionResult[] }) => void;
-  onExitWalk?: () => void;
+  /** The viewer left walk mode by itself: "finish" (F / Finish), "exit" (Exit walk, setMode), "flyTo" (aerial comment). */
+  onExitWalk?: (reason?: "exit" | "flyTo" | "finish") => void;
 }
 
 /**
@@ -123,7 +124,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
         shadows="percentage"
         dpr={DPR[quality]}
         gl={GL_PROPS}
-        camera={{ fov: 50, near: 0.08, far: 3000, position: [30, 22, -26] }}
+        camera={{ fov: 50, near: 0.08, far: 3000, position: [30, 22, 26] }}
         frameloop={mode === "walk" ? "always" : "demand"}
       >
         <SceneRoot ctrl={ctrl} />

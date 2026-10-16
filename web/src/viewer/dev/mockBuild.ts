@@ -13,6 +13,8 @@ import type { AsBuiltSummary } from "@contracts/api-types";
 import type { BuildResult, DesignSectionSrc, SectionResult } from "@/engine";
 
 const FT = 0.3048;
+/** Plan ft → world m (contracts/plan.ts): x = x_ft, z = −y_ft (road at +z), Y = h_ft. */
+const W = (x_ft: number, y_ft: number, h_ft = 0) => new THREE.Vector3(x_ft * FT, h_ft * FT, -y_ft * FT);
 const EXT_T = 0.75;
 const INT_T = 0.375;
 const OUTDOOR = new Set(["porch", "balcony", "terrace", "lawn", "driveway", "courtyard", "open_space"]);
@@ -111,7 +113,7 @@ class MockBuilder {
     const w = (b.x1 - b.x0) * FT, d = (b.y1 - b.y0) * FT, h = (b.h1 - b.h0) * FT;
     if (w <= 1e-4 || d <= 1e-4 || h <= 1e-4) return null;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(((b.x0 + b.x1) / 2) * FT, ((b.h0 + b.h1) / 2) * FT, ((b.y0 + b.y1) / 2) * FT);
+    m.position.copy(W((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.h0 + b.h1) / 2));
     m.castShadow = shadow;
     m.receiveShadow = true;
     return m;
@@ -581,7 +583,7 @@ class MockBuilder {
   }
 
   placeAt(_r: Room, x: number, y: number, rot: number, obj: { group: THREE.Group; colliders: THREE.Mesh[] }, tags: Tags, h: number, collide: boolean) {
-    obj.group.position.set(x * FT, h * FT, y * FT);
+    obj.group.position.copy(W(x, y, h));
     obj.group.rotation.y = rot;
     this.add(obj.group, tags);
     if (collide) this.colliders.push(...obj.colliders);
@@ -639,7 +641,7 @@ class MockBuilder {
       c.receiveShadow = true;
       g.add(c);
     }
-    g.position.set(x * FT, (y > 0 ? 1.5 : 0.5) * FT, y * FT);
+    g.position.copy(W(x, y, y > 0 ? 1.5 : 0.5));
     this.add(g, { layer: "landscape", kind: "tree", label: "Tree" });
     this.colliders.push(trunk);
   }
@@ -651,8 +653,8 @@ class MockBuilder {
     this.built.add("lights");
     const { plot } = this.plan.site;
     const sun = new THREE.DirectionalLight("#fff3e2", 4.2);
-    const center = new THREE.Vector3((plot.width_ft / 2) * FT, 3, (plot.depth_ft / 2) * FT);
-    sun.position.copy(center).add(new THREE.Vector3(-18, 26, -14));
+    const center = W(plot.width_ft / 2, plot.depth_ft / 2, 10);
+    sun.position.copy(center).add(new THREE.Vector3(-18, 26, 14)); // the viewer re-aims it along the sun path
     sun.target.position.copy(center);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -676,7 +678,7 @@ class MockBuilder {
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.03, 24), this.mats.lightEmissive);
       disc.castShadow = false;
       g.add(disc);
-      g.position.set(c.x * FT, ceil * FT - 0.02, c.y * FT);
+      g.position.copy(W(c.x, c.y, ceil)).add(new THREE.Vector3(0, -0.02, 0));
       this.add(g, { layer: "lighting", level: r.level, room: r.id, kind: "light:ceiling", label: `${r.name} ceiling light` });
     }
   }
@@ -692,7 +694,8 @@ class MockBuilder {
       if (box.isEmpty()) continue;
       objects.push({
         id: u.id, layer: u.layer, kind: u.kind, level: u.level, room: u.room,
-        bbox_ft: { min: [box.min.x / FT, box.min.z / FT, box.min.y / FT], max: [box.max.x / FT, box.max.z / FT, box.max.y / FT] },
+        // world z = −y_ft, so the plan y range comes from the opposite z bounds
+        bbox_ft: { min: [box.min.x / FT, -box.max.z / FT, box.min.y / FT], max: [box.max.x / FT, -box.min.z / FT, box.max.y / FT] },
       });
     }
     return { objects, section_errors: [] };
@@ -702,8 +705,8 @@ class MockBuilder {
     const door = this.plan.openings.find((o) => o.type === "main_door") ?? this.plan.openings.find((o) => o.between.includes("exterior") && o.type !== "window");
     const g = this.levels.find((l) => l.index === 0)!;
     if (!door) {
-      const p = new THREE.Vector3((this.plan.site.plot.width_ft / 2) * FT, g.elevation_ft * FT, 4 * FT);
-      return { position: p, lookAt: p.clone().add(new THREE.Vector3(0, 1.6, 5)) };
+      const p = W(this.plan.site.plot.width_ft / 2, 4, g.elevation_ft);
+      return { position: p, lookAt: W(this.plan.site.plot.width_ft / 2, 20, g.elevation_ft + 5) };
     }
     const inside = this.plan.rooms.find((r) => r.id === door.between[0]);
     let nx = 0, ny = -1;
@@ -714,8 +717,8 @@ class MockBuilder {
       [, nx, ny] = dists[0];
     }
     const lvl = this.level(door.level) ?? g;
-    const pos = new THREE.Vector3((door.at[0] + nx * 4.5) * FT, lvl.elevation_ft * FT, (door.at[1] + ny * 4.5) * FT);
-    const look = new THREE.Vector3((door.at[0] - nx * 6) * FT, lvl.elevation_ft * FT + 1.5, (door.at[1] - ny * 6) * FT);
+    const pos = W(door.at[0] + nx * 4.5, door.at[1] + ny * 4.5, lvl.elevation_ft);
+    const look = W(door.at[0] - nx * 6, door.at[1] - ny * 6, lvl.elevation_ft).add(new THREE.Vector3(0, 1.5, 0));
     return { position: pos, lookAt: look };
   }
 
@@ -858,7 +861,7 @@ function stairFrame(s: Pick<Stair, "rect" | "start">) {
     },
     /** Convex profile in (u, h_ft) extruded across v ∈ [v0, v1]; world meters, flat normals. */
     prism(profile: [number, number][], v0: number, v1: number): THREE.BufferGeometry {
-      const P = (u: number, v: number, h: number) => { const [px, py] = toPlan(u, v); return [px * FT, h * FT, py * FT]; };
+      const P = (u: number, v: number, h: number) => { const [px, py] = toPlan(u, v); return W(px, py, h).toArray(); };
       const tri: number[] = [];
       const n = profile.length;
       for (let i = 1; i < n - 1; i++) {
@@ -891,7 +894,8 @@ function stairFrame(s: Pick<Stair, "rect" | "start">) {
   };
 }
 
-const sideRot = (s: Side) => (s === "back" ? Math.PI : s === "front" ? 0 : s === "left" ? Math.PI / 2 : -Math.PI / 2);
+/** Rotation that turns an item's local +z (its front) to face into the room from wall `s` (world z = −y_ft). */
+const sideRot = (s: Side) => (s === "back" ? 0 : s === "front" ? Math.PI : s === "left" ? Math.PI / 2 : -Math.PI / 2);
 const oppositeSide = (s: Side): Side => (s === "back" ? "front" : s === "front" ? "back" : s === "left" ? "right" : "left");
 
 // ───────────────────────────── furniture kit (meters, local +z = front) ─────────────────────────────
