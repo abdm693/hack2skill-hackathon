@@ -1,0 +1,78 @@
+# Web module boundaries
+
+Three tracks are built in parallel in `web/src`. Each one owns a directory and talks to the others **only** through the interfaces below. The interface files are already stubbed in the scaffold; implement them without changing their exported signatures. If a signature must change, note it in your final report.
+
+## engine/: House SDK + builders (track: ENGINE)
+
+`web/src/engine/index.ts`
+
+```ts
+export interface DesignSectionSrc { name: string; layer: Layer; body: string }
+
+/** Parse design.js text ("// @section name [layer] … // @end"). Lenient: ignores junk outside sections. */
+export function parseDesign(code: string): DesignSectionSrc[];
+/** Serialize back (used for display/download). */
+export function serializeDesign(sections: DesignSectionSrc[]): string;
+/** Fallback design when Argon code is missing: structure + auto_furnish every room + landscape + lights. */
+export function defaultDesign(plan: BuildingPlan): DesignSectionSrc[];
+/** Static safety screen; returns the reasons a section is rejected (empty = OK). */
+export function screenSection(body: string): string[];
+
+export interface SectionResult { name: string; layer: Layer; ok: boolean; error?: string; ms: number; objects: number }
+export interface BuildResult {
+  root: THREE.Group;            // add to scene; meters, +Y up
+  summary: AsBuiltSummary;      // see contracts/api.md
+  sections: SectionResult[];
+  levels: { id: string; name: string; floor_y: number; top_y: number }[];   // meters, for level toggles/section cut
+  colliders: THREE.Mesh[];      // static meshes for walkthrough collision (walls, slabs, stairs ramps, big furniture, boundary)
+  spawn: { position: THREE.Vector3; lookAt: THREE.Vector3 };  // walkthrough start (at the main door, outside)
+  dispose(): void;
+}
+/** Build the house. Runs sections in order and calls onSection after each (the viewer re-renders = "layers assembling"). */
+export function buildHouse(plan: BuildingPlan, sections: DesignSectionSrc[], opts?: {
+  onSection?: (r: SectionResult, root: THREE.Group) => void | Promise<void>;
+  quality?: "high" | "medium";
+}): Promise<BuildResult>;
+```
+
+Every created `Object3D` carries
+`userData = { layer, level, room, kind, id, label }`. The viewer relies on this for layer and level toggles, for hover labels, and for comment anchors.
+
+## viewer/: scene host, modes, walkthrough, comments (track: VIEWER)
+
+`web/src/viewer/HouseViewer.tsx`
+
+```tsx
+export interface ViewerHandle {
+  capture(opts?: { width?: number; height?: number }): Promise<string>;  // PNG data URL of the current view (for AI render + comment snapshots)
+  flyTo(comment: Comment): void;
+  setMode(mode: "orbit" | "walk"): void;
+}
+export interface HouseViewerProps {
+  plan: BuildingPlan;
+  sections: DesignSectionSrc[];                 // from engine.parseDesign(version code) or Version.sections
+  mode: "orbit" | "walk";
+  visibleLevels?: string[];                     // default: all
+  layers?: Partial<Record<Layer, boolean>>;     // default: all on
+  sectionCut?: number | null;                   // meters; clip everything above
+  sunHour?: number;                             // 6..19
+  comments?: Comment[];
+  commentMode?: boolean;                        // when on, a click (orbit) or C/click (walk) places a pin
+  onAddComment?: (draft: { anchor: CommentAnchor; camera: Comment["camera"]; snapshot: string }) => void;
+  onSelectComment?: (id: string) => void;
+  onBuildProgress?: (r: SectionResult, done: number, total: number) => void;
+  onReady?: (result: { summary: AsBuiltSummary; sections: SectionResult[] }) => void;
+  onExitWalk?: () => void;
+}
+export const HouseViewer: React.ForwardRefExoticComponent<HouseViewerProps & React.RefAttributes<ViewerHandle>>;
+```
+
+## app/: everything else in the UI (track: APP)
+
+Pages:
+- `/`: workspace
+- `/p/:id`: project, with steps Setup → Concepts → Design → Explore and Walk → Revisions
+
+The app also owns `web/src/api/` (`client.ts` and `sse.ts`). It uses `HouseViewer` and the engine types only through the exports above.
+
+During development the app can use **mock mode** (`VITE_MOCK=1`). In mock mode the API layer returns fixtures from `contracts/fixtures/` and simulates SSE streams with timers, so the UI is fully clickable before the backend exists.

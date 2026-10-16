@@ -33,3 +33,11 @@ coverage/
 .idea/
 .vscode/
 *.swp
+
+# Playwright MCP output
+.playwright-mcp/
+
+# App build outputs
+web/dist/
+api/.venv/
+*.tsbuildinfo
