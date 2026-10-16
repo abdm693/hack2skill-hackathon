@@ -321,7 +321,9 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const currentRoom = room.id ? plan.rooms.find((r) => r.id === room.id) : undefined;
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName);
   const asBuiltNotes = asBuilt?.checks.filter((c) => c.status !== "pass") ?? [];
-  const bottom = wide ? "bottom-4" : "bottom-[96px]";
+  // Clear of the dock (the shell publishes its height as --dock-h); beside it only on very wide screens.
+  // Phones stack three rows above the dock: mode · view · version, then rooms · comment, then notes.
+  const row = (n: number) => (wide ? undefined : { bottom: `calc(var(--dock-h, 96px) + ${8 + n * 52}px)` });
 
   return (
     <div className="nq-house relative h-full overflow-hidden bg-hud">
@@ -378,7 +380,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Bottom-left: mode, view, version */}
-      <div className={cn("absolute left-3 z-20 flex flex-wrap items-center gap-2 sm:left-4", bottom)}>
+      <div className={cn("absolute left-3 z-20 flex flex-wrap items-center gap-2 sm:left-4", wide && "bottom-4")} style={row(0)}>
         <Segmented
           label="Mode"
           tone="hud"
@@ -401,7 +403,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Bottom-right: rooms and comments */}
-      <div className={cn("absolute right-3 z-20 flex items-center gap-2 sm:right-4", bottom, phone && "bottom-[148px]")}>
+      <div className={cn("absolute right-3 z-20 flex items-center gap-2 sm:right-4", wide && "bottom-4")} style={row(phone ? 1 : 0)}>
         <HudButton ref={roomPill} onClick={() => setNavOpen((o) => !o)} pressed={navOpen} label="Rooms (M)">
           <span className="max-w-[180px] truncate">{currentRoom ? `${sentenceCase(currentRoom.name)} · ${levelName(levels.find((l) => l.id === currentRoom.level)!).replace(/ floor$/i, "")}` : "Rooms"}</span>
           <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
@@ -416,7 +418,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Notes from the as-built check and parts that didn't build */}
-      <div className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide ? "bottom-[64px]" : "bottom-[148px]")}>
+      <div className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(phone ? 2 : 1)}>
         {asBuiltNotes.length > 0 && <AsBuiltNotes notes={asBuiltNotes.map((c) => c.message)} />}
         {failed.map((f) => (
           <div key={f.name} className="glass-hud pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 text-[13px]">
@@ -542,8 +544,9 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 /** Make room for the toolbars inside the viewer's own HUD (viewer classes; harmless if they change). */
 const HUD_CSS = `
 .nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: var(--chrome-top, 72px); }
-.nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: 148px; }
-.nq-house .nq-toast { bottom: 200px; }
+.nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 60px); }
+.nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 112px); }
+@media (max-width: 767px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 164px); } .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 216px); } }
 @media (min-width: 1600px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock { bottom: 76px; } .nq-house .nq-toast { bottom: 128px; } }
 `;
 
