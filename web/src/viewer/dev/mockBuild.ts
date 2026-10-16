@@ -377,9 +377,12 @@ class MockBuilder {
     ramp(f.prism([[uLand, hMid], [f.uStart, h1], [f.uStart, h1 - 0.7], [uLand, hMid - 0.7]], wA + gap, f.wid), "stair_ramp");
     if (ground) {
       // under-stair store below the low end of flight B (no head-bumping from the ground floor)
-      const blk = f.rect(uLand - 3, 3, wA + gap, f.wid - wA - gap);
-      const bm = this.boxMesh({ x0: blk.x, x1: blk.x + blk.w, y0: blk.y, y1: blk.y + blk.d, h0, h1: hMid + 1.2 }, this.mats.interior);
-      if (bm) { group.add(bm); this.colliders.push(bm); }
+      const u0 = Math.max(f.uStart, uLand - 3);
+      const hB0 = h1 - ((h1 - hMid) * (u0 - f.uStart)) / (uLand - f.uStart);
+      const store = new THREE.Mesh(f.prism([[u0, h0], [uLand, h0], [uLand, hMid - 0.7], [u0, hB0 - 0.7]], wA + gap, f.wid), this.mats.interior);
+      store.castShadow = store.receiveShadow = true;
+      group.add(store);
+      this.colliders.push(store);
     }
     // inner railing (between flights) and the outer railing of flight B
     const hA = (u: number) => h0 + ((hMid - h0) * (u - f.uStart)) / (uLand - f.uStart);
@@ -492,41 +495,51 @@ class MockBuilder {
     const h = lvl.elevation_ft;
     const t = (kind: string, label: string): Tags => ({ layer: "furniture", level: r.level, room: r.id, kind: `furniture:${kind}`, label });
     const side = this.freeSide(r);
+    const c = this.roomCenter(r);
     switch (r.type) {
       case "drawing":
       case "lounge": {
-        const big = r.rect.w * r.rect.d > 250;
-        this.item(r, side, sofa(this.mats, 7.2, 3.0), t("sofa_3", "3-seat sofa"), h, true);
-        const opp = oppositeSide(side);
-        this.item(r, opp, tvUnit(this.mats, r.type === "lounge"), t(r.type === "lounge" ? "tv_unit" : "console_table", r.type === "lounge" ? "TV unit" : "Console table"), h, true);
-        const c = this.roomCenter(r);
-        this.placeAt(r, c.x, c.y + (side === "back" ? 1.5 : side === "front" ? -1.5 : 0), sideRot(side), coffeeTable(this.mats), t("coffee_table", "Coffee table"), h, true);
-        this.placeAt(r, c.x, c.y, 0, rug(this.mats, 8, 6), t("rug", "Rug"), h, false);
-        if (big && r.type === "lounge") {
-          const dx = r.rect.x + r.rect.w * 0.25, dy = r.rect.y + r.rect.d * 0.32;
-          this.placeAt(r, dx, dy, Math.PI / 2, diningTable(this.mats), t("dining_table_6", "Dining table"), h, true);
+        if (side) {
+          this.item(r, side, sofa(this.mats, 7.2, 3.0), t("sofa_3", "3-seat sofa"), h, true);
+          const opp = oppositeSide(side);
+          const info = this.sideInfo(r, opp);
+          if (!info.ops && !info.open) {
+            const tv = r.type === "lounge";
+            this.item(r, opp, tvUnit(this.mats, tv), t(tv ? "tv_unit" : "console_table", tv ? "TV unit" : "Console table"), h, true);
+          }
+          const toward = side === "back" ? [0, 1.6] : side === "front" ? [0, -1.6] : side === "left" ? [-1.6, 0] : [1.6, 0];
+          this.placeAt(r, c.x + toward[0], c.y + toward[1], sideRot(side), coffeeTable(this.mats), t("coffee_table", "Coffee table"), h, true);
         }
+        this.placeAt(r, c.x, c.y, 0, rug(this.mats, 8, 6), t("rug", "Rug"), h, false);
         break;
       }
+      case "dining":
+        this.placeAt(r, c.x, c.y, r.rect.w > r.rect.d ? 0 : Math.PI / 2, diningTable(this.mats), t("dining_table_6", "Dining table"), h, true);
+        break;
       case "master_bedroom":
       case "bedroom":
       case "guest_bedroom": {
         const king = r.type === "master_bedroom";
-        this.item(r, side, bed(this.mats, king ? 6.4 : 5.3, 6.8), t(king ? "bed_king" : "bed_queen", king ? "King bed" : "Queen bed"), h, true);
+        if (side) this.item(r, side, bed(this.mats, king ? 6.4 : 5.3, 6.8), t(king ? "bed_king" : "bed_queen", king ? "King bed" : "Queen bed"), h, true);
         break;
       }
       case "kitchen": {
-        this.item(r, side, counter(this.mats, Math.min(10, (side === "left" || side === "right" ? r.rect.d : r.rect.w) - 2.5)), t("kitchen_counter", "Kitchen counter"), h, true);
+        if (side) this.item(r, side, counter(this.mats, Math.min(10, (side === "left" || side === "right" ? r.rect.d : r.rect.w) - 2.5)), t("kitchen_counter", "Kitchen counter"), h, true);
         break;
       }
       case "porch": {
-        const c = this.roomCenter(r);
-        this.placeAt(r, c.x, c.y - 1, 0, car(this.mats), { ...t("car_sedan", "Car"), layer: "furniture" }, h, true);
+        // park along the porch's long axis, on the side away from the main door
+        const door = this.plan.openings.find((o) => o.type === "main_door" && o.between.includes(r.id));
+        const alongY = r.rect.d >= r.rect.w;
+        let px = c.x, py = c.y;
+        if (door && alongY) px = door.at[0] > c.x ? r.rect.x + 4 : r.rect.x + r.rect.w - 4;
+        if (door && !alongY) py = door.at[1] > c.y ? r.rect.y + 4 : r.rect.y + r.rect.d - 4;
+        this.placeAt(r, px, py, alongY ? 0 : Math.PI / 2, car(this.mats), { ...t("car_sedan", "Car"), layer: "furniture" }, h, true);
         break;
       }
       case "bath":
       case "powder": {
-        this.item(r, side, vanity(this.mats), t("vanity", "Vanity"), h, true);
+        if (side) this.item(r, side, vanity(this.mats), t("vanity", "Vanity"), h, true);
         break;
       }
       default:
@@ -536,20 +549,24 @@ class MockBuilder {
 
   roomCenter(r: Room) { return { x: r.rect.x + r.rect.w / 2, y: r.rect.y + r.rect.d / 2 }; }
 
-  /** A side of the room with no openings (prefers back, then left/right). */
-  freeSide(r: Room): Side {
-    const ops = this.plan.openings.filter((o) => o.level === r.level && o.between.includes(r.id));
-    const on = (s: Side) => ops.filter((o) => {
-      const { x, y, w, d } = r.rect;
+  /** Openings on one side of a room, and whether that side is open to a neighbour (open plan). */
+  sideInfo(r: Room, s: Side): { ops: number; open: boolean } {
+    const { x, y, w, d } = r.rect;
+    const ops = this.plan.openings.filter((o) => o.level === r.level && o.between.includes(r.id)).filter((o) => {
       if (s === "front") return Math.abs(o.at[1] - y) < 1;
       if (s === "back") return Math.abs(o.at[1] - (y + d)) < 1;
       if (s === "left") return Math.abs(o.at[0] - x) < 1;
       return Math.abs(o.at[0] - (x + w)) < 1;
     }).length;
-    const open = new Set(r.open_to ?? []);
-    const neighbourOpen = (s: Side) => this.plan.rooms.some((n) => open.has(n.id) && touchesSide(r.rect, n.rect, s));
+    const openIds = new Set(r.open_to ?? []);
+    const open = this.plan.rooms.some((n) => openIds.has(n.id) && touchesSide(r.rect, n.rect, s));
+    return { ops, open };
+  }
+
+  /** A solid side of the room (no doors/windows, not open plan), or null. */
+  freeSide(r: Room): Side | null {
     const order: Side[] = ["back", "left", "right", "front"];
-    return order.find((s) => on(s) === 0 && !neighbourOpen(s)) ?? order.reduce((best, s) => (on(s) < on(best) ? s : best), "back");
+    return order.find((s) => { const i = this.sideInfo(r, s); return !i.ops && !i.open; }) ?? null;
   }
 
   item(r: Room, side: Side, obj: { group: THREE.Group; depth: number; colliders: THREE.Mesh[] }, tags: Tags, h: number, collide: boolean) {
@@ -590,15 +607,15 @@ class MockBuilder {
     const lawn = this.plan.rooms.find((r) => r.type === "lawn");
     if (lawn) this.box({ x0: lawn.rect.x + 0.4, x1: lawn.rect.x + lawn.rect.w - 0.4, y0: lawn.rect.y + 0.4, y1: lawn.rect.y + lawn.rect.d - 0.4, h0: 1.5, h1: 1.56 }, this.mats.grass, tg("lawn", "Front lawn", { level: lawn.level, room: lawn.id }), { shadow: false });
     // trees
-    const trees: [number, number, number][] = [[-2.5, -3.5, 22], [W + 2, -3.5, 19], [lawn ? lawn.rect.x + lawn.rect.w - 4 : W - 4, 5, 15], [W / 2 + 25, -3.5, 24], [-26, -3.5, 18]];
+    const trees: [number, number, number][] = [[-3.5, -3.5, 20], [W + 3.5, -3.5, 18], [lawn ? lawn.rect.x + 2.5 : 3, 2.5, 13], [W + 26, -3.5, 22], [-28, -3.5, 19]];
     for (const [x, y, hgt] of trees) this.placeTree(x, y, hgt);
     // neighbours (context massing): both sides and across the road
     const nb = (x0: number, x1: number, y0: number, y1: number, hgt: number, mat: THREE.Material) => {
       this.box({ x0, x1, y0, y1, h0: 0, h1: hgt }, mat, tg("neighbour", "Neighbouring house"));
       this.box({ x0: x0 - 0.3, x1: x1 + 0.3, y0: y0 - 0.3, y1: y1 + 0.3, h0: hgt, h1: hgt + 3 }, mat, tg("neighbour", "Neighbouring house"));
     };
-    nb(-W + 4, -4, 12, D - 6, 22, this.mats.neighbour);
-    nb(W + 4, 2 * W - 4, 14, D - 8, 24, this.mats.neighbour2);
+    nb(-W + 4, -6, 16, D - 6, 18, this.mats.neighbour);
+    nb(W + 6, 2 * W - 4, 18, D - 8, 19, this.mats.neighbour2);
     nb(-W + 2, -2, -14 - road_width_ft - D + 10, -24 - road_width_ft, 23, this.mats.neighbour2);
     nb(2, W - 2, -14 - road_width_ft - D + 8, -26 - road_width_ft, 21, this.mats.neighbour);
     nb(W + 2, 2 * W - 2, -14 - road_width_ft - D + 10, -24 - road_width_ft, 25, this.mats.neighbour);
@@ -633,7 +650,7 @@ class MockBuilder {
     if (this.built.has("lights")) return;
     this.built.add("lights");
     const { plot } = this.plan.site;
-    const sun = new THREE.DirectionalLight("#fff3e2", 3.2);
+    const sun = new THREE.DirectionalLight("#fff3e2", 4.2);
     const center = new THREE.Vector3((plot.width_ft / 2) * FT, 3, (plot.depth_ft / 2) * FT);
     sun.position.copy(center).add(new THREE.Vector3(-18, 26, -14));
     sun.target.position.copy(center);

@@ -7,6 +7,8 @@ import type * as THREE from "three";
 export interface CaptureOptions {
   width?: number;
   height?: number;
+  /** Cap the output height at width × maxAspect (tall viewers), cropping around the pin. */
+  maxAspect?: number;
   /** Draw a comment pin at this NDC position (x, y in −1..1). */
   pinNdc?: { x: number; y: number } | null;
   pinColor?: string;
@@ -18,17 +20,20 @@ export function grabCanvas(src: HTMLCanvasElement, opts: CaptureOptions = {}): s
   const maxW = 1600;
   let w = Math.round(opts.width ?? Math.min(sw, maxW));
   let h = Math.round(opts.height ?? (w * sh) / sw);
+  if (opts.maxAspect && h > w * opts.maxAspect) h = Math.round(w * opts.maxAspect);
   w = Math.max(16, w);
   h = Math.max(16, h);
-  // cover-crop the source to the requested aspect
+  // cover-crop the source to the requested aspect, centred on the pin when there is one
   const ta = w / h, sa = sw / sh;
+  const focusX = opts.pinNdc ? ((opts.pinNdc.x + 1) / 2) * sw : sw / 2;
+  const focusY = opts.pinNdc ? ((1 - opts.pinNdc.y) / 2) * sh : sh / 2;
   let cx = 0, cy = 0, cw = sw, ch = sh;
   if (sa > ta) {
     cw = sh * ta;
-    cx = (sw - cw) / 2;
+    cx = Math.min(sw - cw, Math.max(0, focusX - cw / 2));
   } else if (sa < ta) {
     ch = sw / ta;
-    cy = (sh - ch) / 2;
+    cy = Math.min(sh - ch, Math.max(0, focusY - ch / 2));
   }
   const c = document.createElement("canvas");
   c.width = w;

@@ -41,7 +41,7 @@ function fits(camera: THREE.PerspectiveCamera, corners: THREE.Vector3[], pos: TH
  * A 3/4 aerial view of the front, `side` = +1 looks from the +X side, −1 from −X.
  * Distance is solved so the whole plot fits with margins (room for HUD overlays).
  */
-export function heroPose(plan: BuildingPlan, camera: THREE.PerspectiveCamera, side: 1 | -1 = 1, azimuthDeg = 36, elevationDeg = 24) {
+export function heroPose(plan: BuildingPlan, camera: THREE.PerspectiveCamera, side: 1 | -1 = 1, azimuthDeg = 38, elevationDeg = 29) {
   const box = plotBox(plan);
   const size = box.getSize(new THREE.Vector3());
   const target = box.getCenter(new THREE.Vector3());

@@ -667,7 +667,9 @@ export class ViewerController {
 
   private fallbackDragLook() {
     if (this.store.getState().mode !== "walk") return;
+    if (this.dragLook && this.store.getState().walk === "active") return;
     this.dragLook = true;
+    this.store.setState({ dragLook: true });
     this.activateWalk();
     this.toast("Pointer lock unavailable here: drag to look around");
   }
@@ -679,6 +681,7 @@ export class ViewerController {
   private onPointerLockChange = () => {
     if (this.isLocked()) {
       this.dragLook = false;
+      this.store.setState({ dragLook: false });
       if (this.store.getState().mode === "walk") this.activateWalk();
     } else if (this.store.getState().walk === "active") this.pauseWalk();
   };
@@ -989,7 +992,7 @@ export class ViewerController {
     if (label) anchor.label = label;
     const position = cam.position.clone();
     const target = position.clone().addScaledVector(this.raycaster.ray.direction, hit.distance);
-    const snapshot = this.snapshot({ width: 640, pin: hit.point });
+    const snapshot = this.snapshot({ width: 640, pin: hit.point, maxAspect: 0.75 });
     window.clearTimeout(this.draftTimer);
     this.store.setState({ draft: { position: anchor.position, normal: anchor.normal } });
     this.draftTimer = window.setTimeout(() => this.store.setState({ draft: null }), 60000);
@@ -1057,7 +1060,7 @@ export class ViewerController {
     else gl.render(scene, cam);
   }
 
-  snapshot(o: { width?: number; height?: number; pin?: THREE.Vector3 | null } = {}): string {
+  snapshot(o: { width?: number; height?: number; pin?: THREE.Vector3 | null; maxAspect?: number } = {}): string {
     const gl = this.gl, cam = this.camera;
     if (!gl || !cam) return "";
     const pinsVisible = this.pinsGroup?.visible ?? true;
@@ -1068,7 +1071,7 @@ export class ViewerController {
     try {
       this.renderNow();
       const pinNdc = o.pin ? projectToNdc(o.pin, cam) : null;
-      url = grabCanvas(gl.domElement, { width: o.width, height: o.height, pinNdc });
+      url = grabCanvas(gl.domElement, { width: o.width, height: o.height, pinNdc, maxAspect: o.maxAspect });
     } finally {
       if (this.pinsGroup) this.pinsGroup.visible = pinsVisible;
       this.setOutline(outlined);

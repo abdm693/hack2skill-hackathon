@@ -203,6 +203,7 @@ export class BuildManager {
       const baseY = obj.position.y;
       obj.position.y = baseY + h;
       if (!obj.matrixAutoUpdate) obj.updateMatrix();
+      vis.remember(obj);
       vis.held.add(obj);
       obj.visible = false;
       this.anims.push({ obj, baseY, height: h, start: now + delay, dur: layer === "structure" ? 620 : 520, revealed: false });

@@ -45,6 +45,7 @@ const _ray = new THREE.Ray();
 const _euler = new THREE.Euler(0, 0, 0, "YXZ");
 const _q = new THREE.Quaternion();
 const _push = new THREE.Vector3();
+const _before = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
 export class WalkController {
@@ -83,10 +84,53 @@ export class WalkController {
     return best;
   }
 
-  /** Place the walker (feet on the floor below `pos` if one is found) looking at `lookAt`. */
+  /** Would a capsule standing at `feet` overlap walls or furniture? */
+  overlaps(feet: THREE.Vector3): boolean {
+    if (!this.bvh) return false;
+    _seg.start.set(feet.x, feet.y + STEP_UP + RADIUS, feet.z);
+    _seg.end.set(feet.x, feet.y + HEAD - RADIUS, feet.z);
+    _box.makeEmpty().expandByPoint(_seg.start).expandByPoint(_seg.end);
+    _box.min.addScalar(-RADIUS + 0.02);
+    _box.max.addScalar(RADIUS - 0.02);
+    let hit = false;
+    this.bvh.shapecast({
+      intersectsBounds: (box) => box.intersectsBox(_box),
+      intersectsTriangle: (tri) => {
+        if (tri.closestPointToSegment(_seg, _v, _v2) < RADIUS - 0.02) {
+          hit = true;
+          return true;
+        }
+      },
+    });
+    return hit;
+  }
+
+  /**
+   * Nearest free standing spot to `pos` on the floor at ~`floorY` (spiral search, ≤ 3 m). Engines sometimes put the
+   * spawn on a parked car or a planter; this keeps the walkthrough from starting on a roof or inside a wall.
+   */
+  findFreeSpot(pos: THREE.Vector3, floorY: number): THREE.Vector3 | null {
+    const p = new THREE.Vector3();
+    for (let r = 0; r <= 3.0001; r += 0.25) {
+      const n = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 0.35);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        p.set(pos.x + Math.cos(a) * r, floorY, pos.z + Math.sin(a) * r);
+        const g = this.groundAt(p, floorY + STEP_UP + 0.02, floorY - 0.6);
+        if (g === null || Math.abs(g - floorY) > 0.3) continue;
+        p.y = g;
+        if (!this.overlaps(p)) return p.clone();
+      }
+    }
+    return null;
+  }
+
+  /** Place the walker (feet on the floor below `pos`, nudged to a free spot) looking at `lookAt`. */
   teleport(pos: THREE.Vector3, lookAt?: THREE.Vector3) {
-    const g = this.groundAt(pos, pos.y + 1.2, pos.y - 3);
-    this.feet.set(pos.x, g ?? pos.y, pos.z);
+    const floor = this.groundAt(pos, pos.y + 0.3, pos.y - 3);
+    const spot = floor !== null ? this.findFreeSpot(pos, floor) : null;
+    const g = spot ? spot.y : floor;
+    this.feet.set(spot?.x ?? pos.x, g ?? pos.y, spot?.z ?? pos.z);
     if (lookAt) {
       _v.subVectors(lookAt, _v2.set(pos.x, this.feet.y + EYE, pos.z));
       this.yaw = Math.atan2(-_v.x, -_v.z);
@@ -171,7 +215,7 @@ export class WalkController {
     if (Math.abs(this.vel.x) < 1e-4) this.vel.x = 0;
     if (Math.abs(this.vel.z) < 1e-4) this.vel.z = 0;
 
-    const before = _v2.copy(this.feet);
+    const before = _before.copy(this.feet);
     const moveLen = Math.hypot(this.vel.x, this.vel.z) * dt;
     if (this.bvh) {
       const steps = clamp(Math.ceil(moveLen / 0.035), 1, 10);

@@ -62,6 +62,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
 
   const mode = useStore(ctrl.store, (s) => s.mode);
   const walkPhase = useStore(ctrl.store, (s) => s.walk);
+  const dragLook = useStore(ctrl.store, (s) => s.dragLook);
 
   useEffect(() => {
     ctrl.mount();
@@ -106,7 +107,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
       data-mode={mode}
       data-walk={walkPhase}
       data-comment={props.commentMode ? "1" : "0"}
-      data-drag="0"
+      data-drag={dragLook ? "1" : "0"}
     >
       <Canvas
         shadows="percentage"

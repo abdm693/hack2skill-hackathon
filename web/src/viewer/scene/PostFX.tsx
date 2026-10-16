@@ -32,7 +32,7 @@ export function PostFX({ ctrl }: { ctrl: ViewerController }) {
       />
       <SMAA />
       <Bloom mipmapBlur intensity={0.32} luminanceThreshold={1.1} luminanceSmoothing={0.3} radius={0.6} />
-      <Outline ref={outlineRef} visibleEdgeColor={0xffffff} hiddenEdgeColor={0xffffff} edgeStrength={3.2} blur xRay={false} pulseSpeed={0} />
+      <Outline ref={outlineRef} visibleEdgeColor={0xffb02e} hiddenEdgeColor={0xffb02e} edgeStrength={5} blur xRay={false} pulseSpeed={0} />
       <ToneMapping mode={ToneMappingMode.AGX} />
     </EffectComposer>
   );

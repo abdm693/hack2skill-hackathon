@@ -99,6 +99,11 @@ export class VisibilityController {
     this.bbox = new WeakMap();
   }
 
+  /** Record an object's engine-set visibility before the viewer first touches it. */
+  remember(o: THREE.Object3D) {
+    if (!this.base.has(o)) this.base.set(o, o.visible);
+  }
+
   /** The original (engine-set) visibility of an object, before any toggles. */
   baseVisible(o: THREE.Object3D) {
     return this.base.has(o) ? this.base.get(o)! : o.visible;

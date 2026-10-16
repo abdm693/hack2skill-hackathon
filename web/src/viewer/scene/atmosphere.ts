@@ -38,10 +38,10 @@ export class Atmosphere {
     scene.environmentIntensity = 0.6;
 
     const u = this.sky.material.uniforms;
-    u.turbidity.value = 6.5; // Lahore haze
-    u.rayleigh.value = 1.35;
-    u.mieCoefficient.value = 0.0055;
-    u.mieDirectionalG.value = 0.86;
+    u.turbidity.value = 4.2; // a little Lahore haze
+    u.rayleigh.value = 1.15;
+    u.mieCoefficient.value = 0.004;
+    u.mieDirectionalG.value = 0.84;
     if (u.cloudCoverage) u.cloudCoverage.value = 0.22;
     if (u.cloudDensity) u.cloudDensity.value = 0.32;
     if (u.cloudElevation) u.cloudElevation.value = 0.62;
@@ -51,7 +51,7 @@ export class Atmosphere {
     this.sky.userData = { noPick: true, viewer: "sky" };
     scene.add(this.sky);
 
-    const groundMat = new THREE.MeshStandardMaterial({ color: "#bdb4a2", roughness: 1, metalness: 0 });
+    const groundMat = new THREE.MeshStandardMaterial({ color: "#a9a18f", roughness: 1, metalness: 0 });
     this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 72), groundMat);
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -0.06;
@@ -101,7 +101,7 @@ export class Atmosphere {
     light.target.position.copy(center);
     light.target.updateMatrixWorld();
     light.updateMatrixWorld();
-    const base = engineOwned ? this.baseIntensity(light) : 3.1;
+    const base = engineOwned ? this.baseIntensity(light) : 4.2;
     light.intensity = base * lerp(0.04, 1, sun.daylight) * (0.82 + 0.18 * smoothstep(5, 35, sun.elevationDeg));
     light.color.copy(sun.color);
     this.daylight = sun.daylight;
@@ -119,11 +119,11 @@ export class Atmosphere {
     this.sky.material.uniforms.sunPosition.value.copy(dir);
     const d = this.daylight;
     const golden = 1 - smoothstep(0.08, 0.45, dir.y);
-    this.scene.environmentIntensity = lerp(0.18, 0.62, d);
+    this.scene.environmentIntensity = lerp(0.14, 0.36, d);
     // haze colour ≈ sky near the horizon so the ground melts into it
     const fog = this.scene.fog as THREE.Fog;
     fog.color.set("#d3d7d6").lerp(new THREE.Color("#e6c6a4"), golden * 0.85).lerp(new THREE.Color("#5c5a63"), 1 - d);
-    (this.ground.material as THREE.MeshStandardMaterial).color.set("#bdb4a2").lerp(new THREE.Color("#c9a989"), golden * 0.35);
+    (this.ground.material as THREE.MeshStandardMaterial).color.set("#a9a18f").lerp(new THREE.Color("#c19f7f"), golden * 0.35);
     this.exposure = lerp(1.45, 1.0, d) * (1 + golden * 0.08);
   }
 

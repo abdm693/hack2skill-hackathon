@@ -33,6 +33,8 @@ export interface ViewerState {
   draft: { position: Vec3; normal: Vec3 } | null;
   toast: { id: number; text: string } | null;
   pointerLockSupported: boolean;
+  /** walk mode without pointer lock (embedded browsers): drag to look */
+  dragLook: boolean;
 }
 
 export type ViewerStore = ReturnType<typeof makeViewerStore>;
@@ -51,5 +53,6 @@ export function makeViewerStore(mode: ViewerMode, touch: boolean) {
     draft: null,
     toast: null,
     pointerLockSupported: typeof document !== "undefined" && "pointerLockElement" in document,
+    dragLook: false,
   }));
 }
