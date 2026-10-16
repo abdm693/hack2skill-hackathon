@@ -107,6 +107,29 @@ def test_finalize_moves_open_comments_to_the_new_version(monkeypatch):
     assert comments["c1"]["status"] == "resolved" and comments["c2"]["status"] == "open"
 
 
+def test_a_stalled_fix_round_keeps_the_best_plan(plans, monkeypatch):
+    calls = []
+
+    async def ask(contents, thinking=None, attempts=2):
+        calls.append(attempts)
+        if len(calls) > 1:
+            raise RuntimeError("model output unusable after 1 attempts: the model stopped answering")
+        yield "result", (copy.deepcopy(plans["example"]), "")
+
+    async def no_concept(project):
+        return None
+    monkeypatch.setattr(architect, "_ask_plan", ask)
+    monkeypatch.setattr(architect, "_concept_part", no_concept)
+    brief = {"plot": {"width_ft": 35, "depth_ft": 65, "area_marla": 10.1, "corner": False}, "bedrooms": 5}
+
+    async def go():
+        return [ev async for ev in architect.make_plan({"id": "p1", "brief": brief})]
+    evs = asyncio.run(go())
+    result = next(d for e, d in evs if e == "_result")
+    assert result["chosen_attempt"] == 1 and calls == [2, 1]
+    assert "plan.program.bedrooms" in {c["id"] for c in result["report"]["checks"] if c["status"] == "fail"}
+
+
 def test_revisions_keep_review_notes_about_untouched_rooms(plans):
     plan = plans["example"]
     issues = [{"severity": "major", "rooms": ["f_bath2"], "problem": "Bath 2 is cramped."},

@@ -216,8 +216,9 @@ def _feedback(report: dict, worse: int | None = None, first_round: bool = False)
             + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
 
 
-async def _ask_plan(contents: list, thinking: str | None = None) -> AsyncIterator[tuple[str, object]]:
-    async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768, thinking=thinking):
+async def _ask_plan(contents: list, thinking: str | None = None, attempts: int = 2) -> AsyncIterator[tuple[str, object]]:
+    async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768, thinking=thinking,
+                                           attempts=attempts):
         yield kind, val
 
 
@@ -251,12 +252,20 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
             k = best[0][0]
             yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt} of {config.PLAN_MAX_ATTEMPTS})…"}
         obj = None
-        # fix rounds are local edits to a plan that already exists: less thinking, same output
-        async for kind, val in _ask_plan(contents, thinking=config.FIX_THINKING if attempt > 1 else None):
-            if kind == "progress":
-                yield "progress", {"chars": val}
-            else:
-                obj = val[0]
+        try:
+            # a fix round edits a plan we already have: one try, and if the model stalls we keep the best plan so far
+            async for kind, val in _ask_plan(contents, thinking=config.FIX_THINKING if attempt > 1 else None,
+                                             attempts=2 if attempt == 1 else 1):
+                if kind == "progress":
+                    yield "progress", {"chars": val}
+                else:
+                    obj = val[0]
+        except Exception as e:
+            if best is None:
+                raise
+            log.warning("plan round %d failed (%s); keeping the best plan so far", attempt, e)
+            yield "stage", {"stage": "fix", "message": "Keeping the best plan so far."}
+            break
         plan, repairs = prepare(obj, brief)
         yield "plan", {"plan": plan, "attempt": attempt}
         report = lda.check(plan, brief)
