@@ -1,67 +1,74 @@
 /**
- * Sun path for Lahore (NOAA solar-position approximation, PKT = UTC+5).
+ * Lahore sun path — the same model the engine uses for `s.lights.sun({ hour })` (engine/lights.ts), so moving
+ * the viewer's sun slider never makes the design's sun jump.
  *
- * World compass: the plot FRONT (towards the road, world −Z) points to `site.facing`. Directions are
- * measured clockwise when seen from above (+Y), so for a north-facing plot east = +X, south = +Z.
- * (Engine track: import `sunDirection` if you want the SDK's `s.lights.sun({hour})` to match the viewer.)
+ * - Latitude 31.5°N, fixed declination 10° (spring / late summer: 17.5 h ≈ golden hour), hour angle (h − 12)·15°.
+ * - Directions follow the PLAN's semantics: the plot front (−y) faces `site.facing`, and a compass bearing θ relative
+ *   to the front maps to plan (−sin θ, −cos θ); world = (x_ft, y_ft) → (x_m, z_m). For a north-facing plot the
+ *   morning sun therefore rises over the plan's left side (min x, "left as seen from the road").
  */
 import * as THREE from "three";
-import { clamp, smoothstep } from "./units";
+import { clamp, lerp, smoothstep } from "./units";
 
 export type Facing = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
-export const LAHORE = { lat: 31.5204, lng: 74.3587, tz: 5 };
-/** Late May: sunrise ≈ 5:05, sunset ≈ 18:55 PKT, so the 6..19 slider is daylight and 17.5 is golden hour. */
-export const SUN_DAY_OF_YEAR = 140;
-
+const DEG = Math.PI / 180;
+const LAT = 31.5 * DEG;
+const DECL = 10 * DEG;
 const FACING_AZ: Record<Facing, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
-const D2R = Math.PI / 180;
 
 export interface SunState {
-  /** Unit vector pointing from the scene TOWARDS the sun (world space). */
+  /** Unit vector from the house toward the sun (world). Altitude clamped ≥ 2.5° so shadows stay defined. */
   dir: THREE.Vector3;
-  elevationDeg: number;
-  azimuthDeg: number; // compass, clockwise from north
-  /** 0 at/below the horizon → 1 in full daylight; use to scale the sun light. */
+  /** Same direction with the true altitude (for the Sky shader; can dip below the horizon). */
+  skyDir: THREE.Vector3;
+  altitudeDeg: number;
+  /** 0 below the horizon → 1 in daylight (engine's intensity curve, without its 3.4 scale). */
   daylight: number;
   color: THREE.Color;
+  /** Engine-equivalent directional intensity before the design's `intensity` scale. */
+  intensity: number;
+  hemi: { sky: THREE.Color; ground: THREE.Color; intensity: number };
+  /** 0 day → 1 night: emissive fixtures read as "on" at dusk (engine setTimeOfDay). */
+  night: number;
 }
 
-export function solarPosition(hour: number, dayOfYear = SUN_DAY_OF_YEAR, loc = LAHORE) {
-  const g = ((2 * Math.PI) / 365) * (dayOfYear - 1 + (hour - 12) / 24);
-  const eqTime =
-    229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
-  const decl =
-    0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) -
-    0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
-  const tst = hour * 60 + eqTime + 4 * loc.lng - 60 * loc.tz; // true solar time, minutes
-  const ha = (tst / 4 - 180) * D2R; // hour angle
-  const lat = loc.lat * D2R;
-  const cosZen = clamp(Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(ha), -1, 1);
-  const elevation = 90 - Math.acos(cosZen) / D2R;
-  const az = Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(lat) - Math.tan(decl) * Math.cos(lat)) / D2R + 180;
-  return { elevationDeg: elevation, azimuthDeg: (az + 360) % 360 };
+function solar(hour: number) {
+  const h = clamp(Number.isFinite(hour) ? hour : 17.5, 5, 20);
+  const H = (h - 12) * 15 * DEG;
+  const sinAlt = Math.sin(LAT) * Math.sin(DECL) + Math.cos(LAT) * Math.cos(DECL) * Math.cos(H);
+  const alt = Math.asin(clamp(sinAlt, -1, 1));
+  let cosAz = (Math.sin(DECL) - Math.sin(alt) * Math.sin(LAT)) / (Math.cos(alt) * Math.cos(LAT));
+  cosAz = clamp(cosAz, -1, 1);
+  let az = Math.acos(cosAz); // from north, east-positive in the morning
+  if (H > 0) az = 2 * Math.PI - az;
+  return { alt, az };
 }
 
-const WARM = new THREE.Color("#ff9d5c");
-const GOLD = new THREE.Color("#ffd6a3");
-const NOON = new THREE.Color("#fff6ea");
-
-export function sunState(hour: number, facing: Facing = "N", dayOfYear = SUN_DAY_OF_YEAR): SunState {
-  const { elevationDeg, azimuthDeg } = solarPosition(hour, dayOfYear);
-  const theta = (azimuthDeg - FACING_AZ[facing]) * D2R;
-  // Keep the light a hair above the horizon so shadows stay defined at dusk; the sky uses the true value.
-  const el = Math.max(elevationDeg, 1.5) * D2R;
-  const dir = new THREE.Vector3(Math.cos(el) * Math.sin(theta), Math.sin(el), -Math.cos(el) * Math.cos(theta)).normalize();
-  const daylight = smoothstep(-3, 12, elevationDeg);
-  const color = new THREE.Color().copy(WARM).lerp(GOLD, smoothstep(2, 14, elevationDeg)).lerp(NOON, smoothstep(14, 45, elevationDeg));
-  return { dir, elevationDeg, azimuthDeg, daylight, color };
+function planDir(az: number, facing: Facing, alt: number) {
+  const th = az - (FACING_AZ[facing] ?? 0) * DEG;
+  const dx = -Math.sin(th), dy = -Math.cos(th);
+  return new THREE.Vector3(dx * Math.cos(alt), Math.sin(alt), dy * Math.cos(alt)).normalize();
 }
 
-/** Direction for the Sky shader (uses the true elevation so the disc can set below the horizon). */
-export function skyDirection(hour: number, facing: Facing = "N", dayOfYear = SUN_DAY_OF_YEAR): THREE.Vector3 {
-  const { elevationDeg, azimuthDeg } = solarPosition(hour, dayOfYear);
-  const theta = (azimuthDeg - FACING_AZ[facing]) * D2R;
-  const el = elevationDeg * D2R;
-  return new THREE.Vector3(Math.cos(el) * Math.sin(theta), Math.sin(el), -Math.cos(el) * Math.cos(theta)).normalize();
+export function sunState(hour: number, facing: Facing = "N"): SunState {
+  const { alt, az } = solar(hour);
+  const a = alt / DEG;
+  const warm = new THREE.Color("#ffad66"), gold = new THREE.Color("#ffd6a3"), day = new THREE.Color("#fff3e4");
+  const color = a < 12 ? warm.clone().lerp(gold, smoothstep(0, 12, a)) : gold.clone().lerp(day, smoothstep(12, 40, a));
+  const daylight = smoothstep(-3, 8, a);
+  return {
+    dir: planDir(az, facing, Math.max(alt, 2.5 * DEG)),
+    skyDir: planDir(az, facing, alt),
+    altitudeDeg: a,
+    daylight,
+    color,
+    intensity: 3.4 * daylight * lerp(0.62, 1, smoothstep(5, 45, a)),
+    hemi: {
+      sky: new THREE.Color("#f3c9a2").lerp(new THREE.Color("#b9d1ec"), smoothstep(4, 30, a)),
+      ground: new THREE.Color("#6d5a47"),
+      intensity: lerp(0.25, 0.55, smoothstep(-5, 30, a)),
+    },
+    night: 1 - smoothstep(-2, 16, a),
+  };
 }

@@ -13,6 +13,7 @@ import type { BuildingPlan } from "@contracts/plan";
 import type { Layer } from "@contracts/house-sdk";
 import { buildHouse, type BuildResult, type DesignSectionSrc, type SectionResult } from "@/engine";
 import { easeOutCubic, prefersReducedMotion, sleep } from "./units";
+import { isContainer } from "./tags";
 import type { ViewerController } from "./controller";
 
 function fnv(s: string): string {
@@ -134,6 +135,9 @@ export class BuildManager {
         console.warn("[viewer] onBuildProgress threw", e);
       }
       if (st.swapped && !known && !quiet()) await sleep(PACE_MS[r.layer] ?? 200);
+      // After the last section the engine consolidates meshes (bakes world transforms into merged geometry):
+      // every drop-in must be back at rest by then, or merged walls would keep their mid-air offset.
+      if (st.done >= total) await this.settle(2500);
     };
 
     let result: BuildResult;
@@ -235,6 +239,16 @@ export class BuildManager {
     return true;
   }
 
+  /** Wait (≤ timeoutMs) for drop-ins to land naturally, then snap whatever is left. */
+  async settle(timeoutMs: number) {
+    const t0 = performance.now();
+    while (this.anims.length && performance.now() - t0 < timeoutMs && !document.hidden) {
+      this.ctrl.invalidate();
+      await sleep(40);
+    }
+    this.finishAnims();
+  }
+
   /** Snap every running animation to its end state (e.g. before building colliders or capturing). */
   finishAnims() {
     if (!this.anims.length) return;
@@ -261,6 +275,11 @@ function collectNewUnits(root: THREE.Object3D, seen: WeakSet<THREE.Object3D>): T
   const unitsOf = (o: THREE.Object3D) => {
     if ((o as THREE.Light).isLight || o.type === "Object3D") return; // lights and light targets stay put
     const u = o.userData ?? {};
+    if (isContainer(o)) {
+      // engine wraps each design.js section in a tagged group: animate what's inside, not the whole section
+      for (const c of o.children) unitsOf(c);
+      return;
+    }
     const tagged = !!(u.id || u.kind);
     if (tagged || (o as THREE.Mesh).isMesh || !o.children.length) {
       if ((o as THREE.Mesh).isMesh || o.children.length) units.push(o);

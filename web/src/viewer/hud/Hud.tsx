@@ -116,17 +116,18 @@ function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: Bu
               <span><span className="nq-kbd">C</span> comment</span>
               <span><span className="nq-kbd">F</span> finish</span>
               <span><span className="nq-kbd">Esc</span> pause</span>
+              {plan.levels.length > 1 && <span className="nq-hint-floors"><span className="nq-kbd">1–{plan.levels.length}</span> floor</span>}
             </div>
           )}
           {touch && <TouchControls ctrl={ctrl} />}
         </>
       )}
-      <WalkGate ctrl={ctrl} phase={phase} touch={touch} />
+      <WalkGate ctrl={ctrl} phase={phase} touch={touch} floors={plan.levels.length} />
     </>
   );
 }
 
-function WalkGate({ ctrl, phase, touch }: { ctrl: ViewerController; phase: string; touch: boolean }) {
+function WalkGate({ ctrl, phase, touch, floors }: { ctrl: ViewerController; phase: string; touch: boolean; floors: number }) {
   const start = useCallback(() => ctrl.requestLock(), [ctrl]);
   const exit = useCallback(() => ctrl.finishWalk(), [ctrl]);
   const startRef = useRef<HTMLButtonElement>(null);
@@ -152,6 +153,7 @@ function WalkGate({ ctrl, phase, touch }: { ctrl: ViewerController; phase: strin
               <span><span className="nq-kbd">C</span> comment</span>
               <span><span className="nq-kbd">F</span> finish</span>
               <span><span className="nq-kbd">Esc</span> pause</span>
+              {floors > 1 && <span><span className="nq-kbd">1–{floors}</span> jump to floor</span>}
             </div>
           )}
         </div>

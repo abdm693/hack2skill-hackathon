@@ -201,6 +201,9 @@
   .nq-hints { gap: 9px; padding: 7px 10px; font-size: 11px; }
   .nq-hints .nq-kbd { min-width: 18px; height: 18px; font-size: 10px; }
 }
+@container nqviewer (max-width: 700px) {
+  .nq-hint-floors { display: none !important; }
+}
 @container nqviewer (max-width: 470px) {
   .nq-hints { display: none; }
   .nq-mini { display: none; }

@@ -17,6 +17,55 @@ export interface ResolvedTags {
 
 const str = (v: unknown) => (typeof v === "string" && v.length ? v : undefined);
 
+/** Engine containers that carry tags but are never "the element" (a design.js section, the merged-mesh group). */
+const CONTAINER_KINDS = new Set(["section", "merged"]);
+export const isContainer = (o: THREE.Object3D) => CONTAINER_KINDS.has(o.userData?.kind);
+
+/** Triangle range of a consolidated mesh → the tags of the original element (engine core/consolidate.ts). */
+export interface PartRange {
+  start: number;
+  count: number;
+  tags: Record<string, unknown>;
+}
+
+export function partsOf(o: THREE.Object3D): PartRange[] | null {
+  const p = o.userData?.parts;
+  return Array.isArray(p) && p.length ? (p as PartRange[]) : null;
+}
+
+/** The part containing triangle `faceIndex` (binary search; parts are in triangle order). */
+export function partAt(o: THREE.Object3D, faceIndex: number | null | undefined): PartRange | null {
+  const parts = partsOf(o);
+  if (!parts || faceIndex == null || faceIndex < 0) return null;
+  let lo = 0, hi = parts.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const p = parts[mid];
+    if (faceIndex < p.start) hi = mid - 1;
+    else if (faceIndex >= p.start + p.count) lo = mid + 1;
+    else return p;
+  }
+  return null;
+}
+
+/** Tags for a raycast hit: the element's own tags, refined by its consolidated part when the mesh was merged. */
+export function resolveHitTags(hit: THREE.Intersection, stopAt?: THREE.Object3D | null): ResolvedTags & { part: PartRange | null } {
+  const base = resolveTags(hit.object, stopAt);
+  const part = partAt(hit.object, hit.faceIndex);
+  if (!part) return { ...base, part: null };
+  const t = part.tags;
+  return {
+    element: hit.object,
+    part,
+    id: str(t.id) ?? base.id,
+    kind: str(t.kind) ?? base.kind,
+    label: str(t.label) ?? (str(t.id) ? undefined : base.label),
+    level: str(t.level) ?? base.level,
+    room: str(t.room) ?? base.room,
+    layer: str(t.layer) ?? base.layer,
+  };
+}
+
 /**
  * Walk up from a hit object: the first ancestor with id/kind is the element; missing fields inherit from further up.
  * `stopAt` (exclusive) is the build root, so a tag on the whole house never becomes "the element".
@@ -27,7 +76,7 @@ export function resolveTags(obj: THREE.Object3D, stopAt?: THREE.Object3D | null)
   let o: THREE.Object3D | null = obj;
   while (o && o !== stopAt) {
     const u = o.userData ?? {};
-    if (!element && (str(u.id) || str(u.kind))) element = o;
+    if (!element && !isContainer(o) && (str(u.id) || str(u.kind))) element = o;
     if (element) {
       out.id ??= str(u.id);
       out.kind ??= str(u.kind);

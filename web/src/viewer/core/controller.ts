@@ -14,8 +14,8 @@ import { grabCanvas, projectToNdc } from "./capture";
 import { heroPose, houseBox, plotBox } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
-import { skyDirection, sunState, type Facing } from "./sun";
-import { displayLabel, resolveTags } from "./tags";
+import { sunState, type Facing } from "./sun";
+import { displayLabel, resolveHitTags, type PartRange } from "./tags";
 import { FT, damp, isCoarsePointer, prefersReducedMotion } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
@@ -37,6 +37,39 @@ const isEditable = (t: EventTarget | null) => {
   if (!el || !el.tagName) return false;
   return el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
 };
+
+interface OutlineTarget {
+  obj: THREE.Object3D;
+  part: PartRange | null;
+}
+
+/** Invisible in the beauty pass; the Outline effect renders its own mask from the selection layer. */
+const OVERLAY_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+
+/** Geometry of one consolidated part (triangle range) as a child of the merged mesh, for outlining. */
+function partOverlay(mesh: THREE.Mesh, part: PartRange): THREE.Mesh | null {
+  const g = mesh.geometry;
+  const pos = g.getAttribute("position");
+  if (!pos || part.count <= 0) return null;
+  const count = Math.min(part.count, 60000);
+  const out = new Float32Array(count * 9);
+  const idx = g.index;
+  for (let t = 0; t < count; t++) {
+    for (let k = 0; k < 3; k++) {
+      const i = (part.start + t) * 3 + k;
+      const vi = idx ? (i < idx.count ? idx.getX(i) : 0) : i;
+      out[(t * 3 + k) * 3] = pos.getX(vi);
+      out[(t * 3 + k) * 3 + 1] = pos.getY(vi);
+      out[(t * 3 + k) * 3 + 2] = pos.getZ(vi);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(out, 3));
+  const m = new THREE.Mesh(geo, OVERLAY_MAT);
+  m.userData = { noPick: true, viewer: "outline-part" };
+  m.renderOrder = mesh.renderOrder;
+  return m;
+}
 
 export interface ThreeBits {
   gl: THREE.WebGLRenderer;
@@ -71,6 +104,7 @@ export class ViewerController {
   private colliderDirty = true;
   private colliderTimer = 0;
   private engineSun: THREE.DirectionalLight | null = null;
+  private engineHemi: THREE.HemisphereLight | null = null;
   private cancelAccel: (() => void) | null = null;
   private hoverPending: { x: number; y: number } | null = null;
   private hoverKey = "";
@@ -344,6 +378,7 @@ export class ViewerController {
     this.cancelAccel?.();
     this.cancelAccel = null;
     this.engineSun = null;
+    this.engineHemi = null;
     // the previous result was disposed by the swap; walking keeps using its merged BVH until the new build lands
     this.result = null;
     this.atmosphere?.setFallbackActive(true);
@@ -395,6 +430,11 @@ export class ViewerController {
     const sun = lights.find((l) => l.userData?.kind === "sun") ?? lights.find((l) => l.castShadow) ?? null;
     if (sun === this.engineSun) return;
     this.engineSun = sun;
+    // the engine pairs its sun with a hemisphere "sky" fill (engine/lights.ts addSun)
+    this.engineHemi = null;
+    root.traverse((o) => {
+      if (!this.engineHemi && (o as THREE.HemisphereLight).isHemisphereLight) this.engineHemi = o as THREE.HemisphereLight;
+    });
     if (sun && this.atmosphere) {
       this.atmosphere.baseIntensity(sun);
       this.atmosphere.setFallbackActive(false);
@@ -443,13 +483,15 @@ export class ViewerController {
     if (!atm) return;
     const facing = (this.plan.site?.facing ?? "N") as Facing;
     const hour = this.props.sunHour;
-    const light = this.engineSun ?? atm.fallbackSun;
+    const root = this.currentRoot();
     if (hour === undefined || hour === null || !Number.isFinite(hour)) {
+      // no slider: keep the design's own sun (engine set it from `s.lights.sun({hour})`)
       if (this.engineSun) atm.syncSkyToLight(this.engineSun);
-      else atm.applySun(light, sunState(16.5, facing), skyDirection(16.5, facing), false);
+      else atm.applySun(atm.fallbackSun, sunState(17.5, facing), { owned: false, root });
     } else {
-      const h = Math.min(20, Math.max(5, hour));
-      atm.applySun(light, sunState(h, facing), skyDirection(h, facing), !!this.engineSun);
+      const sun = sunState(hour, facing);
+      if (this.engineSun) atm.applySun(this.engineSun, sun, { owned: true, hemi: this.engineHemi, root });
+      else atm.applySun(atm.fallbackSun, sun, { owned: false, root });
     }
     this.markDirty();
   }
@@ -615,6 +657,41 @@ export class ViewerController {
     }
   }
 
+  /**
+   * Jump to another floor (number keys while walking): the stair hall of that level, else its largest room,
+   * at the nearest free spot. A safety net for awkward stairs and a quick way around big houses.
+   */
+  gotoLevel(index: number) {
+    const levels = [...this.plan.levels].sort((a, b) => a.index - b.index);
+    const lvl = levels[index];
+    const cam = this.camera;
+    if (!lvl || !cam || this.store.getState().mode !== "walk") return;
+    this.ensureCollider();
+    const rooms = this.plan.rooms.filter((r) => r.level === lvl.id);
+    const enclosed = rooms.filter((r) => !["lawn", "driveway", "open_space", "courtyard", "porch", "balcony", "terrace"].includes(r.type));
+    const pickRoom = enclosed.find((r) => r.type === "stair") ?? [...enclosed].sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d)[0];
+    let target: THREE.Vector3;
+    if (pickRoom) target = new THREE.Vector3((pickRoom.rect.x + pickRoom.rect.w / 2) * FT, lvl.elevation_ft * FT, (pickRoom.rect.y + pickRoom.rect.d / 2) * FT);
+    else {
+      // e.g. the roof: stand near the stair tower if there is one, else mid-plot
+      const m = this.plan.roof?.mumty?.rect;
+      const W = this.plan.site.plot.width_ft, D = this.plan.site.plot.depth_ft;
+      target = m ? new THREE.Vector3((m.x + m.w + 3) * FT, lvl.elevation_ft * FT, (m.y + m.d / 2) * FT) : new THREE.Vector3((W / 2) * FT, lvl.elevation_ft * FT, (D / 2) * FT);
+    }
+    const spot = this.walk.findFreeSpot(target, lvl.elevation_ft * FT) ?? this.walk.findFreeSpot(target.clone().setY(target.y + 0.3), lvl.elevation_ft * FT);
+    if (!spot) {
+      this.toast(`No clear spot on the ${lvl.name.toLowerCase()}`);
+      return;
+    }
+    this.walk.feet.copy(spot);
+    this.walk.camY = spot.y + EYE;
+    this.walk.vel.set(0, 0, 0);
+    this.walk.vy = 0;
+    this.walk.grounded = true;
+    this.walk.beginTransition(cam, prefersReducedMotion() ? 0.01 : 0.6);
+    this.toast(lvl.name);
+  }
+
   /** "Finish walkthrough" (F): leave walk mode and tell the app. */
   finishWalk() {
     if (this.store.getState().mode !== "walk") return;
@@ -726,6 +803,9 @@ export class ViewerController {
       } else if (e.code === "KeyF" && !e.repeat) {
         e.preventDefault();
         this.finishWalk();
+      } else if (/^Digit[1-9]$/.test(e.code) && !e.repeat) {
+        e.preventDefault();
+        this.gotoLevel(Number(e.code.slice(5)) - 1);
       } else if (e.code === "Escape" && !this.isLocked()) this.pauseWalk();
       else if (e.code === "Space") e.preventDefault();
     } else if (s.walk === "paused" || s.walk === "ready") {
@@ -852,11 +932,11 @@ export class ViewerController {
     const r = this.container.getBoundingClientRect();
     const hit = this.pickNdc((p.x / r.width) * 2 - 1, -(p.y / r.height) * 2 + 1);
     if (!hit) return this.clearHover();
-    const tags = resolveTags(hit.object, this.currentRoot());
-    const key = tags.element.uuid;
+    const tags = resolveHitTags(hit, this.currentRoot());
+    const key = tags.part ? `${hit.object.uuid}:${tags.part.start}` : tags.element.uuid;
     if (key === this.hoverKey) return;
     this.hoverKey = key;
-    this.setOutline(tags.element);
+    this.setOutline({ obj: tags.element, part: tags.part });
     this.store.setState({ hover: displayLabel(tags, this.plan) });
   }
 
@@ -867,20 +947,35 @@ export class ViewerController {
     this.store.setState({ hover: null });
   }
 
-  private outlined: THREE.Object3D | null = null;
+  private outlined: OutlineTarget | null = null;
+  private partOverlay: THREE.Mesh | null = null;
 
-  setOutline(el: THREE.Object3D | null) {
-    if (el === this.outlined) return;
-    this.outlined = el;
+  /** Outline an element: its meshes, or — for a consolidated (merged) mesh — just that element's triangles. */
+  setOutline(t: OutlineTarget | null) {
+    const same = (a: OutlineTarget | null, b: OutlineTarget | null) => a?.obj === b?.obj && a?.part?.start === b?.part?.start;
+    if (same(t, this.outlined)) return;
+    this.outlined = t;
+    if (this.partOverlay) {
+      this.partOverlay.removeFromParent();
+      this.partOverlay.geometry.dispose();
+      this.partOverlay = null;
+    }
     const o = this.outline;
     if (!o) return;
     const meshes: THREE.Object3D[] = [];
-    if (el) {
-      el.traverseVisible((c) => {
-        if ((c as THREE.Mesh).isMesh && meshes.length < 400) meshes.push(c);
+    if (t?.part && (t.obj as THREE.Mesh).isMesh) {
+      const overlay = partOverlay(t.obj as THREE.Mesh, t.part);
+      if (overlay) {
+        t.obj.add(overlay);
+        this.partOverlay = overlay;
+        meshes.push(overlay);
+      }
+    } else if (t) {
+      t.obj.traverseVisible((c) => {
+        if ((c as THREE.Mesh).isMesh && meshes.length < 400 && !c.userData?.noPick) meshes.push(c);
       });
       // whole-house or giant groups: tooltip only
-      const box = new THREE.Box3().setFromObject(el);
+      const box = new THREE.Box3().setFromObject(t.obj);
       if (meshes.length >= 400 || box.getSize(new THREE.Vector3()).length() > 40) meshes.length = 0;
     }
     o.selection.set(meshes);
@@ -903,7 +998,10 @@ export class ViewerController {
 
   private updateRoomLabel() {
     const where = this.locate(new THREE.Vector3(this.walk.feet.x, this.walk.feet.y + 0.05, this.walk.feet.z), 0.25);
-    const room = where.room ? this.plan.rooms.find((r) => r.id === where.room)?.name ?? null : "Outside";
+    const lvl = this.plan.levels.find((l) => l.id === where.level);
+    const lowest = Math.min(...this.plan.levels.map((l) => l.index));
+    // no room rect here: outdoors on the ground, otherwise name the level (roof terrace, open first-floor area…)
+    const room = where.room ? this.plan.rooms.find((r) => r.id === where.room)?.name ?? null : lvl && lvl.index > lowest ? lvl.name : "Outside";
     const s = this.store.getState();
     if (s.room !== room || s.level !== (where.level ?? null)) this.store.setState({ room, level: where.level ?? null });
   }
@@ -915,11 +1013,11 @@ export class ViewerController {
       if (this.props.commentMode) this.setOutline(null);
       return;
     }
-    const tags = resolveTags(hit.object, this.currentRoot());
+    const tags = resolveHitTags(hit, this.currentRoot());
     const label = displayLabel(tags, this.plan);
     const cur = this.store.getState().target;
     if (!cur || cur.title !== label.title || cur.subtitle !== label.subtitle) this.store.setState({ target: label });
-    this.setOutline(this.props.commentMode ? tags.element : null);
+    this.setOutline(this.props.commentMode ? { obj: tags.element, part: tags.part } : null);
   }
 
   // ───────────────────────────── colliders ─────────────────────────────
@@ -995,7 +1093,7 @@ export class ViewerController {
       this.toast("Aim at a wall, floor or object to pin a comment");
       return;
     }
-    const tags = resolveTags(hit.object, this.currentRoot());
+    const tags = resolveHitTags(hit, this.currentRoot());
     const normal = hitNormal(hit, this.raycaster.ray.direction);
     const where = this.locate(hit.point.clone().addScaledVector(normal, 0.05));
     const label = tags.label ?? displayLabel(tags, this.plan).title;

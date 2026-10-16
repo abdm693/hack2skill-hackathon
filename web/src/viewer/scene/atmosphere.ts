@@ -11,6 +11,30 @@ import { lerp, smoothstep } from "../core/units";
 import type { SunState } from "../core/sun";
 
 /**
+ * Emissive fixtures and additive light pools read as "on" at dusk and subtle at noon. Mirrors the engine's
+ * setTimeOfDay (same userData keys, so the two never fight); safe to call on every slider move.
+ */
+export function applyNight(root: THREE.Object3D, night: number) {
+  const seen = new Set<THREE.Material>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      if (!mat || seen.has(mat)) continue;
+      seen.add(mat);
+      const sm = mat as THREE.MeshStandardMaterial & THREE.MeshBasicMaterial;
+      if (sm.blending === THREE.AdditiveBlending) {
+        sm.userData.baseOpacity ??= sm.opacity;
+        sm.opacity = (sm.userData.baseOpacity as number) * (0.12 + 0.88 * night);
+      } else if (sm.emissive && sm.emissiveIntensity > 0 && sm.emissive.getHex() !== 0) {
+        sm.userData.baseEmissive ??= sm.emissiveIntensity;
+        sm.emissiveIntensity = (sm.userData.baseEmissive as number) * (0.35 + 0.65 * night);
+      }
+    }
+  });
+}
+
+/**
  * Ground plane texture (no network): lighter, warmer near the plot and darker, cooler toward the horizon, with soft
  * low-frequency mottling so the big plane doesn't read as a flat desert. Mapped once across the 900 m disc.
  */
@@ -128,20 +152,39 @@ export class Atmosphere {
     light.shadow.needsUpdate = true;
   }
 
-  /** Point `light` along `sun`, retint it, and sync sky, fog, IBL and exposure. */
-  applySun(light: THREE.DirectionalLight, sun: SunState, skyDir: THREE.Vector3, engineOwned: boolean) {
-    const center = this.shadowFocus.getCenter(new THREE.Vector3());
-    const dist = this.shadowFocus.getBoundingSphere(new THREE.Sphere()).radius + 40;
-    light.position.copy(center).addScaledVector(sun.dir, dist);
-    light.target.position.copy(center);
+  /**
+   * Point `light` along `sun` and retint it like the engine's updateSun (engine/lights.ts), then sync the design's
+   * hemisphere "sky" fill, night emissives, Sky shader, fog, IBL and exposure.
+   */
+  applySun(light: THREE.DirectionalLight, sun: SunState, engine: { owned: boolean; hemi?: THREE.HemisphereLight | null; root?: THREE.Object3D | null }) {
+    if (engine.owned) {
+      // keep the design's own target and distance; just move along the new direction
+      const dist = (light.userData.sunDistance as number) ?? 70;
+      light.position.copy(light.target.position).addScaledVector(sun.dir, dist);
+      light.intensity = sun.intensity * ((light.userData.intensityScale as number) ?? 1);
+    } else {
+      const center = this.shadowFocus.getCenter(new THREE.Vector3());
+      const dist = this.shadowFocus.getBoundingSphere(new THREE.Sphere()).radius + 40;
+      light.position.copy(center).addScaledVector(sun.dir, dist);
+      light.target.position.copy(center);
+      light.intensity = sun.intensity * 1.15;
+    }
     light.target.updateMatrixWorld();
     light.updateMatrixWorld();
-    const base = engineOwned ? this.baseIntensity(light) : 4.2;
-    light.intensity = base * lerp(0.04, 1, sun.daylight) * (0.82 + 0.18 * smoothstep(5, 35, sun.elevationDeg));
     light.color.copy(sun.color);
+    const hemi = engine.hemi;
+    if (hemi) {
+      hemi.color.copy(sun.hemi.sky);
+      hemi.groundColor.copy(sun.hemi.ground);
+      hemi.intensity = sun.hemi.intensity * ((hemi.userData.intensityScale as number) ?? 1);
+    }
+    if (engine.root) applyNight(engine.root, sun.night);
     this.daylight = sun.daylight;
-    this.syncSky(skyDir);
+    this.hasHemi = !!hemi;
+    this.syncSky(sun.skyDir);
   }
+
+  private hasHemi = false;
 
   /** Leave a design's own sun where it is; just align the sky with it. */
   syncSkyToLight(light: THREE.DirectionalLight) {
@@ -154,7 +197,8 @@ export class Atmosphere {
     this.sky.material.uniforms.sunPosition.value.copy(dir);
     const d = this.daylight;
     const golden = 1 - smoothstep(0.08, 0.45, dir.y);
-    this.scene.environmentIntensity = lerp(0.14, 0.36, d);
+    // the design's hemisphere light already fills the shade; keep the IBL for reflections mostly
+    this.scene.environmentIntensity = lerp(0.14, 0.36, d) * (this.hasHemi ? 0.6 : 1);
     // haze = the sky's own colour just above the horizon, so the ground plane melts into it
     const fog = this.scene.fog as THREE.Fog;
     const horizon = this.sampleHorizon();

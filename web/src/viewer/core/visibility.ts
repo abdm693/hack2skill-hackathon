@@ -68,7 +68,7 @@ export class VisibilityController {
     if (this.dollhouse && this.topVisible) {
       if (u.level === this.topVisible.id) {
         const kind = typeof u.kind === "string" ? u.kind : "";
-        if (CEILING_KIND.test(kind)) return true;
+        if (CEILING_KIND.test(kind) || this.allPartsCeiling(o)) return true;
         if (SLAB_KIND.test(kind) && this.isAboveFloor(o, this.topVisible)) return true;
       } else if (!u.level && (u.layer === "facade" || u.layer === "structure") && (u.kind || u.id)) {
         // full-height facade pieces (piers, fins, cladding) would otherwise stand over the cut-away floors
@@ -77,6 +77,19 @@ export class VisibilityController {
       }
     }
     return false;
+  }
+
+  private ceilingParts = new WeakMap<THREE.Object3D, boolean>();
+
+  /** Consolidated meshes (engine `userData.parts`) whose every part is a ceiling/false ceiling/cove. */
+  private allPartsCeiling(o: THREE.Object3D) {
+    let v = this.ceilingParts.get(o);
+    if (v === undefined) {
+      const parts = o.userData?.parts as { tags?: { kind?: unknown } }[] | undefined;
+      v = Array.isArray(parts) && parts.length > 0 && parts.every((p) => typeof p.tags?.kind === "string" && CEILING_KIND.test(p.tags.kind as string));
+      this.ceilingParts.set(o, v);
+    }
+    return v;
   }
 
   private boxOf(o: THREE.Object3D) {
@@ -120,12 +133,14 @@ export class VisibilityController {
     return this.base.has(o) ? this.base.get(o)! : o.visible;
   }
 
-  /** Should this collider take part in walk physics? (its ancestors are shown and its own tags are not hidden) */
+  /**
+   * Should this collider take part in walk physics? Only the viewer's own level/layer toggles disable it — colliders
+   * are invisible by design and engines often hide their whole collider group, so `visible` is ignored here.
+   */
   colliderEnabled(m: THREE.Object3D, root: THREE.Object3D | null): boolean {
-    if (this.hiddenByTags(m)) return false;
-    let p = m.parent;
+    let p: THREE.Object3D | null = m;
     while (p && p !== root) {
-      if (!p.visible && !this.held.has(p)) return false;
+      if (this.hiddenByTags(p)) return false;
       p = p.parent;
     }
     return true;
