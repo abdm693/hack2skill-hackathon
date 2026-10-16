@@ -441,7 +441,7 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
     async def ask_once(cts) -> dict:
         obj = None
         async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, cts, PLAN_SYSTEM, max_tokens=32768, attempts=1,
-                                               thinking=config.FIX_THINKING):
+                                               thinking=config.REVIEW_THINKING):
             if kind == "result":
                 obj = val[0]
         return obj

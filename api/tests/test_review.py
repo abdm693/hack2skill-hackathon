@@ -107,6 +107,18 @@ def test_finalize_moves_open_comments_to_the_new_version(monkeypatch):
     assert comments["c1"]["status"] == "resolved" and comments["c2"]["status"] == "open"
 
 
+def test_revisions_keep_review_notes_about_untouched_rooms(plans):
+    plan = plans["example"]
+    issues = [{"severity": "major", "rooms": ["f_bath2"], "problem": "Bath 2 is cramped."},
+              {"severity": "minor", "rooms": ["g_kitchen"], "problem": "The kitchen window is small."}]
+    v = {"plan": plan, "compliance": architect.with_review(lda.check(plan), issues, plan)}
+    moved = copy.deepcopy(plan)
+    next(o for o in moved["openings"] if o["id"] == "f_bath2_v")["width_ft"] = 2.5
+    rep = reviser.carry_review_notes(v, moved, lda.check(moved))
+    notes = [c for c in rep["checks"] if c["id"].startswith("review.")]
+    assert [c["element_ids"] for c in notes] == [["g_kitchen"]]
+
+
 def test_example_is_what_the_planner_copies(plans):
     """The few-shot example every plan starts from: every bath has a ventilator on its own outside wall."""
     rep = lda.check(plans["example"])

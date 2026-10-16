@@ -19,6 +19,8 @@ PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "3"))
 FIX_THINKING = os.environ.get("FIX_THINKING", "MEDIUM") or None  # thinking level for fix rounds (the first plan thinks fully)
 SELF_REVIEW = os.environ.get("SELF_REVIEW", "1") not in ("0", "false", "no")
 REVIEW_BUDGET_S = float(os.environ.get("REVIEW_BUDGET_S", "150"))  # the optional post-review revision never costs more
+# The post-review revision edits a checked plan against a concrete list, and is checked again: it thinks less to land in time.
+REVIEW_THINKING = os.environ.get("REVIEW_THINKING", "LOW") or None
 # The review is skipped when planning already took this long or used every attempt (the checked plan is built as it is).
 REVIEW_SKIP_AFTER_S = float(os.environ.get("REVIEW_SKIP_AFTER_S", "360"))
 
