@@ -1,0 +1,362 @@
+/**
+ * The dock (DESIGN.md §5.4): bottom-centre, max 720px. Naqsha's latest line and 2–3 suggestion chips, then Ask with
+ * the attached Next pill. While Naqsha works, narration replaces the line and the pill.
+ * Ask doubles as the command bar: ⌘K or "/" focuses it; typing opens Ask Naqsha · Go to · Do.
+ */
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowRight, CornerDownLeft, Sparkles } from "lucide-react";
+import type { Project } from "@contracts/api-types";
+import { cn } from "@/app/lib/utils";
+import { usePhone } from "@/app/lib/hooks";
+import type { ViewId } from "@/app/lib/views";
+import { useProject } from "@/app/store/project";
+import { toast } from "@/app/store/toast";
+import { Composer } from "@/app/ui/Composer";
+import { SuggestionChip } from "@/app/ui/Chip";
+import { Kbd } from "@/app/ui/Kbd";
+import { NaqshaAvatar } from "@/app/ui/Avatar";
+import { Tooltip } from "@/app/ui/Tooltip";
+import { ease, spring } from "@/app/ui/motion";
+import { activeAskContext, useActiveAskContext, useAskStore, type Command, type NextMove } from "./ask";
+import { matchCommands } from "./commands";
+import { useNarration, type Narration } from "./narration";
+import { useShell } from "./state";
+
+export interface DockProps {
+  view: ViewId;
+  project: Project;
+  tone: "light" | "hud";
+  /** Default Next for the view (the view's context can override it). */
+  defaultNext: NextMove | null;
+  /** Default line ("Naqsha's latest words") when the view gives none. */
+  defaultLine: string | null;
+  defaultPlaceholder: string;
+  defaultSuggestions: string[];
+  /** What Ask does when the view registers nothing. */
+  defaultSubmit: (text: string) => void | Promise<void>;
+  commands: Command[];
+}
+
+export function Dock(props: DockProps) {
+  const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands } = props;
+  const ctx = useActiveAskContext();
+  const narration = useNarration();
+  const phone = usePhone();
+  const draft = useAskStore((s) => s.draft);
+  const focusTick = useAskStore((s) => s.focusTick);
+  const queued = useAskStore((s) => s.queued);
+  const toggleChat = useShell((s) => s.toggleChat);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const hud = tone === "hud";
+
+  const next = ctx.next !== undefined ? ctx.next : defaultNext;
+  const line = ctx.line !== undefined ? ctx.line : defaultLine;
+  const suggestions = (ctx.suggestions ?? defaultSuggestions).slice(0, 3);
+  const placeholder = ctx.placeholder ?? defaultPlaceholder;
+  const working: Narration | null = narration ?? (ctx.busy ? { kind: "design", text: "Working…" } : null);
+
+  const setDraft = (v: string) => useAskStore.setState({ draft: v });
+
+  const submit = (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    if (working && working.kind !== "intake") {
+      toast.show("Naqsha is still working on the last request. Ask again in a moment.");
+      return;
+    }
+    setDraft("");
+    setPaletteOpen(false);
+    const fn = activeAskContext().onSubmit ?? defaultSubmit;
+    void fn(t);
+  };
+
+  // useAsk().submit from views
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  const lastQueued = useRef(0);
+  useEffect(() => {
+    if (queued && queued.tick !== lastQueued.current) {
+      lastQueued.current = queued.tick;
+      submitRef.current(queued.text);
+    }
+  }, [queued]);
+
+  // useAsk().focus(), ⌘K and "/"
+  useEffect(() => {
+    if (!focusTick) return;
+    field.current?.focus();
+    setPaletteOpen(true);
+    setActive(0);
+  }, [focusTick]);
+
+  const allCommands = useMemo(() => [...(ctx.commands ?? []), ...commands], [ctx.commands, commands]);
+  const matches = useMemo(() => matchCommands(allCommands, draft, draft.trim() ? 6 : 8), [allCommands, draft]);
+  const askItem = draft.trim().length > 0;
+  const items: ({ kind: "ask" } | { kind: "cmd"; cmd: Command })[] = [
+    ...(askItem ? [{ kind: "ask" as const }] : []),
+    ...matches.map((cmd) => ({ kind: "cmd" as const, cmd })),
+  ];
+  const showPalette = paletteOpen && focused && items.length > 0;
+  useEffect(() => setActive(0), [draft]);
+
+  const runItem = (i: number) => {
+    const it = items[i];
+    if (!it) return;
+    if (it.kind === "ask") submit(draft);
+    else {
+      setDraft("");
+      setPaletteOpen(false);
+      field.current?.blur();
+      it.cmd.run();
+    }
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showPalette) {
+      if (e.key === "ArrowUp" && !draft) setPaletteOpen(true);
+      return;
+    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % items.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + items.length) % items.length); }
+    else if (e.key === "Enter" && !e.shiftKey) {
+      const it = items[active];
+      if (it && it.kind === "cmd") { e.preventDefault(); runItem(active); }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setPaletteOpen(false);
+    }
+  };
+
+  // Publish the dock's height so toasts sit 12px above it.
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--dock-h", `${el.offsetHeight + (phone ? 0 : 12)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.setProperty("--dock-h", "0px");
+    };
+  }, [phone]);
+
+  // Close the palette on a click outside the dock.
+  useEffect(() => {
+    if (!paletteOpen) return;
+    const onDown = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setPaletteOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [paletteOpen]);
+
+  if (ctx.hidden) return null;
+
+  const pill = !working && next && (
+    <motion.div layout transition={spring} className="shrink-0">
+      <Tooltip content={next.hint ?? next.label} disabled={!next.hint}>
+        <button
+          type="button"
+          onClick={next.run}
+          disabled={next.disabled}
+          className={cn(
+            "group inline-flex h-[52px] items-center gap-2 rounded-[26px] bg-accent pl-5 pr-4 text-[15px] font-medium text-white shadow-e2 outline-none",
+            "transition-[background-color,transform,box-shadow] duration-[160ms] ease-out hover:bg-accent-press active:scale-[.97] focus-visible:shadow-[0_0_0_4px_rgb(39_71_245/.28)] disabled:opacity-50",
+            phone && "h-11 rounded-full pl-4 pr-3 text-[14px]",
+          )}
+        >
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={next.label}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.24, ease: ease.out }}
+              className="max-w-[46vw] truncate sm:max-w-none"
+            >
+              {next.label}
+            </motion.span>
+          </AnimatePresence>
+          <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-0.5" strokeWidth={2} />
+        </button>
+      </Tooltip>
+    </motion.div>
+  );
+
+  return (
+    <div ref={root} className="pointer-events-auto relative w-full">
+      {/* Command popover */}
+      <AnimatePresence>
+        {showPalette && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.18, ease: ease.out } }}
+            exit={{ opacity: 0, y: 4, transition: { duration: 0.12, ease: ease.exit } }}
+            role="listbox"
+            aria-label="Ask Naqsha, go to or do"
+            className={cn(
+              "absolute inset-x-0 bottom-full mb-2 max-h-[min(420px,60dvh)] origin-bottom overflow-y-auto rounded-[20px] p-1.5 scrollbar-thin",
+              hud ? "glass-hud" : "bg-surface shadow-e3",
+            )}
+          >
+            <PaletteList items={items} active={active} setActive={setActive} run={runItem} draft={draft} hud={hud} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Naqsha's line, suggestions, or narration */}
+      <AnimatePresence initial={false} mode="wait">
+        {working ? (
+          <motion.div
+            key="working"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: ease.out }}
+            className="mb-2 flex justify-center"
+          >
+            <button
+              type="button"
+              onClick={() => toggleChat(true)}
+              className={cn(
+                "relative flex max-w-full items-center gap-2.5 overflow-hidden rounded-full py-2 pl-3 pr-4 text-left text-[14px] outline-none focus-visible:shadow-focus",
+                hud ? "glass-hud text-hud-ink" : "glass-light text-ink-2",
+              )}
+              aria-live="polite"
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-accent animate-breathe" aria-hidden />
+              <span className="truncate">{working.text}</span>
+              {working.progress !== undefined && (
+                <span className="absolute inset-x-0 bottom-0 h-[2px] bg-accent/15" aria-hidden>
+                  <motion.span className="block h-full bg-accent" animate={{ width: `${Math.round(working.progress * 100)}%` }} transition={{ duration: 0.4, ease: ease.out }} />
+                </span>
+              )}
+            </button>
+          </motion.div>
+        ) : line || suggestions.length ? (
+          <motion.div
+            key={`line-${line ?? ""}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: ease.out }}
+            className="mb-2 flex flex-col items-center gap-2"
+          >
+            {line && (
+              <button
+                type="button"
+                onClick={() => toggleChat()}
+                title="Open the conversation (⌘J)"
+                className={cn(
+                  "flex max-w-full items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-left text-[14px] leading-5 outline-none transition-colors focus-visible:shadow-focus",
+                  hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.7)]" : "glass-light text-ink-2 hover:text-ink",
+                )}
+              >
+                <NaqshaAvatar size={24} />
+                <span className="line-clamp-2 sm:line-clamp-1">{line}</span>
+              </button>
+            )}
+            {suggestions.length > 0 && (
+              <div className={cn("flex max-w-full gap-2", phone ? "no-scrollbar -mx-3 overflow-x-auto px-3" : "flex-wrap justify-center")}>
+                {suggestions.map((s) => (
+                  <SuggestionChip key={s} tone={hud ? "hud" : "light"} onClick={() => submit(s)} className={hud ? "" : "shadow-e1"}>
+                    {s}
+                  </SuggestionChip>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Ask + Next */}
+      <div className="flex items-end gap-2">
+        <Composer
+          ref={field}
+          className="min-w-0 flex-1"
+          tone={hud ? "hud" : "light"}
+          value={draft}
+          onChange={(v) => { setDraft(v); setPaletteOpen(true); }}
+          onSubmit={submit}
+          placeholder={placeholder}
+          label="Ask Naqsha"
+          busy={!!working && working.kind !== "intake"}
+          onKeyDown={onKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 120)}
+          leading={<Sparkles className={cn("ml-2 size-4", hud ? "text-hud-accent" : "text-accent")} strokeWidth={1.75} aria-hidden />}
+          trailing={phone ? undefined : <Kbd keys={["mod", "K"]} tone={hud ? "hud" : "light"} />}
+        />
+        {pill}
+      </div>
+    </div>
+  );
+}
+
+function PaletteList({
+  items,
+  active,
+  setActive,
+  run,
+  draft,
+  hud,
+}: {
+  items: ({ kind: "ask" } | { kind: "cmd"; cmd: Command })[];
+  active: number;
+  setActive: (i: number) => void;
+  run: (i: number) => void;
+  draft: string;
+  hud: boolean;
+}) {
+  const headingClass = cn("px-3 pb-1 pt-2.5 text-[12px] font-medium", hud ? "text-hud-ink-2" : "text-ink-3");
+  let lastGroup: string | null = null;
+  return (
+    <>
+      {items.map((it, i) => {
+        const group = it.kind === "ask" ? "ask" : it.cmd.group;
+        const heading = group !== lastGroup && group !== "ask" ? (group === "go" ? "Go to" : "Do") : null;
+        lastGroup = group;
+        const selected = i === active;
+        return (
+          <div key={it.kind === "ask" ? "ask" : it.cmd.id}>
+            {heading && <div className={headingClass}>{heading}</div>}
+            <button
+              type="button"
+              role="option"
+              aria-selected={selected}
+              onPointerMove={() => setActive(i)}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => run(i)}
+              className={cn(
+                "flex min-h-10 w-full items-center gap-3 rounded-[12px] px-3 text-left text-[14px] outline-none",
+                hud ? "text-hud-ink" : "text-ink",
+                selected && (hud ? "bg-white/10" : "bg-surface-2"),
+              )}
+            >
+              {it.kind === "ask" ? (
+                <>
+                  <NaqshaAvatar size={20} />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium">Ask Naqsha</span>
+                    <span className={hud ? "text-hud-ink-2" : "text-ink-3"}> · {draft.trim()}</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate">{it.cmd.label}</span>
+                  {it.cmd.hint && <span className={cn("shrink-0 text-[12px]", hud ? "text-hud-ink-2" : "text-ink-3")}>{it.cmd.hint}</span>}
+                </>
+              )}
+              {selected && <CornerDownLeft className={cn("size-3.5 shrink-0", hud ? "text-hud-ink-2" : "text-ink-3")} aria-hidden />}
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}

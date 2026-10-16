@@ -44,6 +44,8 @@ export function Segmented<T extends string>({
   const lid = layoutId ?? `seg-${auto}`;
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const hud = tone !== "light";
+  // Roving tab stop: the selected option, or the first one when nothing is selected.
+  const tabStop = Math.max(0, options.findIndex((o) => o.value === value));
 
   const onKey = (e: KeyboardEvent, i: number) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -80,7 +82,7 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={active}
-            tabIndex={active ? 0 : -1}
+            tabIndex={i === tabStop ? 0 : -1}
             title={o.title}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}

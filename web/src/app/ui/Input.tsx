@@ -24,8 +24,8 @@ interface FieldProps {
   label?: ReactNode;
   /** A quiet line under the field. */
   hint?: ReactNode;
-  /** Replaces the hint with a fail caption and a fail border. */
-  error?: ReactNode;
+  /** Replaces the hint with a fail caption and a fail border. `true`: the border only (the message is elsewhere). */
+  error?: ReactNode | boolean;
   /** Icon inside, on the left. */
   leading?: ReactNode;
   /** Element inside, on the right (a button, a unit). */
@@ -34,7 +34,7 @@ interface FieldProps {
   wrapperClassName?: string;
 }
 
-function Frame({ id, label, hint, error, children, className }: { id: string; label?: ReactNode; hint?: ReactNode; error?: ReactNode; children: ReactNode; className?: string }) {
+function Frame({ id, label, hint, error, children, className }: { id: string; label?: ReactNode; hint?: ReactNode; error?: ReactNode | boolean; children: ReactNode; className?: string }) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       {label && (
@@ -43,11 +43,11 @@ function Frame({ id, label, hint, error, children, className }: { id: string; la
         </label>
       )}
       {children}
-      {error ? (
+      {error && error !== true ? (
         <p id={`${id}-msg`} className="text-[12px] font-medium leading-4 text-fail" role="alert">
           {error}
         </p>
-      ) : hint ? (
+      ) : hint && !error ? (
         <p id={`${id}-msg`} className="text-[12px] leading-4 text-ink-3">
           {hint}
         </p>
@@ -72,7 +72,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           ref={ref}
           id={id}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error || hint ? `${id}-msg` : undefined}
+          aria-describedby={(error && error !== true) || (hint && !error) ? `${id}-msg` : undefined}
           className={cn(
             field,
             "h-11 px-3.5",
@@ -125,7 +125,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         value={value}
         onChange={onChange}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error || hint ? `${id}-msg` : undefined}
+        aria-describedby={(error && error !== true) || (hint && !error) ? `${id}-msg` : undefined}
         className={cn(
           field,
           "min-h-11 resize-none px-3.5 py-2.5 leading-[22px]",
