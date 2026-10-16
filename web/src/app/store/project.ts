@@ -4,7 +4,7 @@
  * between steps, and a page reload re-attaches to an in-flight design/revise run (GET /run).
  */
 import { create } from "zustand";
-import type { Change, ChatMessage, Comment, Concept, DesignSection, Project, SSEEvents, Version } from "@contracts/api-types";
+import type { Change, ChatMessage, Comment, Concept, DesignSection, Project, Role, SSEEvents, Version } from "@contracts/api-types";
 import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
 import {
   api,
@@ -13,10 +13,14 @@ import {
   type ConceptsBody,
   type IntakeBody,
   type NewComment,
+  type Reply,
+  type SharedProject,
   type SSEHandlers,
   type StreamOptions,
 } from "@/api/client";
 import { plotLabel } from "@/api/domain";
+import { currentUser } from "@/api/auth";
+import { userId } from "@/api/mode";
 import { saveFixLoop } from "@/app/lib/fixloop";
 import { toast } from "./toast";
 
@@ -92,8 +96,19 @@ interface ProjectState {
   versions: Record<string, Version>;
   comments: Comment[];
   commentsFor: string | null;
+  /** Rename/brief edits: "Saving…" then "Saved" for 1.5 s in the title capsule (never a toast). */
+  saveState: "idle" | "saving" | "saved";
+
+  /** Set when the project was opened from a client link (/s/:token): comments go through the share endpoints. */
+  shareToken: string | null;
+  sharedBy: string | null;
+  /** The client's name for their comments (asked once, remembered in this browser). */
+  guestName: string | null;
 
   open(pid: string): Promise<void>;
+  /** Open a project from a client link. */
+  openShared(token: string): Promise<SharedProject | null>;
+  setGuestName(name: string): void;
   close(): void;
   refresh(): Promise<void>;
   rename(name: string): Promise<void>;
@@ -114,9 +129,12 @@ interface ProjectState {
   loadComments(versionId: string): Promise<void>;
   addComment(body: NewComment): Promise<Comment | null>;
   updateComment(cid: string, patch: { text?: string; status?: Comment["status"] }): Promise<void>;
+  /** Removes it at once and offers Undo for 5 s; the server delete follows (sooner if the page is hidden). */
   deleteComment(cid: string): Promise<void>;
+  replyToComment(cid: string, text: string): Promise<boolean>;
 
-  runRevise(versionId: string, commentIds?: string[]): Promise<void>;
+  /** Apply comments (all open ones by default) and/or a typed instruction ("make the kitchen bigger"). */
+  runRevise(versionId: string, commentIds?: string[], instruction?: string): Promise<void>;
 }
 
 const controllers = new Map<string, AbortController>();
@@ -133,6 +151,51 @@ function abortAll() {
 
 let seq = 0;
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+
+// ── Undoable comment deletes ─────────────────────────────────────────────────────────────────────────
+// A deleted comment disappears at once; the DELETE is sent after the 5 s undo window, or straight away when the
+// page is hidden or another project opens.
+const pendingDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>();
+function flushDeletes() {
+  for (const p of [...pendingDeletes.values()]) {
+    clearTimeout(p.timer);
+    p.run();
+  }
+}
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flushDeletes());
+  window.addEventListener("pagehide", flushDeletes);
+}
+
+// ── A first message typed before the project existed (workspace composer) ───────────────────────────
+const firstMessages = new Map<string, string>();
+/** Send `text` as the first setup message when project `pid` opens. */
+export function queueFirstMessage(pid: string, text: string) {
+  if (text.trim()) firstMessages.set(pid, text.trim());
+}
+const canWrite = (p: Project) => p.role !== "client";
+
+// ── Who is writing ─────────────────────────────────────────────────────────────────────────────────
+const GUEST_NAME_KEY = "naqsha.guestName";
+function readGuestName(): string | null {
+  try { return localStorage.getItem(GUEST_NAME_KEY) || null; } catch { return null; }
+}
+
+/** The author shown on an optimistic reply until the server's copy arrives. */
+function currentAuthor(role: Role | undefined, guestName: string | null, client: boolean): Reply["author"] {
+  const u = currentUser();
+  if (client) return { id: u?.uid ?? "me", name: guestName || u?.name || "You", role: "client" };
+  return { id: u?.uid ?? userId(), name: u?.name || u?.email?.split("@")[0] || "You", role: role ?? "owner" };
+}
+
+let savedTimer: ReturnType<typeof setTimeout> | undefined;
+function markSaved(pid: string) {
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => {
+    const st = useProject.getState();
+    if (st.pid === pid && st.saveState === "saved") useProject.setState({ saveState: "idle" });
+  }, 1500);
+}
 const failuresOf = (r: ComplianceReport) => r.checks.filter((c) => c.status === "fail").length;
 
 export const useProject = create<ProjectState>((set, get) => {
@@ -244,9 +307,14 @@ export const useProject = create<ProjectState>((set, get) => {
     versions: {},
     comments: [],
     commentsFor: null,
+    saveState: "idle",
+    shareToken: null,
+    sharedBy: null,
+    guestName: readGuestName(),
 
     async open(pid) {
-      if (get().pid === pid && get().loadState === "ready") {
+      flushDeletes();
+      if (get().pid === pid && get().loadState === "ready" && !get().shareToken) {
         void get().refresh();
         return;
       }
@@ -266,11 +334,18 @@ export const useProject = create<ProjectState>((set, get) => {
         versions: {},
         comments: [],
         commentsFor: null,
+        saveState: "idle",
+        shareToken: null,
+        sharedBy: null,
       });
       try {
         const [project, messages] = await Promise.all([api.getProject(pid), api.getMessages(pid)]);
         if (!live(pid)) return;
         set({ project, messages, loadState: "ready" });
+        // A home started from the workspace composer: its first message is the brief.
+        const first = firstMessages.get(pid);
+        firstMessages.delete(pid);
+        if (first && !messages.length && canWrite(project)) void get().sendIntake({ message: first });
         if (["planning", "building", "revising"].includes(project.stage)) void get().resumeRun();
       } catch (e) {
         if (!live(pid)) return;
@@ -280,12 +355,58 @@ export const useProject = create<ProjectState>((set, get) => {
 
     close() {
       abortAll();
-      set({ pid: null, project: null, loadState: "idle" });
+      flushDeletes();
+      set({ pid: null, project: null, loadState: "idle", shareToken: null, sharedBy: null });
+    },
+
+    async openShared(token) {
+      abortAll();
+      flushDeletes();
+      set({
+        pid: null,
+        project: null,
+        loadState: "loading",
+        loadError: undefined,
+        messages: [],
+        draft: null,
+        conceptRun: null,
+        design: idleRun(),
+        revise: idleRun(),
+        versions: {},
+        comments: [],
+        commentsFor: null,
+        shareToken: token,
+        sharedBy: null,
+      });
+      try {
+        const shared = await api.getShared(token);
+        if (get().shareToken !== token) return null;
+        const project: Project = { ...shared.project, role: "client", current_version_id: shared.version.id };
+        set({
+          pid: project.id,
+          project,
+          versions: { [shared.version.id]: shared.version },
+          comments: shared.comments,
+          commentsFor: shared.version.id,
+          sharedBy: shared.shared_by ?? null,
+          loadState: "ready",
+        });
+        return shared;
+      } catch (e) {
+        if (get().shareToken === token) set({ loadState: "error", loadError: errorMessage(e) });
+        return null;
+      }
+    },
+
+    setGuestName(name) {
+      const n = name.trim();
+      try { localStorage.setItem(GUEST_NAME_KEY, n); } catch { /* ignore */ }
+      set({ guestName: n || null });
     },
 
     async refresh() {
       const pid = get().pid;
-      if (!pid) return;
+      if (!pid || get().shareToken) return;
       try {
         const project = await api.getProject(pid);
         if (live(pid)) set({ project });
@@ -298,13 +419,14 @@ export const useProject = create<ProjectState>((set, get) => {
       const pid = get().pid;
       const p = get().project;
       if (!pid || !p || !name.trim() || name === p.name) return;
-      set({ project: { ...p, name } });
+      set({ project: { ...p, name }, saveState: "saving" });
       try {
         const project = await api.updateProject(pid, { name });
-        if (live(pid)) set({ project });
+        if (live(pid)) set({ project: { ...project, role: project.role ?? p.role }, saveState: "saved" });
+        markSaved(pid);
       } catch (e) {
-        toast.error("Couldn't rename the project", e);
-        if (live(pid)) set({ project: p });
+        toast.error("Couldn't rename this home", e);
+        if (live(pid)) set({ project: p, saveState: "idle" });
       }
     },
 
@@ -517,9 +639,13 @@ export const useProject = create<ProjectState>((set, get) => {
     async loadComments(versionId) {
       const pid = get().pid;
       if (!pid) return;
+      if (get().shareToken) {
+        if (get().commentsFor !== versionId) set({ commentsFor: versionId });
+        return;
+      }
       try {
         const comments = await api.listComments(pid, versionId);
-        if (live(pid)) set({ comments, commentsFor: versionId });
+        if (live(pid)) set({ comments: comments.filter((c) => !pendingDeletes.has(c.id)), commentsFor: versionId });
       } catch (e) {
         toast.error("Couldn't load comments", e);
       }
@@ -528,8 +654,11 @@ export const useProject = create<ProjectState>((set, get) => {
     async addComment(body) {
       const pid = get().pid;
       if (!pid) return null;
+      const token = get().shareToken;
       try {
-        const c = await api.createComment(pid, body);
+        const c = token
+          ? await api.createSharedComment(token, { ...body, author_name: get().guestName ?? "Guest" })
+          : await api.createComment(pid, body);
         if (live(pid)) set({ comments: [...get().comments, c] });
         return c;
       } catch (e) {
@@ -540,12 +669,12 @@ export const useProject = create<ProjectState>((set, get) => {
 
     async updateComment(cid, patch) {
       const pid = get().pid;
-      if (!pid) return;
+      if (!pid || get().shareToken) return;
       const before = get().comments;
       set({ comments: before.map((c) => (c.id === cid ? { ...c, ...patch } : c)) });
       try {
         const c = await api.updateComment(pid, cid, patch);
-        if (live(pid)) set({ comments: get().comments.map((x) => (x.id === cid ? c : x)) });
+        if (live(pid)) set({ comments: get().comments.map((x) => (x.id === cid ? { ...x, ...c, replies: c.replies ?? x.replies } : x)) });
       } catch (e) {
         if (live(pid)) set({ comments: before });
         toast.error("Couldn't update the comment", e);
@@ -554,28 +683,74 @@ export const useProject = create<ProjectState>((set, get) => {
 
     async deleteComment(cid) {
       const pid = get().pid;
-      if (!pid) return;
-      const before = get().comments;
-      set({ comments: before.filter((c) => c.id !== cid) });
+      if (!pid || get().shareToken) return;
+      const list = get().comments;
+      const index = list.findIndex((c) => c.id === cid);
+      if (index < 0) return;
+      const removed = list[index];
+      set({ comments: list.filter((c) => c.id !== cid) });
+      const restore = () => {
+        if (!live(pid) || get().comments.some((c) => c.id === cid)) return;
+        const now = get().comments;
+        set({ comments: [...now.slice(0, index), removed, ...now.slice(index)] });
+      };
+      const run = () => {
+        pendingDeletes.delete(cid);
+        api.deleteComment(pid, cid).catch((e) => {
+          restore();
+          toast.error("Couldn't delete the comment", e);
+        });
+      };
+      pendingDeletes.set(cid, { timer: setTimeout(run, 5000), run });
+      toast.undo("Comment deleted", () => {
+        const p = pendingDeletes.get(cid);
+        if (!p) return;
+        clearTimeout(p.timer);
+        pendingDeletes.delete(cid);
+        restore();
+      });
+    },
+
+    async replyToComment(cid, text) {
+      const pid = get().pid;
+      const body = text.trim();
+      if (!pid || !body) return false;
+      const token = get().shareToken;
+      const me = currentAuthor(get().project?.role, get().guestName, !!token);
+      const temp: Reply = { id: nid("reply"), author: me, text: body, created_at: new Date().toISOString() };
+      const patchReplies = (fn: (r: Reply[]) => Reply[]) =>
+        set({ comments: get().comments.map((c) => (c.id === cid ? { ...c, replies: fn(c.replies ?? []) } : c)) });
+      patchReplies((r) => [...r, temp]);
       try {
-        await api.deleteComment(pid, cid);
+        const res = token
+          ? await api.replyToSharedComment(token, cid, { text: body, author_name: get().guestName ?? undefined })
+          : await api.replyToComment(pid, cid, { text: body });
+        if (!live(pid)) return true;
+        if ("version_id" in res) {
+          // The server sent the whole thread back.
+          set({ comments: get().comments.map((c) => (c.id === cid ? { ...c, ...res, replies: res.replies ?? c.replies } : c)) });
+        } else {
+          patchReplies((r) => r.map((x) => (x.id === temp.id ? res : x)));
+        }
+        return true;
       } catch (e) {
-        if (live(pid)) set({ comments: before });
-        toast.error("Couldn't delete the comment", e);
+        if (live(pid)) patchReplies((r) => r.filter((x) => x.id !== temp.id));
+        toast.error("Couldn't send the reply", e);
+        return false;
       }
     },
 
     // ── Revise ──────────────────────────────────────────────────────────────────────────────────────
-    async runRevise(versionId, commentIds) {
+    async runRevise(versionId, commentIds, instruction) {
       const pid = get().pid;
-      if (!pid || get().revise.status === "running") return;
+      if (!pid || get().shareToken || get().revise.status === "running") return;
       set({ revise: { ...idleRun(), status: "running", startedAt: Date.now(), baseVersionId: versionId } });
       get().patchProject({ stage: "revising" });
       await drive(
         pid,
         () => "revise",
-        (h, o) => api.revise(pid, { version_id: versionId, comment_ids: commentIds }, h, o),
-        () => void get().runRevise(versionId, commentIds),
+        (h, o) => api.revise(pid, { version_id: versionId, comment_ids: commentIds, instruction }, h, o),
+        () => void get().runRevise(versionId, commentIds, instruction),
       );
     },
   };

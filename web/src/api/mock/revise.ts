@@ -9,10 +9,12 @@
  */
 import type { Change, Comment, DesignSection } from "@contracts/api-types";
 import type { BuildingPlan, ComplianceReport, Opening, Room, RoomType } from "@contracts/plan";
-import { clone, db, findProject, save, touch } from "./db";
+import { clone, db, findProject, now, save, touch, uid } from "./db";
 import { recheck } from "./lda";
 import { saveVersion } from "./scripts";
 import { ev, type Step } from "./stream";
+
+export const NAQSHA = { id: "naqsha", name: "Naqsha", role: "agent" as const };
 
 export const PORCH_REJECTION =
   "Under LDA Building & Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.";
@@ -272,7 +274,27 @@ function materialPhrase(text: string): string | undefined {
 
 const stage = (message: string, s: "changes" | "plan" | "compliance" | "fix" | "build" | "save" = "changes") => ev("stage", { stage: s, message });
 
-export async function* reviseScript(pid: string, versionId: string, commentIds?: string[]): AsyncGenerator<Step> {
+/** A typed change ("make the kitchen bigger") read as an unpinned comment on the room it names. */
+function instructionComment(plan: BuildingPlan, versionId: string, text: string): Comment {
+  const t = text.toLowerCase();
+  const words = (r: Room) => r.name.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2);
+  const scored = plan.rooms
+    .map((r) => ({ r, score: words(r).filter((w) => t.includes(w)).length + (t.includes(r.name.toLowerCase()) ? 3 : 0) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || (a.r.level === "ground" ? -1 : 1));
+  const room = scored[0]?.r;
+  return {
+    id: `instruction_${Date.now().toString(36)}`,
+    version_id: versionId,
+    text,
+    anchor: { position: [0, 0, 0], normal: [0, 0, 1], room: room?.id, level: room?.level, label: room?.name },
+    camera: { position: [0, 8, 14], target: [0, 3, 0] },
+    created_at: now(),
+    status: "open",
+  };
+}
+
+export async function* reviseScript(pid: string, versionId: string, commentIds?: string[], instruction?: string): AsyncGenerator<Step> {
   const d = db();
   const p = findProject(pid);
   const base = d.versions[versionId];
@@ -281,7 +303,9 @@ export async function* reviseScript(pid: string, versionId: string, commentIds?:
     return;
   }
   const open = (d.comments[pid] ?? []).filter((c) => c.version_id === versionId && c.status === "open");
-  const comments = commentIds?.length ? open.filter((c) => commentIds.includes(c.id)) : open;
+  const picked = commentIds?.length ? open.filter((c) => commentIds.includes(c.id)) : instruction?.trim() ? [] : open;
+  const typed = instruction?.trim() ? instructionComment(base.plan, versionId, instruction.trim()) : null;
+  const comments = typed ? [...picked, typed] : picked;
   if (!comments.length) {
     yield ev("error", { message: "There are no open comments to address.", recoverable: false });
     return;
@@ -291,7 +315,11 @@ export async function* reviseScript(pid: string, versionId: string, commentIds?:
   touch(p);
   save();
 
-  yield stage(`Argon is reviewing your ${comments.length} comment${comments.length === 1 ? "" : "s"}…`);
+  yield stage(
+    typed && !picked.length
+      ? "Reading your change…"
+      : `Reading your ${comments.length} comment${comments.length === 1 ? "" : "s"}…`,
+  );
   yield 1400;
 
   const plan = clone(base.plan);
@@ -485,9 +513,17 @@ export async function* reviseScript(pid: string, versionId: string, commentIds?:
   const version = saveVersion(pid, plan, sections, report, summary, changes, versionId);
   for (const c of comments) {
     const r = resolutions.get(c.id) ?? { status: "partial" as const, resolution: "Reviewed; no specific change was needed." };
+    if (c === typed) {
+      // A typed change has no thread: Naqsha answers in the narration instead.
+      yield stage(r.resolution);
+      yield 500;
+      continue;
+    }
     c.status = r.status;
     c.resolution = r.resolution;
     c.resolved_in_version = version.id;
+    // The answer also lands in the thread, where the person asked.
+    c.replies = [...(c.replies ?? []), { id: uid("rp"), author: NAQSHA, text: r.resolution, created_at: now() }];
     save();
     yield 350;
     yield ev("comment", { comment: clone(c) });

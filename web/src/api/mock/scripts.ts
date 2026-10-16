@@ -98,6 +98,8 @@ function* progressTicks(from: number, to: number, n: number, gap: number): Gener
   }
 }
 
+const failuresOf = (r: ComplianceReport) => r.checks.filter((c) => c.status === "fail").length;
+
 export async function* designScript(pid: string): AsyncGenerator<Step> {
   const p = findProject(pid);
   p.stage = "planning";
@@ -110,14 +112,14 @@ export async function* designScript(pid: string): AsyncGenerator<Step> {
   const sizes = [17_400, 16_800, 17_100];
   for (let attempt = 1; attempt <= 3; attempt++) {
     yield ev("stage", attempt === 1
-      ? { stage: "plan", message: "Argon is laying out the floors…" }
-      : { stage: "fix", message: `Argon is fixing the plan (attempt ${attempt})…` });
+      ? { stage: "plan", message: "Laying out the floors…" }
+      : { stage: "fix", message: `Fixing ${failuresOf(report)} ${failuresOf(report) === 1 ? "issue" : "issues"}…` });
     yield* progressTicks(0, sizes[attempt - 1], attempt === 1 ? 7 : 4, attempt === 1 ? 1150 : 1000);
     yield 500;
     plan = attemptPlan(pid, attempt);
     yield ev("plan", { plan, attempt });
     yield 350;
-    yield ev("stage", { stage: "compliance", message: "Checking the plan against LDA regulations…" });
+    yield ev("stage", { stage: "compliance", message: `Checking ${report.checks.length} LDA rules…` });
     yield 900;
     report = attempt === 3 ? structuredClone(ARGON_REPORT) : recheck(plan);
     yield ev("compliance", { report, attempt });
@@ -127,7 +129,7 @@ export async function* designScript(pid: string): AsyncGenerator<Step> {
 
   findProject(pid).stage = "building";
   save();
-  yield ev("stage", { stage: "build", message: "Argon is writing the 3D model as code…" });
+  yield ev("stage", { stage: "build", message: "Building your home in 3D…" });
   yield 1200;
 
   let chars = 0;
@@ -143,7 +145,7 @@ export async function* designScript(pid: string): AsyncGenerator<Step> {
     yield ev("section", { section: s, index: i });
   }
 
-  yield ev("stage", { stage: "save", message: "Saving version…" });
+  yield ev("stage", { stage: "save", message: "Saving this version…" });
   yield 700;
   const version = saveVersion(pid, plan, sections, report, `v${findProject(pid).versions.length + 1}: ${plan.rooms.length} spaces, ${sections.length} code sections`);
   yield ev("version", { version });

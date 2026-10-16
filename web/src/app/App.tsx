@@ -1,47 +1,67 @@
-/** App shell (track: APP): routes, motion defaults and toasts. */
-import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+/**
+ * Routes (track: APP-SHELL).
+ *   /                      landing
+ *   /app                   your homes (workspace)
+ *   /app/signin, /signup   accounts
+ *   /app/p/:id/:view       a home: brief · concepts · plan · house · revisions
+ *   /s/:token              the client view of a shared home
+ * Old links (/p/:id/setup|design|explore…) redirect to their new places.
+ */
+import { useEffect, type ReactNode } from "react";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { MotionConfig } from "motion/react";
-import { Workspace } from "./routes/Workspace";
-import { ProjectLayout, StepGate } from "./routes/ProjectLayout";
-import { SetupStep } from "./setup/SetupStep";
-import { ConceptsStep } from "./concepts/ConceptsStep";
-import { DesignStep } from "./design/DesignStep";
-import { RevisionsStep } from "./revisions/RevisionsStep";
-import { Toaster, Spinner } from "./ui/primitives";
+import { LEGACY_VIEW } from "./lib/views";
+import { Landing } from "./landing/Landing";
+import { Workspace } from "./workspace/Workspace";
+import { AuthPage } from "./auth/AuthPage";
+import { AuthDialog } from "./auth/AuthDialog";
+import { ProjectShell } from "./shell/ProjectShell";
+import { ClientView } from "./share/ClientView";
+import { Toaster } from "./ui/Toast";
+import { buttonClass } from "./ui/Button";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 
-// The 3D viewer pulls in three.js; load it only when the user reaches Explore.
-const ExploreStep = lazy(() => import("./explore/ExploreStep").then((m) => ({ default: m.ExploreStep })));
-
-function Loading() {
-  return (
-    <div className="grid h-full place-items-center bg-night text-sheet/70">
-      <div className="flex items-center gap-3 text-[14px]">
-        <Spinner className="text-[#e7a58f]" /> Loading the 3D studio…
-      </div>
-    </div>
-  );
-}
-
-/** New page, top of the page (the project shell is a fixed-height app view). */
+/** A new page starts at the top (views inside a home keep their own scroll). */
 function ScrollToTop() {
   const { pathname } = useLocation();
-  const first = pathname.split("/").slice(0, 3).join("/");
+  const key = pathname.split("/").slice(0, 4).join("/");
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [first]);
+  }, [key]);
   return null;
 }
 
-function NotFound() {
+/** A crash anywhere shows a calm message instead of a blank page; moving to another page tries again. */
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-paper p-6 text-center">
+    <ErrorBoundary resetKey={pathname} label="This page didn't load" className="min-h-[100dvh]">
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+function LegacyProject() {
+  const { id = "", "*": rest = "" } = useParams();
+  const old = rest.split("/")[0];
+  const view = LEGACY_VIEW[old];
+  const { search } = useLocation();
+  return <Navigate to={`/app/p/${id}${view ? `/${view}` : ""}${search}`} replace />;
+}
+
+function NotFound() {
+  useEffect(() => {
+    document.title = "Not found · Naqsha";
+  }, []);
+  return (
+    <div className="grid min-h-[100dvh] place-items-center bg-canvas p-6 text-center">
       <div>
-        <p className="font-display-tight text-[48px] text-ink">Off the plan.</p>
-        <p className="mt-2 text-[15px] text-graphite">This page doesn't exist.</p>
-        <Link to="/" className="mt-6 inline-block text-[14px] font-medium text-brick underline-offset-4 hover:underline">
-          Back to your projects
-        </Link>
+        <p className="text-display text-ink">Off the plan.</p>
+        <p className="mt-2 text-[15px] text-ink-2">This page doesn't exist.</p>
+        <div className="mt-6 flex justify-center gap-2">
+          <Link to="/" className={buttonClass("secondary")}>Home</Link>
+          <Link to="/app" className={buttonClass("ink")}>Open portal</Link>
+        </div>
       </div>
     </div>
   );
@@ -52,28 +72,25 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<Workspace />} />
-          <Route path="/p/:id" element={<ProjectLayout />}>
-            <Route index element={<StepGate />} />
-            <Route path="setup" element={<StepGate step="setup"><SetupStep /></StepGate>} />
-            <Route path="concepts" element={<StepGate step="concepts"><ConceptsStep /></StepGate>} />
-            <Route path="design" element={<StepGate step="design"><DesignStep /></StepGate>} />
-            <Route
-              path="explore"
-              element={
-                <StepGate step="explore">
-                  <Suspense fallback={<Loading />}>
-                    <ExploreStep />
-                  </Suspense>
-                </StepGate>
-              }
-            />
-            <Route path="revisions" element={<StepGate step="revisions"><RevisionsStep /></StepGate>} />
-            <Route path="*" element={<StepGate />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <RouteBoundary>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/app" element={<Workspace />} />
+            <Route path="/app/signin" element={<AuthPage mode="signin" />} />
+            <Route path="/app/signup" element={<AuthPage mode="signup" />} />
+            {/* Nested so relative links between views ("../plan") resolve inside the home. */}
+            <Route path="/app/p/:id" element={<ProjectShell />}>
+              <Route index element={null} />
+              <Route path=":view" element={null} />
+            </Route>
+            <Route path="/s/:token" element={<ClientView />} />
+            <Route path="/signin" element={<Navigate to="/app/signin" replace />} />
+            <Route path="/signup" element={<Navigate to="/app/signup" replace />} />
+            <Route path="/p/:id/*" element={<LegacyProject />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </RouteBoundary>
+        <AuthDialog />
       </BrowserRouter>
       <Toaster />
     </MotionConfig>

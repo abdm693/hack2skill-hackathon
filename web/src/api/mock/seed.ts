@@ -5,14 +5,18 @@
  * - a lived-in workspace with stable ids for deep links:
  *   p_demo_johar (ready, v1 + v2), p_demo_lake (choosing concepts), p_demo_wapda (mid-setup, corner kanal plot)
  */
-import type { Brief, Change, ChatMessage, Comment, Concept, Project, Version } from "@contracts/api-types";
+import type { Author, Brief, Change, ChatMessage, Comment, Concept, Project, Version } from "@contracts/api-types";
 import { db, save, uid } from "./db";
 import { ARGON_SECTIONS, CONCEPT_IMAGES, clonePlan, revisedSection } from "./fixtures";
 import { demoSetupState } from "./intake";
 import { ARGON_REPORT, envelopeFor, recheck } from "./lda";
-import { PORCH_REJECTION, deepenBedroom2 } from "./revise";
+import { NAQSHA, PORCH_REJECTION, deepenBedroom2 } from "./revise";
 
-const SEED_KEY = "naqsha.mock.seeded";
+/** People in the demo conversations. */
+const SANA: Author = { id: "u_sana", name: "Sana Malik", role: "client" };
+const BILAL: Author = { id: "u_bilal", name: "Bilal Ahmed", role: "team" };
+
+const SEED_KEY = "naqsha.mock.seeded.v2";
 /** Same key format as app/lib/fixloop.ts (the fix loop of the real run went 5 → 1 → 0). */
 const FIX_LOOP_KEY = (vid: string) => `naqsha.fixloop.${vid}`;
 
@@ -83,20 +87,22 @@ function finishedHome(pid: string, name: string, vPrefix: string): { project: Pr
 
   const plan2 = clonePlan();
   deepenBedroom2(plan2);
-  const comment = (id: string, text: string, room: string, level: string, label: string, minutesAgo: number, snapshot: string): Comment => ({
+  const comment = (id: string, author: Author, text: string, room: string, level: string, label: string, minutesAgo: number, snapshot: string, versionId = v1.id): Comment => ({
     id,
-    version_id: v1.id,
+    version_id: versionId,
     text,
     anchor: { position: [0, 0, 0], normal: [0, 0, 1], room, level, label },
     camera: { position: [5.3, 9, 14], target: [5.3, 4, -6] },
     snapshot_url: snapshot,
     created_at: ago(minutesAgo),
     status: "open",
+    author,
+    replies: [],
   });
   const comments: Comment[] = [
-    comment(`${pid}_cm_porch`, "Can we extend the car porch 4 feet forward into the front lawn?", "g_porch", "ground", "Car porch roof", 23 * 60, "/mock/concept-1.jpg"),
-    comment(`${pid}_cm_bed2`, "Bedroom 2 feels cramped, can it be bigger?", "f_bed2", "first", "Bedroom 2", 23 * 60 - 2, "/mock/remix-1.jpg"),
-    comment(`${pid}_cm_louvers`, "Warmer wood on the balcony louvers please", "f_balcony", "first", "Front balcony louvers", 23 * 60 - 4, "/mock/concept-3.jpg"),
+    comment(`${pid}_cm_porch`, SANA, "Can we extend the car porch 4 feet forward into the front lawn?", "g_porch", "ground", "Car porch roof", 23 * 60, "/mock/concept-1.jpg"),
+    comment(`${pid}_cm_bed2`, BILAL, "Bedroom 2 feels cramped, can it be bigger?", "f_bed2", "first", "Bedroom 2", 23 * 60 - 2, "/mock/remix-1.jpg"),
+    comment(`${pid}_cm_louvers`, SANA, "Warmer wood on the balcony louvers please", "f_balcony", "first", "Front balcony louvers", 23 * 60 - 4, "/mock/concept-3.jpg"),
   ];
   const changes: Change[] = [
     { id: "ch1", summary: "Deepened Bedroom 2 by 2 ft into the front balcony (110 → 130 sq ft)", kind: "plan", targets: ["f_bed2", "f_bath2", "f_balcony"], comment_ids: [comments[1].id] },
@@ -126,7 +132,21 @@ function finishedHome(pid: string, name: string, vPrefix: string): { project: Pr
     ["resolved", "Bedroom 2 is now 10×13 ft (130 sq ft), up from 110, by taking 2 ft from the front balcony, which stays 3 ft deep. It still passes every LDA room-size and daylight check."],
     ["resolved", "Updated the facade here: the teak louvers are warmer and wrap the balcony, and the stone pier now runs up to the parapet."],
   ];
-  comments.forEach((cm, i) => Object.assign(cm, { status: resolutions[i][0], resolution: resolutions[i][1], resolved_in_version: v2.id }));
+  comments.forEach((cm, i) =>
+    Object.assign(cm, {
+      status: resolutions[i][0],
+      resolution: resolutions[i][1],
+      resolved_in_version: v2.id,
+      replies: [{ id: `${cm.id}_r1`, author: NAQSHA, text: resolutions[i][1], created_at: ago(22 * 60) }],
+    }),
+  );
+  // Open notes on v2, ready to apply.
+  const kitchen = comment(`${pid}_cm_kitchen`, SANA, "Could the kitchen open into the dining? My mother likes to see the table while she cooks.", "g_kitchen", "ground", "Kitchen", 50, "/mock/remix-2.jpg", v2.id);
+  kitchen.replies = [
+    { id: `${kitchen.id}_r1`, author: BILAL, text: "We can drop the wall and keep a half-height counter. I'll flag it for the next version.", created_at: ago(41) },
+  ];
+  const stair = comment(`${pid}_cm_stair`, BILAL, "Add a skylight over the stair so the landing gets daylight.", "f_stair", "first", "Stair landing", 35, "/mock/remix-3.jpg", v2.id);
+  comments.push(kitchen, stair);
 
   const project: Project = {
     id: pid,
@@ -174,8 +194,12 @@ export function seedIfEmpty() {
   const d = db();
   if (seeded || d.projects.length) return;
 
-  // 1. Ready to walk.
+  // 1. Ready to walk, with a client and an architect on it.
   store(finishedHome("p_demo_johar", "Johar Town family home", "v_demo_johar"), "projects");
+  d.members.p_demo_johar = [
+    { uid: SANA.id, email: "sana@example.com", name: SANA.name, role: "client", status: "active" },
+    { uid: BILAL.id, email: "bilal@example.com", name: BILAL.name, role: "team", status: "active" },
+  ];
 
   // 2. Choosing a concept.
   const pid2 = "p_demo_lake";
@@ -217,6 +241,12 @@ export function seedIfEmpty() {
   });
   d.messages[pid3] = setup.messages;
   d.intake[pid3] = { step: setup.step, done: false, brief: setup.brief };
+
+  // 4. Shared with you (listed once you sign in): an architect's home you are on the team of.
+  store(finishedHome("p_demo_gulberg", "Gulberg corner house", "v_demo_gulberg"), "projects");
+  d.members.p_demo_gulberg = [{ email: "*", role: "team", status: "active" }];
+  d.owners.p_demo_gulberg = "u_ahmed";
+  d.ownerNames.p_demo_gulberg = "Ahmed Builders";
 
   save();
   try { localStorage.setItem(SEED_KEY, "1"); } catch { /* ignore */ }
