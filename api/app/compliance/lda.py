@@ -405,11 +405,20 @@ def check_asbuilt(plan: dict, summary: dict) -> dict:
                            "message": f"The {what} project{'' if what.endswith('s') else 's'} {amount:.1f} ft into the {side} open space (LDA allows "
                                       f"{allow(sb[side]):g} ft for sunshades there).",
                            "rule_ref": f"{REF} §2.7 (projections)", "element_ids": [o["id"]]})
+    if not checks:
+        checks.append({"id": "asbuilt.ok", "title": "As-built projections", "status": "pass", "category": "lda",
+                       "message": "Nothing projects into the mandatory open spaces beyond LDA's sunshade allowance.", "element_ids": []})
     for e in summary.get("section_errors", []):
         checks.append({"id": f"asbuilt.section:{e['section']}", "title": "3D section error", "status": "warn", "category": "livable",
                        "message": f"Section {e['section']} failed: {e['error'][:200]}", "element_ids": []})
+    # What the engine repaired or could not repair while building (stair fit, roof door, guards, openings, furniture,
+    # walking paths, parking): livable checks on the house as built.
+    for c in summary.get("checks") or []:
+        if not isinstance(c, dict) or not c.get("id"):
+            continue
+        status = c.get("status") if c.get("status") in ("pass", "warn", "fail") else "warn"
+        checks.append({"id": f"asbuilt.engine:{c['id']}", "title": str(c.get("title") or "As built")[:120], "status": status,
+                       "category": "livable", "message": str(c.get("message") or "")[:400],
+                       "element_ids": [str(x) for x in (c.get("element_ids") or [])][:20]})
     return {"authority": site.get("authority", "LDA"), "band": band["label"], "ok": not any(c["status"] == "fail" for c in checks),
-            "checks": checks or [{"id": "asbuilt.ok", "title": "As-built projections", "status": "pass", "category": "lda",
-                                  "message": "Nothing projects into the mandatory open spaces beyond LDA's sunshade allowance.",
-                                  "element_ids": []}],
-            "envelope": {}, "metrics": {}}
+            "checks": checks, "envelope": {}, "metrics": {}}
