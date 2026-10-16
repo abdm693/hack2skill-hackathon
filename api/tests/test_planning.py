@@ -273,6 +273,26 @@ def test_porch_sized_for_the_briefed_cars():
     assert planning.brief_cars({"spaces": ["drawing", "car_porch:2"]}) == 2
 
 
+def test_porch_path_must_reach_the_main_door(plans):
+    """A 13 ft porch fits a car and a walkway, but not when the main door is in the middle of its back wall (the engine then
+    leaves the car out to keep the path to the door clear)."""
+    brief = {"spaces": ["car_porch:1"]}
+    assert not any_fail(fails(copy.deepcopy(plans["example"]), brief), "plan.circulation.porch")
+    p = load("plan-porch-door-middle.json")      # 13 x 18 ft porch, 4 ft main door at its middle
+    c = checks(p, brief)["plan.circulation.porch_walkway:g_porch"]
+    assert c["status"] == "fail" and "g_main_door" in c["element_ids"] and "g_main_door" not in c["message"]
+    next(o for o in p["openings"] if o["id"] == "g_main_door")["at"] = [27.5, 28]   # to the porch's end
+    assert not any_fail(fails(p, brief), "plan.circulation.porch")
+
+
+def test_doors_on_open_plan_edges_are_dropped(plans):
+    p = copy.deepcopy(plans["example"])
+    p["openings"].append({"id": "g_stair_arch", "level": "ground", "type": "arch", "at": [8, 33], "width_ft": 4, "height_ft": 7,
+                          "between": ["g_stair", "g_lounge"]})
+    assert planning.drop_open_edge_openings(p) == ["g_stair_arch"]
+    assert not any(o["id"] == "g_stair_arch" for o in p["openings"])
+
+
 def test_villa_dressing_off_the_lounge_and_joined_balconies():
     """BE-06: the master dressing opens only to the upper lounge; three front decks touch and join Bedroom 3 to the master."""
     f = fails(load("plan-villa-v2.json"), load("brief-villa.json"))

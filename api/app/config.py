@@ -16,7 +16,9 @@ MODEL_REVIEW = os.environ.get("MODEL_REVIEW", MODEL_ARCHITECT)      # the archit
 MODEL_SETUP = os.environ.get("MODEL_SETUP", MODEL_INTAKE)           # the conversational setup agent (ADK)
 
 PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "3"))
-FIX_THINKING = os.environ.get("FIX_THINKING", "MEDIUM") or None  # thinking level for fix rounds (the first plan thinks fully)
+# Thinking level for fix rounds ("" = the model's default). MEDIUM was tried: a 1 kanal fix round came back fast but with 45
+# failures, so fix rounds keep full thinking; time is saved by fewer rounds, the shorter review and the parallel build.
+FIX_THINKING = os.environ.get("FIX_THINKING", "") or None
 SELF_REVIEW = os.environ.get("SELF_REVIEW", "1") not in ("0", "false", "no")
 REVIEW_BUDGET_S = float(os.environ.get("REVIEW_BUDGET_S", "150"))  # the optional post-review revision never costs more
 # The post-review revision edits a checked plan against a concrete list, and is checked again: it thinks less to land in time.

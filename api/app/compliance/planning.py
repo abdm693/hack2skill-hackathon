@@ -532,6 +532,17 @@ def valid_glazing(ix: PlanIndex, room_id: str) -> float:
 
 
 # --- normalisation (deterministic repairs before checking) ---------------------------------------------------------
+def drop_open_edge_openings(plan: dict) -> list[str]:
+    """Doors and arches between two rooms that are open-plan to each other (open_to): the 3D engine builds no wall on that
+    edge, so the opening is never built and shows up as "Opening not built". Drop them. Returns their ids."""
+    ix = PlanIndex(plan)
+    gone = [o["id"] for o in ix.openings if ix.info[o["id"]]["kind"] == "pair" and len(set(ix.info[o["id"]]["rooms"])) == 2
+            and ix.open_pairs.get(tuple(sorted(ix.info[o["id"]]["rooms"])), {}).get("valid")]
+    if gone:
+        plan["openings"] = [o for o in plan.get("openings") or [] if o.get("id") not in set(gone)]
+    return gone
+
+
 def normalize(plan: dict) -> list[str]:
     """Deterministic repairs of small slips that don't change the design: snap each opening onto the wall it names and
     slide it along that wall so it fits with jambs. Returns a list of what was changed."""
@@ -1024,6 +1035,28 @@ def _named_cars(r: dict) -> int:
     return 1 if r.get("type") == "garage" or re.search(r"\bcar|garage|parking", name) else 0
 
 
+def _door_reachable(ix: PlanIndex, pr: Rect, door: dict, cars: int) -> bool:
+    """Whether `cars` 9 × 18 ft bays (cars nose-in from the road, side by side) fit in the porch while a 3′6″ path along its
+    depth stays clear and reaches `door` (at least 3 ft of the door's width on the path)."""
+    x0, y0, x1, y1 = pr
+    W, D = x1 - x0, y1 - y0
+    if D + 1e-6 < CAR_L:  # cars can't park nose-in: only the area test applies
+        return True
+    inf = ix.info.get(door["id"]) or {}
+    w = float(door.get("width_ft") or 0)
+    x = float(door["at"][0])
+    on_side = (inf.get("edge") or ("x",))[0] == "y" if inf.get("kind") == "pair" else inf.get("side") in ("left", "right")
+    if on_side:  # a door on the porch's side wall: the path runs along that side
+        return int((W - WALK + 1e-6) // CAR_W) >= cars
+    need = min(3.0, w)
+    c, hi = max(x0, x - w / 2 + need - WALK), min(x1 - WALK, x + w / 2 - need)
+    while c <= hi + 1e-6:
+        if int((c - x0 + 1e-6) // CAR_W) + int((x1 - c - WALK + 1e-6) // CAR_W) >= cars:
+            return True
+        c += 0.25
+    return False
+
+
 def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
     """P-15: the car porch parks every car the family asked for (9 × 18 ft a car), with a 3′6″ walkway past them to the
     door."""
@@ -1054,6 +1087,18 @@ def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
                         f"the other.", ref=f"{REF} P-15", value=fits, limit=cars, unit="cars")
             continue
         doors = [o for o in ix.door_ops.get(r["id"], []) if o.get("type") in HINGED]
+        mains = [o for o in doors if o.get("type") == "main_door"]
+        if doors and not (bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars) and \
+                not any(_door_reachable(ix, ix.R[r["id"]], o, cars) for o in mains or doors):
+            d = (mains or doors)[0]
+            on = ix.oname(d)
+            out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
+                    f"With {cars} car{plural} parked in {r['name']}, no 3′6″ path is left from the gate to {on}: the door sits "
+                    f"where the car has to stand.", ids=[r["id"], d["id"]],
+                    fix=f"Move {d['id']} to one end of the porch's back wall (its edge within 3.5 ft of a side wall) or onto the "
+                        f"porch's side wall, so the car{plural} park beside a 3.5 ft path that reaches the door.",
+                    ref=f"{REF} P-15")
+            continue
         if doors and bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars:
             out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
                     f"{r['name']} is {fmt(width)} × {fmt(depth)}: {cars} car{plural} plus a 3′6″ walkway to {ix.oname(doors[0])} "

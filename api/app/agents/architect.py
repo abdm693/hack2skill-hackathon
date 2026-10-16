@@ -168,6 +168,8 @@ def prepare(plan: dict, brief: dict) -> tuple[dict, list[str]]:
     try:
         if (moved := planning.normalize(plan)):
             repairs.append(f"aligned {len(moved)} door{'s' if len(moved) > 1 else ''} and window{'s' if len(moved) > 1 else ''} with their walls")
+        if (gone := planning.drop_open_edge_openings(plan)):
+            repairs.append(f"removed {len(gone)} door{'s' if len(gone) > 1 else ''} on open-plan edges, which have no wall")
         if planning.repair_stairs(plan):
             repairs.append("fitted the stairs to code inside the stair hall")
         if planning.repair_mumty(plan):
