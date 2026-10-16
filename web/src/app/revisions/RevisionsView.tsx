@@ -77,7 +77,7 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
   return (
     <div className="relative h-full overflow-hidden bg-canvas">
       <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
-        <div className="mx-auto grid max-w-[1400px] gap-8 px-4 pb-40 pt-[104px] sm:px-6 md:pt-[72px] lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
+        <div className="mx-auto grid max-w-[1400px] gap-8 px-4 pb-40 pt-[var(--chrome-top)] sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
           <VersionRail versions={ordered} current={showRun ? null : vid} latest={latest} running={running} nextN={(ordered[0]?.n ?? 0) + 1} onPick={pick} />
 
           <main className="min-w-0">

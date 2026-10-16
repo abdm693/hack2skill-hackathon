@@ -74,7 +74,7 @@ export function useDefaultNext(view: ViewId, project: Project | null): NextMove 
         if (conceptsRunning) return null;
         if (!project.concepts.length) return { label: "Show me concepts", run: () => void st.generateConcepts() };
         if (!project.selected_concept_id) return null;
-        if (designRunning) return { label: "See the plan", run: () => to("plan") };
+        if (designRunning || project.versions.length) return { label: "See the plan", run: () => to("plan") };
         return {
           label: "Plan this one",
           run: () => {

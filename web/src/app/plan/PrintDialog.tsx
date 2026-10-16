@@ -181,18 +181,19 @@ function PrintPreview({ project, version, options, conceptUrl, onClose, onPrint 
   return createPortal(
     <motion.div className="fixed inset-0 z-[85] flex flex-col bg-surface-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Print preview">
       <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-6">
-        <div>
+        <div className="min-w-0">
           <p className="text-[15px] font-semibold text-ink">Print preview</p>
-          <p className="text-[12.5px] text-ink-3">
+          <p className="truncate text-[12.5px] text-ink-3">
             {PAPER[options.paper].label} landscape · floors at 1:{pickScale(version.plan, options.paper)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button variant="quiet" onClick={onClose}>
             Close
           </Button>
-          <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={onPrint}>
-            Print or save as PDF
+          <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={onPrint} aria-label="Print or save as PDF">
+            <span className="sm:hidden">Print</span>
+            <span className="max-sm:hidden">Print or save as PDF</span>
           </Button>
         </div>
       </div>

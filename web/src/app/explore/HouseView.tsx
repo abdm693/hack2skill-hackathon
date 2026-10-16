@@ -367,7 +367,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       )}
 
       {/* Top centre: a revision in progress */}
-      <div className="pointer-events-none absolute inset-x-0 top-[104px] z-20 flex justify-center px-3 md:top-[72px]">
+      <div className="pointer-events-none absolute inset-x-0 top-[var(--chrome-top)] z-20 flex justify-center px-3">
         <AnimatePresence>
           {revise && (
             <div className="pointer-events-auto">
@@ -437,7 +437,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2, ease: EASE_OUT }}
-            className="glass-hud absolute right-3 top-[104px] z-30 md:top-[72px] w-[min(360px,calc(100vw-24px))] rounded-card p-4 sm:right-4"
+            className="glass-hud absolute right-3 top-[var(--chrome-top)] z-30 w-[min(360px,calc(100vw-24px))] rounded-card p-4 sm:right-4"
           >
             <PinCard
               c={selectedComment}
@@ -541,7 +541,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 
 /** Make room for the toolbars inside the viewer's own HUD (viewer classes; harmless if they change). */
 const HUD_CSS = `
-.nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: 72px; }
+.nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: var(--chrome-top, 72px); }
 .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: 148px; }
 .nq-house .nq-toast { bottom: 200px; }
 @media (min-width: 1600px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock { bottom: 76px; } .nq-house .nq-toast { bottom: 128px; } }

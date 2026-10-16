@@ -148,6 +148,8 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
         }
       : {
           placeholder: "Ask for four more, like more brick and deeper shade",
+          // Remixing one concept happens in its lightbox; here Ask draws four new ones.
+          suggestions: [],
           busy: !!run?.running,
           onSubmit: (text) => void flow.concepts(project.id, { count: 4, instruction: text }),
         },
@@ -169,7 +171,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   return (
     <div className="relative h-full overflow-hidden bg-canvas">
       <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
-      <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[104px] sm:px-6 md:pt-[72px]">
+      <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[var(--chrome-top)] sm:px-6">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">

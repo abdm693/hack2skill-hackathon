@@ -35,7 +35,7 @@ export function ViewSwitch({ project, view, tone, fill }: { project: Project; vi
         options={options}
         onChange={(v) => navigate(`/app/p/${project.id}/${v}`)}
         tone={tone === "hud" ? "hud" : "light"}
-        className={cn("h-12 bg-transparent p-1.5 [&>button]:px-4", fill && "w-full")}
+        className={cn("h-12 bg-transparent p-1.5", fill ? "w-full [&>button]:px-2" : "[&>button]:px-4")}
         fill={fill}
       />
     </div>
