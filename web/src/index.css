@@ -197,12 +197,11 @@
 
 /* Code view tokens (tiny highlighter in app/design/CodeBlock.tsx). */
 .code-view { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; tab-size: 2; }
-.code-view .tk-com { color: #8d877d; font-style: italic; }
-.code-view .tk-str { color: #3e6a4e; }
-.code-view .tk-num { color: #9e3f26; }
-.code-view .tk-key { color: #6b4fa0; }
-.code-view .tk-fn { color: #1f5f8b; }
-.code-view .tk-prop { color: #34302a; }
+.code-view .tk-com { color: #8b8478; font-style: italic; }
+.code-view .tk-str { color: #b7d3a0; }
+.code-view .tk-num { color: #f2a98e; }
+.code-view .tk-key { color: #cdb7f0; }
+.code-view .tk-fn { color: #93c6e6; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
