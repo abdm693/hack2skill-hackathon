@@ -28,7 +28,7 @@ import type { ComplianceReport } from "@contracts/plan";
 import { HouseViewer, type ViewerHandle } from "@/viewer/HouseViewer";
 import type { DesignSectionSrc, SectionResult } from "@/engine";
 import { api, errorMessage } from "@/api/client";
-import { cn, feetInches, hourLabel } from "@/app/lib/utils";
+import { cn, feetInches, hourLabel, tidySummary } from "@/app/lib/utils";
 import { useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
 import { Button } from "@/app/ui/Button";
@@ -266,7 +266,12 @@ export function ExploreStep() {
           onSelectComment={(id) => { setSelected(id); setDrawer(true); }}
           onBuildProgress={(r, done, total) => setBuild({ done, total, name: r.name })}
           onReady={(res) => void onReady(res)}
-          onExitWalk={() => setMode("orbit")}
+          onExitWalk={(reason?: string) => {
+            // The viewer left walk mode itself: Esc / Exit ("exit"), an aerial comment ("flyTo"),
+            // or its own Finish (F key / touch button: "finish"), which ends the walkthrough like our button.
+            setMode("orbit");
+            if (reason === "finish" && isLatest) void finish();
+          }}
         />
       </div>
 
@@ -278,14 +283,15 @@ export function ExploreStep() {
             trigger={({ toggle, open }) => (
               <button onClick={toggle} aria-expanded={open} className={glass("flex h-10 items-center gap-2 rounded-full pl-3.5 pr-3 text-[13px] font-medium")}>
                 <History className="size-4 text-sheet/70" strokeWidth={1.75} />
-                Version {version.n}
+                <span className="sm:hidden">v{version.n}</span>
+                <span className="hidden sm:inline">Version {version.n}</span>
                 <ChevronDown className="size-3.5 text-sheet/60" />
               </button>
             )}
             items={[...project.versions]
               .sort((a, b) => b.n - a.n)
               .map((v) => ({
-                label: `v${v.n}${v.id === project.current_version_id ? " (latest)" : ""}${v.summary ? `: ${v.summary.slice(0, 48)}${v.summary.length > 48 ? "…" : ""}` : ""}`,
+                label: versionLabel(v, project.current_version_id),
                 onSelect: () => {
                   setCompare("after");
                   setParams(v.id === project.current_version_id ? {} : { v: v.id });
@@ -300,7 +306,8 @@ export function ExploreStep() {
                   onClick={() => setCompare(k)}
                   className={cn("h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors", compare === k ? "bg-sheet text-ink" : "text-sheet/70 hover:text-sheet")}
                 >
-                  {k === "before" ? `Before (v${before.n})` : `After (v${version.n})`}
+                  <span className="sm:hidden">{k === "before" ? "Before" : "After"}</span>
+                  <span className="hidden sm:inline">{k === "before" ? `Before (v${before.n})` : `After (v${version.n})`}</span>
                 </button>
               ))}
             </div>
@@ -313,19 +320,19 @@ export function ExploreStep() {
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className={cn("flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors", mode === m ? "bg-sheet text-ink" : "text-sheet/75 hover:text-sheet")}
+                className={cn("flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors sm:px-3.5", mode === m ? "bg-sheet text-ink" : "text-sheet/75 hover:text-sheet")}
               >
-                {m === "orbit" ? <Orbit className="size-4" strokeWidth={1.75} /> : <Footprints className="size-4" strokeWidth={1.75} />}
+                {m === "orbit" ? <Orbit className="hidden size-4 sm:block" strokeWidth={1.75} /> : <Footprints className="hidden size-4 sm:block" strokeWidth={1.75} />}
                 {m === "orbit" ? "Orbit" : "Walk"}
               </button>
             ))}
           </div>
-          <div className={glass("no-scrollbar flex h-10 max-w-[60vw] items-center overflow-x-auto rounded-full p-1")}>
+          <div className={glass("no-scrollbar flex h-10 min-w-0 items-center overflow-x-auto rounded-full p-1 sm:max-w-[60vw]")}>
             {[...levels.map((l) => ({ id: l.id, label: l.name.replace(/\s*floor$/i, "") })), { id: "all", label: "All" }].map((l) => (
               <button
                 key={l.id}
                 onClick={() => setLevelChoice(l.id)}
-                className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium transition-colors", levelChoice === l.id ? "bg-sheet text-ink" : "text-sheet/75 hover:text-sheet")}
+                className={cn("h-8 shrink-0 rounded-full px-2.5 text-[12.5px] font-medium transition-colors sm:px-3 sm:text-[13px]", levelChoice === l.id ? "bg-sheet text-ink" : "text-sheet/75 hover:text-sheet")}
               >
                 {l.label}
               </button>
@@ -430,14 +437,17 @@ export function ExploreStep() {
             value={sun}
             onChange={setSun}
           />
-          <Divider />
+          <Divider className="hidden sm:block" />
+          {/* On phones the dock scrolls sideways, so the render button leads it. */}
           <button
             onClick={() => void startRender()}
-            className="flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-sheet px-4 text-[13px] font-semibold text-ink transition-colors hover:bg-white"
+            className="order-first flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-sheet px-3.5 text-[13px] font-semibold text-ink transition-colors hover:bg-white sm:order-none sm:px-4"
           >
             <Sparkles className="size-4 text-brick" strokeWidth={1.75} />
-            Render this view
+            <span className="sm:hidden">Render</span>
+            <span className="hidden sm:inline">Render this view</span>
           </button>
+          <Divider className="order-first sm:hidden" />
         </div>
       </div>
 
@@ -491,8 +501,8 @@ export function ExploreStep() {
   );
 }
 
-function Divider() {
-  return <span className="mx-1 h-7 w-px shrink-0 bg-white/12" />;
+function Divider({ className }: { className?: string }) {
+  return <span className={cn("mx-1 h-7 w-px shrink-0 bg-white/12", className)} />;
 }
 
 function SliderControl({
@@ -544,4 +554,11 @@ function SliderControl({
       </div>
     </div>
   );
+}
+
+/** "v2 (latest): Expanded the guest bedroom from 10×13 ft to…" */
+function versionLabel(v: { id: string; n: number; summary?: string | null }, latestId: string | null): string {
+  const s = v.summary ? tidySummary(v.summary) : "";
+  const short = s.length > 48 ? `${s.slice(0, 48).replace(/[\s,;:]+\S*$/, "")}…` : s;
+  return `v${v.n}${v.id === latestId ? " (latest)" : ""}${short ? `: ${short}` : ""}`;
 }

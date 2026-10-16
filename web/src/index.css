@@ -222,6 +222,11 @@
   .explore-stage .nq-banner,
   .explore-stage .nq-mini { top: 116px; }
 }
+/* App toasts drop below Explore's top toolbar instead of covering it. */
+body:has(.explore-stage) .app-toaster { top: 128px; }
+@media (max-width: 639px) {
+  body:has(.explore-stage) .app-toaster { top: 196px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

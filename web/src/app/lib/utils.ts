@@ -50,6 +50,11 @@ export function hourLabel(h: number): string {
   return `${h12}:${String(mm).padStart(2, "0")} ${suffix}`;
 }
 
+/** Version summaries are change summaries joined with "; " — drop the stray full stops ("windows.; Updated"). */
+export function tidySummary(s: string): string {
+  return s.replace(/\.\s*;\s*/g, "; ").replace(/\s+/g, " ").trim();
+}
+
 export function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }

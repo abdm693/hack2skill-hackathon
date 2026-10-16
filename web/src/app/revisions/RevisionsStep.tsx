@@ -5,7 +5,7 @@ import { ArrowRight, Bot, ChevronDown, CircleAlert, Footprints, GitCompareArrows
 import type { Change, Comment, DesignSection, Version } from "@contracts/api-types";
 import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
 import { api, assetUrl } from "@/api/client";
-import { cn, relativeTime } from "@/app/lib/utils";
+import { cn, relativeTime, tidySummary } from "@/app/lib/utils";
 import { useProject, type FeedItem, type Run } from "@/app/store/project";
 import { FloorPlan } from "@/app/plan/FloorPlan";
 import { CodeBlock } from "@/app/design/CodeBlock";
@@ -62,7 +62,7 @@ export function RevisionsStep() {
                     <span className="font-display-text text-[16px] font-medium">Version {v.n}</span>
                     <span className={cn("text-[11.5px]", active ? "text-sheet/60" : "text-pencil")}>{relativeTime(v.created_at)}</span>
                   </span>
-                  {v.summary && <span className={cn("mt-0.5 line-clamp-2 block text-[12px] leading-snug", active ? "text-sheet/75" : "text-graphite")}>{v.summary}</span>}
+                  {v.summary && <span className={cn("mt-0.5 line-clamp-2 text-[12px] leading-snug", active ? "text-sheet/75" : "text-graphite")} title={tidySummary(v.summary)}>{tidySummary(v.summary)}</span>}
                   {v.id === latestVid && <span className={cn("mt-1 inline-block text-[11px] font-medium", active ? "text-[#f3b9a8]" : "text-brick")}>Latest</span>}
                 </button>
               </li>

@@ -142,7 +142,7 @@ function CommentCard({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[11.5px] text-sheet/55">{anchorLabel(c.anchor, plan)}</span>
-          {!editing && <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-sheet">{c.text}</span>}
+          {!editing && <span className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-sheet">{c.text}</span>}
           <span className="mt-1.5 flex items-center gap-2">
             <Pill tone={STATUS_TONE[c.status]} className="h-5 text-[10.5px]">
               {STATUS_LABEL[c.status]}

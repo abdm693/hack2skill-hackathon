@@ -264,7 +264,7 @@ export function Menu({
 export function Toaster() {
   const { toasts, dismiss } = useToasts();
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[68px] z-50 flex flex-col items-center gap-2 px-4 pt-2" aria-live="polite">
+    <div className="app-toaster pointer-events-none fixed inset-x-0 top-[68px] z-50 flex flex-col items-center gap-2 px-4 pt-2" aria-live="polite">
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div
