@@ -2,7 +2,7 @@
  * Lahore sun path — the same model the engine uses for `s.lights.sun({ hour })` (engine/lights.ts), so moving
  * the viewer's sun slider never makes the design's sun jump.
  *
- * - Latitude 31.5°N, fixed declination 10° (spring / late summer: 17.5 h ≈ golden hour), hour angle (h − 12)·15°.
+ * - Latitude 31.5°N, fixed declination 18° (early summer: 17.5 h ≈ golden hour), hour angle (h − 12)·15°.
  * - Directions follow the PLAN's semantics: the plot front (−y) faces `site.facing`, and a compass bearing θ relative
  *   to the front maps to plan (−sin θ, −cos θ); world = (x_ft, y_ft) → (x_m, z_m). For a north-facing plot the
  *   morning sun therefore rises over the plan's left side (min x, "left as seen from the road").
@@ -14,7 +14,7 @@ export type Facing = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
 const DEG = Math.PI / 180;
 const LAT = 31.5 * DEG;
-const DECL = 10 * DEG;
+const DECL = 18 * DEG;
 const FACING_AZ: Record<Facing, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
 
 export interface SunState {

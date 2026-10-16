@@ -10,6 +10,7 @@ import type { Comment, CommentAnchor, Vec3 } from "@contracts/api-types";
 import type { BuildResult, SectionResult } from "@/engine";
 import type { HouseViewerProps } from "../HouseViewer";
 import { BuildManager } from "./build";
+import { engineExtras } from "./engineExtras";
 import { grabCanvas, projectToNdc } from "./capture";
 import { heroPose, houseBox, plotBox } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
@@ -422,6 +423,17 @@ export class ViewerController {
     }
     this.pinEls.clear();
     this.markDirty();
+    // engine textures stream in from workers after buildHouse resolves: keep repainting (demand loop) until done
+    const pending = engineExtras.texturesReady?.();
+    if (pending) {
+      const iv = window.setInterval(() => this.invalidate(), 300);
+      const stop = () => {
+        window.clearInterval(iv);
+        this.invalidate();
+      };
+      pending.then(stop, stop);
+      window.setTimeout(() => window.clearInterval(iv), 20000);
+    }
   }
 
   onAnimationsSettled() {
@@ -491,9 +503,15 @@ export class ViewerController {
     const facing = (this.plan.site?.facing ?? "N") as Facing;
     const hour = this.props.sunHour;
     const root = this.currentRoot();
-    if (hour === undefined || hour === null || !Number.isFinite(hour)) {
+    const ex = engineExtras;
+    if (this.engineSun && hour !== undefined && hour !== null && Number.isFinite(hour) && ex.updateSun) {
+      // the engine's own sun model: the slider can never disagree with `s.lights.sun({hour})`
+      ex.updateSun(this.engineSun, this.plan, hour, this.engineHemi);
+      if (root) ex.setTimeOfDay?.(root, this.plan, hour);
+      atm.syncSkyToLight(this.engineSun, ex.sunDirection?.(this.plan, hour).altitude, !!this.engineHemi);
+    } else if (hour === undefined || hour === null || !Number.isFinite(hour)) {
       // no slider: keep the design's own sun (engine set it from `s.lights.sun({hour})`)
-      if (this.engineSun) atm.syncSkyToLight(this.engineSun);
+      if (this.engineSun) atm.syncSkyToLight(this.engineSun, undefined, !!this.engineHemi);
       else atm.applySun(atm.fallbackSun, sunState(17.5, facing), { owned: false, root });
     } else {
       const sun = sunState(hour, facing);
@@ -1205,6 +1223,9 @@ export class ViewerController {
 
   async capture(opts?: { width?: number; height?: number }): Promise<string> {
     await this.whenReady();
+    // an AI render of half-loaded textures is wasted: give streaming textures a moment
+    const tex = engineExtras.texturesReady?.();
+    if (tex) await Promise.race([tex.catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
     this.builds.finishAnims();
     return this.snapshot({ width: opts?.width, height: opts?.height });
   }

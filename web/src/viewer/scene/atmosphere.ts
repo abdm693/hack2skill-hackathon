@@ -186,10 +186,20 @@ export class Atmosphere {
 
   private hasHemi = false;
 
-  /** Leave a design's own sun where it is; just align the sky with it. */
-  syncSkyToLight(light: THREE.DirectionalLight) {
+  /**
+   * Align sky, fog, IBL and exposure with a sun the engine positioned itself. `trueAltitude` (radians) lets the sky's
+   * disc set below the horizon even though the light is clamped a little above it.
+   */
+  syncSkyToLight(light: THREE.DirectionalLight, trueAltitude?: number, hasHemi = false) {
+    light.target.updateMatrixWorld();
     const dir = new THREE.Vector3().subVectors(light.position, light.target.position).normalize();
-    this.daylight = smoothstep(-0.05, 0.2, dir.y);
+    if (trueAltitude !== undefined && Number.isFinite(trueAltitude)) {
+      const h = new THREE.Vector3(dir.x, 0, dir.z);
+      if (h.lengthSq() > 1e-8) h.normalize();
+      dir.copy(h).multiplyScalar(Math.cos(trueAltitude)).setY(Math.sin(trueAltitude));
+    }
+    this.daylight = smoothstep(-3, 8, (Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)) * 180) / Math.PI);
+    this.hasHemi = hasHemi;
     this.syncSky(dir);
   }
 
