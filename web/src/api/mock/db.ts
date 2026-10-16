@@ -9,6 +9,8 @@ export interface IntakeState {
 
 export interface MockDB {
   projects: Project[];
+  /** Finished example homes (GET /samples), owned by nobody; cloned on demand. */
+  samples: Project[];
   messages: Record<string, ChatMessage[]>;
   versions: Record<string, Version>;
   comments: Record<string, Comment[]>;
@@ -19,7 +21,7 @@ const KEY = "naqsha.mock.db.v1";
 let cache: MockDB | null = null;
 
 function empty(): MockDB {
-  return { projects: [], messages: {}, versions: {}, comments: {}, intake: {} };
+  return { projects: [], samples: [], messages: {}, versions: {}, comments: {}, intake: {} };
 }
 
 export function db(): MockDB {

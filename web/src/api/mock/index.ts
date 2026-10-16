@@ -7,7 +7,7 @@ import { RENDER_IMAGE } from "./fixtures";
 import { intakeScript } from "./intake";
 import { envelopeFor, recheck } from "./lda";
 import { conceptsScript, designScript, reviseScript } from "./scripts";
-import { seedIfEmpty } from "./seed";
+import { ensureSamples, seedIfEmpty } from "./seed";
 import { play } from "./stream";
 
 function wrap<T>(fn: () => T): T {
@@ -76,6 +76,31 @@ export const mockApi: Api = {
     return clone(p);
   },
 
+  async listSamples() {
+    await latency(140);
+    ensureSamples();
+    return clone(db().samples);
+  },
+
+  async cloneProject(pid, name) {
+    await latency(450);
+    return wrap(() => {
+      ensureSamples();
+      const d = db();
+      const src = d.projects.find((p) => p.id === pid) ?? d.samples.find((p) => p.id === pid);
+      if (!src) throw Object.assign(new Error("Project not found."), { status: 404 });
+      const t = now();
+      const copy: Project = { ...clone(src), id: uid("p"), name: name?.trim() || src.name, created_at: t, updated_at: t };
+      // Versions are immutable and shared; messages, comments and intake state are copied.
+      d.messages[copy.id] = clone(d.messages[pid] ?? []);
+      d.comments[copy.id] = clone(d.comments[pid] ?? []);
+      if (d.intake[pid]) d.intake[copy.id] = clone(d.intake[pid]);
+      d.projects.push(copy);
+      save();
+      return clone(copy);
+    });
+  },
+
   async getProject(pid) {
     await latency(120);
     seedIfEmpty();
@@ -108,7 +133,9 @@ export const mockApi: Api = {
     delete d.messages[pid];
     delete d.comments[pid];
     delete d.intake[pid];
-    for (const v of p?.versions ?? []) delete d.versions[v.id];
+    // Clones share versions with their source: only drop versions nothing else uses.
+    const inUse = new Set([...d.projects, ...d.samples].flatMap((x) => x.versions.map((v) => v.id)));
+    for (const v of p?.versions ?? []) if (!inUse.has(v.id)) delete d.versions[v.id];
     save();
   },
 

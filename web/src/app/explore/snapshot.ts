@@ -40,22 +40,23 @@ export function placeholderSnapshot(plan: BuildingPlan | undefined, label = "3D 
   return c.toDataURL("image/jpeg", 0.85);
 }
 
-/** A sensible front-of-house camera for comments made without a picked point. */
+// World mapping (contracts/web-modules.md): x_m = x_ft·0.3048, z_m = −y_ft·0.3048, so the road is at +z.
+const M = 0.3048;
+
+/** A sensible front-of-house camera (standing on the road) for comments made without a picked point. */
 export function frontCamera(plan: BuildingPlan): Comment["camera"] {
-  const m = 0.3048;
   const W = plan.site.plot.width_ft;
   const D = plan.site.plot.depth_ft;
   return {
-    position: [(W / 2) * m, 9, -18],
-    target: [(W / 2) * m, 4, (D / 2) * m * 0.6],
+    position: [(W / 2) * M, 9, 14],
+    target: [(W / 2) * M, 4, -(D / 2) * M * 0.6],
   };
 }
 
 export function generalAnchor(plan: BuildingPlan): CommentAnchor {
-  const m = 0.3048;
   return {
-    position: [(plan.site.plot.width_ft / 2) * m, 4, (plan.site.plot.depth_ft / 3) * m],
-    normal: [0, 0, -1],
+    position: [(plan.site.plot.width_ft / 2) * M, 4, -(plan.site.plot.depth_ft / 3) * M],
+    normal: [0, 0, 1],
     label: "This view",
     kind: "view",
   };

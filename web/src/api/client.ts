@@ -56,6 +56,10 @@ export interface Api {
 
   listProjects(): Promise<Project[]>;
   createProject(name?: string): Promise<Project>;
+  /** Finished example homes anyone can open (GET /samples). */
+  listSamples(): Promise<Project[]>;
+  /** Copy a sample (or one of your projects) into your workspace, with versions and comments. */
+  cloneProject(pid: string, name?: string): Promise<Project>;
   getProject(pid: string): Promise<Project>;
   updateProject(pid: string, patch: { name?: string; brief?: Brief }): Promise<Project>;
   deleteProject(pid: string): Promise<void>;
@@ -145,6 +149,8 @@ const realApi: Api = {
 
   listProjects: async () => (await http<{ projects: Project[] }>("GET", "/projects")).projects,
   createProject: (name) => http("POST", "/projects", name ? { name } : {}),
+  listSamples: async () => (await http<{ projects: Project[] }>("GET", "/samples")).projects ?? [],
+  cloneProject: (pid, name) => http("POST", `${p(pid)}/clone`, name ? { name } : {}),
   getProject: (pid) => http("GET", p(pid)),
   updateProject: (pid, patch) => http("PATCH", p(pid), patch),
   deleteProject: async (pid) => { await http("DELETE", p(pid)); },

@@ -27,6 +27,8 @@ export function Workspace() {
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [samples, setSamples] = useState<Project[]>([]);
+  const [opening, setOpening] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -40,7 +42,22 @@ export function Workspace() {
   useEffect(() => {
     document.title = "Naqsha — AI home design for Pakistan";
     void load();
+    // Samples are optional: an older server without /samples simply shows none.
+    api.listSamples().then((s) => setSamples(Array.isArray(s) ? s.slice(0, 2) : []), () => setSamples([]));
   }, [load]);
+
+  /** Copy a finished sample into this workspace and open it, ready to walk. */
+  const openSample = async (s: Project) => {
+    if (opening) return;
+    setOpening(s.id);
+    try {
+      const p = await api.cloneProject(s.id);
+      navigate(`/p/${p.id}/${p.current_version_id ? "explore" : ""}`);
+    } catch (e) {
+      toast.error("Couldn't open the sample", e);
+      setOpening(null);
+    }
+  };
 
   const create = async () => {
     if (creating) return;
@@ -105,8 +122,11 @@ export function Workspace() {
             </p>
           </div>
 
-          <div className="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
+          <div className="flex flex-col gap-3 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
             <NewProjectCard onCreate={create} creating={creating} />
+            {samples.map((s) => (
+              <SampleCard key={s.id} sample={s} opening={opening === s.id} disabled={!!opening} onOpen={() => void openSample(s)} />
+            ))}
           </div>
 
           <ol className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-line pt-6 sm:grid-cols-5 sm:gap-x-5 lg:col-span-7 lg:row-start-2 lg:mt-12 lg:self-start">
@@ -157,7 +177,7 @@ export function Workspace() {
               ))}
             </div>
           ) : projects.length === 0 ? (
-            <EmptyState onCreate={create} creating={creating} />
+            <EmptyState onCreate={create} creating={creating} onSample={samples[0] ? () => void openSample(samples[0]) : undefined} />
           ) : (
             <motion.ul layout className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence initial={false}>
@@ -227,7 +247,35 @@ function NewProjectCard({ onCreate, creating }: { onCreate: () => void; creating
   );
 }
 
-function EmptyState({ onCreate, creating }: { onCreate: () => void; creating: boolean }) {
+/** "Explore a sample home": a finished, walkable house in two clicks (no waiting for Argon). */
+function SampleCard({ sample, opening, disabled, onOpen }: { sample: Project; opening: boolean; disabled: boolean; onOpen: () => void }) {
+  const thumb = assetUrl(sample.thumbnail_url ?? sample.concepts.find((c) => c.id === sample.selected_concept_id)?.url ?? sample.concepts[0]?.url);
+  const v = sample.versions.length;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={disabled}
+      className="group flex items-center gap-4 rounded-[22px] bg-plaster p-2 pr-3 text-left shadow-[0_1px_2px_rgb(30_27_23/0.05)] ring-1 ring-line transition-[box-shadow,transform] duration-500 ease-[var(--ease-out-quint)] hover:-translate-y-0.5 hover:shadow-lift disabled:opacity-70"
+    >
+      <span className="relative h-[76px] w-[118px] shrink-0 overflow-hidden rounded-[16px] bg-wash">
+        {thumb && <img src={thumb} alt="" className="h-full w-full object-cover transition-transform duration-700 ease-[var(--ease-out-quint)] group-hover:scale-105" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display-text text-[17px] font-medium leading-tight text-ink">Explore a sample home</span>
+        <span className="mt-0.5 block truncate text-[12.5px] text-graphite">{sample.name}</span>
+        <span className="mt-1 block text-[11.5px] text-pencil">
+          {v > 1 ? `Walkable in 3D, with a revision (v${v})` : "Walkable in 3D"}, no waiting
+        </span>
+      </span>
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-sheet transition-transform duration-500 ease-[var(--ease-out-quint)] group-hover:translate-x-0.5">
+        {opening ? <span className="size-3.5 animate-spin rounded-full border-2 border-sheet/30 border-t-sheet" /> : <ArrowRight className="size-4" strokeWidth={1.75} />}
+      </span>
+    </button>
+  );
+}
+
+function EmptyState({ onCreate, creating, onSample }: { onCreate: () => void; creating: boolean; onSample?: () => void }) {
   return (
     <div className="mt-8 grid place-items-center rounded-[26px] border border-dashed border-line-strong bg-sheet/60 px-6 py-16 text-center">
       <div className="h-24 w-40">
@@ -237,9 +285,16 @@ function EmptyState({ onCreate, creating }: { onCreate: () => void; creating: bo
       <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-graphite">
         Your first home starts with a plot size. Pick one and you'll see what LDA lets you build before you've typed a word.
       </p>
-      <Button variant="primary" size="lg" className="mt-6" onClick={onCreate} loading={creating} trailing={<ArrowRight className="size-4" strokeWidth={1.75} />}>
-        Start a new home
-      </Button>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        <Button variant="primary" size="lg" onClick={onCreate} loading={creating} trailing={<ArrowRight className="size-4" strokeWidth={1.75} />}>
+          Start a new home
+        </Button>
+        {onSample && (
+          <Button variant="ghost" size="lg" onClick={onSample}>
+            Or walk through a sample home
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
