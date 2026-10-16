@@ -175,6 +175,7 @@ export function Dock(props: DockProps) {
           type="button"
           onClick={next.run}
           disabled={next.disabled}
+          aria-label={next.label}
           className={cn(
             "group inline-flex h-[52px] items-center gap-2 rounded-[26px] bg-accent pl-5 pr-4 text-[15px] font-medium text-white shadow-e2 outline-none",
             "transition-[background-color,transform,box-shadow] duration-[160ms] ease-out hover:bg-accent-press active:scale-[.97] focus-visible:shadow-[0_0_0_4px_rgb(39_71_245/.28)] disabled:opacity-50",

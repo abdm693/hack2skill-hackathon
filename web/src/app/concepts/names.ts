@@ -27,8 +27,10 @@ function capital(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** "Stone and teak", from the words the image was drawn from. */
+/** The concept's own name ("Floating Brick Box") when the API gave one, else "Stone and teak" from its prompt. */
 export function conceptName(c: Concept, fallbackIndex = 0): string {
+  const title = c.title?.trim();
+  if (title && !c.instruction?.trim()) return title.length > 40 ? `${title.slice(0, 38).replace(/[\s,;:]+\S*$/, "")}…` : title;
   if (c.instruction?.trim()) {
     const t = c.instruction.trim().replace(/[.!]+$/, "");
     return capital(t.length > 34 ? `${t.slice(0, 32).replace(/[\s,;:]+\S*$/, "")}…` : t);

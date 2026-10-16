@@ -72,9 +72,15 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
 
   useAskContext({
     placeholder: complete ? "Anything to add or change? A prayer room, a third storey…" : "Tell me about the plot and who will live there",
-    suggestions: complete ? undefined : ["Decide everything for me"],
+    // The conversation already shows Naqsha's suggestions under its last turn; the dock keeps to the one shortcut.
+    suggestions: complete ? [] : ["Decide everything for me"],
     busy,
-    onSubmit: (text) => (/^decide everything for me$/i.test(text.trim()) ? send({ action: "skip_all" }) : send({ message: text }, text)),
+    onSubmit: (text) => {
+      const t = text.trim();
+      if (/^decide everything for me$/i.test(t)) send({ action: "skip_all" });
+      else if (/^show me (the )?concepts?$/i.test(t)) goTo("concepts");
+      else send({ message: text }, text);
+    },
   });
 
   const w = preview?.width ?? brief?.plot?.width_ft ?? 0;

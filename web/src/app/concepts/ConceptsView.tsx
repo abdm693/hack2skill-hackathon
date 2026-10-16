@@ -377,6 +377,7 @@ function Tile({ l, light, nightShown, nightFailed, chosen, onOpen, small }: { l:
         )}
         {light === "night" && nightFailed && <span className="shrink-0 text-[12.5px] text-ink-3">Night view unavailable</span>}
       </figcaption>
+      {!small && l.concept.summary && <p className="mt-0.5 line-clamp-2 px-0.5 text-[13px] leading-[18px] text-ink-3">{l.concept.summary}</p>}
     </motion.figure>
   );
 }
@@ -473,7 +474,11 @@ function Lightbox({
           <p className="text-heading text-ink">
             {l.label} <span className="text-ink-3">· {l.name}</span>
           </p>
-          {l.concept.instruction && <p className="text-[13px] text-ink-3">A remix: “{l.concept.instruction}”</p>}
+          {l.concept.instruction ? (
+            <p className="text-[13px] text-ink-3">A remix: “{l.concept.instruction}”</p>
+          ) : l.concept.summary ? (
+            <p className="max-w-[760px] text-[13px] leading-[18px] text-ink-3">{l.concept.summary}</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Segmented

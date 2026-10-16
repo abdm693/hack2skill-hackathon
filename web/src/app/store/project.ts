@@ -154,6 +154,8 @@ function abortAll() {
   controllers.clear();
 }
 
+const commentLoads = new Map<string, Promise<void>>();
+
 let seq = 0;
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
@@ -668,12 +670,22 @@ export const useProject = create<ProjectState>((set, get) => {
         if (get().commentsFor !== versionId) set({ commentsFor: versionId });
         return;
       }
-      try {
-        const comments = await api.listComments(pid, versionId);
-        if (live(pid)) set({ comments: comments.filter((c) => !pendingDeletes.has(c.id)), commentsFor: versionId });
-      } catch (e) {
-        toast.error("Couldn't load comments", e);
-      }
+      // The shell and the view both ask when a version opens: share one request.
+      const key = `${pid}:${versionId}`;
+      const running = commentLoads.get(key);
+      if (running) return running;
+      const load = (async () => {
+        try {
+          const comments = await api.listComments(pid, versionId);
+          if (live(pid)) set({ comments: comments.filter((c) => !pendingDeletes.has(c.id)), commentsFor: versionId });
+        } catch (e) {
+          toast.error("Couldn't load comments", e);
+        } finally {
+          commentLoads.delete(key);
+        }
+      })();
+      commentLoads.set(key, load);
+      return load;
     },
 
     async addComment(body) {
