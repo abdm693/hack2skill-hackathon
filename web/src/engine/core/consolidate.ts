@@ -70,7 +70,8 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
     if (o === colliderGroup || isInside(o, colliderGroup)) return;
     const m = o as THREE.Mesh;
     if (!m.isMesh) {
-      if ((o as THREE.Light).isLight && o.userData.id) {
+      // interior lights are listed (they are fixtures in rooms); the sun and sky are not objects of the house
+      if ((o as THREE.Light).isLight && o.userData.id && o.userData.kind !== "sun" && o.userData.kind !== "sky") {
         const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).applyMatrix4(inv);
         const pf: [number, number, number] = [p.x / FT, -p.z / FT, p.y / FT];
         addBox(readTags(o), { min: pf, max: [...pf] });
@@ -88,7 +89,7 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
       return;
     }
     const mat = m.material as THREE.Material;
-    const key = `${tags.layer}|${tags.level ?? ""}|${mat.uuid}|${m.castShadow ? 1 : 0}${m.receiveShadow ? 1 : 0}|${m.renderOrder}`;
+    const key = `${tags.layer}|${tags.level ?? ""}|${mat.uuid}|${m.castShadow ? 1 : 0}${m.receiveShadow ? 1 : 0}|${m.renderOrder}|${groupOf(m)}`;
     let arr = groups.get(key);
     if (!arr) groups.set(key, (arr = []));
     arr.push({ mesh: m, matrix, tags, collider: isCol });
@@ -172,6 +173,7 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
     mesh.renderOrder = first.renderOrder;
     const common = commonTags(arr.map((s) => s.tags));
     mesh.userData = { ...common, parts, merged: true, collide: false };
+    if (groupOf(first)) mesh.userData.mergeGroup = groupOf(first);
     mesh.name = `merged:${common.layer}:${common.level ?? ""}:${(first.material as THREE.Material).name}`;
     mergedGroup.add(mesh);
     mergedMeshes++;
@@ -240,6 +242,16 @@ export function consolidate(root: THREE.Group, colliderGroup: THREE.Group, colli
 }
 
 const COLLIDER_MAT = new THREE.MeshBasicMaterial({ visible: false });
+
+/** Optional merge partition hint (e.g. "context" for street/neighbours) found on the mesh or an ancestor. */
+function groupOf(o: THREE.Object3D): string {
+  let p: THREE.Object3D | null = o;
+  while (p) {
+    if (p.userData.mergeGroup) return String(p.userData.mergeGroup);
+    p = p.parent;
+  }
+  return "";
+}
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function toPlanBox(b: THREE.Box3): BBox {

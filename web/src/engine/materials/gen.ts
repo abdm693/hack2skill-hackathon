@@ -279,26 +279,40 @@ function woodColor(base: RGB, rings: number, fiber: number, tone: number): RGB {
   return [c[0] * f, c[1] * f, c[2] * f];
 }
 
-/** Continuous joinery grain (along u): rift-sawn veneer look, near-parallel bands with gentle waves. */
+/**
+ * Joinery veneer grain (along u), rift/quarter-cut look: fine growth lines of varying weight that stay nearly
+ * parallel with a slow drift, a soft-rising latewood edge, fibre and colour streaks, and pore dashes (oak).
+ * Tileable: the line count per tile is an integer and line weights repeat per tile.
+ */
 const woodGrain: Gen = (N, base, seed, p) => {
   const d = alloc(N, true, true);
-  const ringF = pnum(p, "rings", 44), warpA = pnum(p, "warp", 1.0);
+  const ringF = Math.max(4, Math.round(pnum(p, "rings", 56)));
+  const warpA = pnum(p, "warp", 1.6);
+  const pores = pnum(p, "pores", 0.5);
   const W1 = sampler(table(seed, "vlow"), N), W2 = sampler(table(seed + 5, "smooth"), N);
-  const S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2), N);
+  const S2 = sampler(table(seed + 1), N), S3 = sampler(table(seed + 2), N), S4 = sampler(table(seed + 3, "smooth"), N);
+  const r = rng(seed ^ 0x5bd1);
+  const weight = Float32Array.from({ length: ringF }, () => 0.22 + 0.78 * Math.pow(r(), 1.6));
+  const width = Float32Array.from({ length: ringF }, () => 0.14 + 0.24 * r());
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const i = y * N + x;
-      const w = W1(x, y, 1, 2), w2 = W2(x, y, 1, 5);
-      const t = (y / N) * ringF + (w - 0.5) * warpA * 1.6 + (w2 - 0.5) * 0.55;
-      const s = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-      const rings = Math.pow(smoothstep(0.3, 1, s), 1.4) * 0.6;
-      const fiber = S2(x, y, 1, 128);
-      const fleck = S3(x, y, 2, 16);
-      const pore = hash2(x, y, seed) > 0.992 && fiber < 0.45 ? 0.8 : 1;
-      const c = woodColor(base, rings, fiber, (0.94 + 0.1 * (fleck - 0.5)) * pore);
+      const w = W1(x, y, 1, 1), w2 = W2(x, y, 1, 3);
+      const t = (y / N) * ringF + (w - 0.5) * warpA * 2 + (w2 - 0.5) * 0.22;
+      const k = Math.floor(t);
+      const f = t - k;
+      const kk = ((k % ringF) + ringF) % ringF;
+      const wd = width[kk];
+      const band = smoothstep(1 - wd, 1 - wd * 0.3, f) * (1 - smoothstep(0.965, 1, f));
+      const rings = clamp(band * weight[kk] * 0.9, 0, 1);
+      const fiber = S2(x, y, 1, 96);
+      const streak = S4(x, y, 1, 6);
+      const fleck = S3(x, y, 2, 24);
+      const pore = pores > 0 && band > 0.15 && hash2(x >> 2, y, seed) > 1 - 0.02 * pores ? 0.74 : 1;
+      const c = woodColor(base, rings, fiber, (0.93 + 0.14 * (streak - 0.5) + 0.05 * (fleck - 0.5)) * pore);
       put(d, i, c[0], c[1], c[2]);
-      d.height![i] = 0.5 + 0.16 * (fiber - 0.5) - 0.08 * rings - (pore < 1 ? 0.12 : 0);
-      d.rough![i] = 0.48 + 0.14 * rings + 0.1 * (fiber - 0.5);
+      d.height![i] = 0.5 + 0.1 * (fiber - 0.5) - 0.03 * rings - (pore < 1 ? 0.06 : 0);
+      d.rough![i] = 0.46 + 0.12 * rings + 0.08 * (fiber - 0.5);
     }
   return d;
 };

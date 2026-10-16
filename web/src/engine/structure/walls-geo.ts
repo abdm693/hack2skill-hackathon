@@ -99,7 +99,9 @@ export function buildWalls(ctx: BuildCtx, m: WallMats): void {
         const ov = 0.09;
         const ua = s.u0 === run.ea && run.capA.kind !== "none" ? s.u0 - ov : s.u0;
         const ub = s.u1 === run.eb && run.capB.kind !== "none" ? s.u1 + ov : s.u1;
-        F.box(cb, ua, ub, wN - ov, wP + ov, s.h1, s.h1 + 0.13);
+        // the drip overhang never crosses a party-wall plot edge (projection envelope)
+        const c = model.clipRunBox(run.axis, ua, ub, wN - ov, wP + ov);
+        if (c) F.box(cb, c[0], c[1], c[2], c[3], s.h1, s.h1 + 0.13);
       }
     }
     // reveals around openings

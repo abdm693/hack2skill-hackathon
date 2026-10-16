@@ -73,6 +73,7 @@ export class Kit {
     let b = this.parts.get(mat);
     if (!b) {
       b = new MeshBuilder();
+      b.grainAuto = !!mat.userData.grain;
       this.parts.set(mat, b);
       this.flags.set(mat, { cast });
     }

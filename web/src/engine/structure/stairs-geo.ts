@@ -73,7 +73,7 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
           const [ax, ay] = pt(f, startEnd - (Math.abs(startEnd - f.s0) < 1e-3 ? f.sign * 0.05 : 0), cs);
           const [bx, by] = pt(f, endEnd, cs);
           const hA = hAt(startEnd), hB = hAt(endEnd);
-          skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 1.0), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 1.08 * FT, 0), side(f, out, 0.07));
+          skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
           // balustrade, stopped short of floor-connected ends
           const p2 = Math.max(p, lo), q2 = Math.min(q, hi);
           if (q2 - p2 < 0.6) continue;

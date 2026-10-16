@@ -11,6 +11,7 @@ export interface BoxMask {
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _nm = new THREE.Matrix3();
+const _bb = new THREE.Box3();
 
 export class MeshBuilder {
   pos: number[] = [];
@@ -19,6 +20,12 @@ export class MeshBuilder {
   idx: number[] = [];
   /** Rotate top/bottom face UVs 90° (e.g. run floor planks along z). */
   swapTopUV = false;
+  /**
+   * Wood joinery: for each box()/addGeometry() part, run texture u (the grain) along the longer in-plane side of
+   * every face, so door leaves, fins and boards get vertical grain and table tops get it along their length.
+   */
+  grainAuto = false;
+  private ext: [number, number, number] | null = null;
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -29,6 +36,20 @@ export class MeshBuilder {
 
   private pushUV(x: number, y: number, z: number, nx: number, ny: number, nz: number): void {
     const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+    const e = this.ext;
+    if (e) {
+      let u: number, v: number;
+      if (ax >= ay && ax >= az) {
+        if (e[1] > e[2] * 1.05) (u = y), (v = nx > 0 ? z : -z);
+        else (u = nx > 0 ? -z : z), (v = y);
+      } else if (az >= ay) {
+        if (e[1] > e[0] * 1.05) (u = y), (v = nz > 0 ? -x : x);
+        else (u = nz > 0 ? x : -x), (v = y);
+      } else if (e[2] > e[0] * 1.05) (u = ny > 0 ? z : -z), (v = x);
+      else (u = x), (v = ny > 0 ? -z : z);
+      this.uv.push(u, v);
+      return;
+    }
     if (ax >= ay && ax >= az) this.uv.push(nx > 0 ? -z : z, y);
     else if (az >= ay) this.uv.push(nz > 0 ? x : -x, y);
     else if (this.swapTopUV) this.uv.push(ny > 0 ? z : -z, x);
@@ -87,12 +108,14 @@ export class MeshBuilder {
     if (y1 < y0) [y0, y1] = [y1, y0];
     if (z1 < z0) [z0, z1] = [z1, z0];
     const m = mask ?? {};
+    if (this.grainAuto) this.ext = [x1 - x0, y1 - y0, z1 - z0];
     if (m.px !== false) this.faceX(x1, y0, y1, z0, z1, 1);
     if (m.nx !== false) this.faceX(x0, y0, y1, z0, z1, -1);
     if (m.py !== false) this.faceY(y1, x0, x1, z0, z1, 1);
     if (m.ny !== false) this.faceY(y0, x0, x1, z0, z1, -1);
     if (m.pz !== false) this.faceZ(z1, x0, x1, y0, y1, 1);
     if (m.nz !== false) this.faceZ(z0, x0, x1, y0, y1, -1);
+    this.ext = null;
   }
 
   /** Box given by center + size. */
@@ -114,6 +137,12 @@ export class MeshBuilder {
     }
     const t = geo.getAttribute("uv") as THREE.BufferAttribute | undefined;
     const base = this.pos.length / 3;
+    if (this.grainAuto && uv === "box") {
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      _bb.copy(geo.boundingBox!);
+      if (m) _bb.applyMatrix4(m);
+      this.ext = [_bb.max.x - _bb.min.x, _bb.max.y - _bb.min.y, _bb.max.z - _bb.min.z];
+    }
     if (m) _nm.getNormalMatrix(m);
     const flip = m ? m.determinant() < 0 : false;
     for (let i = 0; i < p.count; i++) {
@@ -128,6 +157,7 @@ export class MeshBuilder {
       if (uv === "native" && t) this.uv.push(t.getX(i), t.getY(i));
       else this.pushUV(_v.x, _v.y, _v.z, _n.x, _n.y, _n.z);
     }
+    this.ext = null;
     const index = geo.getIndex();
     if (index) {
       for (let i = 0; i < index.count; i += 3) {

@@ -127,9 +127,19 @@ export class StructureModel {
   readonly surfaces: FacadeSurf[] = [];
   /** building footprint on the lowest level (rect list, expanded to wall faces) */
   footprint: R[] = [];
+  /**
+   * Projection envelope (plan ft): how far slabs, copings, plinths, canopies, cladding and other projections may
+   * reach. On a plot edge the building touches (zero setback, i.e. a party wall) nothing may pass the outer
+   * wall face (EXT_T/2 beyond the room edge). Towards a real open space a projection may reach 1.5 ft past the
+   * building line where that space is under 10 ft, 3 ft where it is 10 ft or more, and never past the plot edge.
+   */
+  envelope: { x0: number; x1: number; y0: number; y1: number; party: Record<Side, boolean> } = {
+    x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity, party: { front: false, back: false, left: false, right: false },
+  };
 
   constructor(plan: PlanModel) {
     this.plan = plan;
+    this.computeEnvelope();
     for (const lv of plan.levels) {
       const runs = this.computeRuns(lv);
       this.runsByLevel.set(lv.id, runs);
@@ -384,14 +394,68 @@ export class StructureModel {
   }
 
   // ── slabs ──────────────────────────────────────────────────────────────────────────────────────────
+  // ── projection envelope ────────────────────────────────────────────────────────────────────────────
+  private computeEnvelope(): void {
+    const plan = this.plan;
+    const built = plan.rooms.filter((r) => r.cat !== "outdoor");
+    if (!built.length) return;
+    const bx0 = Math.min(...built.map((r) => r.rect.x)), bx1 = Math.max(...built.map((r) => r.rect.x + r.rect.w));
+    const by0 = Math.min(...built.map((r) => r.rect.y)), by1 = Math.max(...built.map((r) => r.rect.y + r.rect.d));
+    // reach beyond the building line (room edge = wall centre line) on a side with `gap` ft of open space
+    const reach = (gap: number) => (gap < 0.5 ? EXT_T / 2 : Math.max(EXT_T / 2, Math.min(gap, gap < 10 ? 1.5 : 3)));
+    const gL = bx0, gR = plan.plotW - bx1, gF = by0, gB = plan.plotD - by1;
+    // the declared setback lines bound it too (LDA measures projections from them: 0 / 1.5 / 3 ft), but the
+    // outer faces of the walls themselves always stay
+    const sb = (plan.plan.site?.setbacks_ft ?? {}) as Partial<Record<"front" | "rear" | "left" | "right", number>>;
+    const allow = (s: number) => (s <= 0 ? 0 : s >= 10 ? 3 : 1.5);
+    const sbv = (k: "front" | "rear" | "left" | "right") => {
+      const v = Number(sb[k]);
+      return Number.isFinite(v) && v >= 0 ? v : null;
+    };
+    const L = sbv("left"), Rt = sbv("right"), F = sbv("front"), B = sbv("rear");
+    let x0 = bx0 - reach(gL), x1 = bx1 + reach(gR), y0 = by0 - reach(gF), y1 = by1 + reach(gB);
+    if (L !== null) x0 = Math.max(x0, Math.min(L - allow(L), bx0 - EXT_T / 2));
+    if (Rt !== null) x1 = Math.min(x1, Math.max(plan.plotW - Rt + allow(Rt), bx1 + EXT_T / 2));
+    if (F !== null) y0 = Math.max(y0, Math.min(F - allow(F), by0 - EXT_T / 2));
+    if (B !== null) y1 = Math.min(y1, Math.max(plan.plotD - B + allow(B), by1 + EXT_T / 2));
+    this.envelope = {
+      x0, x1, y0, y1,
+      party: { left: gL < 0.5, right: gR < 0.5, front: gF < 0.5, back: gB < 0.5 },
+    };
+  }
+
+  /** A plan rect clipped to the projection envelope (null when nothing is left). */
+  clipRect(r: R): R | null {
+    const e = this.envelope;
+    const x0 = Math.max(r.x, e.x0), x1 = Math.min(r.x + r.w, e.x1);
+    const y0 = Math.max(r.y, e.y0), y1 = Math.min(r.y + r.d, e.y1);
+    if (x1 - x0 < 1e-4 || y1 - y0 < 1e-4) return null;
+    return { x: x0, y: y0, w: x1 - x0, d: y1 - y0 };
+  }
+
+  /** A run-space box (u along a wall run of `axis`, w across it) clipped to the projection envelope. */
+  clipRunBox(axis: "x" | "y", u0: number, u1: number, w0: number, w1: number): [number, number, number, number] | null {
+    const e = this.envelope;
+    const [ua, ub] = axis === "x" ? [e.x0, e.x1] : [e.y0, e.y1];
+    const [wa, wb] = axis === "x" ? [e.y0, e.y1] : [e.x0, e.x1];
+    const U0 = Math.max(Math.min(u0, u1), ua), U1 = Math.min(Math.max(u0, u1), ub);
+    const W0 = Math.max(Math.min(w0, w1), wa), W1 = Math.min(Math.max(w0, w1), wb);
+    if (U1 - U0 < 1e-4 || W1 - W0 < 1e-4) return null;
+    return [U0, U1, W0, W1];
+  }
+
   private computeSlabs(): void {
     const plan = this.plan;
+    const push = (rects: R[], r: R) => {
+      const c = this.clipRect(r);
+      if (c) rects.push(c);
+    };
     for (const U of plan.levels) {
       if (U.i === 0) continue;
       const L = plan.levels[U.i - 1];
       const rects: R[] = [];
-      for (const r of plan.roomsOn(L.id)) if (r.cat === "enclosed" || r.cat === "porch") rects.push(expandRect(r.rect, EXT_T / 2));
-      for (const r of plan.roomsOn(U.id)) if (r.cat !== "outdoor") rects.push(expandRect(r.rect, EXT_T / 2));
+      for (const r of plan.roomsOn(L.id)) if (r.cat === "enclosed" || r.cat === "porch") push(rects, expandRect(r.rect, EXT_T / 2));
+      for (const r of plan.roomsOn(U.id)) if (r.cat !== "outdoor") push(rects, expandRect(r.rect, EXT_T / 2));
       if (!rects.length) continue;
       const holes = this.stairs.filter((s) => s.holeLevel === U.id).flatMap((s) => s.holes);
       const g = CellGrid.fromRects<boolean>(
@@ -405,10 +469,16 @@ export class StructureModel {
     const m = plan.rooms.find((r) => r.lv.isRoof && r.cat === "enclosed");
     if (m) {
       const top = m.lv.elev + plan.mumtyHeight;
-      const g = CellGrid.fromRects<boolean>(
-        plan.rooms.filter((r) => r.lv.isRoof && r.cat === "enclosed").map((r) => ({ rect: expandRect(r.rect, EXT_T / 2 + 0.9), val: true })),
-      );
-      this.slabs.push({ level: m.lv, grid: g, top, bottom: top - m.lv.slab - 0.1 });
+      // the mumty roof overhangs its walls by ~0.9 ft, but never past the projection envelope (party walls)
+      const items = plan.rooms
+        .filter((r) => r.lv.isRoof && r.cat === "enclosed")
+        .map((r) => this.clipRect(expandRect(r.rect, EXT_T / 2 + 0.9)))
+        .filter((r): r is R => !!r)
+        .map((rect) => ({ rect, val: true }));
+      if (items.length) {
+        const g = CellGrid.fromRects<boolean>(items);
+        this.slabs.push({ level: m.lv, grid: g, top, bottom: top - m.lv.slab - 0.1 });
+      }
     }
   }
 
@@ -418,7 +488,8 @@ export class StructureModel {
     const items = plan
       .roomsOn(L0.id)
       .filter((r) => r.cat !== "outdoor")
-      .map((r) => ({ rect: expandRect(r.rect, EXT_T / 2 + PLINTH_PROUD), val: r.floorH - FINISH }));
+      .map((r) => ({ rect: this.clipRect(expandRect(r.rect, EXT_T / 2 + PLINTH_PROUD)), val: r.floorH - FINISH }))
+      .filter((it): it is { rect: R; val: number } => !!it.rect);
     this.plinth = CellGrid.fromRects<number>(items, (a, b) => Math.max(a, b));
     this.footprint = plan
       .roomsOn(L0.id)
