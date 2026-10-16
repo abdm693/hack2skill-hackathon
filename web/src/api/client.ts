@@ -201,8 +201,16 @@ export function assetUrl(url: string | null | undefined): string | undefined {
   return `${BASE}/assets/${url}`;
 }
 
+/** Turn provider errors ("429 RESOURCE_EXHAUSTED {…}") into a sentence people can act on. */
+export function friendlyError(message: string): string {
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota|rate limit/i.test(message)) return "The AI models are busy right now. Try again in a minute.";
+  if (/\b50[34]\b|UNAVAILABLE|overloaded/i.test(message)) return "The AI service is briefly unavailable. Try again shortly.";
+  if (/DEADLINE_EXCEEDED|timed? ?out|timeout/i.test(message)) return "The AI took too long to answer. Try again.";
+  return message;
+}
+
 export function errorMessage(e: unknown): string {
-  if (e instanceof ApiError || e instanceof StreamError) return e.message;
-  if (e instanceof Error) return e.message || "Something went wrong.";
+  if (e instanceof ApiError || e instanceof StreamError) return friendlyError(e.message);
+  if (e instanceof Error) return friendlyError(e.message || "Something went wrong.");
   return "Something went wrong.";
 }

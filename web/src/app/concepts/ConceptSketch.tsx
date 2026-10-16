@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { friendlyError } from "@/api/client";
 import { cn } from "@/app/lib/utils";
 
 /**
@@ -52,7 +53,9 @@ export function ConceptSketch({ label, prompt, startedAt, failed, message, class
           {!failed && <span className="text-[11.5px] text-pencil tabular">{Math.floor(secs)}s</span>}
         </div>
         {failed ? (
-          <p className="mt-1 line-clamp-2 text-[11.5px] text-fail">{message ?? "The image model returned an error."}</p>
+          <p className="mt-1 line-clamp-2 text-[11.5px] text-fail" title={message}>
+            {message ? friendlyError(message) : "The image model returned an error."}
+          </p>
         ) : (
           <>
             {prompt && <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-graphite">{prompt}</p>}

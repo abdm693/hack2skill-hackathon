@@ -16,6 +16,7 @@ import {
   type SSEHandlers,
   type StreamOptions,
 } from "@/api/client";
+import { plotLabel } from "@/api/domain";
 import { saveFixLoop } from "@/app/lib/fixloop";
 import { toast } from "./toast";
 
@@ -353,6 +354,11 @@ export const useProject = create<ProjectState>((set, get) => {
               if (!live(pid)) return;
               const p = get().project;
               get().patchProject({ brief, envelope, stage: p && p.stage === "setup" ? "concepts" : p?.stage });
+              // Give "Untitled home" a name people recognise in the workspace, e.g. "10 marla house, Johar Town".
+              if (p && /^untitled (home|project)$/i.test(p.name.trim()) && brief?.plot?.area_marla) {
+                const size = plotLabel(brief.plot.area_marla).replace(/^\w/, (c) => c.toUpperCase());
+                void get().rename(`${size} house, ${brief.scheme || brief.city || "Lahore"}`);
+              }
             },
           },
           { signal: c.signal, idleTimeoutMs: 90_000 },
