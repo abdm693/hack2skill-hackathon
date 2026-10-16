@@ -3,7 +3,9 @@
  * and what it last said. While Naqsha works, narration replaces the Next pill (DESIGN.md §5).
  */
 import { useMemo } from "react";
-import type { Project } from "@contracts/api-types";
+import type { Project, Version } from "@contracts/api-types";
+import type { ComplianceReport } from "@contracts/plan";
+import { summarize, type Summary } from "@/app/plan/compliance";
 import { useProject, type Run } from "@/app/store/project";
 
 export interface Narration {
@@ -98,16 +100,29 @@ export function useLastLine(): string | null {
   }, [messages]);
 }
 
-/** LDA and livable counts for the current version ("42/42 LDA · 5/5 livable"). */
-export function complianceCounts(project: Project | null, versions: Record<string, { compliance?: { checks: { status: string; category?: string }[] } }>) {
-  const vid = project?.current_version_id;
-  const checks = vid ? versions[vid]?.compliance?.checks : undefined;
-  if (!checks?.length) return null;
-  const lda = checks.filter((c) => (c.category ?? "lda") === "lda");
-  const livable = checks.filter((c) => c.category === "livable");
-  const pass = (l: typeof checks) => l.filter((c) => c.status !== "fail").length;
-  return {
-    lda: { pass: pass(lda), total: lda.length },
-    livable: livable.length ? { pass: pass(livable), total: livable.length } : null,
-  };
+/**
+ * LDA and livable counts for a version (the current one unless `vid` is given), with what the 3D build found merged
+ * in. A warning is never counted as a pass.
+ */
+export function complianceCounts(
+  project: Project | null,
+  versions: Record<string, Version>,
+  asBuilt?: Record<string, ComplianceReport>,
+  vid?: string | null,
+): Summary | null {
+  const id = vid ?? project?.current_version_id;
+  const v = id ? versions[id] : undefined;
+  if (!v?.compliance?.checks?.length) return null;
+  return summarize(v.compliance, v.plan, id ? asBuilt?.[id] : undefined);
+}
+
+/** "35/36 LDA · 10/11 livable · 2 to check" for the title capsule. */
+export function countsLine(s: Summary): string {
+  const bits = [`${s.ldaTally.pass}/${s.ldaTally.total} LDA`];
+  if (s.livableTally.total) bits.push(`${s.livableTally.pass}/${s.livableTally.total} livable`);
+  const fix = s.fails.length;
+  const check = s.warns.length;
+  if (fix) bits.push(`${fix} to fix`);
+  if (check) bits.push(`${check} to check`);
+  return bits.join(" · ");
 }

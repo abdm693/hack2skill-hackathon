@@ -8,11 +8,12 @@ import { Check, ChevronDown, X as XIcon, TriangleAlert } from "lucide-react";
 import type { BuildingPlan, ComplianceCheck, ComplianceReport } from "@contracts/plan";
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { EASE_OUT, Meter } from "@/app/design/kit";
-import { LDA_SECTIONS, ldaSection, summarize, valueLine } from "./compliance";
+import { LDA_SECTIONS, ldaSection, summarize, tallyLine, valueLine, type Tally } from "./compliance";
 
-export function ComplianceChip({ report, plan, onClick, active }: { report: ComplianceReport; plan?: BuildingPlan; onClick: () => void; active?: boolean }) {
-  const s = useMemo(() => summarize(report, plan), [report, plan]);
-  const ok = !s.fails.length;
+export function ComplianceChip({ report, plan, asBuilt, onClick, active }: { report: ComplianceReport; plan?: BuildingPlan; asBuilt?: ComplianceReport | null; onClick: () => void; active?: boolean }) {
+  const s = useMemo(() => summarize(report, plan, asBuilt), [report, plan, asBuilt]);
+  const tone = s.fails.length ? "bg-fail" : s.warns.length ? "bg-warn" : "bg-pass";
+  const check = s.warns.length;
   return (
     <button
       type="button"
@@ -23,7 +24,7 @@ export function ComplianceChip({ report, plan, onClick, active }: { report: Comp
         active ? "bg-ink text-white" : "bg-surface text-ink hover:bg-surface-2",
       )}
     >
-      <span className={cn("size-1.5 rounded-full", ok ? "bg-pass" : "bg-fail")} />
+      <span className={cn("size-1.5 rounded-full", tone)} />
       <span className="font-mono tabular-nums">
         {s.ldaPass}/{s.lda.length}
       </span>
@@ -37,6 +38,11 @@ export function ComplianceChip({ report, plan, onClick, active }: { report: Comp
           <span className={active ? "text-white/70" : "text-ink-3"}>livable</span>
         </>
       )}
+      {(s.fails.length > 0 || check > 0) && (
+        <span className={cn("max-sm:hidden", active ? "text-white/70" : s.fails.length ? "text-fail" : "text-warn")}>
+          · {s.fails.length ? `${s.fails.length} to fix` : `${check} to check`}
+        </span>
+      )}
     </button>
   );
 }
@@ -44,13 +50,19 @@ export function ComplianceChip({ report, plan, onClick, active }: { report: Comp
 export function CompliancePanel({
   report,
   plan,
+  asBuilt,
   failures,
   selectedId,
   onSelect,
   onFix,
   running,
+  stage,
 }: {
   report: ComplianceReport;
+  /** What the 3D build found (House), shown as "As built" rows and counted. */
+  asBuilt?: ComplianceReport | null;
+  /** The design run's stage while it runs ("fix", "review", "build"…), so the copy says what is happening. */
+  stage?: string | null;
   /** Ask Naqsha to fix a failing rule (a revision). */
   onFix?: (c: ComplianceCheck) => void;
   running?: boolean;
@@ -60,7 +72,7 @@ export function CompliancePanel({
   selectedId?: string | null;
   onSelect: (c: ComplianceCheck | null) => void;
 }) {
-  const s = useMemo(() => summarize(report, plan), [report, plan]);
+  const s = useMemo(() => summarize(report, plan, asBuilt), [report, plan, asBuilt]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const m = report.metrics;
   const env = report.envelope;
@@ -70,20 +82,31 @@ export function CompliancePanel({
     return LDA_SECTIONS.filter((x) => map.get(x.key)?.length).map((x) => ({ ...x, list: map.get(x.key)! }));
   }, [s.lda]);
   const fails = s.fails.length;
+  const checks = s.warns.length;
+  const verdict = fails
+    ? `${fails} ${fails === 1 ? "rule" : "rules"} to fix`
+    : s.approvalReady
+      ? "Approval-ready"
+      : `${s.ldaWarns} LDA ${s.ldaWarns === 1 ? "point" : "points"} to check`;
+  const headline = fails
+    ? running
+      ? stage === "fix" || stage === "plan" || stage === "compliance"
+        ? "I'm fixing these now."
+        : stage === "review"
+          ? "I'm reviewing the plan now; these may still change."
+          : "I'm building this version in 3D. Ask me to fix these once it's ready."
+      : "Ask me to fix it, or change the plan yourself."
+    : s.approvalReady
+      ? `Passes all ${s.ldaTally.total} LDA checks${s.livableTally.total ? (s.livableIssues ? `. ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check.` : ` and ${s.livableTally.total} livable rules.`) : "."}`
+      : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass. Look at the ${checks === 1 ? "one" : checks} marked below before you submit.`;
   const setbackChecks = s.lda.filter((c) => c.id.startsWith("setback.") && c.id !== "setback.envelope" && c.id !== "setback.side");
 
   return (
     <div className="pb-4">
       {/* Verdict */}
       <div className="px-5 pt-5">
-        <p className={cn("text-[13px] font-medium", fails ? "text-fail" : "text-pass")}>{fails ? `${fails} ${fails === 1 ? "rule" : "rules"} to fix` : "Approval-ready"}</p>
-        <p className="mt-1 text-heading text-ink">
-          {fails
-            ? running
-              ? "I'm fixing these now."
-              : "Ask me to fix it, or change the plan yourself."
-            : `Passes all ${s.lda.length} LDA checks${s.livable.length ? ` and ${s.livable.length} livable rules` : ""}.`}
-        </p>
+        <p className={cn("text-[13px] font-medium", fails ? "text-fail" : s.approvalReady ? "text-pass" : "text-warn")}>{verdict}</p>
+        <p className="mt-1 text-heading text-ink">{headline}</p>
         <p className="mt-1 text-[13px] text-ink-3">{report.authority} Building and Zoning Regulations</p>
         <p className="text-[13px] text-ink-3">Plot band: {report.band.charAt(0).toLowerCase() + report.band.slice(1)}</p>
         {failures && failures.length > 1 && (
@@ -96,7 +119,7 @@ export function CompliancePanel({
 
       {/* LDA rules */}
       <section className="mt-6">
-        <GroupHeading title="LDA rules" pass={s.ldaPass} total={s.lda.length} />
+        <GroupHeading title="LDA rules" t={s.ldaTally} />
         <div className="grid grid-cols-2 gap-x-5 gap-y-4 px-5 pt-3">
           <Metric label="Ground coverage" value={`${num(m.coverage_pct, 1)}%`} limit={`max ${num(env.max_coverage_pct)}%`} ratio={m.coverage_pct / env.max_coverage_pct} />
           <Metric label="Height" value={feetInches(m.height_ft)} limit={`max ${feetInches(env.max_height_ft)}`} ratio={m.height_ft / env.max_height_ft} />
@@ -107,7 +130,7 @@ export function CompliancePanel({
           <div className="mx-5 mt-4 flex flex-wrap gap-x-4 gap-y-1 rounded-control bg-surface-2/70 px-3 py-2 text-[12.5px] text-ink-2">
             {setbackChecks.map((c) => (
               <span key={c.id} className="inline-flex items-center gap-1.5">
-                <span className={cn("size-1.5 rounded-full", c.status === "fail" ? "bg-fail" : "bg-pass")} />
+                <span className={cn("size-1.5 rounded-full", c.status === "fail" ? "bg-fail" : c.status === "warn" ? "bg-warn" : "bg-pass")} />
                 {c.id.replace("setback.", "").replace(/^\w/, (x) => x.toUpperCase())}
                 <span className="font-mono tabular-nums text-ink">{c.value != null ? feetInches(Number(c.value)) : "–"}</span>
               </span>
@@ -132,7 +155,7 @@ export function CompliancePanel({
                   </span>
                   <span className="flex items-center gap-2 text-[12px] text-ink-3">
                     <span className="font-mono tabular-nums">
-                      {sec.list.length - bad.filter((c) => c.status === "fail").length}/{sec.list.length}
+                      {sec.list.length - bad.length}/{sec.list.length}
                     </span>
                     <ChevronDown className={cn("size-3.5 transition-transform duration-(--dur-fast)", isOpen && "rotate-180")} strokeWidth={1.75} />
                   </span>
@@ -161,9 +184,22 @@ export function CompliancePanel({
       {/* Livable home */}
       {s.livable.length > 0 && (
         <section className="mt-6">
-          <GroupHeading title="Livable home" pass={s.livablePass} total={s.livable.length} />
+          <GroupHeading title="Livable home" t={s.livableTally} />
           <ul className="px-3 pt-1">
             {s.livable.map((c) => (
+              <Row key={c.id} c={c} selected={selectedId === c.id} onSelect={onSelect} onFix={!running ? onFix : undefined} always />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* As built: what the 3D build found */}
+      {s.asBuilt.length > 0 && (
+        <section className="mt-6">
+          <GroupHeading title="As built" t={s.asBuiltTally} />
+          <p className="px-5 pt-0.5 text-[12.5px] text-ink-3">What I found while building the house in 3D.</p>
+          <ul className="px-3 pt-1">
+            {s.asBuilt.map((c) => (
               <Row key={c.id} c={c} selected={selectedId === c.id} onSelect={onSelect} onFix={!running ? onFix : undefined} always />
             ))}
           </ul>
@@ -173,13 +209,11 @@ export function CompliancePanel({
   );
 }
 
-function GroupHeading({ title, pass, total }: { title: string; pass: number; total: number }) {
+function GroupHeading({ title, t }: { title: string; t: Tally }) {
   return (
-    <div className="flex items-baseline justify-between px-5">
+    <div className="flex items-baseline justify-between gap-3 px-5">
       <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
-      <span className={cn("font-mono text-[12.5px] tabular-nums", pass === total ? "text-pass" : "text-fail")}>
-        {pass}/{total}
-      </span>
+      <span className={cn("text-[12.5px] tabular-nums", t.fail ? "text-fail" : t.warn ? "text-warn" : "text-pass")}>{tallyLine(t)}</span>
     </div>
   );
 }
@@ -229,7 +263,7 @@ function Row({ c, selected, onSelect, onFix, always }: { c: ComplianceCheck; sel
         <span className="min-w-0 flex-1">
           <span className="block text-[13.5px] leading-snug text-ink">{c.title}</span>
           {v && <span className="mt-0.5 block font-mono text-[12px] tabular-nums text-ink-2">{v}</span>}
-          {expanded && (!v || c.status !== "pass" || always) && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{c.message}</span>}
+          {(expanded || !v) && c.message && (!v || c.status !== "pass" || always) && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{c.message}</span>}
           {selected && target && <span className="mt-1 block text-[12px] font-medium text-accent">Shown on the plan</span>}
         </span>
       </button>

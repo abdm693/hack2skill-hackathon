@@ -39,10 +39,12 @@ export interface DockProps {
   commands: Command[];
   /** Whether Naqsha's line opens the conversation sheet (false where there is none, e.g. the client view). */
   conversation?: boolean;
+  /** What Enter does with the typed text, in the command popover ("Ask Naqsha", or "Send to the owner"). */
+  askLabel?: string;
 }
 
 export function Dock(props: DockProps) {
-  const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands, conversation = true } = props;
+  const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands, conversation = true, askLabel = "Ask Naqsha" } = props;
   const ctx = useActiveAskContext();
   // What Naqsha is doing right now (setup, concepts, night, design, revise), from the one project store.
   const activity = useNaqshaActivity();
@@ -146,19 +148,29 @@ export function Dock(props: DockProps) {
     }
   };
 
-  // Publish the dock's height so toasts sit 12px above it.
+  // Publish how much of the bottom edge the dock takes (its height, its inset and the safe area), so views keep
+  // their controls above it and toasts sit 12px over it.
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
-    const set = () => document.documentElement.style.setProperty("--dock-h", `${el.offsetHeight + (phone ? 0 : 12)}px`);
+    const set = () => {
+      if (!el.isConnected) return;
+      const r = el.getBoundingClientRect();
+      const h = r.height ? Math.max(0, Math.round(window.innerHeight - r.top)) : 0;
+      document.documentElement.style.setProperty("--dock-h", `${h}px`);
+      if (useShell.getState().dockH !== h) useShell.setState({ dockH: h });
+    };
     set();
     const ro = new ResizeObserver(set);
     ro.observe(el);
+    window.addEventListener("resize", set);
     return () => {
       ro.disconnect();
+      window.removeEventListener("resize", set);
       document.documentElement.style.setProperty("--dock-h", "0px");
+      useShell.setState({ dockH: 0 });
     };
-  }, [phone]);
+  }, [phone, ctx.hidden]);
 
   // Close the palette on a click outside the dock.
   useEffect(() => {
@@ -218,7 +230,7 @@ export function Dock(props: DockProps) {
               hud ? "bg-[rgb(24_24_27/.92)] text-hud-ink shadow-[inset_0_0_0_1px_rgb(255_255_255/.1),0_24px_60px_-20px_rgb(0_0_0/.6)] backdrop-blur-xl" : "bg-surface shadow-e3",
             )}
           >
-            <PaletteList items={items} active={active} setActive={setActive} run={runItem} draft={draft} hud={hud} />
+            <PaletteList items={items} active={active} setActive={setActive} run={runItem} draft={draft} hud={hud} askLabel={askLabel} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -273,7 +285,7 @@ export function Dock(props: DockProps) {
                     title={conversation ? "Open the conversation (⌘J)" : undefined}
                     className={cn(
                       "flex max-w-full items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-left text-[14px] leading-5 outline-none transition-colors focus-visible:shadow-focus",
-                      hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.7)]" : "glass-light text-ink-2 hover:text-ink",
+                      hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.86)]" : "glass-light text-ink-2 hover:text-ink",
                       phone && "min-w-0 flex-1 rounded-[20px] text-[13px] leading-[18px]",
                     )}
                   >
@@ -306,7 +318,7 @@ export function Dock(props: DockProps) {
           value={draft}
           onChange={(v) => { setDraft(v); setPaletteOpen(true); }}
           onSubmit={submit}
-          placeholder={phone ? placeholder.split(", e.g.")[0] : placeholder}
+          placeholder={phone ? phonePlaceholder(placeholder, askLabel) : placeholder}
           label="Ask Naqsha"
           busy={!!working && working.kind !== "intake"}
           onKeyDown={onKeyDown}
@@ -328,6 +340,7 @@ function PaletteList({
   run,
   draft,
   hud,
+  askLabel,
 }: {
   items: ({ kind: "ask" } | { kind: "cmd"; cmd: Command })[];
   active: number;
@@ -335,6 +348,7 @@ function PaletteList({
   run: (i: number) => void;
   draft: string;
   hud: boolean;
+  askLabel: string;
 }) {
   const headingClass = cn("px-3 pb-1 pt-2.5 text-[12px] font-medium", hud ? "text-hud-ink-2" : "text-ink-3");
   let lastGroup: string | null = null;
@@ -365,7 +379,7 @@ function PaletteList({
                 <>
                   <NaqshaAvatar size={20} />
                   <span className="min-w-0 flex-1 truncate">
-                    <span className="font-medium">Ask Naqsha</span>
+                    <span className="font-medium">{askLabel}</span>
                     <span className={hud ? "text-hud-ink-2" : "text-ink-3"}> · {draft.trim()}</span>
                   </span>
                 </>
@@ -382,4 +396,11 @@ function PaletteList({
       })}
     </>
   );
+}
+
+/** Phones get a short placeholder that fits a 375px dock: the first clause, or a plain "Ask Naqsha". */
+function phonePlaceholder(p: string, askLabel: string): string {
+  const first = p.split(/, e\.g\.|\?|, like | e\.g\. /)[0].replace(/[…,.\s]+$/, "").trim();
+  if (first.length <= 26) return first;
+  return askLabel === "Ask Naqsha" ? "Ask Naqsha" : "Leave a note";
 }

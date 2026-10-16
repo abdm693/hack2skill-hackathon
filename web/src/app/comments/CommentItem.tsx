@@ -9,7 +9,7 @@ import type { Comment } from "@contracts/api-types";
 import { assetUrl } from "@/api/client";
 import { cn, relativeTime } from "@/app/lib/utils";
 import { useProject } from "@/app/store/project";
-import { Avatar, roleColor } from "@/app/ui/Avatar";
+import { Avatar, authorColor } from "@/app/ui/Avatar";
 import { Button } from "@/app/ui/Button";
 import { StatusChip } from "@/app/ui/Chip";
 import { Menu, type MenuItem } from "@/app/ui/Menu";
@@ -18,7 +18,7 @@ import { authorOf, isMine, ROLE_LABEL, STATUS_LABEL, STATUS_TONE } from "./model
 
 export interface Me { ids: string[]; name?: string | null }
 
-export function PinNumber({ n, role, selected, className }: { n: number; role?: string; selected?: boolean; className?: string }) {
+export function PinNumber({ n, hueKey, selected, className }: { n: number; hueKey?: string | null; selected?: boolean; className?: string }) {
   return (
     <span
       className={cn(
@@ -26,7 +26,7 @@ export function PinNumber({ n, role, selected, className }: { n: number; role?: 
         selected && "shadow-[0_0_0_4px_var(--color-accent)]",
         className,
       )}
-      style={{ background: roleColor(role as never) }}
+      style={{ background: authorColor(hueKey) }}
       aria-label={`Pin ${n}`}
     >
       {n}
@@ -144,16 +144,16 @@ export const CommentItem = forwardRef<
       )}
 
       <header className="flex items-start gap-2.5">
-        <Avatar name={author.name} role={author.role} size={28} />
+        <Avatar name={author.name} role={author.role} hueKey={c.author?.id || c.author?.name} size={28} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="truncate text-[14px] font-semibold text-ink">{mine ? "You" : author.name}</span>
             <span className="shrink-0 text-[12px] text-ink-3">
-              {ROLE_LABEL[author.role] ?? author.role} · {relativeTime(c.created_at)}
+              {[roleCaption(author), relativeTime(c.created_at)].filter(Boolean).join(" · ")}
             </span>
           </div>
         </div>
-        {number !== undefined && <PinNumber n={number} role={author.role} />}
+        {number !== undefined && <PinNumber n={number} hueKey={c.author?.id || c.author?.name} />}
         {items.length > 0 && (
           <Menu
             width={196}
@@ -286,16 +286,22 @@ function Reply({
   const agent = author.role === "agent";
   return (
     <div className="mt-3 flex gap-2">
-      <Avatar name={author.name} role={author.role as never} size={24} />
+      <Avatar name={author.name} role={author.role as never} hueKey={author.id || author.name} size={24} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[13px] font-semibold text-ink">{mine ? "You" : author.name}</span>
           <span className="text-[12px] text-ink-3">
-            {[agent ? null : ROLE_LABEL[author.role] ?? author.role, at ? relativeTime(at) : null].filter(Boolean).join(" · ")}
+            {[agent ? null : roleCaption(author), at ? relativeTime(at) : null].filter(Boolean).join(" · ")}
           </span>
         </div>
         <p className={cn("mt-0.5 whitespace-pre-wrap text-[14px] leading-5", rejected ? "text-ink-2" : "text-ink")}>{text}</p>
       </div>
     </div>
   );
+}
+
+/** "Client", but nothing when the name already says the role ("Owner · Owner" reads as a stutter). */
+function roleCaption(a: { name: string; role: string }): string | null {
+  const label = ROLE_LABEL[a.role] ?? a.role;
+  return a.name.trim().toLowerCase() === label.toLowerCase() ? null : label;
 }

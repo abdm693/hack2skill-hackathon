@@ -12,6 +12,7 @@ import { plotLabel } from "@/api/domain";
 import { cn, relativeTime } from "@/app/lib/utils";
 import { usePhone } from "@/app/lib/hooks";
 import { roleOf, stageBusy, stageLabel } from "@/app/lib/views";
+import { sampleTitle } from "@/app/lib/samples";
 import { requireAccount, useAuth } from "@/app/store/auth";
 import { queueFirstMessage } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
@@ -44,6 +45,9 @@ export function Workspace() {
   const [opening, setOpening] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
+  // Focus goes back to the card's More button after Rename or Delete (or to the next card after a delete).
+  const focusAfter = useRef<string | null>(null);
+  const moreButton = (id: string | null) => (id ? document.querySelector<HTMLElement>(`[data-card-more="${CSS.escape(id)}"]`) : null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -110,6 +114,9 @@ export function Workspace() {
   const remove = async (p: Project) => {
     try {
       await api.deleteProject(p.id);
+      const i = mine.findIndex((x) => x.id === p.id);
+      const next = mine[i + 1] ?? mine[i - 1];
+      focusAfter.current = next?.id ?? null;
       setProjects((list) => list?.filter((x) => x.id !== p.id) ?? null);
       toast.show("Home deleted");
       return true;
@@ -162,7 +169,7 @@ export function Workspace() {
           </form>
           <p className="mt-3 text-[13px] text-ink-3">
             Or{" "}
-            <button type="button" onClick={() => void create()} className="font-medium text-ink-2 underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:underline" disabled={creating}>
+            <button type="button" onClick={() => void create()} className="hit-44 relative font-medium text-ink-2 underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:underline" disabled={creating}>
               start with questions
             </button>
             {" "}and Naqsha will ask one at a time.
@@ -221,8 +228,8 @@ export function Workspace() {
                   <HomeCard
                     project={p}
                     onOpen={() => navigate(`/app/p/${p.id}`)}
-                    onRename={() => setRenaming(p)}
-                    onDelete={() => setDeleting(p)}
+                    onRename={() => { focusAfter.current = p.id; setRenaming(p); }}
+                    onDelete={() => { focusAfter.current = p.id; setDeleting(p); }}
                   />
                 )}
               </li>
@@ -241,8 +248,8 @@ export function Workspace() {
         )}
       </main>
 
-      <RenameDialog project={renaming} onClose={() => setRenaming(null)} onRename={rename} />
-      <DeleteDialog project={deleting} onClose={() => setDeleting(null)} onDelete={remove} />
+      <RenameDialog project={renaming} onClose={() => setRenaming(null)} onRename={rename} returnFocus={() => moreButton(focusAfter.current)} />
+      <DeleteDialog project={deleting} onClose={() => setDeleting(null)} onDelete={remove} returnFocus={() => moreButton(focusAfter.current) ?? document.querySelector<HTMLElement>("[aria-label='Start a new home']")} />
     </div>
   );
 }
@@ -255,7 +262,7 @@ function Thumb({ p }: { p: Project }) {
   if (url && !failed) return <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />;
   return (
     <div className="grid size-full place-items-center bg-surface p-8">
-      <PlotSketch envelope={p.envelope} width={p.brief?.plot.width_ft} depth={p.brief?.plot.depth_ft} />
+      <PlotSketch envelope={p.envelope} width={p.brief?.plot?.width_ft} depth={p.brief?.plot?.depth_ft} />
     </div>
   );
 }
@@ -291,8 +298,9 @@ function HomeCard({ project: p, onOpen, onRename, onDelete }: { project: Project
               aria-label={`More for ${p.name}`}
               aria-expanded={open}
               aria-haspopup="menu"
+              data-card-more={p.id}
               className={cn(
-                "grid size-9 place-items-center rounded-full text-ink-3 outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:shadow-focus",
+                "hit-44 relative grid size-9 place-items-center rounded-full text-ink-3 outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:shadow-focus",
                 open && "bg-surface-2 text-ink",
               )}
             >
@@ -321,10 +329,10 @@ function SampleCard({ sample: s, opening, onOpen }: { sample: Project; opening: 
   return (
     <Card
       media={<Thumb p={s} />}
-      title={s.name}
+      title={sampleTitle(s.name)}
       caption={[b?.plot?.area_marla ? plotLabel(b.plot.area_marla) : null, b?.style ?? null, "Ready to walk"].filter(Boolean).join(" · ")}
       onClick={onOpen}
-      label={`Explore the sample: ${s.name}`}
+      label={`Explore the sample: ${sampleTitle(s.name)}`}
       badge={opening ? <StatusChip tone="progress" className="glass-light">Opening</StatusChip> : <StatusChip className="glass-light" dot={false}>Sample</StatusChip>}
     />
   );
@@ -379,7 +387,7 @@ function SkeletonGrid() {
 
 // ── Dialogs ─────────────────────────────────────────────────────────────────────────────────────────
 
-function RenameDialog({ project, onClose, onRename }: { project: Project | null; onClose: () => void; onRename: (p: Project, name: string) => Promise<void> }) {
+function RenameDialog({ project, onClose, onRename, returnFocus }: { project: Project | null; onClose: () => void; onRename: (p: Project, name: string) => Promise<void>; returnFocus?: () => HTMLElement | null }) {
   const [name, setName] = useState("");
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -399,6 +407,7 @@ function RenameDialog({ project, onClose, onRename }: { project: Project | null;
     <Dialog
       open={!!project}
       onClose={onClose}
+      returnFocus={returnFocus}
       title="Rename this home"
       actions={
         <>
@@ -414,7 +423,7 @@ function RenameDialog({ project, onClose, onRename }: { project: Project | null;
   );
 }
 
-function DeleteDialog({ project, onClose, onDelete }: { project: Project | null; onClose: () => void; onDelete: (p: Project) => Promise<boolean> }) {
+function DeleteDialog({ project, onClose, onDelete, returnFocus }: { project: Project | null; onClose: () => void; onDelete: (p: Project) => Promise<boolean>; returnFocus?: () => HTMLElement | null }) {
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState<Project | null>(project);
   useEffect(() => { if (project) setShown(project); }, [project]);
@@ -430,6 +439,7 @@ function DeleteDialog({ project, onClose, onDelete }: { project: Project | null;
       open={!!project}
       onClose={onClose}
       dismissible={!busy}
+      returnFocus={returnFocus}
       title="Delete this home?"
       description={
         <>

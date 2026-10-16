@@ -31,50 +31,123 @@ export function ldaSection(c: ComplianceCheck): string {
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const n = (v: unknown) => (isNum(v) ? v : Number(v));
 
-/** "10 ft (min 10 ft)", "63.3% (max 70%)", "240 sq ft (min 100 sq ft)". Null when the message says it better. */
+/** Which way a limit points: a minimum to reach, or a maximum to stay under. */
+function direction(id: string): "min" | "max" | null {
+  if (/^(setback\.|parapet|room\.(size|kitchen|light|vent)|bath\.|clear_height|plan\.roof\.solar|width|path|door)/.test(id)) return "min";
+  if (/^(coverage|far|height|storeys|mumty|boundary|stair|projection|asbuilt\.projection)/.test(id)) return "max";
+  return null;
+}
+
+/** A value with its unit: 5′6″, 63.3%, 240 sq ft, 2 storeys, 10 risers per flight. */
+function withUnit(v: number, unit: string | undefined, id: string): string {
+  const u = (unit ?? "").trim();
+  if (u === "ft" || u === "feet") return feetInches(v);
+  if (u === "%") return `${num(v, v % 1 ? 1 : 0)}%${id === "plan.roof.solar" ? " clear" : ""}`;
+  if (u === "sq ft" || u === "sqft") return `${num(v)} sq ft`;
+  if (u === "in") return `${num(v, 1)} in`;
+  if (!u) return num(v, 2);
+  // Count units read naturally in the singular: "1 side", "1 storey".
+  const unitWord = v === 1 ? u.replace(/^(\w+?)s\b/, "$1").replace(/^storie\b/, "storey") : u;
+  return `${num(v, v % 1 ? 1 : 0)} ${unitWord}`;
+}
+
+/**
+ * The value against its limit, in units and plain words: "5′6″ (min 8′)", "64% clear (min 55%)",
+ * "240 sq ft (min 100 sq ft)", "2 storeys (max 3)". Null when the message says it better (stairs, services).
+ */
 export function valueLine(c: ComplianceCheck): string | null {
   if (c.value == null || c.limit == null) return null;
   const v = n(c.value);
   const l = n(c.limit);
-  if (!Number.isFinite(v) || !Number.isFinite(l)) return `${c.value} (limit ${c.limit})`;
   const id = c.id;
-  if (id === "setback.side") return `${num(v)} side${v === 1 ? "" : "s"} (${num(l)} required)`;
-  if (id.startsWith("setback.")) return `${feetInches(v)} (min ${feetInches(l)})`;
-  if (id === "coverage") return `${num(v, 1)}% (max ${num(l)}%)`;
-  if (id === "far") return `1:${num(v, 2)} (max 1:${num(l, 1)})`;
-  if (id === "height") return `${feetInches(v)} (max ${feetInches(l)})`;
-  if (id === "storeys") return `${num(v)} (max ${num(l)})`;
-  if (id === "mumty") return `${feetInches(v)} (max ${feetInches(l)})`;
-  if (id === "parapet") return `${feetInches(v)} (min ${feetInches(l)})`;
-  if (id.startsWith("boundary")) return `${feetInches(v)} (max ${feetInches(l)})`;
-  if (id.startsWith("room.size") || id.startsWith("room.kitchen")) return `${num(v)} sq ft (min ${num(l)} sq ft)`;
-  if (id.startsWith("room.light")) return `${num(v)} sq ft of glass (${num(l)} needed)`;
-  if (id.startsWith("room.vent") || id.startsWith("bath.")) return `${num(v)} sq ft opening (${num(l)} needed)`;
+  if (!Number.isFinite(v) || !Number.isFinite(l)) return null;
   if (id.startsWith("stair")) return null;
-  return `${num(v, 2)} (limit ${num(l, 2)})`;
+  if (id === "setback.side") return `${num(v)} side${v === 1 ? "" : "s"} (${num(l)} required)`;
+  if (id === "far") return `1:${num(v, 2)} (max 1:${num(l, 1)})`;
+  // Older reports carry no unit: infer it from the rule.
+  const unit =
+    c.unit ??
+    (id.startsWith("setback.") || ["height", "mumty", "parapet"].includes(id) || id.startsWith("boundary") ? "ft"
+      : id === "coverage" ? "%"
+      : /^room\.(size|kitchen|light|vent)|^bath\./.test(id) ? "sq ft"
+      : id === "storeys" ? "storeys"
+      : undefined);
+  const dir = direction(id);
+  if (id.startsWith("room.light")) return `${withUnit(v, unit, id)} of glass (${withUnit(l, unit, id)} needed)`;
+  if (id.startsWith("room.vent") || id.startsWith("bath.")) return `${withUnit(v, unit, id)} opening (${withUnit(l, unit, id)} needed)`;
+  const limit = id === "plan.roof.solar" ? withUnit(l, unit, "") : withUnit(l, unit, id);
+  return `${withUnit(v, unit, id)} (${dir ?? "limit"} ${limit.replace(/ (storeys|sides|risers per flight)$/, "")})`;
 }
 
-export function summarize(report: ComplianceReport | null | undefined, plan?: BuildingPlan) {
+export interface Tally { pass: number; warn: number; fail: number; total: number }
+export function tally(list: ComplianceCheck[]): Tally {
+  let pass = 0, warn = 0, fail = 0;
+  for (const c of list) {
+    if (c.status === "fail") fail++;
+    else if (c.status === "warn") warn++;
+    else pass++;
+  }
+  return { pass, warn, fail, total: list.length };
+}
+/** "35 pass · 1 to check", "33 pass · 2 to fix · 1 to check". */
+export function tallyLine(t: Tally): string {
+  return [`${t.pass} pass`, t.fail ? `${t.fail} to fix` : null, t.warn ? `${t.warn} to check` : null].filter(Boolean).join(" · ");
+}
+
+/** As-built checks worth showing (what the 3D build found), as "As built" rows. */
+export function asBuiltIssues(asBuilt: ComplianceReport | null | undefined): ComplianceCheck[] {
+  return (asBuilt?.checks ?? []).filter((c) => c.status !== "pass");
+}
+
+/**
+ * Counts that never call a warning a pass: LDA and livable tallies, as-built issues merged in, and whether the plan
+ * may be called approval-ready (no fails and no LDA warnings).
+ */
+export function summarize(report: ComplianceReport | null | undefined, plan?: BuildingPlan, asBuilt?: ComplianceReport | null) {
   const checks = withLivable(report, plan);
   const lda = checks.filter((c) => categoryOf(c) === "lda");
   const livable = checks.filter((c) => categoryOf(c) === "livable");
-  const passes = (list: ComplianceCheck[]) => list.filter((c) => c.status !== "fail").length;
+  const built = asBuiltIssues(asBuilt);
+  const builtLda = built.filter((c) => categoryOf(c) === "lda");
+  const builtLivable = built.filter((c) => categoryOf(c) !== "lda");
+  const ldaT = tally(lda);
+  const livT = tally(livable);
+  const builtT = tally(built);
+  const fails = [...checks, ...built].filter((c) => c.status === "fail");
+  const warns = [...checks, ...built].filter((c) => c.status === "warn");
   return {
     checks,
     lda,
     livable,
-    ldaPass: passes(lda),
-    livablePass: passes(livable),
-    fails: checks.filter((c) => c.status === "fail"),
-    warns: checks.filter((c) => c.status === "warn"),
+    asBuilt: built,
+    ldaTally: ldaT,
+    livableTally: livT,
+    asBuiltTally: builtT,
+    /** Checks that fully pass (a warning is not a pass). */
+    ldaPass: ldaT.pass,
+    livablePass: livT.pass,
+    fails,
+    warns,
+    ldaFails: ldaT.fail + builtLda.filter((c) => c.status === "fail").length,
+    ldaWarns: ldaT.warn + builtLda.filter((c) => c.status === "warn").length,
+    livableIssues: livT.fail + livT.warn + builtLivable.length,
+    /** "Approval-ready" and "Passes all" are said only with no fails and no LDA warnings. */
+    approvalReady: fails.length === 0 && ldaT.warn === 0 && builtLda.length === 0,
   };
 }
+export type Summary = ReturnType<typeof summarize>;
 
-/** The report's checks, plus derived livable checks when the report has none. */
+/** The rules DESIGN.md promises on every plan; merged in whenever the report doesn't carry them. */
+const ALWAYS_LIVABLE = ["livable.railings", "livable.doors", "livable.paths"];
+
+/** The report's checks, plus the derived livable rules: all five when the report has none, else the three it lacks. */
 export function withLivable(report: ComplianceReport | null | undefined, plan?: BuildingPlan): ComplianceCheck[] {
   const checks = report?.checks ?? [];
-  if (!plan || checks.some((c) => categoryOf(c) === "livable")) return checks;
-  return [...checks, ...livableChecks(plan)];
+  if (!plan) return checks;
+  const derived = livableChecks(plan);
+  if (!checks.some((c) => categoryOf(c) === "livable")) return [...checks, ...derived];
+  const have = new Set(checks.map((c) => c.id));
+  return [...checks, ...derived.filter((c) => ALWAYS_LIVABLE.includes(c.id) && !have.has(c.id))];
 }
 
 /** The five livable rules (DESIGN.md "Plan"), read from the plan. */

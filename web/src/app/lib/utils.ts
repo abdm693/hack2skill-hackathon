@@ -5,16 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** 12.5 → 12'6"   18 → 18' */
+/** 12.5 → 12′6″   18 → 18′ (primes, as DESIGN.md writes dimensions) */
 export function feetInches(ft: number): string {
   const neg = ft < 0;
   let whole = Math.floor(Math.abs(ft) + 1e-6);
   let inches = Math.round((Math.abs(ft) - whole) * 12);
   if (inches === 12) { whole += 1; inches = 0; }
-  return `${neg ? "-" : ""}${whole}'${inches ? `${inches}"` : ""}`;
+  return `${neg ? "-" : ""}${whole}′${inches ? `${inches}″` : ""}`;
 }
 
-/** Room size label like 18'×18' (or 12'6"×13'). */
+/** Room size label like 18′×18′ (or 12′6″×13′). */
 export function sizeLabel(w: number, d: number): string {
   return `${feetInches(w)}×${feetInches(d)}`;
 }

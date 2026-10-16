@@ -53,7 +53,7 @@ export function Construction({ className }: { className?: string }) {
   const [now, setNow] = useState(0);
   const [done, setDone] = useState(false);
 
-  // Start when a third of the frame is visible.
+  // Start when half of the frame is visible.
   useEffect(() => {
     if (reduced) return;
     const el = root.current;
@@ -61,7 +61,7 @@ export function Construction({ className }: { className?: string }) {
     // Already on screen when the page opens: start now.
     const r = el.getBoundingClientRect();
     const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
-    if (r.height && visible / r.height >= 0.35) {
+    if (r.height && visible / r.height >= 0.5) {
       setRun((x) => (x === 0 ? 1 : x));
       return;
     }
@@ -72,7 +72,7 @@ export function Construction({ className }: { className?: string }) {
           io.disconnect();
         }
       },
-      { threshold: 0.35 },
+      { threshold: 0.5 },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -136,12 +136,12 @@ export function Construction({ className }: { className?: string }) {
         </Chip>
       </div>
       <div
-        className={cn("pointer-events-none absolute right-3 top-3 transition-opacity duration-500 sm:right-5 sm:top-5", time >= T.roof ? "opacity-100" : "opacity-0")}
+        className={cn("pointer-events-none absolute right-3 top-3 hidden transition-opacity duration-500 sm:right-5 sm:top-5 sm:block", time >= T.roof ? "opacity-100" : "opacity-0")}
         aria-hidden={time < T.roof}
       >
         <Chip dark={time >= T.wipe}>
           <span className="size-1.5 rounded-full bg-pass" aria-hidden />
-          <span className="tabular">42/42 LDA · 5/5 livable</span>
+          <span className="tabular">36 LDA checks · 8 livable</span>
         </Chip>
       </div>
 

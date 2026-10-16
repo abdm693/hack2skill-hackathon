@@ -1,5 +1,8 @@
 /** Mock intake agent: six one-tap questions plus an optional map pin, then a complete 10-marla LDA brief. */
-import type { Brief, ChatMessage, Chip } from "@contracts/api-types";
+import type { Brief as BriefBase, BriefPlot, ChatMessage, Chip } from "@contracts/api-types";
+
+/** The mock always keeps a plot on its working brief (zeros until known). */
+type Brief = BriefBase & { plot: BriefPlot };
 import type { Authority } from "@contracts/plan";
 import type { IntakeBody } from "../client";
 import { BUDGET_LABEL, PLOT_PRESETS, STYLE_OPTIONS, parseCoordinates, plotLabel, spaceLabel, toMarla } from "../domain";

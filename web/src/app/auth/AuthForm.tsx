@@ -59,14 +59,17 @@ export function AuthForm({
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Each field carries its own message, under it; anything else (the network) shows above the button.
+  type Field = "name" | "email" | "password";
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [error, setError] = useState<string | null>(null);
-  const [field, setField] = useState<"name" | "email" | "password" | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
   const [sent, setSent] = useState(false);
   const first = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setError(null);
-    setField(null);
+    setErrors({});
     setSent(false);
     const t = setTimeout(() => first.current?.focus(), 60);
     return () => clearTimeout(t);
@@ -75,8 +78,8 @@ export function AuthForm({
   // Take the person straight to the field that needs fixing.
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (field) form.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus();
-  }, [field, error]);
+    if (focusTick) form.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus();
+  }, [focusTick]);
 
   const [title, line] =
     mode === "reset"
@@ -84,9 +87,20 @@ export function AuthForm({
       : AUTH_COPY[reason][mode];
   const H = headingLevel;
 
-  const fail = (msg: string, f: typeof field = null) => {
-    setError(msg);
-    setField(f);
+  const fail = (msg: string, f: Field | null = null) => {
+    if (f) {
+      setErrors({ [f]: msg });
+      setError(null);
+    } else {
+      setErrors({});
+      setError(msg);
+    }
+    setFocusTick((n) => n + 1);
+  };
+  /** Editing a field clears its own message (and nothing else). */
+  const edit = (f: Field, set: (v: string) => void) => (v: string) => {
+    set(v);
+    if (errors[f]) setErrors((e) => ({ ...e, [f]: undefined }));
   };
 
   const submit = async (e: FormEvent) => {
@@ -99,7 +113,7 @@ export function AuthForm({
     if (mode === "signup" && password.length < 6) return fail("Use at least 6 characters for your password.", "password");
     setBusy(true);
     setError(null);
-    setField(null);
+    setErrors({});
     try {
       if (mode === "signin") await signIn(em, password);
       else if (mode === "signup") await signUp(name, em, password);
@@ -146,9 +160,9 @@ export function AuthForm({
             label="Your name, as clients will see it"
             autoComplete="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => edit("name", setName)(e.target.value)}
             placeholder="Ahmed Raza"
-            error={field === "name"}
+            error={errors.name}
             maxLength={60}
           />
         )}
@@ -159,9 +173,9 @@ export function AuthForm({
           inputMode="email"
           autoComplete="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => edit("email", setEmail)(e.target.value)}
           placeholder="name@example.com"
-          error={field === "email"}
+          error={errors.email}
         />
         {mode !== "reset" && (
           <Input
@@ -169,9 +183,9 @@ export function AuthForm({
             type={show ? "text" : "password"}
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => edit("password", setPassword)(e.target.value)}
             hint={mode === "signup" ? "At least 6 characters." : undefined}
-            error={field === "password"}
+            error={errors.password}
             trailing={
               <button
                 type="button"

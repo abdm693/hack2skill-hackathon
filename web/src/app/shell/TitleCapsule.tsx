@@ -3,29 +3,30 @@
  * "v2 · 42/42 LDA · 5/5 livable · Saved". Its menu holds Versions, Print plan…, Share, Rename, Details and All homes.
  */
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronDown, CloudUpload, History, Info, LayoutGrid, Pencil, Printer, Share2 } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
-import { canEdit, roleOf, viewAvailable } from "@/app/lib/views";
+import { canEdit, resolveVersion, roleOf, viewAvailable } from "@/app/lib/views";
 import { requireAccount, useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
 import { Menu, type MenuItem } from "@/app/ui/Menu";
 import { Tooltip } from "@/app/ui/Tooltip";
-import { complianceCounts } from "./narration";
+import { complianceCounts, countsLine } from "./narration";
 import { startShare } from "./next";
 
+/** "v1 · 35/36 LDA · 10/11 livable · 2 to check · Saved", for the version on screen (?v=), not just the latest. */
 export function useStatusLine(project: Project): string {
+  const [params] = useSearchParams();
   const versions = useProject((s) => s.versions);
+  const asBuilt = useProject((s) => s.asBuilt);
   const saveState = useProject((s) => s.saveState);
-  const current = project.versions.find((v) => v.id === project.current_version_id);
-  const counts = complianceCounts(project, versions);
+  const shownId = resolveVersion(project, params.get("v")).id;
+  const current = project.versions.find((v) => v.id === shownId);
+  const counts = complianceCounts(project, versions, asBuilt, shownId);
   const bits: string[] = [];
-  if (current) bits.push(`v${current.n}`);
-  if (counts) {
-    bits.push(`${counts.lda.pass}/${counts.lda.total} LDA`);
-    if (counts.livable) bits.push(`${counts.livable.pass}/${counts.livable.total} livable`);
-  }
+  if (current) bits.push(`v${current.n}${current.id !== project.current_version_id ? " (earlier)" : ""}`);
+  if (counts) bits.push(countsLine(counts));
   if (saveState === "saving") bits.push("Saving…");
   else if (saveState === "saved") bits.push("Saved");
   else if (!current) bits.push(project.stage === "setup" ? "Brief" : project.concepts.length ? "Concepts" : "Draft");

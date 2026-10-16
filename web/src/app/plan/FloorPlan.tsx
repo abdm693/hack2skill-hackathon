@@ -12,7 +12,7 @@ import { Minus, Plus, Scan } from "lucide-react";
 import type { BuildingPlan, Opening, Room } from "@contracts/plan";
 import { cn, feetInches, num, sizeLabel } from "@/app/lib/utils";
 import { EXT_WALL, deriveWalls, placeOpenings, stairDrawing, wallPieces, type PlacedOpening, type StairDrawing } from "./geometry";
-import { layoutLabels, type Box, type Label } from "./labels";
+import { layoutLabels, measure, type Box, type Label } from "./labels";
 import { CATEGORY, FILL, OPEN_TYPES, SITE_TYPES, area, isRoofLevel, levelsOf, opensTo, sentenceCase } from "./model";
 
 export type HighlightTone = "accent" | "fail" | "warn" | "pass";
@@ -70,7 +70,10 @@ export interface PlanSheetProps {
   pins?: PlanPin[];
   hovered?: string | null;
   onHover?: (room: Room | null, e: React.PointerEvent) => void;
-  onPin?: (id: string) => void;
+  /** Keyboard: Tab moves between rooms; focusing one (or Enter) shows its card. */
+  onFocusRoom?: (room: Room | null) => void;
+  /** A pin was tapped; `at` is its centre in client (viewport) px, for anchoring a popover beside it. */
+  onPin?: (id: string, at?: { x: number; y: number }) => void;
   /** Print: no hover affordances, heavier hairlines. */
   print?: boolean;
   /** Labels computed by the parent (keeps the legend in sync). */
@@ -90,6 +93,7 @@ export const PlanSheet = memo(function PlanSheet({
   pins,
   hovered,
   onHover,
+  onFocusRoom,
   onPin,
   print,
   labels: labelsProp,
@@ -120,15 +124,8 @@ export const PlanSheet = memo(function PlanSheet({
     const up = plan.stairs.filter((s) => s.from_level === level?.id).map((s) => ({ d: stairDrawing(s, plan.levels), dir: "up" as const }));
     const down = up.length ? [] : plan.stairs.filter((s) => s.to_level === level?.id).map((s) => ({ d: stairDrawing(s, plan.levels), dir: "down" as const }));
     const stairs = [...up, ...down];
-    // Stair halls fully drawn by their stair are labelled by the stair (UP/DN) instead.
-    const labelled = [...site, ...building].filter(
-      (r) =>
-        !(
-          r.type === "stair" &&
-          stairs.some(({ d }) => d.outline.x >= r.rect.x - 0.01 && d.outline.y >= r.rect.y - 0.01 && d.outline.x + d.outline.w <= r.rect.x + r.rect.w + 0.01 && d.outline.y + d.outline.d <= r.rect.y + r.rect.d + 0.01) &&
-          area(r) < stairs.reduce((s, x) => s + x.d.outline.w * x.d.outline.d, 0) * 1.5
-        ),
-    );
+    // Every room gets a label or a numbered marker, the stair hall included (its marker sits clear of the flights).
+    const labelled = [...site, ...building];
     return { rooms, site, building, walls, boundaries, openings, roofRooms, parapet, stairs, labelled };
   }, [plan, level, levels, isGround, roof]);
 
@@ -172,11 +169,18 @@ export const PlanSheet = memo(function PlanSheet({
           fill={FILL[CATEGORY[r.type]] ?? FILL.living}
           onPointerMove={onHover && ((e) => onHover(r, e))}
           onPointerLeave={onHover && ((e) => onHover(null, e))}
+          tabIndex={onFocusRoom ? 0 : undefined}
+          role={onFocusRoom ? "button" : undefined}
+          aria-label={onFocusRoom ? `${sentenceCase(r.name)}, ${sizeLabel(r.rect.w, r.rect.d).replace("×", " by ")}` : undefined}
+          onFocus={onFocusRoom && (() => onFocusRoom(r))}
+          onBlur={onFocusRoom && (() => onFocusRoom(null))}
+          onKeyDown={onFocusRoom && ((e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onFocusRoom(r); } })}
+          style={onFocusRoom ? { outline: "none" } : undefined}
         />
       ))}
       {hovered && (() => {
         const r = geo.rooms.find((x) => x.id === hovered);
-        return r ? <rect {...rect(r.rect)} fill="rgb(39 71 245 / 0.06)" pointerEvents="none" /> : null;
+        return r ? <rect {...rect(r.rect)} fill="rgb(39 71 245 / 0.06)" stroke={ACCENT} strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" /> : null;
       })()}
 
       {/* Issues and highlights */}
@@ -188,9 +192,9 @@ export const PlanSheet = memo(function PlanSheet({
         {geo.rooms.filter((r) => chg.has(r.id)).map((r) => <rect key={`chg-${r.id}`} {...rect(r.rect)} fill="rgb(39 71 245 / 0.07)" />)}
       </g>
 
-      {/* Stairs */}
+      {/* Stairs (on the roof they are drawn again after the stair tower, see below) */}
       <g pointerEvents="none">
-        {geo.stairs.map(({ d, dir }) => (
+        {!roof && geo.stairs.map(({ d, dir }) => (
           <StairSymbol key={d.stair.id} d={d} dir={dir} Y={Y} px={px} highlighted={hl.has(d.stair.id)} tone={TONE[tone]} />
         ))}
       </g>
@@ -219,7 +223,12 @@ export const PlanSheet = memo(function PlanSheet({
             const r = w.orient === "h" ? { x: w.a - th / 2, y: Y(w.c) - th / 2, width: w.b - w.a + th, height: th } : { x: w.c - th / 2, y: Y(w.b) - th / 2, width: th, height: w.b - w.a + th };
             return <rect key={i} {...r} fill={PAPER} stroke={INK} strokeWidth={hair} vectorEffect="non-scaling-stroke" />;
           })}
-          <RoofExtras plan={plan} Y={Y} px={px} />
+          <RoofExtras plan={plan} Y={Y} px={px} W={W} />
+          {/* The stair arriving at the roof, inside the stair tower: never painted over. */}
+          {geo.stairs.map(({ d, dir }) => (
+            <StairSymbol key={d.stair.id} d={d} dir={dir} Y={Y} px={px} highlighted={hl.has(d.stair.id)} tone={TONE[tone]} />
+          ))}
+          <RoofLabels plan={plan} Y={Y} px={px} W={W} D={D} />
         </g>
       )}
 
@@ -303,7 +312,11 @@ export const PlanSheet = memo(function PlanSheet({
           key={p.id}
           transform={`translate(${p.x} ${Y(p.y)})`}
           style={{ cursor: onPin ? "pointer" : undefined }}
-          onClick={onPin && ((e) => { e.stopPropagation(); onPin(p.id); })}
+          onClick={onPin && ((e) => {
+            e.stopPropagation();
+            const r = (e.currentTarget as SVGGElement).getBoundingClientRect();
+            onPin(p.id, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+          })}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <title>{p.text}</title>
@@ -510,61 +523,122 @@ function StairSymbol({ d, dir, Y, px, highlighted, tone }: { d: StairDrawing; di
   );
 }
 
-function RoofExtras({ plan, Y, px }: { plan: BuildingPlan; Y: (y: number) => number; px: (n: number) => number }) {
+function RoofExtras({ plan, Y }: { plan: BuildingPlan; Y: (y: number) => number; px: (n: number) => number; W: number }) {
   const m = plan.roof.mumty;
   const tank = plan.roof.water_tank;
   const solar = plan.roof.solar;
-  const caption = (x: number, y: number, t: string, sub?: string) => (
-    <g textAnchor="middle" style={{ fontFamily: SANS }}>
-      <text x={x} y={y} fontSize={px(11)} fontWeight={500} fill={INK}>
-        {t}
-      </text>
-      {sub && (
-        <text x={x} y={y + px(13)} fontSize={px(10)} fill={INK3} style={{ fontFamily: MONO }}>
-          {sub}
-        </text>
-      )}
-    </g>
-  );
+  // A tank sitting on the stair tower's roof is above this level: dashed, like anything overhead.
+  const overhead = !!(m && tank && inside(tank.rect, m.rect));
   return (
     <g>
       {solar?.rect && (
-        <g>
-          <rect {...{ x: solar.rect.x, y: Y(solar.rect.y + solar.rect.d), width: solar.rect.w, height: solar.rect.d }} fill={solar.mode === "panels" ? "url(#fp-solar)" : "rgb(39 71 245 / 0.04)"} stroke={ACCENT} strokeWidth={1} strokeDasharray={solar.mode === "panels" ? undefined : "5 4"} vectorEffect="non-scaling-stroke" />
-          {caption(solar.rect.x + solar.rect.w / 2, Y(solar.rect.y + solar.rect.d / 2), solar.mode === "panels" ? "Solar panels" : "Kept clear for solar", `${num(solar.rect.w * solar.rect.d)} sq ft`)}
-        </g>
+        <rect {...{ x: solar.rect.x, y: Y(solar.rect.y + solar.rect.d), width: solar.rect.w, height: solar.rect.d }} fill={solar.mode === "panels" ? "url(#fp-solar)" : "rgb(39 71 245 / 0.04)"} stroke={ACCENT} strokeWidth={1} strokeDasharray={solar.mode === "panels" ? undefined : "5 4"} vectorEffect="non-scaling-stroke" />
       )}
       {m && (
         <g>
-          <rect x={m.rect.x} y={Y(m.rect.y + m.rect.d)} width={m.rect.w} height={m.rect.d} fill="#fff" stroke={INK} strokeWidth={EXT_WALL} />
+          {/* Walls only (no fill), so the stair that arrives inside stays visible. */}
+          <rect x={m.rect.x + EXT_WALL / 2} y={Y(m.rect.y + m.rect.d) + EXT_WALL / 2} width={Math.max(0.1, m.rect.w - EXT_WALL)} height={Math.max(0.1, m.rect.d - EXT_WALL)} fill="none" stroke={INK} strokeWidth={EXT_WALL} />
           {(() => {
             const { x, y, w, d } = m.rect;
             const dw = 3;
             const g =
-              m.door_side === "right" ? { x: x + w - EXT_WALL / 2 - 0.05, y: Y(y + d / 2 + dw / 2), width: EXT_WALL + 0.1, height: dw }
-              : m.door_side === "left" ? { x: x - EXT_WALL / 2 - 0.05, y: Y(y + d / 2 + dw / 2), width: EXT_WALL + 0.1, height: dw }
-              : m.door_side === "front" ? { x: x + w / 2 - dw / 2, y: Y(y) - EXT_WALL / 2 - 0.05, width: dw, height: EXT_WALL + 0.1 }
-              : { x: x + w / 2 - dw / 2, y: Y(y + d) - EXT_WALL / 2 - 0.05, width: dw, height: EXT_WALL + 0.1 };
-            return <rect {...g} fill="#fff" />;
+              m.door_side === "right" ? { x: x + w - EXT_WALL - 0.05, y: Y(y + d / 2 + dw / 2), width: EXT_WALL + 0.1, height: dw }
+              : m.door_side === "left" ? { x: x - 0.05, y: Y(y + d / 2 + dw / 2), width: EXT_WALL + 0.1, height: dw }
+              : m.door_side === "front" ? { x: x + w / 2 - dw / 2, y: Y(y) - EXT_WALL - 0.05, width: dw, height: EXT_WALL + 0.1 }
+              : { x: x + w / 2 - dw / 2, y: Y(y + d) - 0.05, width: dw, height: EXT_WALL + 0.1 };
+            return <rect {...g} fill={PAPER} />;
           })()}
         </g>
       )}
       {tank && (
         <g>
           {tank.material === "plastic" ? (
-            <ellipse cx={tank.rect.x + tank.rect.w / 2} cy={Y(tank.rect.y + tank.rect.d / 2)} rx={tank.rect.w / 2} ry={tank.rect.d / 2} fill="#E6F1F5" stroke={INK} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <ellipse cx={tank.rect.x + tank.rect.w / 2} cy={Y(tank.rect.y + tank.rect.d / 2)} rx={tank.rect.w / 2} ry={tank.rect.d / 2} fill={overhead ? "none" : "#E6F1F5"} stroke={INK} strokeWidth={1} strokeDasharray={overhead ? "4 3" : undefined} vectorEffect="non-scaling-stroke" />
           ) : (
             <>
-              <rect x={tank.rect.x} y={Y(tank.rect.y + tank.rect.d)} width={tank.rect.w} height={tank.rect.d} fill="#E6F1F5" stroke={INK} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              <path d={`M${tank.rect.x} ${Y(tank.rect.y)}L${tank.rect.x + tank.rect.w} ${Y(tank.rect.y + tank.rect.d)}M${tank.rect.x} ${Y(tank.rect.y + tank.rect.d)}L${tank.rect.x + tank.rect.w} ${Y(tank.rect.y)}`} stroke={INK3} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+              <rect x={tank.rect.x} y={Y(tank.rect.y + tank.rect.d)} width={tank.rect.w} height={tank.rect.d} fill={overhead ? "none" : "#E6F1F5"} stroke={INK} strokeWidth={1} strokeDasharray={overhead ? "4 3" : undefined} vectorEffect="non-scaling-stroke" />
+              {!overhead && <path d={`M${tank.rect.x} ${Y(tank.rect.y)}L${tank.rect.x + tank.rect.w} ${Y(tank.rect.y + tank.rect.d)}M${tank.rect.x} ${Y(tank.rect.y + tank.rect.d)}L${tank.rect.x + tank.rect.w} ${Y(tank.rect.y)}`} stroke={INK3} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />}
             </>
           )}
         </g>
       )}
-      {m && caption(m.rect.x + m.rect.w / 2, Y(m.rect.y + m.rect.d) - px(16), "Stair tower", `${feetInches(m.height_ft)} high`)}
-      {tank && caption(tank.rect.x + tank.rect.w / 2, Y(tank.rect.y) + px(14), tank.material === "plastic" ? "Plastic tank" : tank.material === "concrete" ? "Concrete tank" : "Water tank")}
     </g>
   );
+}
+
+function inside(a: { x: number; y: number; w: number; d: number }, b: { x: number; y: number; w: number; d: number }) {
+  return a.x >= b.x - 0.01 && a.y >= b.y - 0.01 && a.x + a.w <= b.x + b.w + 0.01 && a.y + a.d <= b.y + b.d + 0.01;
+}
+
+/**
+ * Roof captions: inside their shape when they fit, otherwise beside it with a short leader, on the side with room
+ * (never on the stair tower's walls or over the flights).
+ */
+function RoofLabels({ plan, Y, px, W, D }: { plan: BuildingPlan; Y: (y: number) => number; px: (n: number) => number; W: number; D: number }) {
+  const m = plan.roof.mumty;
+  const tank = plan.roof.water_tank;
+  const solar = plan.roof.solar;
+  const FS = 11;
+  const SUB = 10;
+  const pad = px(4);
+  type R = { x: number; y: number; w: number; d: number };
+  const taken: R[] = [];
+  const out: ReactNode[] = [];
+  const hit = (a: R, b: R) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.d && b.y < a.y + a.d;
+  const place = (key: string, shape: R, title: string, sub: string | undefined, allowInside: boolean, avoid: R[]) => {
+    const tw = px(Math.max(measure(title, FS), sub ? measure(sub, SUB, true) : 0));
+    const th = px(FS * 1.2 + (sub ? SUB * 1.3 : 0));
+    const text = (x: number, top: number, anchor: "start" | "middle" | "end") => (
+      <g textAnchor={anchor} style={{ fontFamily: SANS }}>
+        <text x={x} y={Y(top) + px(FS * 0.95)} fontSize={px(FS)} fontWeight={500} fill={INK}>
+          {title}
+        </text>
+        {sub && (
+          <text x={x} y={Y(top) + px(FS * 1.2 + SUB * 1.05)} fontSize={px(SUB)} fill={INK3} style={{ fontFamily: MONO }}>
+            {sub}
+          </text>
+        )}
+      </g>
+    );
+    // Inside, centred, when the caption fits with a 4px margin and touches nothing else.
+    if (allowInside && tw + 2 * pad <= shape.w && th + 2 * pad <= shape.d) {
+      const box = { x: shape.x + shape.w / 2 - tw / 2, y: shape.y + shape.d / 2 - th / 2, w: tw, d: th };
+      if (!avoid.some((a) => hit(a, box)) && !taken.some((t) => hit(t, box))) {
+        taken.push(box);
+        out.push(<g key={key}>{text(shape.x + shape.w / 2, box.y + box.d, "middle")}</g>);
+        return;
+      }
+    }
+    // Beside it with a leader: right, left, behind (up the page), in front.
+    const gap = px(10);
+    const cy = shape.y + shape.d / 2;
+    const cands: { box: R; anchor: "start" | "end" | "middle"; tx: number; lead: [number, number, number, number] }[] = [
+      { box: { x: shape.x + shape.w + gap, y: cy - th / 2, w: tw, d: th }, anchor: "start", tx: shape.x + shape.w + gap, lead: [shape.x + shape.w, cy, shape.x + shape.w + gap - px(2), cy] },
+      { box: { x: shape.x - gap - tw, y: cy - th / 2, w: tw, d: th }, anchor: "end", tx: shape.x - gap, lead: [shape.x, cy, shape.x - gap + px(2), cy] },
+      { box: { x: shape.x + shape.w / 2 - tw / 2, y: shape.y + shape.d + gap, w: tw, d: th }, anchor: "middle", tx: shape.x + shape.w / 2, lead: [shape.x + shape.w / 2, shape.y + shape.d, shape.x + shape.w / 2, shape.y + shape.d + gap - px(2)] },
+      { box: { x: shape.x + shape.w / 2 - tw / 2, y: shape.y - gap - th, w: tw, d: th }, anchor: "middle", tx: shape.x + shape.w / 2, lead: [shape.x + shape.w / 2, shape.y, shape.x + shape.w / 2, shape.y - gap + px(2)] },
+    ];
+    const fits = (b: R) => b.x >= 0.5 && b.x + b.w <= W - 0.5 && b.y >= 0.5 && b.y + b.d <= D - 0.5 && !avoid.some((a) => hit(a, b)) && !taken.some((t) => hit(t, b));
+    const c = cands.find((k) => fits(k.box)) ?? cands.find((k) => k.box.x >= 0 && k.box.x + k.box.w <= W) ?? cands[0];
+    taken.push(c.box);
+    out.push(
+      <g key={key}>
+        <line x1={c.lead[0]} y1={Y(c.lead[1])} x2={c.lead[2]} y2={Y(c.lead[3])} stroke={INK3} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+        <circle cx={c.lead[0]} cy={Y(c.lead[1])} r={px(1.6)} fill={INK3} />
+        {text(c.tx, c.box.y + c.box.d, c.anchor)}
+      </g>,
+    );
+  };
+  const stairsUp = plan.stairs.filter((st) => m && inside(st.rect, m.rect)).map((st) => st.rect);
+  const solids: R[] = [...(m ? [m.rect] : []), ...(tank ? [tank.rect] : [])];
+  if (m) place("mumty", m.rect, "Stair tower", `${feetInches(m.height_ft)} high`, false, solids.filter((r) => r !== m.rect));
+  if (tank) {
+    const name = tank.material === "plastic" ? "Plastic tank" : tank.material === "concrete" ? "Concrete tank" : "Water tank";
+    const onTower = !!(m && inside(tank.rect, m.rect));
+    place("tank", tank.rect, onTower ? `${name} above` : name, undefined, !onTower, [...(m ? [m.rect] : []), ...stairsUp].filter((r) => r !== tank.rect));
+  }
+  if (solar?.rect) place("solar", solar.rect, solar.mode === "panels" ? "Solar panels" : "Kept clear for solar", `${num(solar.rect.w * solar.rect.d)} sq ft`, true, solids);
+  return <g>{out}</g>;
 }
 
 function Roads({ plan, px, isGround }: { plan: BuildingPlan; px: (n: number) => number; isGround: boolean }) {
@@ -771,7 +845,7 @@ export interface FloorPlanProps {
   changed?: string[];
   deltas?: Map<string, number | "new">;
   pins?: PlanPin[];
-  onPin?: (id: string) => void;
+  onPin?: (id: string, at?: { x: number; y: number }) => void;
   setbacks?: { front: number; rear: number; left: number; right: number };
   /** Space (px) kept clear around the drawing at "fit" (floating chrome sits there). */
   inset?: { top: number; right: number; bottom: number; left: number };
@@ -786,6 +860,8 @@ export interface FloorPlanProps {
   fit?: "sheet" | "plot";
   /** Called with the label layout so the parent can show the numbered-key legend. */
   onKeys?: (keys: { n: number; room: Room }[]) => void;
+  /** What changed in a room since the last version, shown in its card ("Widened the window"). */
+  notes?: Map<string, string[]>;
   children?: ReactNode;
 }
 
@@ -809,6 +885,7 @@ export function FloorPlan({
   resetKey,
   fit = "sheet",
   onKeys,
+  notes,
   children,
 }: FloorPlanProps) {
   const box = useRef<HTMLDivElement>(null);
@@ -916,7 +993,10 @@ export function FloorPlan({
       e.preventDefault();
       const r = el.getBoundingClientRect();
       const k = e.ctrlKey ? 0.012 : 0.0022;
-      zoomAt(Math.exp(-e.deltaY * k), e.clientX - r.left, e.clientY - r.top);
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      // One wheel notch (or one pinch event) zooms 1.25x at most.
+      const f = Math.min(1.25, Math.max(0.8, Math.exp(-e.deltaY * unit * k)));
+      zoomAt(f, e.clientX - r.left, e.clientY - r.top);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -927,11 +1007,13 @@ export function FloorPlan({
   const gesture = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
   const [dragging, setDragging] = useState(false);
   const moved = useRef(0);
+  const tapStart = useRef<number | null>(null);
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     moved.current = 0;
+    tapStart.current = pointers.current.size === 1 ? e.pointerId : null;
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       gesture.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
@@ -968,13 +1050,48 @@ export function FloorPlan({
     });
   };
   const onPointerUp = (e: React.PointerEvent) => {
+    // A tap (no drag) on a room shows its card; on empty paper it clears the card.
+    if (e.type === "pointerup" && tapStart.current === e.pointerId && moved.current < 3 && pointers.current.size === 1) {
+      const r = box.current!.getBoundingClientRect();
+      const sx = e.clientX - r.left;
+      const sy = e.clientY - r.top;
+      const room = roomAt(sx, sy);
+      setTapped(room ? { room, x: sx, y: sy } : null);
+    }
+    tapStart.current = null;
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) gesture.current = null;
     if (!pointers.current.size) setDragging(false);
   };
 
-  // Hover: the room under the pointer with "Opens to…".
+  // Hover: the room under the pointer with "Opens to…". A tap or keyboard focus pins the same card (phones, keyboards).
   const [hover, setHover] = useState<{ room: Room; x: number; y: number } | null>(null);
+  const [tapped, setTapped] = useState<{ room: Room; x: number; y: number } | null>(null);
+  /** Container px → the room on this level under that point (smallest first, so a bath inside a suite wins). */
+  const roomAt = (sx: number, sy: number): Room | null => {
+    const p = ppf0 * v.z;
+    const x = v.cx - size.w / 2 / p + sx / p;
+    const y = plan.site.plot.depth_ft - (v.cy - size.h / 2 / p + sy / p);
+    const hits = plan.rooms
+      .filter((rm) => rm.level === level && x >= rm.rect.x && x <= rm.rect.x + rm.rect.w && y >= rm.rect.y && y <= rm.rect.y + rm.rect.d)
+      .sort((a, b) => area(a) - area(b));
+    return hits[0] ?? null;
+  };
+  /** A room's centre in container px. */
+  const roomCentre = (rm: Room) => {
+    const p = ppf0 * v.z;
+    return {
+      x: (rm.rect.x + rm.rect.w / 2 - (v.cx - size.w / 2 / p)) * p,
+      y: (plan.site.plot.depth_ft - (rm.rect.y + rm.rect.d / 2) - (v.cy - size.h / 2 / p)) * p,
+    };
+  };
+  const onFocusRoom = useCallback(
+    (rm: Room | null) => setTapped(rm ? { room: rm, ...roomCentre(rm) } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [v.cx, v.cy, v.z, ppf0, size.w, size.h, plan],
+  );
+  useEffect(() => setTapped(null), [level, plan]);
+  const card = hover ?? tapped;
   const onHover = useCallback((room: Room | null, e: React.PointerEvent) => {
     if (e.pointerType === "touch" || pointers.current.size) return;
     const r = box.current?.getBoundingClientRect();
@@ -998,14 +1115,7 @@ export function FloorPlan({
       ...plan.stairs.filter((s) => s.from_level === level),
       ...(plan.stairs.some((s) => s.from_level === level) ? [] : plan.stairs.filter((s) => s.to_level === level)),
     ].map((s) => stairDrawing(s, plan.levels));
-    const labelled = [...site, ...building].filter(
-      (r) =>
-        !(
-          r.type === "stair" &&
-          stairs.some((d) => d.outline.x >= r.rect.x - 0.01 && d.outline.y >= r.rect.y - 0.01 && d.outline.x + d.outline.w <= r.rect.x + r.rect.w + 0.01 && d.outline.y + d.outline.d <= r.rect.y + r.rect.d + 0.01) &&
-          area(r) < stairs.reduce((s, d) => s + d.outline.w * d.outline.d, 0) * 1.5
-        ),
-    );
+    const labelled = [...site, ...building];
     const avoid: Box[] = stairs.map((d) => ({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d }));
     return layoutLabels(labelled, labelPpf || 1, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
   }, [plan, level, rooms, labelPpf, fontTick, deltas, measured]);
@@ -1020,7 +1130,7 @@ export function FloorPlan({
 
   const zoomBy = (f: number) => animateTo(clampView({ ...v, z: v.z * f }));
 
-  const opens = hover ? opensTo(plan, hover.room) : [];
+  const opens = card ? opensTo(plan, card.room) : [];
 
   return (
     <div
@@ -1058,8 +1168,9 @@ export function FloorPlan({
             changed={changed}
             deltas={deltas}
             pins={pins}
-            hovered={hover?.room.id ?? null}
+            hovered={card?.room.id ?? null}
             onHover={onHover}
+            onFocusRoom={onFocusRoom}
             onPin={onPin}
             labels={labels}
           />
@@ -1067,16 +1178,30 @@ export function FloorPlan({
       )}
       <style>{`.fp-pulse{animation:fp-pulse 1.6s ease-in-out infinite}@keyframes fp-pulse{50%{opacity:.35}}@media (prefers-reduced-motion: reduce){.fp-pulse{animation:none}}`}</style>
 
-      {hover && !dragging && (
+      {card && !dragging && (
         <div
           className="pointer-events-none absolute z-10 max-w-[260px] rounded-control bg-ink px-3 py-2 text-white shadow-e2"
-          style={{ left: Math.min(hover.x + 16, size.w - 270), top: Math.max(8, hover.y - 72) }}
+          style={{ left: Math.max(8, Math.min(card.x + 16, size.w - 270)), top: Math.max(8, card.y - 72) }}
+          role="status"
+          aria-live="polite"
         >
-          <p className="text-[13px] font-medium leading-tight">{sentenceCase(hover.room.name)}</p>
+          <p className="text-[13px] font-medium leading-tight">{sentenceCase(card.room.name)}</p>
           <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-white/70">
-            {sizeLabel(hover.room.rect.w, hover.room.rect.d).replace("×", " × ")} · {num(area(hover.room))} sq ft
+            {sizeLabel(card.room.rect.w, card.room.rect.d).replace("×", " × ")} · {num(area(card.room))} sq ft
           </p>
           {opens.length > 0 && <p className="mt-1 text-[12px] leading-snug text-white/85">Opens to: {opens.join(", ")}</p>}
+          {(() => {
+            const d = deltas?.get(card.room.id);
+            const said = notes?.get(card.room.id);
+            if (d === undefined && !said?.length) return null;
+            return (
+              <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[12px] leading-snug text-white/85">
+                {d !== undefined && <span className="font-mono font-semibold tabular-nums text-[#9DB0FF]">{d === "new" ? "New room" : `${d > 0 ? "+" : "−"}${num(Math.abs(d))} sq ft`}</span>}
+                {d !== undefined && said?.length ? " · " : ""}
+                {said?.join("; ")}
+              </p>
+            );
+          })()}
         </div>
       )}
 

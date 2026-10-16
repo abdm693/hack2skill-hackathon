@@ -107,6 +107,7 @@ export function Conversation({
                 <UnderstoodCard
                   m={m}
                   brief={brief}
+                  envelope={envelope}
                   interactive={m.id === latestUnderstood}
                   onCorrect={(before, after) => send({ message: `Correction: ${after}, not ${before.toLowerCase()}.` }, `${after}, not ${before.toLowerCase()}`)}
                   onRemoveAssumption={(a) => send({ message: `Don't assume: ${a.toLowerCase()}.` }, `Don't assume ${a.toLowerCase()}`)}

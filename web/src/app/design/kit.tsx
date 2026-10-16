@@ -180,7 +180,7 @@ export function Segmented<T extends string>({
   className,
 }: {
   value: T;
-  options: { value: T; label: ReactNode; title?: string; disabled?: boolean }[];
+  options: { value: T; label: ReactNode; title?: string; disabled?: boolean; /** Accessible name when the label is short ("3" → "3 storeys"). */ aria?: string }[];
   onChange: (v: T) => void;
   tone?: "light" | "hud";
   size?: "sm" | "md";
@@ -207,11 +207,12 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            aria-label={o.aria}
             title={o.title}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              "relative z-0 inline-flex h-full items-center gap-1.5 rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus disabled:opacity-40",
+              "hit-44 relative z-0 inline-flex h-full items-center gap-1.5 rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus disabled:opacity-40",
               size === "md" ? "px-3.5 text-[13px]" : "px-3 text-[12px]",
               tone === "light" ? (active ? "text-ink" : "text-ink-3 hover:text-ink") : active ? "text-ink" : "text-hud-ink-2 hover:text-hud-ink",
             )}
@@ -390,7 +391,11 @@ export function Dialog({
 
 // ── Popover ─────────────────────────────────────────────────────────────────────────────────────────
 
-/** A small anchored panel. Closes on outside click and Esc. `side` is where it opens relative to the anchor. */
+/**
+ * A small anchored panel. Closes on outside click and Esc. `side` is where it opens relative to the anchor; it flips
+ * only when the other side has more room, and is always clamped inside the viewport (8px margin) with its own scroll.
+ * `sheetBelow` (px): narrower screens get a bottom sheet instead.
+ */
 export function Popover({
   open,
   onClose,
@@ -401,6 +406,10 @@ export function Popover({
   tone = "light",
   className,
   offset = 8,
+  sheetBelow,
+  sheetFull,
+  avoid,
+  label,
 }: {
   open: boolean;
   onClose: () => void;
@@ -411,26 +420,66 @@ export function Popover({
   tone?: "light" | "hud";
   className?: string;
   offset?: number;
+  sheetBelow?: number;
+  /** As a sheet, take the full height under the top row (the phone room list). */
+  sheetFull?: boolean;
+  /** Elements the panel must not cover (e.g. the minimap); it shifts left or caps its height to stay clear. */
+  avoid?: () => (Element | null | undefined)[];
+  label?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
+  const [asSheet, setAsSheet] = useState(false);
+  // Read through a ref: callers pass a fresh arrow each render, and re-placing on every render would make it jump.
+  const avoidRef = useRef(avoid);
+  avoidRef.current = avoid;
   useEscape(open, onClose);
 
   const place = useCallback(() => {
+    const sheet = !!sheetBelow && window.innerWidth < sheetBelow;
+    setAsSheet(sheet);
+    if (sheet) {
+      setPos(
+        sheetFull
+          ? { left: 8, right: 8, top: "calc(var(--chrome-top, 72px) + 4px)", bottom: "calc(8px + env(safe-area-inset-bottom, 0px))", visibility: "visible" }
+          : { left: 8, right: 8, bottom: "calc(8px + env(safe-area-inset-bottom, 0px))", maxHeight: "min(70dvh, calc(100dvh - 16px))", visibility: "visible" },
+      );
+      return;
+    }
     const a = anchor.current?.getBoundingClientRect();
     const p = panel.current;
     if (!a || !p) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const w = p.offsetWidth;
-    const h = p.offsetHeight;
+    // Natural height (uncapped) decides the side; the cap then keeps it on screen with internal scroll.
+    const natural = p.scrollHeight;
+    const above = a.top - offset - 8;
+    const below = vh - a.bottom - offset - 8;
+    let dir = side;
+    if (side === "top" && natural > above && below > above) dir = "bottom";
+    if (side === "bottom" && natural > below && above > below) dir = "top";
+    const room = Math.max(120, dir === "top" ? above : below);
+    let maxH = Math.min(natural, room, vh - 16);
     let left = align === "start" ? a.left : align === "end" ? a.right - w : a.left + a.width / 2 - w / 2;
     left = Math.max(8, Math.min(vw - w - 8, left));
-    let top = side === "top" ? a.top - h - offset : a.bottom + offset;
-    if (side === "top" && top < 8) top = a.bottom + offset;
-    if (side === "bottom" && top + h > vh - 8) top = Math.max(8, a.top - h - offset);
-    setPos({ left, top, visibility: "visible" });
-  }, [anchor, side, align, offset]);
+    let top = dir === "top" ? a.top - offset - maxH : a.bottom + offset;
+    top = Math.max(8, Math.min(vh - maxH - 8, top));
+    // Stay clear of what must stay visible (the minimap): cap the height above it, or move beside it.
+    for (const el of avoidRef.current?.() ?? []) {
+      const r = el?.getBoundingClientRect();
+      if (!r || !r.width) continue;
+      const hits = left < r.right && r.left < left + w && top < r.bottom && r.top < top + maxH;
+      if (!hits) continue;
+      if (dir === "top" && a.top - offset - (r.bottom + 8) >= 160) {
+        maxH = Math.min(maxH, a.top - offset - (r.bottom + 8));
+        top = a.top - offset - maxH;
+      } else if (r.left - 8 - w >= 8) {
+        left = r.left - 8 - w;
+      }
+    }
+    setPos({ left, top, maxHeight: maxH, visibility: "visible" });
+  }, [anchor, side, align, offset, sheetBelow, sheetFull]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -467,12 +516,14 @@ export function Popover({
           exit={{ opacity: 0, y: side === "top" ? 4 : -4, transition: { duration: 0.14 } }}
           transition={{ duration: 0.2, ease: EASE_OUT }}
           className={cn(
-            "fixed z-[70] rounded-card p-2",
+            "fixed z-[70] overflow-y-auto overscroll-contain rounded-card p-2 [scrollbar-width:thin]",
             tone === "light" ? "bg-surface text-ink shadow-e2" : "glass-hud shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)]",
             className,
+            asSheet && "w-auto rounded-panel p-3",
           )}
           style={pos}
           role="dialog"
+          aria-label={label}
         >
           {children}
         </motion.div>

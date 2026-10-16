@@ -4,12 +4,15 @@ import type { Layer } from "./house-sdk";
 
 export type Stage = "setup" | "concepts" | "planning" | "building" | "ready" | "revising";
 
+export interface BriefPlot { width_ft: number; depth_ft: number; area_marla: number; corner: boolean }
+
 export interface Brief {
   city: string;
   authority: Authority;
   scheme?: string;
   coordinates?: { lat: number; lng: number };
-  plot: { width_ft: number; depth_ft: number; area_marla: number; corner: boolean };
+  /** null until the plot size is known (a first message without one saves an empty brief). */
+  plot: BriefPlot | null;
   facing?: "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
   storeys: number;
   basement: boolean;

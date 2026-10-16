@@ -134,6 +134,13 @@ export interface Api {
 
   // The client view (/s/:token)
   getShared(token: string): Promise<SharedProject>;
+  /** Comments only (GET /share/{token}/comments): the client's light 10 s poll. */
+  listSharedComments(token: string): Promise<Comment[]>;
+  /**
+   * Which version is current, cheaply: GET /share/{token}/meta when the server has it, else the full share read
+   * (polled less often by the caller).
+   */
+  getSharedMeta(token: string): Promise<{ current_version_id: string | null; versions: { id: string; n: number }[] }>;
   createSharedComment(token: string, body: NewComment & { author_name: string }): Promise<Comment>;
   replyToSharedComment(token: string, cid: string, body: { text: string; author_name?: string }): Promise<Comment | Reply>;
 }
@@ -274,6 +281,17 @@ const realApi: Api = {
   setShare: (pid, enabled) => http("POST", `${p(pid)}/share`, { enabled }),
 
   getShared: (token) => http("GET", s(token)),
+  listSharedComments: async (token) => (await http<{ comments: Comment[] }>("GET", `${s(token)}/comments`)).comments ?? [],
+  getSharedMeta: async (token) => {
+    try {
+      const m = await http<{ current_version_id?: string | null; versions?: { id: string; n: number }[] }>("GET", `${s(token)}/meta`);
+      if (m && "current_version_id" in m) return { current_version_id: m.current_version_id ?? null, versions: m.versions ?? [] };
+    } catch {
+      /* older servers: no /meta */
+    }
+    const full = await http<SharedProject>("GET", s(token));
+    return { current_version_id: full.project.current_version_id ?? full.version?.id ?? null, versions: full.project.versions.map((v) => ({ id: v.id, n: v.n })) };
+  },
   createSharedComment: (token, body) => http("POST", `${s(token)}/comments`, body),
   replyToSharedComment: (token, cid, body) => http("POST", `${s(token)}/comments/${e(cid)}/replies`, body),
 };
@@ -295,6 +313,7 @@ export function shareUrl(share: { url?: string; token?: string } | null | undefi
 
 /** Turn provider errors ("429 RESOURCE_EXHAUSTED {…}") into a sentence people can act on. */
 export function friendlyError(message: string): string {
+  if (/^\s*<|<\/?(html|body|head|title|h1|div)\b/i.test(message)) return "Naqsha couldn't reply. Try again.";
   if (/\b429\b|RESOURCE_EXHAUSTED|quota|rate limit/i.test(message)) return "Naqsha is busy right now. Try again in a minute.";
   if (/\b50[34]\b|UNAVAILABLE|overloaded/i.test(message)) return "Naqsha is briefly unavailable. Try again shortly.";
   if (/DEADLINE_EXCEEDED|timed? ?out|timeout/i.test(message)) return "That took too long. Try again.";

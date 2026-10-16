@@ -24,8 +24,10 @@ export function PlotSketch({ envelope, width, depth, className }: { envelope?: E
   if (!W || !D) {
     return (
       <svg viewBox="0 0 160 120" className={cn("h-full w-full", className)} aria-hidden>
+        {/* An empty plot, not yet sized: a neutral house mark (no accent "+", which reads as "New home"). */}
         <rect x="56" y="30" width="48" height="60" rx="2" fill="none" stroke="var(--color-line-strong)" strokeWidth="1" strokeDasharray="3 3" />
-        <path d="M80 52v16M72 60h16" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M70 70V59l10-8 10 8v11z" fill="none" stroke="var(--color-ink-4)" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M77 70v-6h6v6" fill="none" stroke="var(--color-ink-4)" strokeWidth="1.2" strokeLinejoin="round" />
       </svg>
     );
   }

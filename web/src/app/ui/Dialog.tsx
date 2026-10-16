@@ -25,6 +25,7 @@ export function Dialog({
   className,
   dismissible = true,
   showClose = true,
+  returnFocus,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,12 +42,14 @@ export function Dialog({
   /** False: the scrim and Escape don't close it (e.g. while saving). */
   dismissible?: boolean;
   showClose?: boolean;
+  /** Where focus goes when it closes (default: what had focus when it opened). */
+  returnFocus?: () => HTMLElement | null | undefined;
 }) {
   const sheet = useMediaQuery("(max-width: 639px)");
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  useFocusTrap(panel, open);
+  useFocusTrap(panel, open, returnFocus);
   useEscape(open, () => dismissible && onClose());
   useModalOpen(open);
 

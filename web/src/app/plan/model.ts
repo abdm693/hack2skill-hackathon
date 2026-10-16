@@ -184,7 +184,8 @@ export function opensTo(plan: BuildingPlan, room: Room): string[] {
     const other = byId.get(c.other);
     if (!other) continue;
     const otherDoors = connections(plan, other).filter((x) => x.other !== "exterior" && x.other !== room.id);
-    const own = (other.type === "bath" || other.type === "dressing") && otherDoors.every((x) => ["bath", "dressing"].includes(byId.get(x.other)?.type ?? ""));
+    // "Own" only for a bedroom's suite (its bath or dressing); a lounge's neighbouring bath is just "Bath 2".
+    const own = BEDROOMS.has(room.type) && (other.type === "bath" || other.type === "dressing") && otherDoors.every((x) => ["bath", "dressing"].includes(byId.get(x.other)?.type ?? ""));
     out.push(own ? `own ${other.type === "bath" ? "bath" : "dressing"}` : inline(sentenceCase(other.name)));
   }
   // Exterior views: windows onto the outside are not "opens to".
@@ -219,6 +220,55 @@ export function coveredArea(plan: BuildingPlan, levelId: string): number {
 }
 
 /** Room-size changes between two plans: id → delta sq ft (only rooms in both, |Δ| ≥ 1). New rooms are "new". */
+/**
+ * The rooms a change touched: room ids as they are, an opening (f_master_w) → the room(s) on either side of it,
+ * a stair → its stair hall. Each room carries the summaries of the changes that touched it.
+ */
+export function changedRooms(plan: BuildingPlan, changes: { summary: string; kind: string; targets: string[] }[] | undefined): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const add = (id: string, summary: string) => {
+    if (!plan.rooms.some((r) => r.id === id)) return;
+    const list = out.get(id) ?? [];
+    if (!list.includes(summary)) list.push(summary);
+    out.set(id, list);
+  };
+  for (const c of changes ?? []) {
+    if (c.kind !== "plan") continue;
+    const summary = cleanSummary(c.summary);
+    for (const t of c.targets) {
+      if (plan.rooms.some((r) => r.id === t)) {
+        add(t, summary);
+        continue;
+      }
+      const o = plan.openings.find((x) => x.id === t);
+      if (o) {
+        for (const side of o.between) if (side !== "exterior") add(side, summary);
+        continue;
+      }
+      const st = plan.stairs.find((x) => x.id === t);
+      if (st) {
+        const hall = plan.rooms.find((r) => r.level === st.from_level && r.type === "stair" && st.rect.x >= r.rect.x - 0.5 && st.rect.y >= r.rect.y - 0.5 && st.rect.x + st.rect.w <= r.rect.x + r.rect.w + 0.5 && st.rect.y + st.rect.d <= r.rect.y + r.rect.d + 0.5);
+        if (hall) add(hall.id, summary);
+        continue;
+      }
+      // An id that names a room by prefix (f_master_w2 → f_master).
+      const base = plan.rooms.filter((r) => t.startsWith(`${r.id}_`)).sort((a, b) => b.id.length - a.id.length)[0];
+      if (base) add(base.id, summary);
+    }
+  }
+  return out;
+}
+
+/** "Widened the window (Master w)" → "Widened the window": ids and id-like asides never reach people. */
+export function cleanSummary(s: string): string {
+  return s
+    .replace(/\s*\((?:[a-z]_[\w]+|[A-Z][a-z]+(?: [a-z0-9]+)*?(?: w\d*| d\d*)|[\w]+_[\w]+)\)/g, "")
+    .replace(/\b[gfrb]_[a-z0-9_]+\b/g, (id) => id.replace(/^[gfrb]_/, "").replace(/_/g, " "))
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;])/g, "$1")
+    .trim();
+}
+
 export function areaDeltas(before: BuildingPlan | undefined, after: BuildingPlan, ids: string[]): Map<string, number | "new"> {
   const out = new Map<string, number | "new">();
   for (const id of ids) {

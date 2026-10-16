@@ -33,7 +33,11 @@ export function ViewSwitch({ project, view, tone, fill }: { project: Project; vi
         label="Views of this home"
         value={view as SwitchViewId}
         options={options}
-        onChange={(v) => navigate(`/app/p/${project.id}/${v}`)}
+        onChange={(v) => {
+          // Day or night carries across the views (Concepts and House read it; the hidden House keeps it).
+          const light = new URLSearchParams(window.location.search).get("light");
+          navigate(`/app/p/${project.id}/${v}${light ? `?light=${light}` : ""}`);
+        }}
         tone={tone === "hud" ? "hud" : "light"}
         className={cn("h-12 bg-transparent p-1.5", fill ? "w-full [&>button]:px-2" : "[&>button]:px-4")}
         fill={fill}

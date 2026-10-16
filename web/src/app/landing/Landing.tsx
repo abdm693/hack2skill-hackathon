@@ -6,8 +6,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
+import type { Project } from "@contracts/api-types";
+import { api, assetUrl } from "@/api/client";
 import { cn } from "@/app/lib/utils";
-import { openSampleHome } from "@/app/lib/samples";
+import { heroSample, openSampleHome, sampleCaption, sampleTitle } from "@/app/lib/samples";
 import { AccountMenu } from "@/app/auth/AccountMenu";
 import { Button, buttonClass } from "@/app/ui/Button";
 import { Wordmark } from "@/app/ui/brand";
@@ -15,30 +17,26 @@ import { ease } from "@/app/ui/motion";
 import { Construction } from "./Construction";
 
 const BENEFITS: { title: string; line: string }[] = [
-  { title: "Plot to approval-ready plan in minutes", line: "Tell Naqsha the plot and the family. Get dimensioned floor plans the same afternoon, not after weeks of back and forth." },
-  { title: "Checked against LDA, every time", line: "42 bylaw checks and 5 livability rules on every plan: setbacks, coverage, height, stairs to the roof, railings at every drop." },
+  { title: "Plot to approval-ready plan the same afternoon", line: "Tell Naqsha the plot and the family. Get dimensioned floor plans before the chai goes cold, not after weeks of back and forth." },
+  { title: "Checked against LDA, every time", line: "Every LDA bylaw that applies to your plot (36 checks on a 10 marla) and 8 livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop." },
   { title: "Walk your home before you build it", line: "Room by room, on any laptop or phone. Find the cramped bedroom while it costs nothing to fix." },
   { title: "Share with family and your architect", line: "Invite your team to design, or send your client a link. Everyone comments in one place, with their name on it." },
   { title: "Revisions in minutes, not weeks", line: "Pin a note on a wall. Naqsha returns the next version, still compliant, and answers every note in its thread." },
-  { title: "Drawings your contractor can use", line: "Print every floor at 1:100 with a title block, area schedule and compliance sheet, or save it as a PDF." },
+  { title: "Drawings your contractor can use", line: "Print every floor to scale with a title block, area schedule and compliance sheet, on A3 or A4, or save it as a PDF." },
 ];
 
 const STEPS: { label: string; time: string; title: string; line: string }[] = [
   { label: "Brief", time: "2 minutes", title: "Tell Naqsha about the plot", line: "Size, which way it faces, who will live there. One message is enough; Naqsha asks only what it still needs." },
   { label: "Concepts", time: "1 minute", title: "Choose a direction", line: "Four exteriors by day and by night. Pick the one that feels like home and Naqsha plans the floors around it." },
+  { label: "Plan", time: "A few minutes", title: "See every floor, checked", line: "Dimensioned floors with doors and furniture, checked against LDA and livable rules as they are drawn. Print it for your contractor." },
   { label: "House", time: "5 minutes", title: "Walk it, change it, share it", line: "Walk through in 3D, pin notes for changes, and bring in your family, your architect or your client." },
-];
-
-const SAMPLES: { img: string; title: string; caption: string }[] = [
-  { img: "/mock/concept-1.jpg", title: "10 marla family home", caption: "Johar Town · Stone and teak" },
-  { img: "/landing/home-day.jpg", title: "Courtyard frame house", caption: "Mid-row · Solar-ready roof" },
-  { img: "/mock/concept-2.jpg", title: "Corner home", caption: "1 kanal · Stone and glass" },
 ];
 
 export function Landing() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [samples, setSamples] = useState<Project[] | null>(null);
 
   useEffect(() => {
     document.title = "Naqsha · Walk through your home before the first brick";
@@ -48,11 +46,26 @@ export function Landing() {
     return () => window.removeEventListener("scroll", on);
   }, []);
 
-  const sample = async () => {
+  useEffect(() => {
+    let alive = true;
+    api
+      .listSamples()
+      .then((list) => alive && setSamples(list))
+      .catch(() => alive && setSamples([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const hero = samples ? heroSample(samples) : undefined;
+
+  /** Open one sample (the hero's 10 marla home when no id is given). */
+  const sample = async (id?: string) => {
     if (opening) return;
-    setOpening(true);
-    const ok = await openSampleHome(navigate);
-    if (!ok) setOpening(false);
+    const target = id ?? hero?.id;
+    setOpening(target ?? "hero");
+    const ok = await openSampleHome(navigate, target);
+    if (!ok) setOpening(null);
   };
 
   return (
@@ -75,11 +88,9 @@ export function Landing() {
             <a href="#samples" className="hidden rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:text-ink focus-visible:shadow-focus md:inline-block">
               Samples
             </a>
-            <span className="hidden sm:inline-flex">
-              <AccountMenu />
-            </span>
+            <AccountMenu />
             <Link to="/app" className={buttonClass("ink", "sm", "px-4")}>
-              Open portal
+              Portal
             </Link>
           </nav>
         </div>
@@ -110,7 +121,7 @@ export function Landing() {
               <Button variant="primary" size="lg" trailing={<ArrowRight className="size-4" strokeWidth={2} />} onClick={() => navigate("/app")}>
                 Start your home
               </Button>
-              <Button variant="secondary" size="lg" loading={opening} onClick={() => void sample()}>
+              <Button variant="secondary" size="lg" loading={opening === "hero" || (!!hero && opening === hero.id)} onClick={() => void sample()}>
                 Explore a sample home
               </Button>
             </div>
@@ -146,8 +157,8 @@ export function Landing() {
         {/* How it works */}
         <section id="how" className="mx-auto max-w-[1280px] scroll-mt-24 px-4 pt-28 sm:px-8 sm:pt-36" aria-labelledby="how-title">
           <div className="rounded-media bg-surface px-5 py-14 shadow-e1 sm:px-12 sm:py-20">
-            <SectionHead id="how-title" title="How it works" line="Three places, one conversation. You can stop at any point and come back." />
-            <ol className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8">
+            <SectionHead id="how-title" title="How it works" line="Four views of one home, one conversation. You can stop at any point and come back." />
+            <ol className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
               {STEPS.map((s, i) => (
                 <Reveal key={s.label} delay={i * 0.08} as="li" className="relative">
                   <div className="flex items-center gap-3">
@@ -167,23 +178,63 @@ export function Landing() {
         <section id="samples" className="mx-auto max-w-[1280px] scroll-mt-24 px-4 pt-28 sm:px-8 sm:pt-36" aria-labelledby="samples-title">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <SectionHead id="samples-title" title="Sample homes" line="Open a finished home and walk through it. No account needed." />
-            <Button variant="secondary" className="self-start sm:self-auto" loading={opening} onClick={() => void sample()} trailing={<ArrowRight className="size-4" strokeWidth={1.75} />}>
-              Walk through one
-            </Button>
+            {!!hero && (
+              <Button variant="secondary" className="self-start sm:self-auto" loading={opening === hero.id} onClick={() => void sample(hero.id)} trailing={<ArrowRight className="size-4" strokeWidth={1.75} />}>
+                Walk through one
+              </Button>
+            )}
           </div>
-          <ul className="mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {SAMPLES.map((s, i) => (
-              <Reveal key={s.title} delay={i * 0.06} as="li">
-                <button type="button" onClick={() => void sample()} className="group/s block w-full text-left outline-none" aria-label={`Explore the sample home: ${s.title}`}>
-                  <span className="block overflow-hidden rounded-card bg-surface-2 shadow-e1 transition-[box-shadow,transform] duration-[600ms] ease-out group-hover/s:-translate-y-0.5 group-hover/s:shadow-e2 group-focus-visible/s:shadow-focus">
-                    <img src={s.img} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-[600ms] ease-out group-hover/s:scale-[1.02]" />
-                  </span>
-                  <span className="mt-3 block px-0.5 text-[15px] font-semibold tracking-[-.01em] text-ink">{s.title}</span>
-                  <span className="block px-0.5 text-[13px] text-ink-3">{s.caption}</span>
-                </button>
-              </Reveal>
-            ))}
-          </ul>
+          {samples === null ? (
+            <ul className="mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2" aria-label="Loading sample homes" aria-busy>
+              {[0, 1].map((i) => (
+                <li key={i} className="flex flex-col gap-3">
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-card bg-surface-2">
+                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+                  </div>
+                  <div className="h-4 w-2/3 rounded-full bg-surface-2" />
+                  <div className="h-3 w-1/2 rounded-full bg-surface-2" />
+                </li>
+              ))}
+            </ul>
+          ) : samples.length ? (
+            <ul className={cn("mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2", samples.length > 2 && "lg:grid-cols-3")}>
+              {samples.map((s, i) => {
+                const img = assetUrl(s.thumbnail_url);
+                return (
+                  <Reveal key={s.id} delay={i * 0.06} as="li">
+                    <button
+                      type="button"
+                      onClick={() => void sample(s.id)}
+                      disabled={!!opening}
+                      aria-busy={opening === s.id || undefined}
+                      className="group/s block w-full text-left outline-none disabled:cursor-progress"
+                      aria-label={`Explore the sample home: ${sampleTitle(s.name)}`}
+                    >
+                      <span className="relative block overflow-hidden rounded-card bg-surface-2 shadow-e1 transition-[box-shadow,transform] duration-[600ms] ease-out group-hover/s:-translate-y-0.5 group-hover/s:shadow-e2 group-focus-visible/s:shadow-focus">
+                        {img ? (
+                          <img src={img} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-[600ms] ease-out group-hover/s:scale-[1.02]" />
+                        ) : (
+                          <span className="block aspect-[4/3] w-full" />
+                        )}
+                        {opening === s.id && (
+                          <span className="glass-light absolute left-3 top-3 inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-ink">
+                            <span className="size-1.5 animate-breathe rounded-full bg-accent" aria-hidden />
+                            Opening
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-3 block px-0.5 text-[15px] font-semibold tracking-[-.01em] text-ink">{sampleTitle(s.name)}</span>
+                      <span className="block px-0.5 text-[13px] text-ink-3">{sampleCaption(s)}</span>
+                    </button>
+                  </Reveal>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-12 rounded-card bg-surface px-6 py-10 text-center text-[15px] text-ink-2 shadow-e1">
+              The sample homes are resting right now. <Link to="/app" className="font-medium text-ink underline underline-offset-4">Start your own</Link> instead.
+            </p>
+          )}
         </section>
 
         {/* For builders */}
@@ -198,7 +249,7 @@ export function Landing() {
               </p>
             </div>
             <Link to="/app" className={buttonClass("secondary", "lg", "border-transparent bg-white text-ink hover:bg-white/90")}>
-              Open the Portal
+              Portal
               <ArrowRight className="size-4" strokeWidth={2} />
             </Link>
           </div>
@@ -212,11 +263,11 @@ export function Landing() {
             <Wordmark />
             <p className="mt-3 max-w-xs text-[14px] leading-[22px] text-ink-3">Homes designed with you, checked against LDA rules, and ready to walk.</p>
           </div>
-          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-12 gap-y-2 text-[14px]">
-            <Link to="/app" className="text-ink-2 hover:text-ink">Portal</Link>
-            <a href="#how" className="text-ink-2 hover:text-ink">How it works</a>
-            <a href="#samples" className="text-ink-2 hover:text-ink">Samples</a>
-            <Link to="/app/signin" className="text-ink-2 hover:text-ink">Sign in</Link>
+          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-12 text-[14px]">
+            <Link to="/app" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink sm:min-h-8">Portal</Link>
+            <a href="#how" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink sm:min-h-8">How it works</a>
+            <a href="#samples" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink sm:min-h-8">Samples</a>
+            <Link to="/app/signin" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink sm:min-h-8">Sign in</Link>
           </nav>
         </div>
         <p className="mt-10 text-[13px] text-ink-3">© 2026 Naqsha · Made in Lahore</p>

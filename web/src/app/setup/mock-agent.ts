@@ -4,7 +4,10 @@
  * "Here's what I understood" card, then at most three rounds (floors, roof, style), each one question with
  * one widget and "Decide for me". Persists to the mock store like the rest of the mock API.
  */
-import type { Brief, ChatMessage, Chip } from "@contracts/api-types";
+import type { Brief as BriefBase, BriefPlot, ChatMessage, Chip } from "@contracts/api-types";
+
+/** The mock always keeps a plot on its working brief (zeros until known). */
+type Brief = BriefBase & { plot: BriefPlot };
 import type { IntakeBody, SSEHandlers, StreamOptions } from "@/api/client";
 import { PLOT_PRESETS, STYLE_OPTIONS, plotLabel, toMarla } from "@/api/domain";
 import { db, findProject, now, save, sleep, touch, uid } from "@/api/mock/db";
