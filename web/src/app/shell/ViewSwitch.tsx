@@ -25,7 +25,8 @@ export function ViewSwitch({ project, view, tone, fill }: { project: Project; vi
     label: v.label,
     busy: !!busy[v.id] && v.id !== view,
   }));
-  if (options.length < 2 && !fill) return null;
+  // One place only (a brand-new home): nothing to switch between.
+  if (options.length < 2) return null;
   return (
     <div className={cn("pointer-events-auto rounded-full", tone === "hud" ? "glass-hud" : "glass-light", fill && "w-full")}>
       <Segmented<SwitchViewId>

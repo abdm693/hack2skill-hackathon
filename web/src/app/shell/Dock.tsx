@@ -242,7 +242,7 @@ export function Dock(props: DockProps) {
               )}
             </button>
           </motion.div>
-        ) : line || suggestions.length ? (
+        ) : line || suggestions.length || (phone && pill) ? (
           <motion.div
             key={`line-${line ?? ""}`}
             initial={{ opacity: 0, y: 4 }}
@@ -251,19 +251,26 @@ export function Dock(props: DockProps) {
             transition={{ duration: 0.2, ease: ease.out }}
             className="mb-2 flex flex-col items-center gap-2"
           >
-            {line && (
-              <button
-                type="button"
-                onClick={() => toggleChat()}
-                title="Open the conversation (⌘J)"
-                className={cn(
-                  "flex max-w-full items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-left text-[14px] leading-5 outline-none transition-colors focus-visible:shadow-focus",
-                  hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.7)]" : "glass-light text-ink-2 hover:text-ink",
+            {/* On phones the Next pill sits here, beside Naqsha's line, so Ask keeps the full width. */}
+            {(line || (phone && pill)) && (
+              <div className={cn("flex max-w-full items-center gap-2", phone && "w-full justify-end")}>
+                {line && (
+                  <button
+                    type="button"
+                    onClick={() => toggleChat()}
+                    title="Open the conversation (⌘J)"
+                    className={cn(
+                      "flex max-w-full items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-left text-[14px] leading-5 outline-none transition-colors focus-visible:shadow-focus",
+                      hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.7)]" : "glass-light text-ink-2 hover:text-ink",
+                      phone && "min-w-0 flex-1 rounded-[20px] text-[13px] leading-[18px]",
+                    )}
+                  >
+                    <NaqshaAvatar size={24} />
+                    <span className="line-clamp-2 sm:line-clamp-1">{line}</span>
+                  </button>
                 )}
-              >
-                <NaqshaAvatar size={24} />
-                <span className="line-clamp-2 sm:line-clamp-1">{line}</span>
-              </button>
+                {phone && pill}
+              </div>
             )}
             {suggestions.length > 0 && (
               <div className={cn("flex max-w-full gap-2", phone ? "no-scrollbar -mx-3 overflow-x-auto px-3" : "flex-wrap justify-center")}>
@@ -287,7 +294,7 @@ export function Dock(props: DockProps) {
           value={draft}
           onChange={(v) => { setDraft(v); setPaletteOpen(true); }}
           onSubmit={submit}
-          placeholder={placeholder}
+          placeholder={phone ? placeholder.split(", e.g.")[0] : placeholder}
           label="Ask Naqsha"
           busy={!!working && working.kind !== "intake"}
           onKeyDown={onKeyDown}
@@ -296,7 +303,7 @@ export function Dock(props: DockProps) {
           leading={<Sparkles className={cn("ml-2 size-4", hud ? "text-hud-accent" : "text-accent")} strokeWidth={1.75} aria-hidden />}
           trailing={phone ? undefined : <Kbd keys={["mod", "K"]} tone={hud ? "hud" : "light"} />}
         />
-        {pill}
+        {!phone && pill}
       </div>
     </div>
   );

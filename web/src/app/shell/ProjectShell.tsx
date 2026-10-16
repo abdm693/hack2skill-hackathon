@@ -268,7 +268,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
 
   // Clear of the floating top row: 12/16px + 48px + 12px on desktop; phone adds the full-width switch.
   const shellVars = {
-    "--chrome-top": phone ? "128px" : "calc(var(--chrome) * 2 + 48px)",
+    "--chrome-top": phone ? (VIEWS.filter((v) => viewAvailable(project, v.id)).length > 1 ? "128px" : "72px") : "calc(var(--chrome) * 2 + 48px)",
     "--sheet-top": phone ? "0px" : "calc(var(--chrome) * 2 + 48px)",
   } as CSSProperties;
   const sheetLeft = !phone && left === "chat";
