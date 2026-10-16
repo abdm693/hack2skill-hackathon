@@ -18,6 +18,17 @@ Families in Lahore usually start building a house with a sketch on paper, a cont
 5. **Explore and walk.** The viewer offers orbit, floor and layer toggles, a section cut and a sun slider, plus first-person walking with collisions and stairs. *Render this view* turns a viewport into a photoreal image.
 6. **Comment and revise** (Google ADK agent). The family pins comments on any surface. When they finish the walkthrough, a tool-using ADK agent reads only the rooms and code it needs, dry-runs layout edits against the LDA engine, rewrites sections, and explains every resolution. If a request would break a regulation, the agent says which rule and proposes a compliant alternative.
 
+## Screens
+
+| | |
+|---|---|
+| ![Setup agent with the LDA buildable envelope](docs/screens/app-setup.png) | ![Argon's naqsha with the LDA compliance panel](docs/screens/app-design.png) |
+| **Setup.** One-tap chat; the LDA envelope appears as soon as the plot size is known. | **Plan.** Argon's dimensioned *naqsha* and the LDA fix loop: 5 → 1 → 0 violations. |
+| ![3D front elevation generated from Argon's code](docs/screens/engine-argon-front.png) | ![Interior from the same code](docs/screens/engine-interior.png) |
+| **Build.** The 3D model written by Gemini 4 Argon as House SDK code, matching the chosen concept. | **Interiors.** Marble, joinery, false ceilings, ceiling fans. Every piece comes from code. |
+| ![First-person walkthrough](docs/screens/app-walk.png) | ![Revisions from walkthrough comments](docs/screens/app-revisions.png) |
+| **Walk.** First-person walkthrough with collisions, stairs, a minimap and pinned comments. | **Revise.** The ADK agent resolves comments and refuses ones that break LDA rules, explaining why. |
+
 ## Architecture
 
 ```
