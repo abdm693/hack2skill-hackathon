@@ -29,6 +29,12 @@ export interface ViewerHandle {
   capture(opts?: { width?: number; height?: number }): Promise<string>;
   flyTo(comment: Comment): void;
   setMode(mode: "orbit" | "walk"): void;
+  /** Walk: glide to the room through doors/stairs. Orbit: frame the room in a dollhouse cut. */
+  goToRoom(roomId: string): void;
+  /** Walk: move to that floor's stair landing facing into the floor. Orbit: show up to that floor. */
+  setFloor(levelId: string): void;
+  /** Back to the hero view (orbit). */
+  resetView(): void;
 }
 
 export interface HouseViewerProps {
@@ -47,6 +53,16 @@ export interface HouseViewerProps {
   onReady?: (result: { summary: AsBuiltSummary; sections: SectionResult[] }) => void;
   /** The viewer left walk mode by itself: "finish" (F / Finish), "exit" (Exit walk, setMode), "flyTo" (aerial comment). */
   onExitWalk?: (reason?: "exit" | "flyTo" | "finish") => void;
+  /** Make neighbours/context between the camera and the house translucent (default true). */
+  ghostContext?: boolean;
+  /** Hide cars and motorbikes (default: hidden in walk, shown in orbit). */
+  hideVehicles?: boolean;
+  /** Night lighting: dark sky, interior and facade lights on. */
+  night?: boolean;
+  /** Walk: fires when the walker enters a different room. */
+  onRoomChange?: (roomId: string | null, levelId: string | null) => void;
+  /** Keep the camera when plan/sections change (version switch); default true. */
+  preserveCamera?: boolean;
 }
 
 /**

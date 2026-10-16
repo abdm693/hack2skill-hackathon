@@ -156,6 +156,10 @@ export class ViewerController {
     capture: (opts?: { width?: number; height?: number }) => this.capture(opts),
     flyTo: (comment: Comment) => this.flyTo(comment),
     setMode: (mode: ViewerMode) => this.setMode(mode, "handle"),
+    // Overhaul additions (contracts/web-modules.md); implemented by the VIEWER track.
+    goToRoom: (_roomId: string) => console.warn("goToRoom: not implemented yet"),
+    setFloor: (_levelId: string) => console.warn("setFloor: not implemented yet"),
+    resetView: () => console.warn("resetView: not implemented yet"),
   };
 
   // ───────────────────────────── lifecycle ─────────────────────────────
