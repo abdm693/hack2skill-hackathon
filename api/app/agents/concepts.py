@@ -13,10 +13,11 @@ from ..store import blobs, db
 
 VARIANTS = [
     "street-level front elevation at golden hour, 24mm lens, eye level from across the road",
-    "three-quarter view from the street corner in soft overcast morning light, 28mm lens",
+    "slightly angled front view from across the road in soft overcast morning light, 28mm lens",
     "dusk shot with warm interior lights glowing and facade uplights on, slight low angle, 24mm lens",
     "sunny afternoon front view with crisp shadows, a family car in the porch, 35mm lens",
 ]
+CORNER_VARIANT = "three-quarter view from the street corner showing both road-facing facades, 28mm lens"
 
 STYLE_HINTS = {
     "Modern Contemporary": "crisp white plaster volumes, grey stone cladding pier, vertical teak fins, black aluminium frames, cantilevered canopy, frameless glass balcony",
@@ -37,11 +38,16 @@ def concept_prompt(brief: dict, variant: str, instruction: str | None = None) ->
     porch = next((s for s in brief.get("spaces", []) if s.startswith("car_porch")), "car_porch:1")
     cars = porch.split(":")[1] if ":" in porch else "1"
     extra = f" Additional direction: {instruction}." if instruction else ""
+    if p.get("corner"):
+        site = "It is a CORNER plot: two road-facing facades, both designed with care."
+    else:
+        site = ("It is a MID-ROW plot (NOT a corner): neighbouring houses stand directly against both sides, so only the "
+                "front facade faces the street and the side walls are hidden.")
     return (
         f"Photorealistic architectural photograph of a {style} {storeys} house on a {p.get('area_marla', 10):g} marla plot "
         f"({p.get('width_ft', 35):g} ft wide street frontage) in {where}, Pakistan. Design language: {hints}. "
         f"Typical Lahore layout: boundary wall with a sliding gate, a {cars}-car porch within the building line, a small front lawn, "
-        f"flat roof with parapet and a mumty (stair tower). Neighbouring houses and a residential street are visible. "
+        f"flat roof with parapet and a mumty (stair tower). {site} A residential street is visible. "
         f"{variant}. High-end real-estate photography, realistic materials and proportions, no people, no text, no watermark.{extra}"
     )
 
@@ -82,7 +88,8 @@ async def generate(project: dict, count: int = 4, instruction: str | None = None
             prompts.append(f"Edit this house design photo: {instruction or 'refine it'}. Keep the same house, plot, camera and "
                            f"composition; change only what the instruction asks. Photorealistic, no text. Variation {i + 1}.")
         else:
-            prompts.append(concept_prompt(brief, VARIANTS[i % len(VARIANTS)], instruction))
+            variants = ([CORNER_VARIANT] + VARIANTS[:3]) if (brief.get("plot") or {}).get("corner") else VARIANTS
+            prompts.append(concept_prompt(brief, variants[i % len(variants)], instruction))
     for i, pr in enumerate(prompts):
         yield "concept.started", {"index": i, "prompt": pr}
 
