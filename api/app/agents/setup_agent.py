@@ -264,13 +264,22 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
     asked = (turn.reply or {}).get("field")
     # complete when the agent says so and nothing is missing, or when it asks about a brief field nothing needs any more
     complete = done and (turn.complete or turn.reply is None or (asked in KNOWN_FIELDS and asked not in gaps))
+    # the card goes with a turn that changed the brief, the first completion, or the agent's own assumptions; a question
+    # asked after setup gets a plain answer (and no "Here's what I understood" without the card)
+    changed = bool(turn.patch_fields - {"notes"})
+    card = bool(turn.understood) or len(turn.patch_fields - {"notes"}) >= 3 or (
+        complete and (changed or not project.get("intake_complete")))
+    tail = intake._complete_text(project, brief) if card or project.get("versions") else "When you're ready, tap Show me concepts."
     if turn.complete and not done:  # it wrapped up too early: ask the first real gap instead
         q = intake.question(gaps[0] if gaps else intake.missing(brief)[0], brief)
         turn.reply = {"text": "Noted. " + q["text"], "suggestions": [], "multi": False, **{k: q[k] for k in ("field", "chips", "input", "allow_skip")}}
     elif complete and turn.reply and not turn.reply.get("complete"):  # keep its answer, drop the needless question
         kept = _strip_question(turn.reply.get("text", ""))
-        turn.reply = {"text": (kept + " " + intake._complete_text(project, brief)).strip(), "complete": True,
-                      "suggestions": turn.reply.get("suggestions") or []}
+        turn.reply = {"text": (kept + " " + tail).strip(), "complete": True, "suggestions": turn.reply.get("suggestions") or []}
+    elif complete and turn.reply and not card:  # an answer after setup: no read-back of a card that isn't there
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", turn.reply.get("text") or "") if "what i understood" not in s.lower()]
+        text = " ".join(kept).strip()
+        turn.reply = {**turn.reply, "text": text if "concepts" in text.lower() else (text + " " + tail).strip()}
     if complete and not brief.get("spaces"):
         brief = intake.merge_brief(brief, {"spaces": intake.defaults_for(brief)[0]["spaces"]}, ["spaces"])
     brief, env, newly = await intake._save(project, brief, complete, before)
@@ -305,10 +314,7 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
         reply["text"] = (push + " " + " ".join(kept)).strip()
     out = {"role": "assistant", "text": reply["text"], "chips": reply.get("chips") or [], "multi": bool(reply.get("multi")),
            "input": reply.get("input"), "field": reply.get("field"), "allow_skip": bool(reply.get("allow_skip"))}
-    rich = len(turn.patch_fields - {"notes"}) >= 3
-    # the card goes with a turn that changed the brief, the first completion, or the agent's own assumptions; a question
-    # asked after setup gets a plain answer
-    if turn.understood or (complete and (newly or (turn.patch_fields - {"notes"}))) or rich:
+    if card or (complete and newly):
         out["understood"] = intake.understood(brief, turn.understood)
     if reply.get("suggestions"):
         out["suggestions"] = [str(s) for s in reply["suggestions"]][:3]

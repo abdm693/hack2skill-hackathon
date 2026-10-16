@@ -73,7 +73,7 @@ def test_dha_storeys_are_capped_with_a_reason():
     b, said = intake.clamp_storeys({"authority": "DHA", "storeys": 3, "floors": [
         {"level": "ground", "rooms": ["drawing"]}, {"level": "first", "rooms": ["bedroom:2"]}, {"level": "second", "rooms": ["bedroom:1"]}]})
     assert b["storeys"] == 2 and said.startswith("DHA allows ground + first, plus a basement, so I've kept it to 2 storeys.")
-    assert [f["level"] for f in b["floors"]] == ["ground", "first"] and "bedroom:1" in b["floors"][1]["rooms"]
+    assert [f["level"] for f in b["floors"]] == ["ground", "first"] and b["floors"][1]["rooms"] == ["bedroom:3"]
     assert intake.clamp_storeys({"authority": "LDA", "storeys": 3, "plot": {"width_ft": 35, "depth_ft": 65, "area_marla": 10.1}})[1] is None
 
 

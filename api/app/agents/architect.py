@@ -137,9 +137,16 @@ def _clean_plan(plan: dict, brief: dict) -> dict:
     for o in plan.get("openings", []):
         if isinstance(o.get("at"), list) and len(o["at"]) == 2:
             o["at"] = [snap(o["at"][0]), snap(o["at"][1])]
-    p = plan.setdefault("site", {}).setdefault("plot", {})
+    site = plan.setdefault("site", {})
+    p = site.setdefault("plot", {})
     if brief.get("plot"):
         p.update({k: brief["plot"][k] for k in ("width_ft", "depth_ft", "area_marla", "corner") if k in brief["plot"]})
+    # where the house is comes from the brief, never from the model ("DHA / Johar Town")
+    site["scheme"] = str(brief.get("scheme") or "").strip()
+    site["authority"] = brief.get("authority") or site.get("authority") or "LDA"
+    site["city"] = brief.get("city") or site.get("city") or "Lahore"
+    if brief.get("facing"):
+        site["facing"] = brief["facing"]
     if brief.get("coordinates"):
         plan["site"]["coordinates"] = brief["coordinates"]
     roof = plan.setdefault("roof", {"parapet_ft": 3.5})

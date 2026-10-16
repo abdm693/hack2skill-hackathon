@@ -438,6 +438,19 @@ def to_ask(brief: dict) -> list[str]:
     return out
 
 
+def _sum_tokens(tokens: list[str]) -> list[str]:
+    """["bedroom:2", "lounge", "bedroom:2"] -> ["bedroom:4", "lounge"] (order kept)."""
+    counts: dict[str, int] = {}
+    for t in tokens:
+        name, _, n = str(t).partition(":")
+        try:
+            k = int(float(n)) if n else 1
+        except ValueError:
+            k = 1
+        counts[name] = counts.get(name, 0) + k
+    return [f"{k}:{n}" if n != 1 else k for k, n in counts.items()]
+
+
 def storey_cap(brief: dict) -> tuple[int, str]:
     """The most storeys the authority allows for this brief, and how to say so ("DHA allows ground + first, plus a
     basement")."""
@@ -470,7 +483,7 @@ def clamp_storeys(brief: dict) -> tuple[dict, str | None]:
         if tgt is None:
             tgt = {"level": top, "rooms": []}
             floors.append(tgt)
-        tgt["rooms"] = list(tgt.get("rooms") or []) + extra
+        tgt["rooms"] = _sum_tokens(list(tgt.get("rooms") or []) + extra)
         moved = f" I've put the rooms you planned higher up on the {top} floor; move them if you like."
     if brief.get("floors") is not None:
         b["floors"] = merge_floors([], floors)
