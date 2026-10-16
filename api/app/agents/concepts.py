@@ -21,7 +21,8 @@ from ..store import blobs, db
 log = logging.getLogger("naqsha.concepts")
 
 CAMERA_MIDROW = ("Camera: straight-on front elevation from across the road at eye level, 24mm lens, the whole house and its "
-                 "boundary wall in frame, centred. Light: golden hour, low warm sun from the side, soft long shadows, clear sky.")
+                 "boundary wall in frame, centred, with a slice of each neighbouring house at the frame edges; never a corner or "
+                 "three-quarter view. Light: golden hour, low warm sun from the side, soft long shadows, clear sky.")
 CAMERA_CORNER = ("Camera: three-quarter view from the street corner at eye level, 24mm lens, both road-facing facades in frame. "
                  "Light: golden hour, low warm sun, soft long shadows, clear sky.")
 
@@ -60,7 +61,9 @@ def _site_sentence(brief: dict) -> str:
     if p.get("corner"):
         return ("It is a CORNER plot: two road-facing facades, both designed with care, a side road running along one side.")
     return ("It is a MID-ROW plot (NOT a corner): neighbouring houses stand directly against both side walls, there is no side "
-            "street and no visible side facade; only the front facade faces the single road in front.")
+            "street and no visible side facade; only the front facade faces the single road in front. Show the two neighbouring "
+            "houses at the left and right edges of the frame, touching this house's side walls (plain, muted, no gap, no side "
+            "lawn, no side road), so it clearly reads as a house in a row.")
 
 
 def _roof_sentence(brief: dict) -> str:
@@ -270,7 +273,10 @@ async def render_view(pid: str, image: bytes, mime: str, prompt: str | None) -> 
     """Viewport screenshot → photoreal render that keeps the exact geometry and camera."""
     instr = ("Turn this 3D architectural viewport render into a photorealistic photograph. Keep EXACTLY the same building geometry, "
              "openings, camera angle, framing and material choices; upgrade lighting, textures, reflections, vegetation and sky to "
-             "real-world photo quality. No added objects or people, no text." + (f" {prompt}" if prompt else ""))
+             "real-world photo quality. The neighbouring houses stay plain, muted and simple, exactly as massed in the viewport: "
+             "add nothing to them (no solar panels, water tanks, dishes or other roof equipment, no extra storeys or details), and "
+             "add nothing to this house's roof that isn't in the viewport. No added objects or people, no text."
+             + (f" {prompt}" if prompt else ""))
     got = _image_bytes(await _image_call([types.Part.from_bytes(data=image, mime_type=mime), instr], aspect=None))
     if not got:
         raise RuntimeError("The image model returned no image")

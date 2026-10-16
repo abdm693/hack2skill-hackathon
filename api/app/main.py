@@ -5,15 +5,19 @@ guest id (X-Naqsha-User). Roles per project: owner, team (design, comment, revis
 """
 from __future__ import annotations
 
+import copy
+import hashlib
+import hmac
 import logging
 import os
 import re
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import auth, busy, config, runs, sse
 from .agents import architect, concepts, intake, reviser, reviser_adk
@@ -24,6 +28,9 @@ from .store import blobs, db
 logging.basicConfig(level=logging.INFO)
 busy.install()
 app = FastAPI(title="Naqsha API")
+# JSON and the JS bundle go out compressed; images are already compressed and event streams (SSE) are never buffered or
+# compressed (text/event-stream is in Starlette's default exclusions).
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
 PUBLIC_FIELDS = ("id", "name", "created_at", "updated_at", "stage", "brief", "envelope", "concepts", "selected_concept_id",
                  "versions", "current_version_id", "thumbnail_url", "brief_changed", "cloned_from")
@@ -43,12 +50,74 @@ def role_of(p: dict, me: Identity) -> str | None:
     return None
 
 
+THUMB_W = 640
+
+
+def thumb_url(url: str | None) -> str | None:
+    """A card-sized (640 px WebP) variant of a stored image, made once on first request (see /api/assets)."""
+    if not url or not url.startswith("/api/assets/") or "?" in url or url.endswith(".webp"):
+        return url
+    return f"{url}?w={THUMB_W}"
+
+
 def public(p: dict, role: str | None = None) -> dict:
     out = {k: p.get(k) for k in (CLIENT_FIELDS if role == "client" else PUBLIC_FIELDS)}
     out["role"] = role or "owner"
     out["members_count"] = len([m for m in p.get("members") or []])
     out["brief_changed"] = bool(p.get("brief_changed")) if role != "client" else False
+    out["thumbnail_url"] = thumb_url(p.get("thumbnail_url"))
     return out
+
+
+# --- comment authors: opaque per-project handles ---------------------------------------------------------------------------
+# A guest's id is their whole identity (X-Naqsha-User), so comment payloads never carry raw uids or guest ids: each author
+# id becomes an HMAC handle that is stable within a project (pins and threads still group by author) and useless outside it.
+# `mine` tells the caller which comments and replies are their own.
+_HANDLE_KEY = (config.HANDLE_SECRET or f"naqsha-handles:{config.PROJECT}").encode()
+_PUBLIC_AUTHORS = {"naqsha", "owner", "anon", None, ""}
+
+
+def author_handle(pid: str, raw: str | None) -> str | None:
+    if raw in _PUBLIC_AUTHORS:
+        return raw
+    return "a_" + hmac.new(_HANDLE_KEY, f"{pid}:{raw}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def my_author_ids(me: Identity | None) -> set[str]:
+    return {x for x in ((me.uid, me.guest_id) if me else ()) if x and x not in _PUBLIC_AUTHORS}
+
+
+def comment_out(pid: str, c: dict | None, me: Identity | None, keep_own: bool = False) -> dict | None:
+    """A comment as the caller may see it: author ids as handles (the caller's own raw id kept only when keep_own, for the
+    owner's own app), and `mine` on the comment and each reply."""
+    if not c:
+        return c
+    c = copy.deepcopy(c)
+    mine_ids = my_author_ids(me)
+
+    def fix(obj: dict) -> None:
+        a = obj.get("author")
+        raw = a.get("id") if isinstance(a, dict) else None
+        obj["mine"] = bool(raw and raw in mine_ids)
+        if isinstance(a, dict) and not (keep_own and obj["mine"]):
+            a["id"] = author_handle(pid, raw)
+    fix(c)
+    for r in c.get("replies") or []:
+        if isinstance(r, dict):
+            fix(r)
+    return c
+
+
+def comments_out(pid: str, cs: list[dict], me: Identity | None, keep_own: bool = False) -> list[dict]:
+    return [comment_out(pid, c, me, keep_own) for c in cs]
+
+
+async def maybe_identity(authorization: str | None = Header(None), x_naqsha_user: str | None = Header(None)) -> Identity:
+    """The caller's identity when they have one; an expired sign-in on a public link just reads as a guest."""
+    try:
+        return await auth.identity(authorization, x_naqsha_user)
+    except HTTPException:
+        return auth.identity_from(None, auth.valid_guest(x_naqsha_user))
 
 
 async def access(pid: str, me: Identity, need: str = "view") -> tuple[dict, str]:
@@ -165,12 +234,17 @@ async def patch_project(pid: str, body: PatchProject, me: Identity = Depends(aut
     fields: dict = {}
     if body.name is not None:
         fields["name"] = body.name.strip()[:80] or p.get("name")
+        fields["auto_named"] = False  # the family named it: the plot no longer renames it
     if body.brief is not None:
         before = p.get("brief") or intake.empty_brief()
-        brief = intake.merge_brief(before, body.brief, [], spaces_mode="replace")
+        # The brief panel sends whole lists: preferences are replaced (an empty list clears them), not appended.
+        brief = intake.merge_brief(before, body.brief, [], spaces_mode="replace", prefs_mode="replace")
+        brief, _ = intake.clamp_storeys(brief)
         fields.update(brief=brief, envelope=intake.envelope_for(brief), stage=intake.next_stage(p, bool(p.get("intake_complete"))))
         if p.get("versions") and intake._design_fields(before) != intake._design_fields(brief):
             fields["brief_changed"] = True
+        if body.name is None and (name := intake.auto_name(p, brief)):
+            fields.update(name=name, auto_named=True)
     return public(await db.update_project(pid, **fields) if fields else p, role)
 
 
@@ -196,9 +270,16 @@ async def clone(pid: str, body: NewProject, me: Identity = Depends(auth.identity
     if not src or not (src.get("owner") == db.SAMPLES_OWNER or role_of(src, me) in ("owner", "team")):
         raise HTTPException(404, "project not found")
     if src.get("owner") == db.SAMPLES_OWNER and not body.fresh:
+        stale = None
         for key in me.owner_keys:
-            if (mine := await db.find_clone(key, pid)):
+            mine, is_stale = await db.find_clone(key, pid, src)
+            if mine and not is_stale:
                 return public(mine, "owner")
+            stale = stale or mine
+        if stale:  # an untouched copy of an older sample: refresh it in place with the current sample
+            return public(await db.refresh_clone(stale["id"], src, stale["owner"]), "owner")
+        # one copy per guest and sample, even when two tabs open it at once (a deterministic id, created only once)
+        return public(await db.clone_project(pid, me.key, body.name, once=True), "owner")
     return public(await db.clone_project(pid, me.key, body.name), "owner")
 
 
@@ -299,10 +380,11 @@ async def _shared(token: str) -> dict:
 
 
 @app.get("/api/share/{token}")
-async def share_view(token: str):
+async def share_view(token: str, me: Identity = Depends(maybe_identity)):
     p = await _shared(token)
     v = await db.get_version(p["id"], p["current_version_id"]) if p.get("current_version_id") else None
-    return {"project": public(p, "client"), "version": fresh_version(v, p.get("brief")), "comments": await db.list_comments(p["id"]), "role": "client"}
+    return {"project": public(p, "client"), "version": fresh_version(v, p.get("brief")),
+            "comments": comments_out(p["id"], await db.list_comments(p["id"]), me), "role": "client"}
 
 
 @app.get("/api/share/{token}/versions/{vid}")
@@ -315,9 +397,9 @@ async def share_version(token: str, vid: str):
 
 
 @app.get("/api/share/{token}/comments")
-async def share_comments(token: str, version_id: str | None = None):
+async def share_comments(token: str, version_id: str | None = None, me: Identity = Depends(maybe_identity)):
     p = await _shared(token)
-    return {"comments": await db.list_comments(p["id"], version_id)}
+    return {"comments": comments_out(p["id"], await db.list_comments(p["id"], version_id), me)}
 
 
 class ShareComment(BaseModel):
@@ -327,6 +409,7 @@ class ShareComment(BaseModel):
     camera: dict
     snapshot_data_url: str | None = None
     version_id: str | None = None
+    kind: str | None = None  # "approval": the client approves this version (stored resolved, never applied)
 
 
 class ReplyBody(BaseModel):
@@ -334,15 +417,46 @@ class ReplyBody(BaseModel):
     author_name: str | None = None
 
 
-async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera: dict, snapshot: str | None, author: dict) -> dict:
+APPROVAL_RE = re.compile(r"^\s*approved?\s+(?:version\s+|v)\d+\s*\.?\s*$", re.I)
+
+
+def _general(anchor: dict) -> bool:
+    return not (anchor or {}).get("room") and not (anchor or {}).get("element_id")
+
+
+async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
+    """General notes ("Whole home", "This view") share one anchor point; nudge each new one sideways so pins don't stack."""
+    pos = (anchor or {}).get("position")
+    if not _general(anchor) or not (isinstance(pos, list) and len(pos) == 3):
+        return anchor
+    try:
+        p0 = [float(v) for v in pos]
+    except (TypeError, ValueError):
+        return anchor
+    others = [c for c in await db.list_comments(pid, version_id) if _general(c.get("anchor") or {})]
+    taken = {tuple(round(float(v), 2) for v in (c.get("anchor") or {}).get("position") or []) for c in others}
+    step = 0.9  # metres
+    for k in range(0, 40):
+        dx = step * ((k + 1) // 2) * (1 if k % 2 else -1) if k else 0.0
+        cand = [round(p0[0] + dx, 2), round(p0[1], 2), round(p0[2], 2)]
+        if tuple(cand) not in taken:
+            return {**anchor, "position": cand}
+    return anchor
+
+
+async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera: dict, snapshot: str | None, author: dict,
+                       kind: str | None = None) -> dict:
     cid = db.new_id("cm_")
     snap = None
     if snapshot:
         data, mime = blobs.decode_data_url(snapshot)
         snap = await blobs.put(f"projects/{p['id']}/comments/{cid}.{'jpg' if 'jpeg' in mime else 'png'}", data, mime)
-    return await db.add_comment(p["id"], {"id": cid, "version_id": version_id, "text": text.strip(), "anchor": anchor, "camera": camera,
-                                          "snapshot_url": snap, "created_at": db.now(), "status": "open", "author": author,
-                                          "replies": []})
+    anchor = await _spread(p["id"], version_id, anchor)
+    c = {"id": cid, "version_id": version_id, "text": text.strip(), "anchor": anchor, "camera": camera, "snapshot_url": snap,
+         "created_at": db.now(), "status": "open", "author": author, "replies": []}
+    if kind == "approval":  # a sign-off, not a change request: closed from the start, so Revise and Apply leave it out
+        c.update(kind="approval", status="resolved")
+    return await db.add_comment(p["id"], c)
 
 
 @app.post("/api/share/{token}/comments")
@@ -354,13 +468,16 @@ async def share_comment(token: str, body: ShareComment, me: Identity = Depends(a
     vid = body.version_id or p.get("current_version_id")
     if not vid:
         raise HTTPException(400, "There's nothing to comment on yet.")
-    return await _new_comment(p, vid, body.text, body.anchor, body.camera, body.snapshot_data_url, author_of(me, role, body.author_name))
+    kind = "approval" if body.kind == "approval" or (APPROVAL_RE.match(body.text) and _general(body.anchor)) else None
+    c = await _new_comment(p, vid, body.text, body.anchor, body.camera, body.snapshot_data_url,
+                           author_of(me, role, body.author_name), kind)
+    return comment_out(p["id"], c, me)
 
 
 @app.post("/api/share/{token}/comments/{cid}/replies")
 async def share_reply(token: str, cid: str, body: ReplyBody, me: Identity = Depends(auth.identity)):
     p = await _shared(token)
-    return await _reply(p, cid, body, author_of(me, role_of(p, me) or "client", body.author_name))
+    return comment_out(p["id"], await _reply(p, cid, body, author_of(me, role_of(p, me) or "client", body.author_name)), me)
 
 
 async def _reply(p: dict, cid: str, body: ReplyBody, author: dict) -> dict:
@@ -554,7 +671,7 @@ class CommentPatch(BaseModel):
 @app.get("/api/projects/{pid}/comments")
 async def list_comments(pid: str, version_id: str | None = None, me: Identity = Depends(auth.identity)):
     await access(pid, me, "view")
-    return {"comments": await db.list_comments(pid, version_id)}
+    return {"comments": comments_out(pid, await db.list_comments(pid, version_id), me, keep_own=True)}
 
 
 @app.post("/api/projects/{pid}/comments")
@@ -562,8 +679,9 @@ async def add_comment(pid: str, body: CommentBody, me: Identity = Depends(auth.i
     p, role = await access(pid, me, "comment")
     if not body.text.strip():
         raise HTTPException(400, "Write a comment first.")
-    return await _new_comment(p, body.version_id, body.text, body.anchor, body.camera, body.snapshot_data_url,
-                              author_of(me, role, body.author_name))
+    c = await _new_comment(p, body.version_id, body.text, body.anchor, body.camera, body.snapshot_data_url,
+                           author_of(me, role, body.author_name))
+    return comment_out(pid, c, me, keep_own=True)
 
 
 @app.patch("/api/projects/{pid}/comments/{cid}")
@@ -581,7 +699,7 @@ async def patch_comment(pid: str, cid: str, body: CommentPatch, me: Identity = D
             raise HTTPException(400, "Unknown status.")
         if role == "client" and not mine:
             raise HTTPException(403, "Only the owner or the team can change that.")
-    return await db.update_comment(pid, cid, **fields)
+    return comment_out(pid, await db.update_comment(pid, cid, **fields), me, keep_own=True)
 
 
 @app.delete("/api/projects/{pid}/comments/{cid}")
@@ -597,7 +715,7 @@ async def delete_comment(pid: str, cid: str, me: Identity = Depends(auth.identit
 @app.post("/api/projects/{pid}/comments/{cid}/replies")
 async def reply(pid: str, cid: str, body: ReplyBody, me: Identity = Depends(auth.identity)):
     p, role = await access(pid, me, "comment")
-    return await _reply(p, cid, body, author_of(me, role, body.author_name))
+    return comment_out(pid, await _reply(p, cid, body, author_of(me, role, body.author_name)), me, keep_own=True)
 
 
 # --- revise (comments and/or a typed request → new version) --------------------------------------------------------------------
@@ -615,12 +733,12 @@ async def revise(pid: str, body: ReviseBody, me: Identity = Depends(auth.identit
     v = await db.get_version(pid, body.version_id)
     if not v:
         raise HTTPException(404, "version not found")
-    all_c = await db.list_comments(pid, body.version_id)
-    if body.comment_ids is not None:  # the owner picked which comments go in (any that aren't resolved yet)
+    if body.comment_ids is not None:  # the owner picked which comments go in (any that aren't resolved yet, on any version)
         chosen = set(body.comment_ids)
-        comments = [c for c in all_c if c["id"] in chosen and c.get("status") != "resolved"]
+        comments = [c for c in await db.list_comments(pid) if c["id"] in chosen and c.get("status") != "resolved"]
     else:
-        comments = [c for c in all_c if c.get("status") == "open"]
+        comments = [c for c in await db.list_comments(pid, body.version_id) if c.get("status") == "open"]
+    comments = [c for c in comments if c.get("kind") != "approval"]  # a client's sign-off is never a change request
     instruction = (body.instruction or "").strip() or None
     if not comments and not instruction:
         raise HTTPException(400, "Add a comment or tell me what to change.")
@@ -628,12 +746,15 @@ async def revise(pid: str, body: ReviseBody, me: Identity = Depends(auth.identit
     async def gen():
         try:  # agentic ADK reviser first; the single-shot reviser is the safety net (ADK writes nothing until it finishes)
             async for ev in reviser_adk.revise(p, v, comments, instruction):
-                yield ev
+                yield _out(ev)
         except Exception as e:
             logging.exception("ADK reviser failed; falling back")
             yield "stage", {"stage": "changes", "message": f"Trying a simpler route ({type(e).__name__})…"}
             async for ev in reviser.revise(p, v, comments, instruction):
-                yield ev
+                yield _out(ev)
+
+    def _out(ev):  # the run stream reaches the team too: comment authors as handles
+        return (ev[0], {**ev[1], "comment": comment_out(pid, ev[1]["comment"], me, keep_own=True)}) if ev[0] == "comment" else ev
     return _attach(runs.start(pid, "revise", gen))
 
 
@@ -653,18 +774,34 @@ async def render(pid: str, body: RenderBody, me: Identity = Depends(auth.identit
 
 # --- assets (GCS proxy) ----------------------------------------------------------------------------------------------------
 @app.get("/api/assets/{path:path}")
-async def asset(path: str):
-    got = await blobs.get(path)
+async def asset(path: str, w: int | None = None):
+    """A stored image. ?w=320|640|960 serves a WebP that wide (made on first request and kept, for workspace cards)."""
+    if w is not None:
+        if w not in (320, 640, 960) or path.startswith("thumbs/"):
+            raise HTTPException(400, "unsupported size")
+        got = await blobs.thumb(path, w)
+    else:
+        got = await blobs.get(path)
     if not got:
         raise HTTPException(404, "not found")
     return Response(content=got[0], media_type=got[1], headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 # --- SPA (built web app) ---------------------------------------------------------------------------------------------------
+class ImmutableAssets(StaticFiles):
+    """Vite's /assets files have content hashes in their names: cache them for a year, publicly (CDN and browser)."""
+
+    async def get_response(self, path: str, scope):
+        resp = await super().get_response(path, scope)
+        if resp.status_code == 200:
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+
+
 WEB_DIST = Path(os.environ.get("WEB_DIST", Path(__file__).resolve().parents[2] / "web" / "dist"))
 if WEB_DIST.exists():
     if (WEB_DIST / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
+        app.mount("/assets", ImmutableAssets(directory=WEB_DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

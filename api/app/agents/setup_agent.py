@@ -45,13 +45,18 @@ Every turn:
    "first=bedroom:3,bath:3,lounge"]. Use bedroom (or master_bedroom / guest_bedroom), bath, powder, drawing, lounge, dining,
    kitchen, kitchenette, dirty_kitchen, prayer, study, store, laundry, servant_quarter, dressing, terrace, balcony.
    "Attached baths" means one bath per bedroom: set bathrooms accordingly (plus a powder room if they mention one).
+   If they take a wish back or contradict one ("remove the dirty kitchen", "no open kitchen after all"), drop it with
+   remove_preferences (and remove_spaces for a room), in the same update_brief call.
 2. If they asked a question, answer it first, using ONLY the LDA FACTS you are given (never other numbers). Push back gently on
-   choices with a real trade-off (a double-height lounge costs first-floor area; a fourth storey isn't allowed).
+   choices with a real trade-off (a double-height lounge costs first-floor area; more storeys than the authority allows
+   aren't possible).
 3. In the SAME step, reply with ask() for the first field in STILL MISSING that they haven't just answered, or with
    complete_setup() when nothing will be missing after your update. Never ask about the budget. Put your whole reply
    (a short acknowledgement or answer, then the question) in that call's text; write nothing else.
    The app shows the family a card of everything you recorded, so don't repeat the brief back. Call present_understanding()
    only to list assumptions you made yourself (e.g. a plot size you inferred).
+   When you complete the setup, say "Here's what I understood" and that you'll sketch four exteriors when they tap Show me
+   concepts. Never say "initial", "layout concepts" or "recorded"; the next step is four exterior designs, not floor plans.
 Call update_brief together with ask or complete_setup in ONE step."""
 
 
@@ -78,8 +83,8 @@ class Turn:
                          remove_spaces: Optional[list[str]] = None, floors: Optional[list[str]] = None,
                          water_tank: Optional[str] = None, solar: Optional[str] = None, style: Optional[str] = None,
                          style_notes: Optional[str] = None, budget: Optional[str] = None,
-                         preferences: Optional[list[str]] = None, note: Optional[str] = None,
-                         decided_for_them: Optional[list[str]] = None) -> dict:
+                         preferences: Optional[list[str]] = None, remove_preferences: Optional[list[str]] = None,
+                         note: Optional[str] = None, decided_for_them: Optional[list[str]] = None) -> dict:
             """Record what the family told you in the design brief. Pass only what they said (or what you decided because they
             asked you to, listed in decided_for_them).
 
@@ -106,6 +111,7 @@ class Turn:
               style_notes: Extra style direction in their words.
               budget: economy, standard, premium or luxury.
               preferences: Soft wishes in their own words, each short.
+              remove_preferences: Wishes they took back or contradicted, as recorded (e.g. "dirty kitchen").
               note: Anything else worth remembering, one sentence.
               decided_for_them: Fields you chose yourself because they asked you to decide.
             """
@@ -115,9 +121,10 @@ class Turn:
             if plot_width_ft and plot_depth_ft:
                 plot = {"width_ft": plot_width_ft, "depth_ft": plot_depth_ft}
             elif plot_marla and not (cur and abs((cur.get("area_marla") or 0) - plot_marla) < 0.6):
-                plot = {"area_marla": plot_marla, "corner": cur.get("corner", False)}
-                t.brief = {**t.brief, "plot": None}  # a new size: don't keep the old width and depth
-            if corner is not None:
+                plot = {"area_marla": plot_marla}
+                # a new size: don't keep the old width and depth (but keep corner / mid-row, and whether it was said)
+                t.brief = {**t.brief, "plot": {"corner": cur["corner"]} if "corner" in cur else None}
+            if corner is not None:  # only when they said it: otherwise Naqsha asks "Corner or mid-row?"
                 plot["corner"] = bool(corner)
             if plot:
                 patch["plot"] = plot
@@ -125,7 +132,7 @@ class Turn:
                          ("storeys", storeys), ("basement", basement), ("bedrooms", bedrooms), ("bathrooms", bathrooms),
                          ("spaces", spaces), ("remove_spaces", remove_spaces), ("floors", floors), ("water_tank", water_tank),
                          ("solar", solar), ("style", style), ("style_notes", style_notes), ("budget", budget),
-                         ("preferences", preferences), ("notes", note)):
+                         ("preferences", preferences), ("remove_preferences", remove_preferences), ("notes", note)):
                 if v not in (None, "", []):
                     patch[k] = v
             if patch.get("bedrooms") and not patch.get("bathrooms") and not t.brief.get("bathrooms"):
@@ -157,8 +164,8 @@ class Turn:
 
             Args:
               question: Your whole reply: a short acknowledgement or answer, then the question.
-              field: The brief field you are asking about: authority, plot, facing, storeys, bedrooms, floors, water_tank,
-                solar, style, budget, or "other" for anything else.
+              field: The brief field you are asking about: authority, plot, corner, facing, storeys, bedrooms, floors,
+                water_tank, solar, style, budget, or "other" for anything else.
               chips: Optional one-tap answers for an "other" question (the app supplies them for known fields).
               input: Optional widget: text, number, plot, map, style, rooms or floors.
               multi: True if several chips may be chosen.
@@ -249,7 +256,9 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
                 break
     except Exception:
         log.exception("setup agent failed; falling back to the question bank")
-    brief = turn.brief
+    brief, push = intake.clamp_storeys(turn.brief)  # never more storeys than the authority allows (DHA: 2)
+    if push:
+        turn.patch_fields.add("storeys")
     gaps = intake.to_ask(brief)
     done = not gaps and not intake.missing(brief)
     asked = (turn.reply or {}).get("field")
@@ -289,11 +298,17 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
         if not reply.get("text"):
             reply["text"] = intake._complete_text(project, brief)
         reply.update(field=None, chips=[], input=None, allow_skip=False)
-        reply["suggestions"] = reply.get("suggestions") or intake._complete_suggestions(project)
+        reply["suggestions"] = intake._complete_suggestions(project, brief)  # never offers what the brief already has
+    if push:  # one sentence of pushback, and no sentence that still promises the storeys that aren't allowed
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", reply.get("text") or "")
+                if not re.search(r"\b(three|four|3|4|triple)[\s-]*(storey|story|stories|storeys|floor)", s, re.I)]
+        reply["text"] = (push + " " + " ".join(kept)).strip()
     out = {"role": "assistant", "text": reply["text"], "chips": reply.get("chips") or [], "multi": bool(reply.get("multi")),
            "input": reply.get("input"), "field": reply.get("field"), "allow_skip": bool(reply.get("allow_skip"))}
     rich = len(turn.patch_fields - {"notes"}) >= 3
-    if turn.understood or complete or rich:
+    # the card goes with a turn that changed the brief, the first completion, or the agent's own assumptions; a question
+    # asked after setup gets a plain answer
+    if turn.understood or (complete and (newly or (turn.patch_fields - {"notes"}))) or rich:
         out["understood"] = intake.understood(brief, turn.understood)
     if reply.get("suggestions"):
         out["suggestions"] = [str(s) for s in reply["suggestions"]][:3]

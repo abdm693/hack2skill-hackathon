@@ -246,7 +246,28 @@ interface AsBuiltSummary {
 - **Revise**: changes made for the typed `instruction` carry `from_request: true` (their `comment_ids` list only real comments);
   the resolution of the request is also sent as a final `stage` message. Plan edits may not add any LDA or livable failure the
   version didn't already have; failures that were already there stay visible in the new version's report.
-- **Clone**: `{fresh: true}` forces a new copy of a sample.
+- **Comment authors** (round 1): no comment payload (share link, `/comments`, replies, the revise stream's `comment` events)
+  carries a raw uid or guest id. `author.id` is an opaque per-project handle `"a_" + 16 hex` (stable within the project, so
+  pins and threads still group by author); the owner's own app keeps the caller's own raw id. Every comment and reply has
+  `mine: boolean`, computed for the caller (share endpoints read the optional `X-Naqsha-User` / Bearer identity); use it
+  instead of comparing ids.
+- **Approvals**: `POST /api/share/{token}/comments` takes `kind: "approval"` (the client's "Approve vN"; the text
+  "Approved version N." on a general anchor is also recognised). It is stored `status: "resolved"`, `kind: "approval"`: never
+  counted as open, never pre-ticked, applied or revised. General notes (no `room` / `element_id` in the anchor) are nudged
+  sideways so their pins don't stack.
+- **Open comments follow new versions**: when a design or revise run saves a new current version, every comment still
+  `open` on the version it replaces (including ones posted while the run was going) moves to the new version, keeping its
+  anchor and thread, with `from_version_id` = the version it was written on. Resolved, partial and rejected threads stay
+  where they were answered. `revise {comment_ids}` accepts open comments from any version.
+- **Brief PATCH**: `preferences` in `PATCH /projects/{pid} {brief}` replaces the list (`[]` clears it). Storeys are capped
+  at the authority's maximum (DHA: 2). A name set with `PATCH {name}` is kept; an auto-made name follows plot changes.
+- **Review notes**: the self-review's unresolved issues are livable `warn` checks `review.<n>` in the version's report, and
+  the version summary ends with "· N review notes".
+- **Clone**: `{fresh: true}` forces a new copy of a sample. Opening a sample again returns your copy (one copy, even from
+  parallel requests); an untouched copy of an older sample (no messages, comments, versions or concepts of its own) is
+  refreshed in place with the current sample.
+- **Thumbnails**: `GET /api/assets/{path}?w=320|640|960` serves a WebP that wide (made once, cached); `thumbnail_url` in
+  project payloads points at the 640 px variant.
 - **Errors**: an invalid or expired Bearer token returns **401** ("Your sign-in has expired…"); refresh the token and retry.
   A role that may not do something gets **403**; a project you can't see is **404**.
 `checks` lists what the engine had to repair or could not repair while building (stair fit, roof door moved to the

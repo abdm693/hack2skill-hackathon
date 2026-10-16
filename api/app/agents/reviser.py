@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from typing import AsyncIterator
 
 from google.genai import types
@@ -17,6 +18,7 @@ from ..compliance import lda
 from ..store import blobs, db
 from .architect import BUILD_SYSTEM, CONTRACTS, _read, _status, prepare
 
+log = logging.getLogger("naqsha.reviser")
 NAQSHA = {"id": "naqsha", "name": "Naqsha", "role": "agent"}
 
 REVISE_SYSTEM = """You are Naqsha's architect, revising a house design after the family's 3D walkthrough. Each comment is pinned
@@ -156,6 +158,14 @@ async def finalize(project: dict, version: dict, plan: dict, sections: list[dict
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": new_v["id"], "n": n, "created_at": new_v["created_at"],
                                                                            "status": "ready", "summary": summary}],
                             current_version_id=new_v["id"], stage="ready", brief_changed=False)
+    # Comments left out of this revision (unticked, or posted while it ran) stay open: they follow the new version so they
+    # can still be seen and applied. The current version moves first, so a note posted now lands on the new one anyway.
+    parents = {version["id"], fresh.get("current_version_id")} - {None, new_v["id"]}
+    for vid in parents:
+        try:
+            await db.move_open_comments(pid, vid, new_v["id"])
+        except Exception:
+            log.exception("moving open comments from %s failed", vid)
     yield "version", {"version": new_v}
 
 
