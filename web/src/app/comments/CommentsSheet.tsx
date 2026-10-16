@@ -54,6 +54,11 @@ export function CommentsSheet({
   const versionId = commentsFor ?? project.current_version_id;
   const plan = versionId ? versions[versionId]?.plan : undefined;
   const list = useMemo(() => comments.filter((c) => !versionId || c.version_id === versionId), [comments, versionId]);
+  // A client has no Revisions view: their notes on earlier versions, with Naqsha's answers, stay readable here.
+  const earlier = useMemo(
+    () => (clientView && versionId ? comments.filter((c) => c.version_id !== versionId).sort((a, b) => b.created_at.localeCompare(a.created_at)) : []),
+    [clientView, comments, versionId],
+  );
   const numbers = useMemo(() => pinNumbers(list), [list]);
   const me = useMemo(() => ({ ids: [user?.uid, clientView ? undefined : userId()].filter(Boolean) as string[], name: clientView ? guestName : user?.name }), [user, clientView, guestName]);
   const shown = useMemo(() => list.filter((c) => matches(c, filter, me)), [list, filter, me]);
@@ -138,7 +143,7 @@ export function CommentsSheet({
           <span className="grid size-11 place-items-center rounded-full bg-surface-2 text-ink-3">
             <MessageSquarePlus className="size-5" strokeWidth={1.75} />
           </span>
-          <p className="mt-3 text-[15px] font-semibold text-ink">No comments yet</p>
+          <p className="mt-3 text-[15px] font-semibold text-ink">{earlier.length ? "No notes on this version yet" : "No comments yet"}</p>
           <p className="mt-1 max-w-[260px] text-[13px] leading-[18px] text-ink-3">
             {emptyHint ?? "Press C in the House view, then click anywhere to pin a note. Naqsha turns notes into the next version."}
           </p>
@@ -179,6 +184,17 @@ export function CommentsSheet({
             );
           })}
         </div>
+      )}
+
+      {earlier.length > 0 && !(applyMode && canApply) && (
+        <section className="pt-4" aria-label="Notes on earlier versions">
+          <h3 className="sticky top-0 z-[1] -mx-5 bg-surface/95 px-5 py-1.5 text-[12px] font-medium text-ink-3 backdrop-blur-sm">On earlier versions</h3>
+          <div className="flex flex-col divide-y divide-line">
+            {earlier.map((c) => (
+              <CommentItem key={c.id} comment={c} me={me} moderator={false} clientView={clientView} highlight={focusId === c.id} />
+            ))}
+          </div>
+        </section>
       )}
     </Sheet>
   );
