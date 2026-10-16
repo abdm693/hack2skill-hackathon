@@ -211,6 +211,58 @@ export class NavGrid {
     return out.reverse();
   }
 
+  /**
+   * Dijkstra flood from `start` over everything walkable (same costs as findPath). Lets a caller pick the best goal
+   * among the cells you can actually reach, e.g. the reachable spot nearest a room's middle when furniture walls
+   * part of the room off.
+   */
+  flood(start: number): { cost: Float32Array; came: Int32Array } {
+    const { nx, nz } = this;
+    const n = nx * nz;
+    const cost = new Float32Array(n).fill(Infinity);
+    const came = new Int32Array(n).fill(-1);
+    if (start < 0 || !this.free[start]) return { cost, came };
+    const closed = new Uint8Array(n);
+    const heap = new MinHeap();
+    const penalty = [3, 1.6, 0.45, 0.1, 0];
+    cost[start] = 0;
+    heap.push(start, 0);
+    while (heap.size) {
+      const i = heap.pop();
+      if (closed[i]) continue;
+      closed[i] = 1;
+      const ix = i % nx, iz = (i / nx) | 0;
+      for (let oz = -1; oz <= 1; oz++)
+        for (let ox = -1; ox <= 1; ox++) {
+          if (!ox && !oz) continue;
+          const jx = ix + ox, jz = iz + oz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (closed[j] || !this.passable(i, j)) continue;
+          if (ox && oz && (!this.passable(i, iz * nx + jx) || !this.passable(i, jz * nx + ix))) continue;
+          const c = cost[i] + (ox && oz ? 1.4142 : 1) * (1 + penalty[Math.min(this.clr[j], 4)]);
+          if (c < cost[j]) {
+            cost[j] = c;
+            came[j] = i;
+            heap.push(j, c);
+          }
+        }
+    }
+    return { cost, came };
+  }
+
+  /** Cell path start → goal from a flood's `came` links (null when unreached). */
+  static trace(came: Int32Array, start: number, goal: number): number[] | null {
+    if (goal === start) return [start];
+    if (goal < 0 || came[goal] < 0) return null;
+    const out: number[] = [];
+    for (let c = goal; c !== -1; c = came[c]) {
+      out.push(c);
+      if (c === start) break;
+    }
+    return out[out.length - 1] === start ? out.reverse() : null;
+  }
+
   /** Straight walkable line between two cells (sampled at half-cell steps), keeping some clearance. */
   los(a: number, b: number, minClr: number): boolean {
     const ax = this.cx(a), az = this.cz(a), bx = this.cx(b), bz = this.cz(b);

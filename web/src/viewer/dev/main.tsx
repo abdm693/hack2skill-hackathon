@@ -79,7 +79,14 @@ function Harness() {
   const [panel, setPanel] = useState(qs.get("panel") !== "0");
   const [chrome] = useState(qs.get("chrome") === "1");
   const viewer = useRef<ViewerHandle>(null);
-  const plan = fixture.plan;
+  // "revision": the same design with the front windows widened (a small plan change → crossfade + changed outline)
+  const [revised, setRevised] = useState(false);
+  const plan = useMemo(() => {
+    if (!revised) return fixture.plan;
+    const p = structuredClone(fixture.plan);
+    for (const o of p.openings) if (o.type === "window" && o.at[1] < 30) o.width_ft = Math.max(2, o.width_ft - 2);
+    return p;
+  }, [fixture, revised]);
   const levels = useMemo(() => [...plan.levels].sort((a, b) => b.index - a.index), [plan]);
 
   const onAddComment = useCallback<NonNullable<HouseViewerProps["onAddComment"]>>((d) => {
@@ -210,6 +217,9 @@ function Harness() {
               ))}
               <Toggle on={preserve} onClick={() => setPreserve((v) => !v)}>
                 keep camera
+              </Toggle>
+              <Toggle on={revised} onClick={() => setRevised((v) => !v)}>
+                revision: narrower front windows
               </Toggle>
             </div>
           </Field>

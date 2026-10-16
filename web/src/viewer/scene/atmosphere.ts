@@ -349,14 +349,14 @@ export class Atmosphere {
       dir.lerp(MOON_DIR, n).normalize();
       light.position.copy(tgt).addScaledVector(dir, dist);
       light.updateMatrixWorld();
-      const moon = 0.5 * ((light.userData.intensityScale as number) ?? 1);
+      const moon = 0.3 * ((light.userData.intensityScale as number) ?? 1);
       light.intensity = light.intensity + (moon - light.intensity) * n;
       light.color.lerp(MOON_COLOR, n);
     }
     if (hemi) {
       hemi.color.lerp(NIGHT_HEMI_SKY, n);
       hemi.groundColor.lerp(NIGHT_HEMI_GROUND, n);
-      hemi.intensity = hemi.intensity + (0.22 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
+      hemi.intensity = hemi.intensity + (0.13 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
     }
     (this.scene.fog as THREE.Fog).color.lerp(NIGHT_FOG, n);
     this.scene.environmentIntensity = lerp(this.scene.environmentIntensity, 0.035, n);

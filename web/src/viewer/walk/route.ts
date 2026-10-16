@@ -36,6 +36,8 @@ export interface RoutePlan {
   byLevel: Record<string, [number, number][]>;
   /** True when part of the route ignores furniture (room-graph fallback). */
   rough?: boolean;
+  /** The only way in goes through something solid at eye height (a wardrobe in a doorway): don't glide it. */
+  blocked?: boolean;
   reason?: string;
 }
 
@@ -204,6 +206,23 @@ export class Navigator {
     return out;
   }
 
+  /** Does the path pass through anything solid at eye height? */
+  private crossesAtEye(pts: THREE.Vector3[]): boolean {
+    const bvh = this.walk.bvh;
+    if (!bvh) return false;
+    const ray = new THREE.Ray();
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      ray.origin.set(a.x, a.y + EYE - 0.1, a.z);
+      ray.direction.set(b.x - a.x, b.y - a.y, b.z - a.z);
+      const len = ray.direction.length();
+      if (len < 1e-4) continue;
+      ray.direction.multiplyScalar(1 / len);
+      if (bvh.raycastFirst(ray, THREE.DoubleSide, 0, len)) return true;
+    }
+    return false;
+  }
+
   /** Walk from `p` (on a floor) along `dir` up to `max` m, stopping before anything solid. */
   private extendFree(p: THREE.Vector3, dir: THREE.Vector3, max: number): THREE.Vector3 {
     let best = p.clone();
@@ -368,7 +387,8 @@ export class Navigator {
       length += d;
       timeLength += d * w;
     }
-    return { ok: true, pts: clean, end, yaw: face, pitch: LOOK_PITCH, length, weights, timeLength, stairs: chain.length > 0, byLevel: this.splitByLevel(clean), rough };
+    const blocked = rough && this.crossesAtEye(clean);
+    return { ok: true, pts: clean, end, yaw: face, pitch: LOOK_PITCH, length, weights, timeLength, stairs: chain.length > 0, byLevel: this.splitByLevel(clean), rough, blocked };
   }
 
   /** Where to stand in a room (just inside, a step past the door) and which way to look (into the room). */
@@ -396,18 +416,30 @@ export class Navigator {
       return best;
     };
     if (g) {
-      // the free cell nearest the room's middle, preferring open floor
+      // the reachable free cell nearest the room's middle, preferring open floor (furniture can wall part of a
+      // room off: then you stop where you can stand and still see the room)
+      const s = this.nearestReachable(g, from);
+      const fl = g.flood(s);
       let goal = -1, gd = Infinity;
       for (let i = 0; i < g.free.length; i++) {
-        if (!g.free[i] || !g.inRect(i, inner) || Math.abs(g.h[i] - floorY) > 0.6) continue;
+        if (!Number.isFinite(fl.cost[i]) || !g.inRect(i, inner) || Math.abs(g.h[i] - floorY) > 0.6) continue;
         const d = Math.hypot(g.cx(i) - centre.x, g.cz(i) - centre.z) - Math.min(g.clr[i], 3) * 0.35;
         if (d < gd) {
           gd = d;
           goal = i;
         }
       }
-      const s = this.nearestReachable(g, from);
-      const cells = goal >= 0 && s >= 0 ? g.findPath(s, goal) : null;
+      // nothing reachable inside the inset rect: try right up to the walls
+      if (goal < 0)
+        for (let i = 0; i < g.free.length; i++) {
+          if (!Number.isFinite(fl.cost[i]) || !g.inRect(i, rect) || Math.abs(g.h[i] - floorY) > 0.6) continue;
+          const d = Math.hypot(g.cx(i) - centre.x, g.cz(i) - centre.z);
+          if (d < gd) {
+            gd = d;
+            goal = i;
+          }
+        }
+      const cells = goal >= 0 && s >= 0 ? NavGrid.trace(fl.came, s, goal) : null;
       if (cells) {
         let stop = cells.length - 1;
         if (!inside(from)) {

@@ -78,7 +78,7 @@ function patch(mat: THREE.Material, mode: "solid" | "ghost") {
     if (mode === "ghost") {
       sh.fragmentShader = sh.fragmentShader.replace(
         "#include <dithering_fragment>",
-        "#include <dithering_fragment>\n  float nqK = smoothstep(0.02, 0.85, nqG);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.84, 0.82, 0.78), 0.5 * nqK);\n  gl_FragColor.a *= mix(1.0, 0.15, nqK);",
+        "#include <dithering_fragment>\n  float nqK = smoothstep(0.02, 0.85, nqG);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(1.02, 1.0, 0.96), 0.7 * nqK);\n  gl_FragColor.a *= mix(1.0, 0.15, nqK);",
       );
     }
   };

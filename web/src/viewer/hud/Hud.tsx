@@ -173,7 +173,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
           </div>
           <dl>
             <dt>Look around</dt>
-            <dd>{refused ? "Drag" : "Click, then move the mouse"}</dd>
+            <dd>{refused ? "Drag" : "Click, then the mouse"}</dd>
             <dt>Move</dt>
             <dd>
               <Kbd>W</Kbd>
@@ -186,7 +186,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
               <Kbd>Shift</Kbd>
             </dd>
             <dt>Go to a room</dt>
-            <dd>Click it on the map</dd>
+            <dd>Click the map</dd>
             {floors > 1 && (
               <>
                 <dt>Change floor</dt>
@@ -203,7 +203,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
             <dd>
               <Kbd>F</Kbd>
             </dd>
-            <dt>Stop looking · leave</dt>
+            <dt>Let go · leave</dt>
             <dd>
               <Kbd>Esc</Kbd>
             </dd>

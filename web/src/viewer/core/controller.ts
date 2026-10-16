@@ -6,7 +6,7 @@ import * as THREE from "three";
 import type CameraControlsImpl from "camera-controls";
 import type { EffectComposer as EffectComposerImpl, OutlineEffect } from "postprocessing";
 import type { BuildingPlan, Level, Room } from "@contracts/plan";
-import type { Comment, CommentAnchor, Vec3 } from "@contracts/api-types";
+import type { AsBuiltSummary, Comment, CommentAnchor, Vec3 } from "@contracts/api-types";
 import type { BuildResult, SectionResult } from "@/engine";
 import type { HouseViewerProps } from "../HouseViewer";
 import { BuildManager } from "./build";
@@ -280,7 +280,7 @@ export class ViewerController {
     const plotCenter = plotBox(this.plan).getCenter(new THREE.Vector3());
     this.atmosphere.ground.position.set(plotCenter.x, -0.06, plotCenter.z);
     this.atmosphere.configureShadow(this.atmosphere.fallbackSun, this.store.getState().quality);
-    this.ctxfx.setHouseBox(ghostBox(this.plan));
+    this.syncGhostBox();
     this.syncSun();
     this.syncSectionCut();
     this.syncVisibility();
@@ -475,7 +475,7 @@ export class ViewerController {
     this.nav.reset(this.plan, []);
     this.navWarm = false;
     this.ctxfx.install(result.root);
-    this.ctxfx.setHouseBox(ghostBox(this.plan));
+    this.syncGhostBox();
     this.applyVehicleTargets(true);
     this.configureVisibility();
     this.vis.apply(result.root);
@@ -591,6 +591,73 @@ export class ViewerController {
     );
   }
 
+  private flashTimer = 0;
+  private flashOverlays: THREE.Mesh[] = [];
+
+  /**
+   * After a version swap: a 1.2 s accent outline on what changed (DESIGN Revisions), found by diffing the as-built
+   * summaries (new elements, or ones that moved or resized by more than 3 inches). Skipped when most of the house
+   * changed (a different design altogether) and while walking.
+   */
+  flashChanges(prev: AsBuiltSummary | null, next: BuildResult, delayMs: number) {
+    if (!prev || !this.outline || prefersReducedMotion()) return;
+    const before = new Map(prev.objects.map((o) => [o.id, o]));
+    const changed = new Set<string>();
+    const moved = (a: Vec3, b: Vec3) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) > 0.25;
+    for (const o of next.summary.objects) {
+      if (!o.id || o.id === "unknown" || o.id.startsWith("merged_") || /^light:|^collider|^stair:(ramp|landing)/.test(o.kind ?? "")) continue;
+      const b = before.get(o.id);
+      if (!b || moved(o.bbox_ft.min, b.bbox_ft.min) || moved(o.bbox_ft.max, b.bbox_ft.max)) changed.add(o.id);
+    }
+    if (!changed.size || changed.size > next.summary.objects.length * 0.35) return;
+    window.clearTimeout(this.flashTimer);
+    this.flashTimer = window.setTimeout(() => {
+      if (this.result !== next || this.store.getState().mode !== "orbit" || !this.outline) return;
+      this.clearFlash();
+      const targets: THREE.Object3D[] = [];
+      let budget = 160;
+      next.root.traverseVisible((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || o.userData?.viewer || budget <= 0) return;
+        const parts = o.userData?.parts as PartRange[] | undefined;
+        if (parts?.length) {
+          for (const part of parts) {
+            if (budget <= 0 || !changed.has(String(part.tags.id ?? ""))) continue;
+            const ov = partOverlay(m, part);
+            if (!ov) continue;
+            m.add(ov);
+            this.flashOverlays.push(ov);
+            targets.push(ov);
+            budget--;
+          }
+        } else if (changed.has(String(o.userData?.id ?? ""))) {
+          targets.push(o);
+          budget--;
+        }
+      });
+      if (!targets.length) return;
+      this.outline.selection.set(targets);
+      this.invalidate();
+      this.flashTimer = window.setTimeout(() => {
+        this.clearFlash();
+        // put the hover outline back, if any
+        const t = this.outlined;
+        this.outlined = null;
+        this.setOutline(t);
+        this.invalidate();
+      }, 1200);
+    }, delayMs);
+  }
+
+  private clearFlash() {
+    for (const ov of this.flashOverlays) {
+      ov.removeFromParent();
+      ov.geometry.dispose();
+    }
+    this.flashOverlays = [];
+    this.outline?.selection.clear();
+  }
+
   // ───────────────────────────── prop syncs ─────────────────────────────
 
   private bands(): LevelBand[] {
@@ -644,8 +711,26 @@ export class ViewerController {
     }
     this.colliderDirty = true;
     this.colliderTimer = performance.now() + 150;
+    this.syncGhostBox();
     this.clearHover();
     this.markDirty();
+  }
+
+  /**
+   * The volume neighbours must not hide: the plot up to the top of what is on show (a dollhouse cut or a section
+   * cut lowers it, so neighbours only ghost where they really cover the house).
+   */
+  private syncGhostBox() {
+    const b = ghostBox(this.plan);
+    if (this.vis.levelsShown) {
+      const shown = this.bands().filter((l) => this.vis.levelsShown!.has(l.id));
+      const top = Math.max(...shown.map((l) => l.top_y), 0);
+      if (shown.length) b.max.y = Math.min(b.max.y, top + 0.6);
+    }
+    const cut = this.clipY();
+    if (cut !== null) b.max.y = Math.min(b.max.y, cut);
+    b.max.y = Math.max(b.max.y, b.min.y + 0.5);
+    this.ctxfx.setHouseBox(b);
   }
 
   private levelOf(o: THREE.Object3D, root: THREE.Object3D): string | undefined {
@@ -693,6 +778,7 @@ export class ViewerController {
       this.sectionPlane.constant = cut;
       gl.clippingPlanes = [this.sectionPlane];
     }
+    this.syncGhostBox();
     this.clearHover();
     this.markDirty();
   }
@@ -1171,8 +1257,14 @@ export class ViewerController {
     if (!this.walk.ready || !this.collider) return;
     this.walk.cancelGlide();
     const route = this.nav.route(this.walk.feet.clone(), { kind: "room", room });
-    if (route.ok && route.pts.length > 1) {
+    if (route.ok && route.pts.length > 1 && !route.blocked) {
       this.startGlide(route, room.id);
+      return;
+    }
+    if (route.ok && route.blocked) {
+      // furniture stands in the only doorway: say so, and step straight in
+      this.jumpTo(route.end, route.yaw, route.pitch);
+      this.toast(`Furniture blocks the way into the ${room.name.toLowerCase()}, so I've brought you straight in`);
       return;
     }
     const lvl = this.plan.levels.find((l) => l.id === room.level)!;

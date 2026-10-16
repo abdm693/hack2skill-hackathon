@@ -223,13 +223,13 @@
 
 /* ── ? help card (takes the minimap's place) ───────────────────────────── */
 .nq-help {
-  position: absolute; right: var(--nq-edge); top: var(--nq-top); width: 248px; box-sizing: border-box;
+  position: absolute; right: var(--nq-edge); top: var(--nq-top); width: 264px; box-sizing: border-box;
   padding: 12px 14px 14px; border-radius: 20px; animation: nq-drop 260ms var(--nq-ease-sheet) both;
 }
 .nq-help-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .nq-help-head b { font-size: 13px; font-weight: 600; }
-.nq-help dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; font-size: 12px; align-items: center; }
-.nq-help dt { color: var(--nq-ink-2); }
+.nq-help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 12px; align-items: center; }
+.nq-help dt { color: var(--nq-ink-2); white-space: nowrap; }
 .nq-help dd { margin: 0; text-align: right; color: var(--nq-ink); white-space: nowrap; }
 
 /* the HUD steps back while you stand still */

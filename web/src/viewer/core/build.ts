@@ -139,6 +139,7 @@ export class BuildManager {
     const fade = ctrl.beginCrossfade();
     this.cache.delete(d.sig);
     const prev = this.displayed;
+    const prevSummary = prev?.result.summary ?? null;
     for (const child of [...ctrl.holder.children]) child.removeFromParent();
     this.displayed = d;
     this.retire(prev);
@@ -148,6 +149,7 @@ export class BuildManager {
     ctrl.onBuildComplete(d.result, d.mock);
     ctrl.setBuildState({ phase: "ready", done: d.result.sections.length, total: d.result.sections.length, current: undefined, failed: d.result.sections.filter((s) => !s.ok).length, mock: d.mock, first: false });
     if (fade) ctrl.endCrossfade(360);
+    ctrl.flashChanges(prevSummary, d.result, 360);
     try {
       ctrl.props.onReady?.({ summary: d.result.summary, sections: d.result.sections });
     } catch (e) {
@@ -252,6 +254,7 @@ export class BuildManager {
       return;
     }
     const fade = !st.swapped && !!prev && ctrl.beginCrossfade();
+    const prevSummary = offscreen ? prev?.result.summary ?? null : null;
     if (!st.swapped) {
       // off screen, or every section was unchanged: swap now (no drop-in animation)
       swapIn(result.root);
@@ -261,6 +264,7 @@ export class BuildManager {
     ctrl.onBuildComplete(result, st.mock);
     ctrl.setBuildState({ phase: "ready", done: st.done, total: Math.max(total, st.done), current: undefined, failed: st.failed, mock: st.mock, first: false });
     if (fade) ctrl.endCrossfade(600);
+    if (prevSummary) ctrl.flashChanges(prevSummary, result, 600);
     try {
       ctrl.props.onReady?.({ summary: result.summary, sections: result.sections });
     } catch (e) {
