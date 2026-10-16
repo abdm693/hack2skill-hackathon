@@ -199,7 +199,9 @@ async def revise(project: dict, version: dict, comments: list[dict], instruction
     brief = project.get("brief") or {}
     await db.update_project(pid, stage="revising")
     n = len(comments)
-    yield "stage", {"stage": "changes", "message": (f"Reading your {n} note{'s' if n != 1 else ''}…" if n else "Working on your request…")}
+    notes = f"your {n} note{'s' if n != 1 else ''}" if n else ""
+    what = " and ".join(x for x in (notes, "your request" if instruction else "") if x)
+    yield "stage", {"stage": "changes", "message": f"Reading {what}…"}
     targets = list(comments) + ([{"id": "request", "text": instruction, "anchor": {}}] if instruction else [])
     ws = Workspace(version, targets, brief)
     agent = Agent(name="reviser", model=Gemini(model=config.MODEL_ARCHITECT, retry_options=RETRY), instruction=INSTRUCTION,
