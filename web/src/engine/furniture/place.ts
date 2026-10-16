@@ -4,13 +4,14 @@ import type { FurnishOptions, FurnitureType, Side } from "@contracts/house-sdk";
 import type { BuildCtx, PlacedItem } from "../core/ctx";
 import { Kit } from "../core/shapes";
 import { DEG, FT, clamp, colorHex, hashStr, luma, num, rng, warn } from "../core/util";
+import { humanType } from "../core/notes";
 import type { RoomM } from "../plan/model";
 import { findRoom, innerRect } from "../interior";
 import { acOutdoor, chairsForTable, ITEMS, type ItemDef } from "./items";
 import { makeMats, type ItemBuild } from "./parts";
 import { keepOut, solidIntervals, type Zone } from "./zones";
 import { ceilingSpot } from "../lights";
-import { onWalkwayRect, parking } from "./parking";
+import { onWalkwayRect, parking, replanParking, type Parking } from "./parking";
 import { subtract } from "../structure/cover";
 
 const SIDES: Side[] = ["front", "back", "left", "right"];
@@ -38,6 +39,14 @@ export function resolveItem(item: unknown): FurnitureType | null {
   return null;
 }
 
+/** What each "top" item stands on (undefined: anything with a top surface). */
+const TOP_SUPPORTS: Partial<Record<string, string[]>> = {
+  hob: ["kitchen_counter", "kitchen_island"],
+  sink_kitchen: ["kitchen_counter", "kitchen_island"],
+  microwave: ["kitchen_counter", "kitchen_island", "sideboard"],
+  table_lamp: ["side_table", "console_table", "dresser", "sideboard", "study_desk", "dressing_table"],
+};
+
 /** Items that may overlap each other's footprints (sets). */
 const COMPANIONS: [string, string][] = [
   ["dining_chair", "dining_table"], ["desk_chair", "study_desk"], ["ottoman", "dressing_table"], ["ottoman", "sofa"], ["coffee_table", "sofa_l"],
@@ -57,6 +66,95 @@ const TALL_EXEMPT = new Set<string>(["kitchen_counter", "vanity", "shower", "wc"
 const SHRINK = new Set<string>(["wardrobe", "sideboard", "kitchen_counter", "bookshelf", "tv_unit", "dresser", "console_table", "bed_king", "bed_queen", "sofa_3", "sofa_l", "shower", "vanity", "study_desk", "dressing_table"]);
 /** never left out: if nothing is free they may touch other furniture, but never a door, stair or walkway */
 const ESSENTIAL = new Set<string>(["wc", "vanity", "shower", "bed_king", "bed_queen", "bed_single", "kitchen_counter", "fridge", "dining_table_4", "dining_table_6", "dining_table_8", "sofa_3", "sofa_l", "sofa_2", "wardrobe", "tv_unit", "washing_machine"]);
+
+/** purely decorative pieces: when one has no free spot it is simply not placed (no note: nothing the family relies on) */
+export const DECOR = new Set<string>(["plant_floor", "plant_small", "floor_lamp", "painting", "ottoman", "swing", "outdoor_chair", "outdoor_table", "console_table"]);
+/** pieces that give way to a fixture the room cannot do without (they are left out, with a note) */
+const SOFT = new Set<string>(["plant_floor", "plant_small", "water_dispenser", "armchair", "ottoman", "floor_lamp", "console_table", "desk_chair", "outdoor_chair", "outdoor_table", "swing"]);
+/** the smaller version tried before an essential piece is left out */
+const SMALLER: Partial<Record<string, { type: FurnitureType; size?: { w_ft?: number; d_ft?: number } }>> = {
+  bed_king: { type: "bed_queen" },
+  bed_queen: { type: "bed_single" },
+  fridge: { type: "fridge", size: { w_ft: 2.4, d_ft: 2.2 } },
+  dining_table_8: { type: "dining_table_6" },
+  dining_table_6: { type: "dining_table_4" },
+  sofa_l: { type: "sofa_3" },
+  sofa_3: { type: "sofa_2" },
+};
+
+/** EN-03: what a room is not a room without (a bedroom's bed, a dressing room's wardrobe, a kitchen's fridge and hob,
+ *  a bath's WC). Matched by type prefix; `add` is what the defining pass furnishes when it is missing. */
+const DEFINING: Record<string, { label: string; types: string[]; add: FurnitureType }[]> = {
+  master_bedroom: [{ label: "bed", types: ["bed_"], add: "bed_king" }],
+  bedroom: [{ label: "bed", types: ["bed_"], add: "bed_queen" }],
+  guest_bedroom: [{ label: "bed", types: ["bed_"], add: "bed_queen" }],
+  servant: [{ label: "bed", types: ["bed_"], add: "bed_single" }],
+  dressing: [{ label: "wardrobe", types: ["wardrobe"], add: "wardrobe" }],
+  kitchen: [
+    { label: "fridge", types: ["fridge"], add: "fridge" },
+    { label: "hob", types: ["hob", "oven", "kitchen_counter"], add: "hob" },
+  ],
+  dirty_kitchen: [{ label: "hob", types: ["hob", "oven", "kitchen_counter"], add: "hob" }],
+  bath: [{ label: "WC", types: ["wc"], add: "wc" }],
+  powder: [{ label: "WC", types: ["wc"], add: "wc" }],
+};
+
+function isDefining(room: RoomM, type: string): boolean {
+  return type !== "kitchen_counter" && (DEFINING[room.type] ?? []).some((d) => d.types.some((t) => type.startsWith(t)));
+}
+
+/**
+ * EN-03, after every section: each room gets the pieces it is defined by. A missing one (never asked for, or left out
+ * because nothing was free) is furnished again with the full search (every wall, both orientations, a smaller
+ * version, softer pieces giving way); if it still has no place the build reports a fail note.
+ */
+export function ensureDefining(ctx: BuildCtx, run?: (fn: () => void) => Promise<void>): Promise<void> | void {
+  const missing = (room: RoomM) => (DEFINING[room.type] ?? []).filter((d) => !ctx.items.some((it) => it.room === room.id && d.types.some((t) => it.type.startsWith(t) && !(t === "kitchen_counter" && /nohob/i.test(it.variant ?? "")))));
+  const rooms = ctx.plan.rooms.filter((r) => r.cat === "enclosed" && missing(r).length);
+  if (!rooms.length) return;
+  const work = () => {
+    for (const room of rooms) {
+      for (const d of missing(room)) {
+        // the wall with the longest solid stretch first (the placer tries the others itself)
+        const sides = SIDES.map((s) => ({ s, len: solidIntervals(ctx, room, s).reduce((a, [p, q]) => Math.max(a, q - p), 0) })).sort((a, b) => b.len - a.len);
+        const opts: FurnishOptions = { room: room.id, against: sides[0]?.s ?? "back" } as FurnishOptions;
+        furnishImpl(ctx, d.add, opts);
+        const still = missing(room).some((m) => m.label === d.label);
+        if (still)
+          ctx.notes.add({
+            id: `asbuilt.furniture_missing:${room.id}`,
+            title: `No ${d.label} in the ${room.name}`,
+            status: "fail",
+            message: `${roomLabel(ctx, room)}: there is no place for a ${d.label} that keeps every doorway and the 3 ft in front of it clear. Make the room larger or move a door.`,
+            element_ids: [room.id],
+          });
+      }
+    }
+  };
+  return run ? run(work) : work();
+}
+
+/** Take a piece out again (it gave way to a fixture), with whatever stands on it. */
+function evict(ctx: BuildCtx, it: PlacedItem, forType: string): void {
+  const deps = ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "top" && (q.x0 + q.x1) / 2 > it.x0 && (q.x0 + q.x1) / 2 < it.x1 && (q.y0 + q.y1) / 2 > it.y0 && (q.y0 + q.y1) / 2 < it.y1);
+  for (const q of [it, ...deps]) {
+    q.group.removeFromParent();
+    const meshes = new Set<THREE.Object3D>();
+    q.group.traverse((x) => meshes.add(x));
+    ctx.colliders = ctx.colliders.filter((m) => !meshes.has(m));
+    const k = ctx.items.indexOf(q);
+    if (k >= 0) ctx.items.splice(k, 1);
+  }
+  const room = ctx.plan.room(it.room);
+  if (!DECOR.has(it.type)) ctx.notes.add({ id: `asbuilt.furniture_dropped:${it.id}`, title: "Furniture left out", status: "warn", message: `${roomLabel(ctx, room)}: the ${humanType(it.type)} was left out to make room for the ${humanType(forType)}.`, element_ids: [it.id] });
+}
+
+/** A room's name for notes, with its floor when another room on another floor has the same name (EN-07). */
+export function roomLabel(ctx: BuildCtx, room: RoomM | null | undefined): string {
+  if (!room) return "A room";
+  const twin = ctx.plan.rooms.some((r) => r !== room && r.name.trim().toLowerCase() === room.name.trim().toLowerCase());
+  return twin ? `${room.name} (${room.lv.name.toLowerCase()})` : room.name;
+}
 
 const alongOf = (side: Side, it: { x0: number; x1: number; y0: number; y1: number }): [number, number] => (side === "front" || side === "back" ? [it.x0, it.x1] : [it.y0, it.y1]);
 
@@ -224,7 +322,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   const park = outdoorGround && ctx.structureBuilt ? parking(ctx) : null;
   // keep-out zones for floor items: doors, open-plan gates, stairs, roof door, tank, solar area; windows for tall items
   const tallH = type === "tv_unit" ? 5.6 : h;
-  const zones: Zone[] = def.cls === "floor" && ctx.structureBuilt ? keepOut(ctx, room).filter((z) => z.kind !== "window" || (!TALL_EXEMPT.has(type) && tallH > (z.sill ?? 3) + 0.5)) : [];
+  const zones: Zone[] = (def.cls === "floor" || def.cls === "top") && ctx.structureBuilt ? keepOut(ctx, room).filter((z) => z.kind !== "window" || (!TALL_EXEMPT.has(type) && tallH > (z.sill ?? 3) + 0.5)) : [];
   let rot = 0;
   let cx: number, cy: number;
   let wallInfo: { axis: "x" | "y"; inner: number; into: number; lo: number; hi: number } | null = null;
@@ -248,7 +346,9 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
     return f.axis === "x" ? [u, across] : [across, u];
   };
   const dropped = (why: string, status: "warn" | "fail" = "warn"): FurnishResult => {
-    ctx.notes.add({ id: `asbuilt.furniture_dropped:${room.id}:${type}:${ctx.items.length}`, title: "Furniture left out", status, message: `${room.name}: the ${type.replace(/_/g, " ")} was left out because ${why}.`, element_ids: [room.id] });
+    // a piece the room is defined by (its bed, its WC, a kitchen's fridge) is not reported here: the defining pass
+    // at the end of the build tries again and reports a fail if it still has no place (EN-03)
+    if (!isDefining(room, type) && !DECOR.has(type)) ctx.notes.add({ id: `asbuilt.furniture_dropped:${room.id}:${type}:${ctx.items.length}`, title: "Furniture left out", status, message: `${roomLabel(ctx, room)}: the ${humanType(type)} was left out because ${why}.`, element_ids: [room.id] });
     warn(`furnish ${type} in ${room.id}: ${why}; left out`);
     const dbg = (ctx as unknown as { dropLog?: unknown[] }).dropLog ?? ((ctx as unknown as { dropLog?: unknown[] }).dropLog = []);
     dbg.push({ type, room: room.id, cx, cy, w, d, rot, against, bounds, zones });
@@ -257,13 +357,31 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
 
   if (isVehicle) {
     // B.6: cars only in a parking bay that keeps the gate-to-door walkway clear
-    const bays = ctx.structureBuilt ? parking(ctx).bays.filter((b) => !b.used) : [];
+    ctx.carsAsked++;
+    let bays = ctx.structureBuilt ? parking(ctx).bays.filter((b) => !b.used) : [];
+    if (!bays.length && ctx.structureBuilt) {
+      // EN-04: more cars than were counted up front: lay the bays out again for one more car, moving the parked ones
+      const re = replanParking(ctx, ctx.carsAsked);
+      if (re) {
+        moveParkedCars(ctx, re);
+        bays = re.bays.filter((b) => !b.used);
+      }
+    }
     const want = Array.isArray(o?.at) ? [room.rect.x + num(o.at[0], room.rect.w / 2), room.rect.y + num(o.at[1], room.rect.d / 2)] : [room.rect.x + room.rect.w / 2, room.rect.y + room.rect.d / 2];
     const bay = bays.sort((a, b) => (a.where === b.where ? 0 : a.where === "porch" ? -1 : 1) || Math.hypot(a.rect.x + a.rect.w / 2 - want[0], a.rect.y + a.rect.d / 2 - want[1]) - Math.hypot(b.rect.x + b.rect.w / 2 - want[0], b.rect.y + b.rect.d / 2 - want[1]))[0];
     if (!bay) {
-      ctx.notes.add({ id: `asbuilt.car_dropped:${ctx.items.length}`, title: "Car left out", status: "warn", message: `No parking bay is left that keeps the walkway from the gate to the main door clear, so the ${type === "car_suv" ? "SUV" : "car"} in ${room.name} was left out.`, element_ids: [room.id] });
+      const m = Math.max(ctx.carsAsked, ctx.carsWanted);
+      const nParked = ctx.carsParked;
+      ctx.notes.set({
+        id: "asbuilt.car_dropped",
+        title: "Car left out",
+        status: "fail",
+        message: `Only ${nParked} of ${m} cars ${nParked === 1 ? "fits" : "fit"} in the ${room.name.toLowerCase()} while keeping a 3 ft walkway from the gate to the main door. Make the porch wider or deeper (about 9 ft wide and 18 ft deep per car, plus the walkway).`,
+        element_ids: [room.id],
+      });
       return { group };
     }
+    ctx.carsParked++;
     bay.used = true;
     cx = bay.rect.x + bay.rect.w / 2;
     cy = bay.rect.y + bay.rect.d / 2;
@@ -333,25 +451,70 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   };
   if (!isVehicle) clampFp();
 
+  // EN-02/EN-08: a "top" item (lamp, hob, sink, microwave, small plant) stands ON a nightstand, counter or table: when
+  // nothing supports it where it was asked for, it moves onto the nearest suitable surface in the room; with none,
+  // it stands on the floor as its own little cabinet and keeps out of doorways like any floor item
+  let topSupported = false;
+  if (def.cls === "top" && ctx.structureBuilt) {
+    const kinds = TOP_SUPPORTS[type];
+    const ok = (it: PlacedItem) => it.room === room.id && it.topH !== null && it.cls === "floor" && (!kinds || kinds.some((k) => it.type.startsWith(k)));
+    const inside = (it: PlacedItem) => cx > it.x0 && cx < it.x1 && cy > it.y0 && cy < it.y1;
+    const under = ctx.items.find((it) => ok(it) && inside(it));
+    if (under) topSupported = true;
+    else {
+      const holds = (s: PlacedItem) => ctx.items.some((q) => q.cls === "top" && q.type === type && q.room === room.id && (q.x0 + q.x1) / 2 > s.x0 && (q.x0 + q.x1) / 2 < s.x1 && (q.y0 + q.y1) / 2 > s.y0 && (q.y0 + q.y1) / 2 < s.y1);
+      const dist = (s: PlacedItem) => Math.hypot(Math.max(s.x0 - cx, 0, cx - s.x1), Math.max(s.y0 - cy, 0, cy - s.y1)) + (holds(s) ? 20 : 0);
+      const sups = ctx.items.filter(ok).sort((a, b) => dist(a) - dist(b));
+      for (const s of sups) {
+        const r2 = s.rot ?? rot;
+        const f0 = footprint(0, 0, w, d, r2);
+        const hx = (f0.x1 - f0.x0) / 2, hy = (f0.y1 - f0.y0) / 2;
+        const lx0 = s.x0 + Math.min(hx, (s.x1 - s.x0) / 2), lx1 = s.x1 - Math.min(hx, (s.x1 - s.x0) / 2);
+        const ly0 = s.y0 + Math.min(hy, (s.y1 - s.y0) / 2), ly1 = s.y1 - Math.min(hy, (s.y1 - s.y0) / 2);
+        const px = clamp(cx, lx0, lx1), py = clamp(cy, ly0, ly1);
+        // slide along the surface's long side, clear of the other things already standing on it
+        const tops = ctx.items.filter((q) => q.cls === "top" && q.room === room.id && (q.x0 + q.x1) / 2 > s.x0 && (q.x0 + q.x1) / 2 < s.x1 && (q.y0 + q.y1) / 2 > s.y0 && (q.y0 + q.y1) / 2 < s.y1);
+        const alongXs = s.x1 - s.x0 >= s.y1 - s.y0;
+        let spot: [number, number] | null = null;
+        for (let k = 0; k <= 80 && !spot; k++) {
+          const off = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
+          const qx = alongXs ? px + off : px, qy = alongXs ? py : py + off;
+          if (qx < lx0 - 1e-6 || qx > lx1 + 1e-6 || qy < ly0 - 1e-6 || qy > ly1 + 1e-6) continue;
+          const f = footprint(qx, qy, w, d, r2);
+          if (!tops.some((q) => overlaps(f, q, 0.05))) spot = [qx, qy];
+        }
+        if (!spot) continue;
+        [cx, cy] = spot;
+        rot = r2;
+        if (s.against) {
+          against = s.against as Side;
+          wallInfo = faceOf(against);
+        }
+        fp = footprint(cx, cy, w, d, rot);
+        topSupported = true;
+        break;
+      }
+    }
+  }
+
   // B.4/B.6: floor items never in a keep-out zone, on the walkway or in a parking bay. Search: the requested wall
   // (full clearances, then the core clearances that still keep every door leaf, doorway and stair free), the other
   // walls, a narrower size, and for essential fixtures a spot that may touch other furniture; else leave it out.
-  if (def.cls === "floor" && !isVehicle) {
-    const others = ctx.items.filter((it) => it.room === room.id && it.cls === "floor" && !companions(type, it.type)).map((it) => ({ x0: it.x0, x1: it.x1, y0: it.y0, y1: it.y1 }));
+  if ((def.cls === "floor" || (def.cls === "top" && !topSupported && ctx.structureBuilt)) && !isVehicle) {
+    const otherItems = ctx.items.filter((it) => it.room === room.id && it.cls === "floor" && (def.cls === "top" || !companions(type, it.type)));
+    const others = otherItems.map((it) => ({ x0: it.x0, x1: it.x1, y0: it.y0, y1: it.y1 }));
+    // what a fixture the room cannot do without may push aside (a plant, a chair, a dispenser), never a bed or counter
+    const hard = otherItems.filter((it) => !SOFT.has(it.type)).map((it) => ({ x0: it.x0, x1: it.x1, y0: it.y0, y1: it.y1 }));
     const bays = park ? park.bays.map((b) => ({ x0: b.rect.x, x1: b.rect.x + b.rect.w, y0: b.rect.y, y1: b.rect.y + b.rect.d })) : [];
     const inBounds = (f: Rect4) => !(f.x0 < bounds.x0 - 0.01 || f.x1 > bounds.x1 + 0.01 || f.y0 < bounds.y0 - 0.01 || f.y1 > bounds.y1 + 0.01);
-    /** tier 0: full zones; 1: core zones; 2: core zones, other furniture ignored; 3: (tiny wet rooms) only the
-     *  doorway itself and 1 ft in front of it, the stair and its landings */
-    const doorway = (z: Zone) => {
-      if (z.kind !== "door" || !z.core) return z.core ?? z;
-      const c = z.core;
-      const wide = c.x1 - c.x0 > c.y1 - c.y0;
-      return wide ? { x0: c.x0, x1: c.x1, y0: c.y0, y1: Math.min(c.y1, c.y0 + 1.2) } : { x0: c.x0, x1: Math.min(c.x1, c.x0 + 1.2), y0: c.y0, y1: c.y1 };
-    };
+    /** tier 0: full zones; 1: core zones; 2: core zones, a tall piece may stand in front of a window; 3: as 2, and
+     *  plants, chairs and the like give way. A door's core (its width × 3 ft and the leaf's sweep), the stair and
+     *  its landings are never given up (EN-02), and furniture never stands inside other furniture. */
+    const blockers = (tier: number) => (tier >= 3 ? hard : others);
     const free = (f: Rect4, tier = 0) =>
       inBounds(f) &&
-      !zones.some((z) => (tier >= 2 && z.kind === "window") || overlaps(f, tier === 0 ? z : tier === 3 ? doorway(z) : z.core ?? z, 0.04)) &&
-      (tier >= 2 || !others.some((ob) => overlaps(f, ob, 0.08))) &&
+      !zones.some((z) => !(tier >= 2 && z.kind === "window") && overlaps(f, tier === 0 ? z : z.core ?? z, 0.04)) &&
+      !blockers(tier).some((ob) => overlaps(f, ob, 0.08)) &&
       !bays.some((b) => overlaps(f, b, 0.02)) &&
       !(park && onWalkwayRect(park, f));
     if (!free(fp)) {
@@ -377,7 +540,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
           const q = tier === 0 ? z : z.core ?? z;
           out.push(ax ? q.x0 : q.y0, ax ? q.x1 : q.y1);
         }
-        for (const o of tier === 2 ? [] : others) out.push(ax ? o.x0 : o.y0, ax ? o.x1 : o.y1);
+        for (const o of blockers(tier)) out.push(ax ? o.x0 : o.y0, ax ? o.x1 : o.y1);
         for (const wl of ctx.model.roomWalls(room, side)) out.push(wl.a, wl.b);
         return out;
       };
@@ -415,7 +578,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
           xs.push(q.x0 - hx - 0.05, q.x1 + hx + 0.05);
           ys.push(q.y0 - hy - 0.05, q.y1 + hy + 0.05);
         }
-        for (const o of tier === 2 ? [] : others) {
+        for (const o of blockers(tier)) {
           xs.push(o.x0 - hx - 0.1, o.x1 + hx + 0.1);
           ys.push(o.y0 - hy - 0.1, o.y1 + hy + 0.1);
         }
@@ -466,19 +629,38 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
         const uNow = wallInfo!.axis === "x" ? cx : cy;
         const proj = (side: Side) => (side === "front" || side === "back" ? cx : cy);
         const rest: Side[] = [OPP[s0], ...ADJ[s0]];
+        const all = [s0, ...rest];
+        const at = (s: Side) => (s === s0 ? uNow : proj(s));
         const ok =
           tryWall(s0, uNow, w, 0) ||
           tryWall(s0, uNow, w, 1) ||
           rest.some((s) => tryWall(s, proj(s), start.w, 0)) ||
           rest.some((s) => tryWall(s, proj(s), start.w, 1)) ||
-          (SHRINK.has(type) && [0.95, 0.9, 0.85].some((k) => [s0, ...rest].some((s) => tryWall(s, s === s0 ? uNow : proj(s), start.w * k, 1)))) ||
+          (SHRINK.has(type) && [0.95, 0.9, 0.85].some((k) => all.some((s) => tryWall(s, at(s), start.w * k, 1)))) ||
           (SHRINK.has(type) && fitSpan(1)) ||
-          (ESSENTIAL.has(type) && [s0, ...rest].some((s) => tryWall(s, s === s0 ? uNow : proj(s), start.w, 2))) ||
-          (ESSENTIAL.has(type) && SHRINK.has(type) && fitSpan(2)) ||
-          (ESSENTIAL.has(type) && WET.has(room.type) && [s0, ...rest].some((s) => tryWall(s, s === s0 ? uNow : proj(s), start.w * (SHRINK.has(type) ? 0.85 : 1), 3)));
+          (ESSENTIAL.has(type) && all.some((s) => tryWall(s, at(s), start.w, 2))) ||
+          (ESSENTIAL.has(type) && SHRINK.has(type) && ([0.95, 0.9, 0.85].some((k) => all.some((s) => tryWall(s, at(s), start.w * k, 2))) || fitSpan(2))) ||
+          (ESSENTIAL.has(type) && all.some((s) => tryWall(s, at(s), start.w, 3))) ||
+          (ESSENTIAL.has(type) && SHRINK.has(type) && ([0.95, 0.9, 0.85].some((k) => all.some((s) => tryWall(s, at(s), start.w * k, 3))) || fitSpan(3)));
         void ok;
-      } else if (!trySpiral(0) && !trySpiral(1) && ESSENTIAL.has(type)) trySpiral(2);
-      if (!found) return dropped("there is no place for it that keeps doors, stairs and walkways clear");
+      } else {
+        // free-standing: near the asked spot, then turned a quarter (both orientations)
+        const tiers = ESSENTIAL.has(type) ? [0, 1, 2, 3] : [0, 1];
+        if (!tiers.some((t) => trySpiral(t))) {
+          const r0 = rot;
+          rot = r0 + 90;
+          if (!tiers.some((t) => trySpiral(t))) rot = r0;
+        }
+      }
+      if (!found) {
+        // a smaller version of a fixture the room is defined by (a queen for a king, a slim fridge), before leaving it out
+        const smaller = SMALLER[type];
+        if (smaller && !(o as { _smaller?: boolean })._smaller) {
+          group.removeFromParent();
+          return furnishInner(ctx, smaller.type, { ...o, size: smaller.size ? { ...(o?.size ?? {}), ...smaller.size } : o?.size, _smaller: true } as FurnishOptions, style);
+        }
+        return dropped("there is no place for it that keeps doors, stairs and walkways clear");
+      }
       const fnd = found as { x: number; y: number; side: Side | null; rot: number; w: number };
       cx = fnd.x;
       cy = fnd.y;
@@ -489,6 +671,8 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
         wallInfo = faceOf(fnd.side);
       }
       fp = footprint(cx, cy, w, d, rot);
+      // anything soft it now stands on gives way (EN-03: a fridge before a water dispenser)
+      for (const it of otherItems) if (SOFT.has(it.type) && overlaps(fp, it, 0.08)) evict(ctx, it, type);
     }
   }
   if (def.cls === "wall" && type === "tv" && ctx.structureBuilt) {
@@ -589,7 +773,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   const topH = topHeight(type, base, h, b);
   const item: PlacedItem = {
     id: ctx.uid(`${room.id}_${type}`), type, room: room.id, x0: fp.x0, x1: fp.x1, y0: fp.y0, y1: fp.y1,
-    h0: base, h1: base + (def.cls === "ceiling" ? 0 : h), cls: def.cls, topH, group, against: against ?? undefined, w, d, rot,
+    h0: base, h1: base + (def.cls === "ceiling" ? 0 : h), cls: def.cls, topH, group, against: against ?? undefined, w, d, rot, variant,
   };
   ctx.items.push(item);
   const vehicle = isVehicle || type === "motorbike";
@@ -632,6 +816,23 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
 
   if (type === "ac_split" && wallInfo && against) addOutdoorUnit(ctx, room, against, cx, cy, base, mats);
   return { group, item };
+}
+
+/** After the bays were laid out again: put every car already parked into a bay of the new layout (in order). */
+function moveParkedCars(ctx: BuildCtx, p: Parking): void {
+  const cars = ctx.items.filter((it) => it.type === "car_sedan" || it.type === "car_suv");
+  const free = [...p.bays].sort((a, b) => (a.where === b.where ? 0 : a.where === "porch" ? -1 : 1));
+  for (const it of cars) {
+    const bay = free.find((b) => !b.used);
+    if (!bay) break;
+    bay.used = true;
+    const cx = bay.rect.x + bay.rect.w / 2, cy = bay.rect.y + bay.rect.d / 2;
+    const fp = footprint(cx, cy, it.w ?? 6, it.d ?? 15, bay.rot);
+    it.group.position.x = cx * FT;
+    it.group.position.z = -cy * FT;
+    it.group.rotation.y = bay.rot * DEG;
+    Object.assign(it, { x0: fp.x0, x1: fp.x1, y0: fp.y0, y1: fp.y1, rot: bay.rot, room: bay.room });
+  }
 }
 
 function topHeight(type: FurnitureType, base: number, h: number, b: ItemBuild): number | null {

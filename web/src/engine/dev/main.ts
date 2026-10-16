@@ -106,11 +106,21 @@ let buildSeq = 0;
 /** Every root put in the scene by a build (a superseded build in flight must not leave its house behind). */
 const liveRoots = new Set<THREE.Object3D>();
 
+/** ?src=<url>: a saved version ({plan, sections} as the API returns it) instead of a bundled fixture. */
+let srcVersion: { plan: BuildingPlan; sections: DesignSectionSrc[] } | null = null;
+async function loadSrc(): Promise<void> {
+  const url = params.get("src");
+  if (!url || srcVersion) return;
+  const v = (await (await fetch(url)).json()) as { plan: BuildingPlan; sections: (DesignSectionSrc & { code?: string })[] };
+  srcVersion = { plan: v.plan, sections: v.sections.map((s) => ({ name: s.name, layer: s.layer, body: s.body ?? s.code ?? "" })) };
+}
+
 async function rebuild(): Promise<void> {
   const seq = ++buildSeq;
   const key = ($("design") as HTMLSelectElement).value;
   const quality = ($("quality") as HTMLSelectElement).value as "high" | "medium";
-  const { plan, sections } = designs[key]();
+  await loadSrc();
+  const { plan, sections } = srcVersion ? { plan: JSON.parse(JSON.stringify(srcVersion.plan)) as BuildingPlan, sections: srcVersion.sections } : designs[key]();
   currentPlan = plan;
   for (const r of liveRoots) scene.remove(r);
   liveRoots.clear();

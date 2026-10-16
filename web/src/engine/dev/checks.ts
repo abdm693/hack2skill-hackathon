@@ -19,7 +19,7 @@ import { resolveHit } from "../core/tags";
 import { rectContains } from "../core/grid";
 import { subtract } from "../structure/cover";
 import { openingsOnEdge } from "../structure/stairs-geo";
-import { keepOut, solidIntervals } from "../furniture/zones";
+import { doorClearance, intrudes, keepOut, solidIntervals } from "../furniture/zones";
 import { parking, onWalkwayRect } from "../furniture/parking";
 import { pathReport } from "../furniture/paths";
 import { ITEMS } from "../furniture/items";
@@ -245,6 +245,25 @@ function checkFurniture(ctx: BuildCtx): Check[] {
       } else if (z.kind === "door" && ov(it, z)) soft.push(`${it.id} near ${z.id}`);
     }
   }
+  // EN-02: every door, arch and sliding door keeps its opening width × 3 ft clear on each side, plus the leaf sweep
+  const clear: string[] = [];
+  const clearSpots: Check["spots"] = [];
+  let doors = 0;
+  for (const o of ctx.model.openings) {
+    if (!o.isDoor) continue;
+    doors++;
+    for (const into of [-1, 1] as const) {
+      const z = doorClearance(o, into);
+      for (const it of ctx.items) {
+        if (it.cls !== "floor" && it.cls !== "top") continue;
+        const room = ctx.plan.room(it.room);
+        if (!room || room.level !== o.op.level) continue;
+        if (!intrudes(it, z)) continue;
+        clear.push(`${it.id} in front of ${o.op.id}`);
+        clearSpots.push({ level: room.level, x: +((it.x0 + it.x1) / 2).toFixed(1), y: +((it.y0 + it.y1) / 2).toFixed(1), note: `${it.type} in ${o.op.id}'s clear zone` });
+      }
+    }
+  }
   const wallBad: string[] = [];
   for (const it of ctx.items) {
     if (it.cls !== "wall" || it.type === "curtains" || !it.against) continue;
@@ -261,6 +280,13 @@ function checkFurniture(ctx: BuildCtx): Check[] {
       status: hard.length ? "fail" : soft.length ? "warn" : "pass",
       detail: hard.length ? `${hard.length} items block a door swing, doorway or stair: ${hard.slice(0, 6).join("; ")}` : soft.length ? `door leaves and stairs clear; ${soft.length} items inside the full 3 ft door clearance (${soft.slice(0, 4).join("; ")})` : `${ctx.items.filter((i) => i.cls === "floor").length} floor items, all clear of door clearances and stairs`,
       spots,
+    },
+    {
+      id: "door_clear",
+      title: "Doorways keep 3 ft clear on each side",
+      status: clear.length ? "fail" : "pass",
+      detail: clear.length ? `${clear.length} intrusions into a door's 3 ft clear zone or leaf sweep: ${clear.slice(0, 8).join("; ")}` : `${doors} doors, arches and sliding doors: no furniture, counter or fixture in their clear zones`,
+      spots: clearSpots,
     },
     {
       id: "furniture_walls",

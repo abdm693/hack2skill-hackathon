@@ -24,6 +24,8 @@ export interface PlacedItem {
   w?: number;
   d?: number;
   rot?: number;
+  /** the variant it was furnished with (e.g. "noHob" for a counter without a hob) */
+  variant?: string;
 }
 
 /** A guard (railing) along a straight, axis-aligned line on a level: runs along `axis` at `c`, from a to b. */
@@ -78,6 +80,11 @@ export class BuildCtx {
   readonly falseCeil = new Map<string, number>();
   /** rooms that received recessed downlights */
   readonly downlit = new Set<string>();
+  /** cars the design asks for (furnish("car_*") calls counted before the sections run): parking lays out that many bays */
+  carsWanted = 0;
+  /** cars actually parked / asked for so far (for the "Only N of M cars fit" note) */
+  carsParked = 0;
+  carsAsked = 0;
 
   constructor(plan: PlanModel, quality: Quality) {
     this.plan = plan;

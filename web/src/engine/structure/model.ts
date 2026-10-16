@@ -272,6 +272,9 @@ export class StructureModel {
       );
       if (!own) list.push({ id: "roof_mumty_door", level: tw.room.level, type: "door", at: tw.at, width: tw.width, height: 7, sill: 0, between: [tw.room.id, "exterior"], swing: "out", synthetic: true });
     }
+    // EN-01: doors claim their stretch of wall first (the main door before all), windows fit around them
+    const rank = (o: OpeningM) => (o.type === "main_door" ? 0 : DOOR_TYPES.includes(o.type) ? 1 : 2);
+    list.sort((p, q) => rank(p) - rank(q));
     for (const op of list) {
       // B.7: an opening joins rooms on its own level, and is cut only into the wall between exactly those rooms
       const named = op.between.filter((b) => b && b !== "exterior");
@@ -307,34 +310,87 @@ export class StructureModel {
       const mA = run.perpA ? run.perpA / 2 + 0.12 : 0.06;
       const mB = run.perpB ? run.perpB / 2 + 0.12 : 0.06;
       const avail = run.b - run.a - mA - mB;
+      const label = this.openingLabel(op);
       let w = op.width;
       if (w > avail) {
         if (avail < 1.2) {
-          warn(`opening ${op.id}: wall too short, skipped`);
+          this.skipOpening(op, `${label} was not built: its wall is only ${Math.max(0, run.b - run.a).toFixed(1)} ft long.`, isDoor ? "fail" : "warn");
           continue;
         }
         warn(`opening ${op.id}: narrowed from ${w} to ${avail.toFixed(2)} ft to fit its wall`);
         w = avail;
       }
-      let u0 = clamp(best.along - w / 2, run.a + mA, run.b - mB - w);
-      // avoid overlapping openings already on this run
-      const clash = (a: number) => run.openings.some((o) => a < o.u1 + 0.3 && a + w > o.u0 - 0.3);
-      if (clash(u0)) {
-        let found = false;
-        for (let step = 0.25; step < run.b - run.a; step += 0.25) {
-          for (const s of [u0 + step, u0 - step]) {
-            if (s >= run.a + mA && s + w <= run.b - mB && !clash(s)) {
-              u0 = s;
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
+      const lo = run.a + mA, hi = run.b - mB;
+      const want = clamp(best.along - w / 2, lo, hi - w);
+      // where an opening of width ww could go without crowding the others on this run (0.3 ft apart): the free gaps
+      const gaps = (others: PlacedOpening[]): [number, number][] => {
+        const out: [number, number][] = [];
+        let a = lo;
+        for (const o of [...others].sort((p, q) => p.u0 - q.u0)) {
+          if (o.u0 - 0.3 > a) out.push([a, Math.min(hi, o.u0 - 0.3)]);
+          a = Math.max(a, o.u1 + 0.3);
         }
-        if (!found) {
-          warn(`opening ${op.id}: overlaps another opening, skipped`);
+        if (hi > a) out.push([a, hi]);
+        return out.filter(([p, q]) => q - p > 0.05);
+      };
+      /** best spot for an opening of width ww (up to wMax, down to wMin) near `pref`: [u0, width] */
+      const fit = (others: PlacedOpening[], pref: number, wMax: number, wMin: number, narrowCost: number): [number, number] | null => {
+        let bestFit: { u0: number; w: number; cost: number } | null = null;
+        for (const [p, q] of gaps(others)) {
+          const ww = Math.min(wMax, q - p);
+          if (ww < wMin - 1e-6) continue;
+          const u = clamp(pref + (wMax - ww) / 2, p, q - ww);
+          const cost = Math.abs(u + ww / 2 - (pref + wMax / 2)) + (wMax - ww) * narrowCost;
+          if (!bestFit || cost < bestFit.cost) bestFit = { u0: u, w: ww, cost };
+        }
+        return bestFit ? [bestFit.u0, bestFit.w] : null;
+      };
+      let u0 = want;
+      const clash = (a: number, ww: number) => run.openings.some((o) => a < o.u1 + 0.3 && a + ww > o.u0 - 0.3);
+      if (clash(u0, w)) {
+        // shift (full width), else narrow: windows down to 1.5 ft, doors down to 2.5 ft; a door may also make
+        // a window on the same run give way (narrow or shift it) before the door itself is ever left out
+        const wMin = isDoor ? Math.min(w, 2.5) : Math.min(w, 1.5);
+        let spot = isDoor ? fit(run.openings, want, w, w, 0) ?? fit(run.openings, want, w, wMin, 2) : fit(run.openings, want, w, wMin, 1.5);
+        if (!spot && isDoor) {
+          const doors = run.openings.filter((o) => o.isDoor);
+          const door = fit(doors, want, w, wMin, 2);
+          if (door) {
+            const [du0, dw] = door;
+            const mine: PlacedOpening = { op, run, u0: du0, u1: du0 + dw, bottom: 0, top: 0, floor: 0, swingSide: 1, hingeAtA: true, frameOff: 0, isDoor: true };
+            // re-fit every window that now clashes with this door, around the doors and the other windows
+            const wins = run.openings.filter((o) => !o.isDoor && du0 < o.u1 + 0.3 && du0 + dw > o.u0 - 0.3);
+            let ok = true;
+            for (const win of wins) {
+              const rest = run.openings.filter((o) => o !== win);
+              const ww0 = win.u1 - win.u0;
+              const f = fit([...rest, mine], win.u0, ww0, Math.min(ww0, 1.5), 2);
+              if (!f) {
+                ok = false;
+                break;
+              }
+              win.u0 = f[0];
+              win.u1 = f[0] + f[1];
+              this.notes.add({ id: `asbuilt.opening_moved:${win.op.id}`, title: "Window adjusted", status: "warn", message: `${this.openingLabel(win.op)} was ${f[1] < ww0 - 0.05 ? `narrowed to ${f[1].toFixed(1)} ft` : "moved"} to make room for ${label}.`, element_ids: [win.op.id, op.id] });
+            }
+            if (!ok) {
+              // the window cannot shrink enough: leave the window out rather than the door
+              for (const win of run.openings.filter((o) => !o.isDoor && du0 < o.u1 + 0.3 && du0 + dw > o.u0 - 0.3)) {
+                run.openings.splice(run.openings.indexOf(win), 1);
+                this.openings.splice(this.openings.indexOf(win), 1);
+                this.skipOpening(win.op, `${this.openingLabel(win.op)} was left out to make room for ${label}.`, "warn");
+              }
+            }
+            run.openings.sort((p, q) => p.u0 - q.u0);
+            spot = door;
+          }
+        }
+        if (!spot) {
+          this.skipOpening(op, `${label} was not built: it overlaps another opening on the same wall and there is no room to move it.`, isDoor ? "fail" : "warn");
           continue;
         }
+        if (spot[1] < w - 0.05) warn(`opening ${op.id}: narrowed from ${w.toFixed(2)} to ${spot[1].toFixed(2)} ft beside its neighbour`);
+        [u0, w] = spot;
       }
       const rooms = [run.neg, run.pos].filter((r): r is RoomM => !!r && r.cat !== "outdoor");
       const r0 = plan.room(op.between[0]);
@@ -346,7 +402,7 @@ export class StructureModel {
       if (top - bottom < 0.8) {
         bottom = Math.max(run.h0, top - 0.8);
         if (top - bottom < 0.8) {
-          warn(`opening ${op.id}: no room for it in the wall height, skipped`);
+          this.skipOpening(op, `${label} was not built: the wall is too low for it.`, isDoor ? "fail" : "warn");
           continue;
         }
       }
@@ -373,9 +429,22 @@ export class StructureModel {
     }
   }
 
-  private skipOpening(op: OpeningM, message: string): void {
+  /** Every opening left out is reported (EN-01); a missing door is a fail, a missing window a warn. */
+  private skipOpening(op: OpeningM, message: string, status?: "warn" | "fail"): void {
     warn(`opening ${op.id}: ${message}`);
-    this.notes.add({ id: `asbuilt.opening_skipped:${op.id}`, title: "Opening not built", status: "warn", message, element_ids: [op.id] });
+    const st = status ?? (DOOR_TYPES.includes(op.type) ? "fail" : "warn");
+    this.notes.add({ id: `asbuilt.opening_skipped:${op.id}`, title: DOOR_TYPES.includes(op.type) ? "Door not built" : "Opening not built", status: st, message, element_ids: [op.id] });
+  }
+
+  /** "The main door", "The Kitchen window", "The door between the Kitchen and the Dining": for as-built notes. */
+  openingLabel(op: OpeningM): string {
+    const names = op.between.map((b) => (b === "exterior" ? null : this.plan.room(b)?.name ?? null)).filter((n): n is string => !!n);
+    const kind = op.type === "main_door" ? "main door" : op.type === "double_door" ? "double door" : op.type === "sliding_door" ? "sliding door" : op.type === "garage_door" ? "garage door" : op.type === "arch" ? "arch" : op.type === "ventilator" ? "ventilator" : DOOR_TYPES.includes(op.type) ? "door" : "window";
+    if (op.type === "main_door") return "The main door";
+    if (op.id === "roof_mumty_door") return "The roof door";
+    if (names.length >= 2) return `The ${kind} between the ${names[0]} and the ${names[1]}`;
+    if (names.length === 1) return `The ${names[0]} ${kind}`;
+    return `The ${kind} ${op.id}`;
   }
 
   /** B.3.5: the 3 x 3 ft inside the roof door must be floor, never the stairwell. */
