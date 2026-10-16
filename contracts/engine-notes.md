@@ -24,16 +24,23 @@
 - **A flight reaches the roof.** If the plan has none from the top floor, the engine copies the stair below.
 - **The mumty** grows to cover the top flight and its 3 ft top landing. Its door goes on a wall that touches that landing, at roof level, never over the stairwell, a party wall or the tank. Do not add your own roof door.
 - **Guards**: every stairwell edge and every edge with a drop over 30 in gets a 3.5 ft railing in the `railing` style you chose; roof terraces stand behind the roof parapet. Do not draw your own stair or terrace railings.
-- **Openings** are cut only into the wall between the two rooms they name, on their own level. An opening onto a room on another floor is not built.
+- **Openings** are cut only into the wall between the two rooms they name, on their own level. An opening onto a room on another floor is not built. Doors are placed first (the main door before all); a window on the same wall is narrowed (down to 1.5 ft) or moved to make room. Any opening that cannot be built is reported, and a missing door is a fail: keep 0.3 ft between openings on one wall.
+- **A stair never passes low over a door.** If a flight or landing would be less than 7 ft above the floor in front of a door below it, the engine turns the stair around (or mirrors it); if that does not clear every door, the build fails "Stair landing blocks <door>". Do not put a door under a stair's mid-landing.
+- **Stair windows**: glass beside a flight or landing keeps 3 ft above the treads; the engine raises the sill, or adds a guard rail across the glass, and reports it.
+- **Balconies that touch**: two balconies or terraces on an upper floor that share an edge and are not `open_to` each other get a 7 ft privacy screen between them, so one bedroom is never reached through another's balcony.
 
 ## Furniture
-- Keep these clear (the engine moves anything placed there, or leaves it out): 3 ft in front of every door (deeper on the side a door swings into), the open-plan crossing between rooms, the stair, its foot and top landings, and 2 ft in front of windows for tall pieces (wardrobes, bookshelves, fridges, a TV unit with its TV).
-- Wall items only on solid wall: never a TV, painting, mirror, AC or towel rail over a door or window, or on an open-plan side. Put the `tv` at the same `against`/`along_ft` as its `tv_unit` (the engine lines them up anyway).
+- `along_ft` is measured from the wall's LEFT end as you face that wall from inside the room: on the **front** wall that is its high-x end (x = room.x + room.w − along_ft); back wall: low-x end; left wall: low-y end; right wall: high-y end.
+- Keep these clear (the engine moves anything placed there, or leaves it out): every door, arch and sliding door's width × 3 ft on BOTH sides plus the leaf's swing (no furniture, counter, fixture or appliance ever stands there), the open-plan crossing between rooms, the stair, its foot and top landings, and 2 ft in front of windows for tall pieces (wardrobes, bookshelves, fridges, a TV unit with its TV).
+- Every bedroom gets a bed, every bath a WC, every kitchen a fridge and a hob, every dressing room a wardrobe: if the room cannot hold one with its doorways clear, the build fails. Size those rooms for them.
+- TV: the `tv_unit` keeps 1.5 ft from every door and arch frame, never on the wall the room is entered through (a lounge's main-door wall), and in a bedroom only on the wall the bed faces. Put the `tv` at the same `against`/`along_ft` as its `tv_unit` (the engine lines them up anyway).
+- Nightstands (`side_table`) stand on the two sides of the bed (the engine puts them there; leave 1.5 ft each side of the bed); `table_lamp`s stand on them. Hob, sink and microwave stand on a kitchen counter.
+- Wall items only on solid wall: never a TV, painting, mirror, AC or towel rail over a door or window, or on an open-plan side.
 - Every door and stair landing keeps a 3 ft path: leave walking room between pieces (sofa to coffee table at least 1.5 ft, 2.5 ft beside beds).
 - A tiny WC or bath (under 36 sq ft) gets an outward-opening door so the WC and basin stay clear.
 
 ## Parking and the way in
-- Cars go into parking bays the engine lays out in the porch (and the driveway for a second car), nose toward the house, leaving a 3 ft walkway from the pedestrian gate to the main door. Use `furnish("car_sedan" | "car_suv", { room: porch })`; the position you give only picks the nearest bay.
+- Cars go into parking bays the engine lays out in the porch (and the driveway for a further car), nose toward the house, leaving a 3 ft walkway from the pedestrian gate to the main door. Call `furnish("car_sedan" | "car_suv", { room: porch })` once per car in the brief (a 2-car porch needs two calls); the position you give only picks the nearest bay. Bays sit side by side, either side of the walkway, or one behind the other in a deep porch; a porch needs about 9 ft of width per car plus the walkway, and 18 ft of depth. A car that does not fit is a fail: "Only N of M cars fit".
 - Nothing may stand on that walkway (plants, swings, motorbikes are moved).
 
 ## Roof

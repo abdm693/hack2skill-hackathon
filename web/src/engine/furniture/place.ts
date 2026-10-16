@@ -68,7 +68,7 @@ const SHRINK = new Set<string>(["wardrobe", "sideboard", "kitchen_counter", "boo
 const ESSENTIAL = new Set<string>(["wc", "vanity", "shower", "bed_king", "bed_queen", "bed_single", "kitchen_counter", "fridge", "dining_table_4", "dining_table_6", "dining_table_8", "sofa_3", "sofa_l", "sofa_2", "wardrobe", "washing_machine"]);
 
 /** purely decorative pieces: when one has no free spot it is simply not placed (no note: nothing the family relies on) */
-export const DECOR = new Set<string>(["plant_floor", "plant_small", "floor_lamp", "painting", "ottoman", "swing", "outdoor_chair", "outdoor_table", "console_table"]);
+export const DECOR = new Set<string>(["plant_floor", "plant_small", "floor_lamp", "table_lamp", "painting", "ottoman", "swing", "outdoor_chair", "outdoor_table", "console_table", "side_table", "armchair", "desk_chair"]);
 /** pieces that give way to a fixture the room cannot do without (they are left out, with a note) */
 const SOFT = new Set<string>(["plant_floor", "plant_small", "water_dispenser", "armchair", "ottoman", "floor_lamp", "console_table", "desk_chair", "outdoor_chair", "outdoor_table", "swing"]);
 /** the smaller version tried before an essential piece is left out */

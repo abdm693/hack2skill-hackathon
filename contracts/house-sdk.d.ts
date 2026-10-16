@@ -88,7 +88,11 @@ export type FurnitureType =
 
 export interface FurnishOptions {
   room: string; // room id
-  /** Back of the item against this wall of the room. along_ft = distance of the item's CENTER from the wall's left end (seen from inside the room). */
+  /**
+   * Back of the item against this wall of the room. along_ft = distance of the item's CENTER from the wall's left end
+   * seen from inside the room, facing that wall: front wall → measured from its high-x end (x = room.x + room.w −
+   * along); back wall → from its low-x end; left wall → from its low-y end; right wall → from its high-y end.
+   */
   against?: Side;
   along_ft?: number;
   /** OR free placement: item center in room-local ft (origin = room's min corner). rot_deg 0 = item faces +y (toward the back of the plot). */
@@ -204,12 +208,17 @@ export interface HouseSDK {
 
   /**
    * Place one furniture item. Returns the group so you can tweak it. The engine keeps clearances and may move it:
-   * floor items never stand in a door's swing or doorway (3 ft deep), an open-plan crossing, on a stair or its
-   * landings, or (tall items) in front of a window; they slide along their wall, move to another wall, get up to 15%
-   * narrower, or are left out (reported). Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on
-   * solid wall, never over a door or window; a tv lines up over its tv_unit, a mirror over a dresser or vanity, a
-   * painting over a sofa or sideboard. Cars go into a parking bay that keeps the gate-to-main-door walkway clear
-   * (one bay per car; an extra car is left out). After each section every door and stair landing keeps a 3 ft path.
+   * floor items never stand in a door's clear zone (its width × 3 ft on each side, plus the leaf's swing), an
+   * open-plan crossing, on a stair or its landings, or (tall items) in front of a window; they slide along their
+   * wall, move to another wall, get up to 15% narrower, or are left out (reported). A room's defining piece (a
+   * bedroom's bed, a bath's WC, a kitchen's fridge and hob, a dressing room's wardrobe) is never silently missing:
+   * a smaller version is tried, plants and chairs give way, and if it still has no place the build reports a fail.
+   * Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on solid wall, never over a door or window;
+   * a tv lines up over its tv_unit, a mirror over a dresser or vanity, a painting over a sofa or sideboard. A
+   * tv_unit keeps 1.5 ft from every door frame; in a bedroom it goes only on the wall the bed faces. side_tables
+   * stand on the two sides of the bed; table_lamp, hob, sink_kitchen and microwave stand on a nightstand or counter.
+   * Cars go into parking bays that keep the gate-to-main-door walkway clear (one bay per car the design parks).
+   * After each section every door and stair landing keeps a 3 ft path.
    */
   furnish(item: FurnitureType, o: FurnishOptions): THREE_NS.Object3D;
   /** Sensible default layout for a room by its type (use when no specific intent). */
