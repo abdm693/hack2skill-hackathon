@@ -184,6 +184,12 @@ export class ViewerController {
     this.store = makeViewerStore("orbit", isCoarsePointer());
     this.builds = new BuildManager(this);
     this.nav = new Navigator(props.plan, this.walk);
+    this.nav.sight = (from, dir, max) => {
+      const rc = new THREE.Raycaster(from, dir.clone().normalize(), 0, max);
+      rc.layers.enableAll();
+      const hit = pick(rc, [this.holder], { far: max });
+      return hit ? hit.distance : max;
+    };
     this.holder.name = "naqsha-house";
     this.raycaster.layers.enableAll();
     try {
@@ -1022,12 +1028,9 @@ export class ViewerController {
   }
 
   resetView() {
-    if (this.store.getState().mode === "walk") {
-      this.leaveWalk("user");
-      return;
-    }
     this.store.setState({ orbitFloor: null });
-    this.syncVisibility();
+    if (this.store.getState().mode === "walk") this.leaveWalk("user");
+    else this.syncVisibility();
     this.placeHero(true);
   }
 
@@ -1462,6 +1465,12 @@ export class ViewerController {
     if (MOVE_KEYS.has(e.code)) {
       if (walking) {
         this.activity();
+        // the route is still drawing: walking yourself wins
+        if (s.gliding && !this.walk.glide && e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
+          window.clearTimeout(this.routeTimer);
+          this.routeSeq++;
+          this.store.setState({ gliding: false, route: null });
+        }
         this.walk.input.keys.add(e.code);
         consume();
       }
@@ -1824,7 +1833,7 @@ export class ViewerController {
     this.builds.finishAnims();
     this.lift.finish();
     const root = this.currentRoot();
-    const list = (res.colliders ?? []).filter((m) => m && this.vis.colliderEnabled(m, root));
+    const list = [...(res.colliders ?? []), ...this.extraSolids(res)].filter((m) => m && this.vis.colliderEnabled(m, root));
     // parked cars never block the way in (they are hidden or fade while you walk)
     const next = buildColliderBVH(list, this.ctxfx.exclusionBoxes());
     disposeCollider(this.collider);
@@ -1833,6 +1842,49 @@ export class ViewerController {
     this.nav.reset(this.plan, list);
     this.navWarm = false;
     this.colliderDirty = false;
+  }
+
+  private solidsCache = new WeakMap<BuildResult, THREE.Mesh[]>();
+
+  /**
+   * Roof objects you can't walk through that some engine builds leave out of the colliders (the water tank, solar
+   * frames): baked into world-space meshes once per build and added to the walk collider.
+   */
+  private extraSolids(res: BuildResult): THREE.Mesh[] {
+    const hit = this.solidsCache.get(res);
+    if (hit) return hit;
+    const SOLID = /(^|:)(water_tank|tank|solar(_panels?|_array|_frame)?)($|:)/;
+    const out: THREE.Mesh[] = [];
+    const v = new THREE.Vector3();
+    res.root.updateMatrixWorld(true);
+    res.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || o.userData?.viewer || (m as THREE.InstancedMesh).isInstancedMesh) return;
+      const pos = m.geometry?.getAttribute("position") as THREE.BufferAttribute | undefined;
+      if (!pos) return;
+      const idx = m.geometry.index;
+      const parts = o.userData?.parts as PartRange[] | undefined;
+      const ranges: { start: number; count: number }[] = [];
+      if (parts?.length) {
+        for (const p of parts) if (SOLID.test(String(p.tags.kind ?? ""))) ranges.push(p);
+      } else if (SOLID.test(String(o.userData?.kind ?? ""))) ranges.push({ start: 0, count: (idx ? idx.count : pos.count) / 3 });
+      if (!ranges.length) return;
+      const arr: number[] = [];
+      for (const r of ranges)
+        for (let t = r.start; t < r.start + r.count; t++)
+          for (let k = 0; k < 3; k++) {
+            const i = t * 3 + k;
+            v.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+            arr.push(v.x, v.y, v.z);
+          }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+      const solid = new THREE.Mesh(g);
+      solid.userData = { kind: "collider:solid", level: o.userData?.level, viewer: "solid" };
+      out.push(solid);
+    });
+    this.solidsCache.set(res, out);
+    return out;
   }
 
   // ───────────────────────────── pins ─────────────────────────────

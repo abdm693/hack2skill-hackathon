@@ -90,6 +90,11 @@ export class Navigator {
   private stairs: StairPath[] | null = null;
   /** Points that lie on a stair flight (shared with the cached stair paths). */
   private stairSet = new WeakSet<THREE.Vector3>();
+  /**
+   * How far you can see from a point along a direction (visible geometry: a water tank or a wardrobe may not be a
+   * collider). Defaults to the walk collider.
+   */
+  sight: ((from: THREE.Vector3, dir: THREE.Vector3, max: number) => number) | null = null;
   private colliders: THREE.Mesh[] = [];
 
   constructor(
@@ -204,6 +209,32 @@ export class Navigator {
     }
     this.stairs = out;
     return out;
+  }
+
+  /**
+   * From inside the stair tower on the roof, the shortest walk out of it to open terrace (a spot with some room
+   * around it), or null when the tower has no way out.
+   */
+  private outOfTower(level: Level, from: THREE.Vector3): THREE.Vector3[] | null {
+    const m = this.plan.roof?.mumty?.rect;
+    const g = this.grid(level.id);
+    if (!m || !g) return null;
+    const tower = { x0: m.x * FT - 0.3, x1: (m.x + m.w) * FT + 0.3, z0: zOf(m.y + m.d) - 0.3, z1: zOf(m.y) + 0.3 };
+    const s = this.nearestReachable(g, from);
+    if (s < 0 || !g.inRect(s, tower)) return null;
+    const fl = g.flood(s);
+    let goal = -1, best = Infinity;
+    for (let i = 0; i < g.free.length; i++) {
+      if (!Number.isFinite(fl.cost[i]) || g.inRect(i, tower) || g.clr[i] < 3) continue;
+      if (fl.cost[i] < best) {
+        best = fl.cost[i];
+        goal = i;
+      }
+    }
+    const cells = goal >= 0 ? NavGrid.trace(fl.came, s, goal) : null;
+    if (!cells) return null;
+    const turns = g.simplify(cells).map((i) => g.center(i));
+    return roundCorners(dedupe([from.clone(), ...turns.slice(1)]), g);
   }
 
   /** Does the path pass through anything solid at eye height? */
@@ -368,6 +399,12 @@ export class Navigator {
       const a = pts[Math.max(0, pts.length - 6)];
       face = Math.hypot(end.x - a.x, end.z - a.z) > 0.1 ? Math.atan2(-(end.x - a.x), -(end.z - a.z)) : this.walk.yaw;
     } else {
+      // the roof: the stair arrives inside the stair tower; step out through its door onto the terrace
+      const out = this.plan.rooms.some((r) => r.level === goalLevel.id) ? null : this.outOfTower(goalLevel, cur);
+      if (out) {
+        pts.push(...out.slice(1));
+        cur = out[out.length - 1].clone();
+      }
       end = cur.clone();
       face = this.intoFloorYaw(goalLevel, end, pts);
     }
@@ -500,13 +537,19 @@ export class Navigator {
     }
     const eye = new THREE.Vector3(at.x, at.y + EYE - 0.1, at.z);
     let best = want, bestScore = -Infinity;
+    // how open the view is: the centre ray and two at ±18° (so we never aim just past the edge of a tank or a wall)
+    const seen = (yaw: number) => {
+      const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      return Math.min(this.walk.clearDistance(eye, dir, 9), this.sight ? this.sight(eye, dir, 9) : 9);
+    };
+    const spread = THREE.MathUtils.degToRad(18);
     for (let k = -12; k <= 12; k++) {
       const yaw = want + (k * Math.PI) / 12;
-      const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-      const dist = this.walk.clearDistance(eye, dir, 9);
+      const mid = seen(yaw);
+      const open = (Math.min(mid, 7) * 2 + Math.min(seen(yaw - spread), 7) + Math.min(seen(yaw + spread), 7)) / 4;
       const off = Math.abs(angleWrap(yaw - want));
       const offH = Math.abs(angleWrap(yaw - heading));
-      const score = Math.min(dist, 7) - off * 1.6 - offH * 0.3 - (dist < 1.6 ? 6 : 0);
+      const score = open - off * 1.1 - offH * 0.3 - (mid < 1.6 ? 6 : 0);
       if (score > bestScore) {
         bestScore = score;
         best = yaw;
