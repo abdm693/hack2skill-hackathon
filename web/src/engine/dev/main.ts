@@ -11,6 +11,7 @@ import planArgon from "@contracts/fixtures/argon-v1-plan.json";
 import designFixture from "@contracts/fixtures/design-10-marla.js?raw";
 import designArgon from "@contracts/fixtures/argon-v1-design.js?raw";
 import { buildHouse, defaultDesign, parseDesign, setTimeOfDay, sunDirection, texturesReady, updateSun, type BuildResult, type DesignSectionSrc } from "../index";
+import { asBuiltCheck } from "./asbuilt";
 
 const app = document.getElementById("app")!;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
@@ -73,6 +74,7 @@ let visibleLevels: Set<string> | null = null;
 let buildMs = 0;
 let clip: THREE.Plane | null = null;
 let building = false;
+let hideContext = false;
 let texWaitMs = 0;
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -81,13 +83,19 @@ if (params.has("prof")) (globalThis as unknown as { __naqshaProf?: object }).__n
 ($("design") as HTMLSelectElement).value = params.get("design") ?? "fixture";
 ($("quality") as HTMLSelectElement).value = params.get("quality") ?? "high";
 
+let buildSeq = 0;
+/** Every root put in the scene by a build (a superseded build in flight must not leave its house behind). */
+const liveRoots = new Set<THREE.Object3D>();
+
 async function rebuild(): Promise<void> {
+  const seq = ++buildSeq;
   const key = ($("design") as HTMLSelectElement).value;
   const quality = ($("quality") as HTMLSelectElement).value as "high" | "medium";
   const { plan, sections } = designs[key]();
   currentPlan = plan;
+  for (const r of liveRoots) scene.remove(r);
+  liveRoots.clear();
   if (current) {
-    scene.remove(current.root);
     current.dispose();
     current = null;
   }
@@ -99,22 +107,36 @@ async function rebuild(): Promise<void> {
   const res = await buildHouse(plan, sections, {
     quality,
     onSection: (r, root) => {
+      if (seq !== buildSeq) return;
       if (!live) {
         live = root;
         scene.add(root);
+        liveRoots.add(root);
       }
       const d = document.createElement("div");
       d.innerHTML = `<span class="${r.ok ? "" : "err"}">${r.ok ? "✓" : "✗"} ${r.name} <i style="color:#777">[${r.layer}]</i>${r.error ? `<span class="msg">${escapeHtml(r.error)}</span>` : ""}</span><span>${r.ms.toFixed(0)} ms · ${r.objects}</span>`;
       $("sections").appendChild(d);
     },
   });
+  const stale = () => {
+    if (seq === buildSeq) return false;
+    scene.remove(res.root);
+    liveRoots.delete(res.root);
+    res.dispose();
+    return true;
+  };
+  if (stale()) return;
   buildMs = performance.now() - t0;
   const tTex = performance.now();
   await texturesReady();
   texWaitMs = performance.now() - tTex;
+  if (stale()) return;
   building = false;
   current = res;
-  if (!live) scene.add(res.root);
+  if (!live) {
+    scene.add(res.root);
+    liveRoots.add(res.root);
+  }
   buildLevelButtons(res);
   applyLevels();
   setHour(parseFloat(($("hour") as HTMLInputElement).value));
@@ -147,11 +169,44 @@ function buildLevelButtons(res: BuildResult): void {
 function applyLevels(): void {
   if (!current) return;
   current.root.traverse((o) => {
+    if (o.userData.mergeGroup === "context" || o.userData.kind === "landscape:neighbour") {
+      o.visible = !hideContext;
+      return;
+    }
     const lv = o.userData.level as string | undefined;
     if (lv && (o as THREE.Mesh).isMesh) o.visible = !visibleLevels || visibleLevels.has(lv);
     if (lv && (o as THREE.Light).isLight && !(o.userData.kind === "sun" || o.userData.kind === "sky")) o.visible = !visibleLevels || visibleLevels.has(lv);
   });
   renderer.clippingPlanes = clip ? [clip] : [];
+  // clipped solids: draw their back faces as a flat light-grey "poché" so cut walls, door leaves and frames
+  // read as solid sections (lit back faces would show shadow acne)
+  const seen = new Set<THREE.Material>();
+  current.root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || Array.isArray(m.material) || seen.has(m.material)) return;
+    seen.add(m.material);
+    const mat = m.material as THREE.Material;
+    mat.userData.side0 ??= mat.side;
+    if (mat.userData.side0 === THREE.DoubleSide || mat.transparent) return; // glass, leaves, cards: leave alone
+    if (!mat.userData.capPatched) {
+      mat.userData.capPatched = true;
+      const prev = mat.onBeforeCompile.bind(mat);
+      mat.onBeforeCompile = (sh, r) => {
+        prev(sh, r);
+        sh.fragmentShader = sh.fragmentShader.replace(
+          "#include <dithering_fragment>",
+          "#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor = vec4(vec3(0.56, 0.55, 0.53), 1.0);",
+        );
+      };
+      const key0 = mat.customProgramCacheKey.bind(mat);
+      mat.customProgramCacheKey = () => key0() + "|cap";
+    }
+    const want = clip ? THREE.DoubleSide : (mat.userData.side0 as THREE.Side);
+    if (mat.side !== want) {
+      mat.side = want;
+      mat.needsUpdate = true;
+    }
+  });
 }
 
 function setHour(h: number): void {
@@ -185,6 +240,7 @@ function setView(name: string): void {
   const P = (xf: number, yf: number, hm: number) => new THREE.Vector3(xf * FT, hm, -yf * FT);
   visibleLevels = null;
   clip = null;
+  hideContext = false;
   camera.fov = 42;
   let pos: THREE.Vector3, tgt: THREE.Vector3;
   switch (name) {
@@ -199,17 +255,98 @@ function setView(name: string): void {
     case "dollhouse": {
       const ids = current?.levels.map((l) => l.id) ?? [];
       visibleLevels = new Set(ids.slice(0, 1));
-      pos = P(Wf + 22, -14, 16);
-      tgt = P(Wf * 0.45, Df * 0.52, 0);
+      hideContext = true;
+      const g0 = currentPlan.levels.find((l) => l.index === 0) ?? currentPlan.levels[0];
+      clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), g0.elevation_ft * FT + 2.3);
+      pos = P(Wf * 0.5 - 20, -16, 19);
+      tgt = P(Wf * 0.5, Df * 0.5, 0.5);
+      camera.fov = 38;
       break;
     }
     case "lounge":
     case "master": {
       const r = name === "lounge" ? roomCenter("lounge", "ground") ?? roomCenter("lounge") : roomCenter("master_bedroom") ?? roomCenter("bedroom");
       if (r) {
-        camera.fov = 62;
-        pos = P(r.x + r.w - 1.6, r.y + r.d - 1.4, (r.floor + 5.2) * FT);
-        tgt = P(r.x + r.w * 0.3, r.y + r.d * 0.3, (r.floor + 3.6) * FT);
+        camera.fov = 64;
+        // candidate eye points (corners, then wall midpoints) looking across the room; keep the ones whose view
+        // is not blocked by furniture right in front of the lens, then prefer corners far from the doors
+        const room = currentPlan.rooms.find((q) => q.rect.x === r.x && q.rect.y === r.y)!;
+        const doors = currentPlan.openings.filter((o) => o.level === room.level && o.between.includes(room.id) && !/window|ventilator/.test(o.type));
+        // aim at the room's hero piece (bed / sofa) when there is one, else across the room
+        const heroRe = name === "master" ? /bed/ : /sofa/;
+        const hero = current?.summary.objects.find((o) => o.room === room.id && heroRe.test(o.kind ?? ""));
+        const hx = hero ? (hero.bbox_ft.min[0] + hero.bbox_ft.max[0]) / 2 : r.x + r.w / 2;
+        const hy = hero ? (hero.bbox_ft.min[1] + hero.bbox_ft.max[1]) / 2 : r.y + r.d / 2;
+        const i = 1.7;
+        const pts: [number, number][] = [
+          [r.x + i, r.y + i], [r.x + r.w - i, r.y + i], [r.x + i, r.y + r.d - i], [r.x + r.w - i, r.y + r.d - i],
+          [r.x + r.w / 2, r.y + i], [r.x + r.w / 2, r.y + r.d - i], [r.x + i, r.y + r.d / 2], [r.x + r.w - i, r.y + r.d / 2],
+        ];
+        const cands: [number, number, number, number][] = pts.map(([x, y]) => {
+          // look at the hero, or across the room through the centre when the hero is right beside the eye
+          const far = Math.hypot(hx - x, hy - y) > 6;
+          return far ? [x, y, hx, hy] : [x, y, x + (r.x + r.w / 2 - x) * 1.6, y + (r.y + r.d / 2 - y) * 1.6];
+        });
+        const meshes: THREE.Object3D[] = [];
+        current?.root.traverseVisible((o) => {
+          if ((o as THREE.Mesh).isMesh && !String(o.userData.kind ?? "").includes("glow")) meshes.push(o);
+        });
+        const rc = new THREE.Raycaster();
+        const eyeH = (r.floor + 5.0) * FT;
+        const aim = (c: [number, number, number, number]) => P(c[2], c[3], (r.floor + 2.8) * FT);
+        const clear = (c: [number, number, number, number]) => {
+          const from = P(c[0], c[1], eyeH);
+          const to = aim(c);
+          const dir = to.clone().sub(from);
+          const len = Math.max(0.5, dir.length() - 0.9);
+          dir.normalize();
+          // a fan of rays across the frame: big surfaces right in front of the lens (an open door leaf, a
+          // wardrobe side) ruin the shot, so score the near field (first 2.5 m) of each ray
+          let sum = 0, worst = 1;
+          const fan = [-0.5, -0.32, -0.16, 0, 0.16, 0.32, 0.5];
+          const near = Math.min(2.5, len);
+          for (const a of fan) {
+            rc.set(from, dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), a));
+            rc.far = near;
+            const hit = rc.intersectObjects(meshes, false)[0];
+            const f = hit ? hit.distance / near : 1;
+            sum += f;
+            worst = Math.min(worst, f);
+          }
+          // the eye must not be inside something (short rays in 4 directions)
+          let boxed = 0;
+          for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            rc.set(from, new THREE.Vector3(d[0], 0, d[1]));
+            rc.far = 0.35;
+            if (rc.intersectObjects(meshes, false).length) boxed++;
+          }
+          return 0.6 * (sum / fan.length) + 0.4 * worst - boxed * 0.3;
+        };
+        const doorDist = (c: [number, number, number, number]) => Math.min(30, ...doors.map((o) => Math.hypot(o.at[0] - c[0], o.at[1] - c[1])));
+        // prefer a comfortable distance to the subject (≈ 10–16 ft) and corners (they show two walls)
+        const dist = (c: [number, number, number, number]) => Math.hypot(c[2] - c[0], c[3] - c[1]);
+        // the hero faces away from the wall it stands against: view it from the front, not over its back
+        let face: [number, number] | null = null;
+        if (hero) {
+          const b = hero.bbox_ft;
+          const gaps: [number, [number, number]][] = [
+            [b.min[0] - r.x, [1, 0]], [r.x + r.w - b.max[0], [-1, 0]], [b.min[1] - r.y, [0, 1]], [r.y + r.d - b.max[1], [0, -1]],
+          ];
+          gaps.sort((a, b2) => a[0] - b2[0]);
+          if (gaps[0][0] < 2) face = gaps[0][1];
+        }
+        const facing = (c: [number, number, number, number]) => {
+          if (!face) return 0;
+          const dx = c[0] - hx, dy = c[1] - hy, l = Math.hypot(dx, dy) || 1;
+          return (dx * face[0] + dy * face[1]) / l;
+        };
+        const score = (c: [number, number, number, number], k: number) =>
+          clear(c) * 60 + Math.min(dist(c), 16) * 1.2 + Math.min(doorDist(c), 12) * 0.3 + (k < 4 ? 5 : 0) + facing(c) * 14;
+        const ranked = cands.map((c, k) => ({ c, s: score(c, k), clear: clear(c), dist: dist(c) })).sort((a, b) => b.s - a.s);
+        (window as unknown as { __camDebug?: unknown }).__camDebug = ranked;
+        const best = ranked[0].c;
+        pos = P(best[0], best[1], eyeH);
+        tgt = aim(best).setY((r.floor + 3.2) * FT);
       } else {
         pos = P(Wf / 2, -40, 10);
         tgt = P(Wf / 2, Df / 2, 3);
@@ -217,8 +354,8 @@ function setView(name: string): void {
       break;
     }
     default:
-      pos = P(-Wf * 0.55, -36, 15);
-      tgt = P(Wf * 0.5, Df * 0.42, 3.2);
+      pos = P(Wf + 26, -40, 17);
+      tgt = P(Wf * 0.45, Df * 0.4, 3.5);
   }
   camera.position.copy(pos);
   controls.target.copy(tgt);
@@ -297,6 +434,19 @@ renderer.setAnimationLoop(() => {
     return renderer.domElement.toDataURL("image/png");
   },
   stats: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, buildMs, texWaitMs, ...(window as unknown as { __lastStats?: object }).__lastStats }),
+  /** Draw calls of the main colour pass alone (no shadow map, AO or post passes). */
+  mainPassCalls: () => {
+    const au = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.info.reset();
+    renderer.render(scene, camera);
+    const out = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
+    renderer.shadowMap.autoUpdate = au;
+    return out;
+  },
+  renderer,
+  /** Replica of the backend's as-built projection check on the current build (empty = pass). */
+  asBuilt: () => (current ? asBuiltCheck(currentPlan, current.summary) : null),
   texturesReady,
   camera,
   controls,

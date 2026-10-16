@@ -33,9 +33,9 @@ interface PresetDef {
   env?: number;
 }
 
-const WOOD = (base: string, rings = 18): PresetDef => ({
+const WOOD = (base: string, rings = 50, pores = 0.5): PresetDef => ({
   base,
-  tex: { gen: "woodGrain", size: [1.1, 1.1], N: 512, normal: 0.9, params: { rings, warp: 2.4 } },
+  tex: { gen: "woodGrain", size: [1.1, 1.1], N: 1024, normal: 0.55, params: { rings, warp: 1.4, pores } },
   roughness: 0.52,
 });
 const PLASTER = (base: string, trowel = 1): PresetDef => ({
@@ -72,10 +72,10 @@ export const PRESETS: Record<MaterialPreset, PresetDef> = {
   ceramic_tile: { base: "#e9e7e2", tex: { gen: "tiles", size: [0.6, 0.6], N: 512, normal: 1.2, params: { tiles: 2, grout: 2.4, stone: 0.25, gloss: 0.14 } }, roughness: 0.16 },
   wood_floor_oak: { base: "#b78d5f", tex: { gen: "planks", size: [2.4, 2.4], N: 1024, normal: 1.4, params: { rows: 12, rings: 9, vary: 0.12 } }, roughness: 0.48 },
   wood_floor_walnut: { base: "#6e4b33", tex: { gen: "planks", size: [2.4, 2.4], N: 1024, normal: 1.4, params: { rows: 12, rings: 8, vary: 0.14 } }, roughness: 0.45 },
-  wood_teak: WOOD("#a56b3e", 16),
-  wood_walnut: WOOD("#5e3e2a", 20),
-  wood_oak: WOOD("#b99067", 22),
-  wood_white_oak: WOOD("#cfb795", 22),
+  wood_teak: WOOD("#a56b3e", 40, 0.4),
+  wood_walnut: WOOD("#5e3e2a", 46, 0.5),
+  wood_oak: WOOD("#b99067", 56, 1),
+  wood_white_oak: WOOD("#cfb795", 60, 1),
   lacquer: { base: "#f1eee8", tex: { gen: "smudge", size: [1.5, 1.5], N: 256, normal: 0 }, roughness: 0.3, physical: { clearcoat: 0.6, clearcoatRoughness: 0.12 } },
   metal_black: { base: "#1e1f22", tex: { gen: "smudge", size: [1.0, 1.0], N: 256, normal: 0 }, roughness: 0.42, metalness: 0.55 },
   metal_brushed: { base: "#c9cacc", tex: { gen: "brushed", size: [0.5, 0.5], N: 512, normal: 0.2 }, roughness: 0.3, metalness: 1 },
@@ -415,6 +415,8 @@ export class MaterialLib {
       envMapIntensity: def.env ?? 1,
     };
     const mat = physical ? new THREE.MeshPhysicalMaterial({ ...params, ...def.physical }) : new THREE.MeshStandardMaterial(params);
+    // joinery wood: geometry builders run the grain along each member's long side (see MeshBuilder.grainAuto)
+    if (def.tex?.gen === "woodGrain") mat.userData.grain = true;
     if (def.physical?.sheen) (mat as THREE.MeshPhysicalMaterial).sheenColor = toColor(colorHexStr).lerp(new THREE.Color(1, 1, 1), 0.35);
     if (set && def.tex) {
       const sc = s.scale_ft ? (s.scale_ft * 0.3048) / def.tex.size[0] : 1;
@@ -444,33 +446,45 @@ export class MaterialLib {
     return mat;
   }
 
+  /**
+   * Glass without the transmission pass (which re-renders every opaque mesh and doubles draw calls). Clear and
+   * tinted glass use "premultiplied" blending: the pane dims what is behind it by `opacity` and adds its
+   * reflections at full strength, which reads like real glass. Frosted glass is a plain translucent white.
+   */
   private glass(def: PresetDef, s: NormSpec): THREE.Material {
     const col = toColor(s.color ?? def.base);
     const rough = s.roughness ?? def.roughness;
-    if (this.quality === "high" && def.glass !== "frosted") {
-      const m = new THREE.MeshPhysicalMaterial({
+    if (def.glass === "frosted") {
+      return new THREE.MeshPhysicalMaterial({
         color: col,
         metalness: 0,
         roughness: rough,
-        transmission: 1,
-        thickness: 0.004,
-        ior: 1.5,
-        specularIntensity: 1,
+        transparent: true,
+        opacity: 0.78,
+        depthWrite: false,
         side: THREE.DoubleSide,
         envMapIntensity: 1.2,
       });
-      return m;
     }
+    const tinted = def.glass === "tinted";
     const m = new THREE.MeshPhysicalMaterial({
-      color: def.glass === "tinted" ? col.clone().multiplyScalar(0.55) : col,
+      // the body colour only tints: keep it dark so the pane does not haze what is behind it
+      color: col.clone().multiplyScalar(tinted ? 0.09 : 0.075),
       metalness: 0,
       roughness: rough,
       transparent: true,
-      opacity: def.glass === "tinted" ? 0.5 : def.glass === "frosted" ? 0.75 : 0.22,
+      opacity: tinted ? 0.46 : 0.14,
       depthWrite: false,
       side: THREE.DoubleSide,
-      envMapIntensity: 1.4,
+      envMapIntensity: 1.0,
+      specularIntensity: 1,
+      ior: 1.5,
     });
+    m.blending = THREE.CustomBlending;
+    m.blendEquation = THREE.AddEquation;
+    m.blendSrc = THREE.OneFactor;
+    m.blendDst = THREE.OneMinusSrcAlphaFactor;
+    m.userData.glass = def.glass;
     return m;
   }
 

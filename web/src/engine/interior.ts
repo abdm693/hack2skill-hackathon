@@ -73,14 +73,16 @@ export function interiorAPI(ctx: BuildCtx) {
       ]);
       const p0 = w.inner, p1 = w.inner + into * thick;
       for (const rr of g.rects((v) => v === true)) {
-        box(mb, axis, rr.x, rr.x + rr.w, p0, p1, rr.y, rr.y + rr.d);
-        if (groove) {
-          // fluted panelling: thin dark reveals every ~0.5 ft
-          const n = Math.floor(rr.w / 0.5);
-          for (let k = 1; k < n; k++) {
-            const u = rr.x + (rr.w * k) / n;
-            box(kit.mb(groove, false), axis, u - 0.012, u + 0.012, p1, p1 + into * 0.004, rr.y + 0.02, rr.y + rr.d - 0.02);
-          }
+        if (!groove) {
+          box(mb, axis, rr.x, rr.x + rr.w, p0, p1, rr.y, rr.y + rr.d);
+          continue;
+        }
+        // fluted panelling: vertical boards ~0.5 ft wide (grain runs up each board) with thin dark reveals
+        const n = Math.max(1, Math.floor(rr.w / 0.5));
+        for (let k = 0; k < n; k++) box(mb, axis, rr.x + (rr.w * k) / n, rr.x + (rr.w * (k + 1)) / n, p0, p1, rr.y, rr.y + rr.d);
+        for (let k = 1; k < n; k++) {
+          const u = rr.x + (rr.w * k) / n;
+          box(kit.mb(groove, false), axis, u - 0.012, u + 0.012, p1, p1 + into * 0.004, rr.y + 0.02, rr.y + rr.d - 0.02);
         }
       }
     }

@@ -1,5 +1,6 @@
 /** Opening geometry: frames, glass, sills, lintels, door leaves (open ~80°), handles, sliding panels. */
 import * as THREE from "three";
+import type { BoxMask } from "../core/meshbuilder";
 import { Kit, mat4, unitBox, unitCyl } from "../core/shapes";
 import { FT } from "../core/util";
 import type { BuildCtx } from "../core/ctx";
@@ -28,17 +29,25 @@ function frame(run: WallRun) {
   const U = run.axis === "x" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
   const W = run.axis === "x" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
   const P = (u: number, w: number, h: number) => (run.axis === "x" ? new THREE.Vector3(u * FT, h * FT, w * FT) : new THREE.Vector3(w * FT, h * FT, u * FT));
-  /** axis-aligned box in run space (ft) */
-  const box = (kit: Kit, mat: THREE.Material, u0: number, u1: number, w0: number, w1: number, h0: number, h1: number) => {
+  /**
+   * Axis-aligned box in run space (ft). `skip` drops the faces lying at the given u / w / h coordinates: faces
+   * pressed against a wall (reveal, wall face) are never seen and would z-fight with it in section cuts.
+   */
+  const box = (kit: Kit, mat: THREE.Material, u0: number, u1: number, w0: number, w1: number, h0: number, h1: number, skip?: { u?: number[]; w?: number[]; h?: number[] }) => {
     if (MODEL) {
       const c = MODEL.clipRunBox(run.axis, u0, u1, w0, w1);
       if (!c) return;
       [u0, u1, w0, w1] = c;
     }
-    const a = P(Math.min(u0, u1), Math.min(w0, w1), Math.min(h0, h1));
-    const b = P(Math.max(u0, u1), Math.max(w0, w1), Math.max(h0, h1));
+    const ua = Math.min(u0, u1), ub = Math.max(u0, u1), wa = Math.min(w0, w1), wb = Math.max(w0, w1), ha = Math.min(h0, h1), hb = Math.max(h0, h1);
+    const a = P(ua, wa, ha);
+    const b = P(ub, wb, hb);
     if (Math.abs(b.x - a.x) < 1e-5 || Math.abs(b.y - a.y) < 1e-5 || Math.abs(b.z - a.z) < 1e-5) return;
-    kit.mb(mat).box(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z));
+    const keep = (list: number[] | undefined, v: number) => !list || !list.some((x) => Math.abs(x - v) < 1e-6);
+    const k = { u0: keep(skip?.u, ua), u1: keep(skip?.u, ub), w0: keep(skip?.w, wa), w1: keep(skip?.w, wb), h0: keep(skip?.h, ha), h1: keep(skip?.h, hb) };
+    const mask: BoxMask =
+      run.axis === "x" ? { nx: k.u0, px: k.u1, nz: k.w0, pz: k.w1, ny: k.h0, py: k.h1 } : { nz: k.u0, pz: k.u1, nx: k.w0, px: k.w1, ny: k.h0, py: k.h1 };
+    kit.mb(mat).box(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z), mask);
   };
   return { U, W, P, box };
 }
@@ -92,10 +101,10 @@ function windowGeo(kit: Kit, glassKit: Kit, po: PlacedOpening, m: OpeningMats, v
   const w0 = wc - fd / 2, w1 = wc + fd / 2;
   const { u0, u1, bottom: b, top } = po;
   // outer frame
-  F.box(kit, m.frame, u0, u0 + fw, w0, w1, b, top);
-  F.box(kit, m.frame, u1 - fw, u1, w0, w1, b, top);
-  F.box(kit, m.frame, u0 + fw, u1 - fw, w0, w1, b, b + fw);
-  F.box(kit, m.frame, u0 + fw, u1 - fw, w0, w1, top - fw, top);
+  F.box(kit, m.frame, u0, u0 + fw, w0, w1, b, top, { u: [u0] });
+  F.box(kit, m.frame, u1 - fw, u1, w0, w1, b, top, { u: [u1] });
+  F.box(kit, m.frame, u0 + fw, u1 - fw, w0, w1, b, b + fw, { h: [b] });
+  F.box(kit, m.frame, u0 + fw, u1 - fw, w0, w1, top - fw, top, { h: [top] });
   const W = u1 - u0, H = top - b;
   if (vent) {
     // louvred frosted glass (typical bathroom ventilator)
@@ -132,7 +141,7 @@ function windowGeo(kit: Kit, glassKit: Kit, po: PlacedOpening, m: OpeningMats, v
     // exterior sill flashing
     F.box(kit, m.sill, u0 - 0.1, u1 + 0.1, wc + (out * fd) / 2, wOut + out * 0.13, b - 0.09, b + 0.025);
     // lintel band (subtle relief)
-    if (!vent) F.box(kit, m.ext, u0 - 0.28, u1 + 0.28, wOut, wOut + out * 0.035, top, top + 0.42);
+    if (!vent) F.box(kit, m.ext, u0 - 0.28, u1 + 0.28, wOut, wOut + out * 0.035, top, top + 0.42, { w: [wOut] });
     // interior window board
     const inRoom = out > 0 ? run.neg : run.pos;
     if (inRoom && inRoom.cat === "enclosed" && !vent) F.box(kit, m.board, u0 - 0.08, u1 + 0.08, wc - (out * fd) / 2, wIn - out * 0.07, b - 0.03, b + 0.045);
@@ -148,17 +157,17 @@ function linings(kit: Kit, po: PlacedOpening, mat: THREE.Material, arch: boolean
   const lw = arch ? 0.14 : 0.12;
   const wN = run.c - run.t / 2 - 0.015, wP = run.c + run.t / 2 + 0.015;
   const { u0, u1, bottom: b, top } = po;
-  F.box(kit, mat, u0, u0 + lw, wN, wP, b, top);
-  F.box(kit, mat, u1 - lw, u1, wN, wP, b, top);
-  F.box(kit, mat, u0, u1, wN, wP, top - lw, top);
+  F.box(kit, mat, u0, u0 + lw, wN, wP, b, top, { u: [u0], h: [b, top] });
+  F.box(kit, mat, u1 - lw, u1, wN, wP, b, top, { u: [u1], h: [b, top] });
+  F.box(kit, mat, u0, u1, wN, wP, top - lw, top, { h: [top] });
   // architraves on faces that look into enclosed rooms
   const aw = 0.24, ap = 0.07;
   for (const [room, w, dir] of [[run.neg, run.c - run.t / 2, -1], [run.pos, run.c + run.t / 2, 1]] as const) {
     if (!room || room.cat !== "enclosed") continue;
     const wa = w, wb = w + dir * ap;
-    F.box(kit, mat, u0 - aw, u0 + 0.02, wa, wb, b, top + aw);
-    F.box(kit, mat, u1 - 0.02, u1 + aw, wa, wb, b, top + aw);
-    F.box(kit, mat, u0 - aw, u1 + aw, wa, wb, top - 0.02, top + aw);
+    F.box(kit, mat, u0 - aw, u0 + 0.02, wa, wb, b, top + aw, { w: [wa], h: [b] });
+    F.box(kit, mat, u1 - 0.02, u1 + aw, wa, wb, b, top + aw, { w: [wa], h: [b] });
+    F.box(kit, mat, u0 - aw, u1 + aw, wa, wb, top - 0.02, top + aw, { w: [wa] });
   }
   return lw;
 }
@@ -231,10 +240,10 @@ function slidingGeo(kit: Kit, glassKit: Kit, po: PlacedOpening, m: OpeningMats):
   const wc = run.c + po.frameOff;
   const fw = 0.18, fd = 0.32;
   // outer frame + track
-  F.box(kit, m.frame, u0, u0 + fw, wc - fd / 2, wc + fd / 2, b, top);
-  F.box(kit, m.frame, u1 - fw, u1, wc - fd / 2, wc + fd / 2, b, top);
-  F.box(kit, m.frame, u0, u1, wc - fd / 2, wc + fd / 2, top - fw, top);
-  F.box(kit, m.frame, u0, u1, wc - fd / 2, wc + fd / 2, b, b + 0.07);
+  F.box(kit, m.frame, u0, u0 + fw, wc - fd / 2, wc + fd / 2, b, top, { u: [u0], h: [b, top] });
+  F.box(kit, m.frame, u1 - fw, u1, wc - fd / 2, wc + fd / 2, b, top, { u: [u1], h: [b, top] });
+  F.box(kit, m.frame, u0, u1, wc - fd / 2, wc + fd / 2, top - fw, top, { h: [top] });
+  F.box(kit, m.frame, u0, u1, wc - fd / 2, wc + fd / 2, b, b + 0.07, { h: [b] });
   const innerW = u1 - u0 - 2 * fw;
   const pw = innerW / 2 + 0.1;
   const ph = top - fw - (b + 0.07);
@@ -269,9 +278,9 @@ function garageGeo(kit: Kit, po: PlacedOpening, m: OpeningMats): void {
   const F = frame(run);
   const { u0, u1, bottom: b, top } = po;
   const wc = run.c + po.frameOff;
-  F.box(kit, m.frame, u0, u0 + 0.15, wc - 0.2, wc + 0.2, b, top);
-  F.box(kit, m.frame, u1 - 0.15, u1, wc - 0.2, wc + 0.2, b, top);
-  F.box(kit, m.frame, u0, u1, wc - 0.2, wc + 0.2, top - 0.15, top);
+  F.box(kit, m.frame, u0, u0 + 0.15, wc - 0.2, wc + 0.2, b, top, { u: [u0], h: [b, top] });
+  F.box(kit, m.frame, u1 - 0.15, u1, wc - 0.2, wc + 0.2, b, top, { u: [u1], h: [b, top] });
+  F.box(kit, m.frame, u0, u1, wc - 0.2, wc + 0.2, top - 0.15, top, { h: [top] });
   const n = Math.max(4, Math.round((top - b) / 0.55));
   const ph = (top - 0.15 - b) / n;
   for (let k = 0; k < n; k++) {
