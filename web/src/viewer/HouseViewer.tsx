@@ -32,7 +32,7 @@ import type { Quality } from "./core/store";
 import { SceneRoot } from "./scene/SceneRoot";
 import { OrbitRig } from "./scene/OrbitRig";
 import { PostFX } from "./scene/PostFX";
-import { PinsLayer } from "./comments/PinsLayer";
+import { PinAnchors, PinsOverlay } from "./comments/PinsLayer";
 import { Hud } from "./hud/Hud";
 import "./viewer.css";
 
@@ -168,9 +168,10 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
       >
         <SceneRoot ctrl={ctrl} />
         <OrbitRig ctrl={ctrl} />
-        <PinsLayer ctrl={ctrl} comments={props.comments} />
+        <PinAnchors ctrl={ctrl} comments={props.comments} />
         <PostFX ctrl={ctrl} />
       </Canvas>
+      <PinsOverlay ctrl={ctrl} comments={props.comments} />
       <Hud ctrl={ctrl} plan={props.plan} commentMode={!!props.commentMode} />
     </div>
   );

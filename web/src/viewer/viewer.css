@@ -247,7 +247,9 @@
 .nq-touch-pin:active { transform: translateY(-50%) scale(0.94); }
 
 /* ── comment pins: a 24 px teardrop whose tip is the anchor ───────────────────────────── */
-.nq-pin-wrap { pointer-events: none; }
+/* One DOM layer over the canvas; each wrap is moved to its pin's projected anchor every rendered frame. */
+.nq-pins { position: absolute; inset: 0; overflow: hidden; pointer-events: none; isolation: isolate; }
+.nq-pin-wrap { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
 .nq-pin {
   --pin: #0d7c72;
   position: absolute; left: 0; top: 0; width: 24px; height: 29px; padding: 0; margin: 0; border: 0; background: none;
