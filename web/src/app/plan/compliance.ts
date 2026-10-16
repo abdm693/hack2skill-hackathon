@@ -83,16 +83,29 @@ export function livableChecks(plan: BuildingPlan): ComplianceCheck[] {
   const out: ComplianceCheck[] = [];
 
   // 1. Bedrooms open only to a corridor, lounge, balcony or own bath.
+  // A bath or dressing is the bedroom's own when everything it opens to stays inside the suite (bed → dressing → bath).
+  const privateSuite = (bed: Room, start: Room) => {
+    const seen = new Set([bed.id, start.id]);
+    const queue = [start];
+    while (queue.length) {
+      const r = queue.shift()!;
+      for (const c of connections(plan, r)) {
+        if (c.other === "exterior" || seen.has(c.other)) continue;
+        const next = byId.get(c.other);
+        if (!next || (next.type !== "bath" && next.type !== "dressing")) return false;
+        seen.add(next.id);
+        queue.push(next);
+      }
+    }
+    return true;
+  };
   // A dining area that is open to a lounge or passage is part of the family space, not a room of its own.
   const openLiving = (r: Room) =>
     r.type === "dining" &&
     plan.rooms.some((x) => x.level === r.level && ["lounge", "corridor", "lobby"].includes(x.type) && (r.open_to?.includes(x.id) || x.open_to?.includes(r.id)));
   const okNeighbour = (bed: Room, other: Room) => {
     if (["corridor", "lobby", "stair", "lounge", "balcony", "terrace"].includes(other.type) || openLiving(other)) return true;
-    if (other.type === "bath" || other.type === "dressing") {
-      const doors = connections(plan, other).filter((x) => x.other !== "exterior");
-      return doors.length === 1 && doors[0].other === bed.id;
-    }
+    if (other.type === "bath" || other.type === "dressing") return privateSuite(bed, other);
     return false;
   };
   const badBeds: { bed: Room; via: Room[]; noAccess: boolean }[] = [];

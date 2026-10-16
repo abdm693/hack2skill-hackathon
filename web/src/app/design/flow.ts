@@ -435,7 +435,9 @@ export const flow = {
       if (isAbortError(e) || !live(pid)) return;
       const n = useFlow.getState().night;
       if (n) useFlow.setState({ night: { ...n, failed: n.ids.filter((id) => !n.done.includes(id)) } });
-      notify.error("The night views didn't come back", e, { label: "Try again", run: () => void flow.night(pid, ids) });
+      const status = (e as { status?: number }).status;
+      if (status === 404 || status === 405) notify.info("Night views aren't ready on this server yet", "The day views are shown instead.");
+      else notify.error("The night views didn't come back", e, { label: "Try again", run: () => void flow.night(pid, ids) });
     } finally {
       const n = useFlow.getState().night;
       if (n && n.pid === pid) {

@@ -183,8 +183,8 @@ export function opensTo(plan: BuildingPlan, room: Room): string[] {
     }
     const other = byId.get(c.other);
     if (!other) continue;
-    const otherDoors = connections(plan, other).filter((x) => x.other !== "exterior");
-    const own = (other.type === "bath" || other.type === "dressing") && otherDoors.length === 1 && otherDoors[0].other === room.id;
+    const otherDoors = connections(plan, other).filter((x) => x.other !== "exterior" && x.other !== room.id);
+    const own = (other.type === "bath" || other.type === "dressing") && otherDoors.every((x) => ["bath", "dressing"].includes(byId.get(x.other)?.type ?? ""));
     out.push(own ? `own ${other.type === "bath" ? "bath" : "dressing"}` : inline(sentenceCase(other.name)));
   }
   // Exterior views: windows onto the outside are not "opens to".

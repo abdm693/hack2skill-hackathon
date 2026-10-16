@@ -47,11 +47,40 @@ export function conceptName(c: Concept, fallbackIndex = 0): string {
 
 export interface Labelled { concept: Concept; label: string; name: string }
 
+const CUES: [RegExp, string][] = [
+  [/cantilever/i, "cantilever"],
+  [/jaali|screen/i, "screened"],
+  [/courtyard/i, "courtyard"],
+  [/pergola/i, "pergola"],
+  [/double[- ]height/i, "double height"],
+  [/balcon(y|ies)/i, "balconies"],
+  [/frame/i, "deep frame"],
+  [/golden hour|sunset|warm evening/i, "warm light"],
+  [/dusk|twilight/i, "dusk"],
+  [/overcast|morning/i, "soft light"],
+  [/three-quarter|corner composition|angled/i, "angled view"],
+];
+
+/** Names for originals, kept distinct: "Stone and teak", "Stone and teak, cantilever". */
+function distinctNames(list: Concept[]): string[] {
+  const used = new Set<string>();
+  return list.map((c, i) => {
+    let name = conceptName(c, i);
+    if (used.has(name.toLowerCase())) {
+      const cue = CUES.find(([re, word]) => re.test(c.prompt ?? "") && !used.has(`${name}, ${word}`.toLowerCase()))?.[1];
+      name = cue ? `${name}, ${cue}` : `${name}, take ${i + 1}`;
+    }
+    used.add(name.toLowerCase());
+    return name;
+  });
+}
+
 export function labelConcepts(concepts: Concept[]): Map<string, Labelled> {
   const out = new Map<string, Labelled>();
   const sorted = [...concepts].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const roots = sorted.filter((c) => !c.parent_id || !concepts.some((x) => x.id === c.parent_id));
-  roots.forEach((c, i) => out.set(c.id, { concept: c, label: LETTERS[i % 26] + (i >= 26 ? String(Math.floor(i / 26) + 1) : ""), name: conceptName(c, i) }));
+  const names = distinctNames(roots);
+  roots.forEach((c, i) => out.set(c.id, { concept: c, label: LETTERS[i % 26] + (i >= 26 ? String(Math.floor(i / 26) + 1) : ""), name: names[i] }));
   const counts = new Map<string, number>();
   for (const c of sorted) {
     if (out.has(c.id)) continue;
