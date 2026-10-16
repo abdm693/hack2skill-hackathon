@@ -119,18 +119,30 @@ async def design_takes(brief: dict, n: int = 4, instruction: str | None = None) 
     return FALLBACK_TAKES[:n]
 
 
+IMAGE_MODELS = [m for m in dict.fromkeys([config.MODEL_IMAGE] + [x.strip() for x in config.MODEL_IMAGE_FALLBACKS.split(",") if x.strip()])]
+_NO_RETRY = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))  # fail fast; we fall back to another model
+
+
 async def _image_call(contents, aspect: str | None = "16:9"):
-    for attempt in range(5):  # back off on 429 / RESOURCE_EXHAUSTED (per-minute image quota with 4 in parallel)
-        try:
-            cfg = types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"],
-                                              image_config=types.ImageConfig(aspect_ratio=aspect) if aspect else None)
-            return await client().aio.models.generate_content(model=config.MODEL_IMAGE, contents=contents, config=cfg)
-        except Exception as e:
-            if attempt == 4 or not any(t in str(e) for t in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")):
-                raise
-            wait = 3 * 2 ** attempt + random.random() * 2
-            busy.notify(wait, "429")
-            await asyncio.sleep(wait)
+    """Image generation with a model fallback chain. A 429 on one model moves straight to the next (each has its own
+    quota) instead of waiting out a long back-off; only when every model is busy do we back off and go round again."""
+    last: Exception | None = None
+    for rnd in range(4):
+        for model in IMAGE_MODELS:
+            try:
+                cfg = types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"], http_options=_NO_RETRY,
+                                                  image_config=types.ImageConfig(aspect_ratio=aspect) if aspect else None)
+                resp = await client().aio.models.generate_content(model=model, contents=contents, config=cfg)
+                resp._naqsha_model = model  # type: ignore[attr-defined]
+                return resp
+            except Exception as e:
+                last = e
+                if not any(t in str(e) for t in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "404", "NOT_FOUND")):
+                    raise
+        wait = 4 * 2 ** rnd + random.random() * 2
+        busy.notify(wait, "429")
+        await asyncio.sleep(wait)
+    raise last or RuntimeError("image models unavailable")
 
 
 def _image_bytes(resp) -> tuple[bytes, str] | None:
@@ -144,12 +156,13 @@ async def _generate_one(pid: str, prompt: str, ref: tuple[bytes, str] | None = N
     contents: list = [prompt]
     if ref:
         contents = [types.Part.from_bytes(data=ref[0], mime_type=ref[1]), prompt]
-    got = _image_bytes(await _image_call(contents))
+    resp = await _image_call(contents)
+    got = _image_bytes(resp)
     if not got:
         raise RuntimeError("The image model returned no image")
     cid = db.new_id("c_")
     url = await blobs.put(f"projects/{pid}/concepts/{cid}.png", got[0], got[1])
-    return {"id": cid, "url": url, "prompt": prompt, "model": config.MODEL_IMAGE, "created_at": db.now()}
+    return {"id": cid, "url": url, "prompt": prompt, "model": getattr(resp, "_naqsha_model", config.MODEL_IMAGE), "created_at": db.now()}
 
 
 async def generate(project: dict, count: int = 4, instruction: str | None = None, base_id: str | None = None) -> AsyncIterator[tuple[str, dict]]:

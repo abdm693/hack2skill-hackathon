@@ -9,6 +9,8 @@ MODEL_INTAKE = os.environ.get("MODEL_INTAKE", "gemini-3.8-flash")
 MODEL_ARCHITECT = os.environ.get("MODEL_ARCHITECT", "gemini-4-argon")
 MODEL_IMAGE = os.environ.get("MODEL_IMAGE", "gemini-3.1-flash-image")
 MODEL_IMAGE_HERO = os.environ.get("MODEL_IMAGE_HERO", "gemini-3-pro-image")
+# Fallbacks when the primary image model is rate-limited (each model has its own quota).
+MODEL_IMAGE_FALLBACKS = os.environ.get("MODEL_IMAGE_FALLBACKS", "gemini-nano-banana-2.1,gemini-3-pro-image")
 
 MODEL_REVIEW = os.environ.get("MODEL_REVIEW", MODEL_ARCHITECT)      # the architect's self-review of the drawn plan
 MODEL_SETUP = os.environ.get("MODEL_SETUP", MODEL_INTAKE)           # the conversational setup agent (ADK)
