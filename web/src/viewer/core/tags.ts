@@ -179,7 +179,9 @@ export function humanLabel(kind?: string, label?: string, room?: string): string
   }
   name = cap(inSentence(name));
   if (!room || name.toLowerCase().includes(room.trim().toLowerCase())) return name;
-  return `${name} in ${theRoom(room)}`;
+  // "on the roof terrace", "on the lawn"; "in the kitchen", "in bedroom 2"
+  const on = /\b(terrace|balcony|roof|lawn|porch|patio|deck|driveway)\b/i.test(room);
+  return `${name} ${on ? "on" : "in"} ${theRoom(room)}`;
 }
 
 /** Build-card words for a design section: "Building the roof", "Furnishing the kitchen". */
