@@ -26,7 +26,18 @@ import { NewComment } from "./NewComment";
 
 type Draft = { anchor: Comment["anchor"]; camera: Comment["camera"]; snapshot: string };
 
-export function HouseStage({ project, version, clientView }: { project: Project; version: Version; clientView?: boolean }) {
+export function HouseStage({
+  project,
+  version,
+  clientView,
+  active = true,
+}: {
+  project: Project;
+  version: Version;
+  clientView?: boolean;
+  /** False while kept mounted behind another view: no shortcuts, no HUD. */
+  active?: boolean;
+}) {
   const [params, setParams] = useSearchParams();
   const phone = usePhone();
   const comments = useProject((s) => s.comments);
@@ -56,6 +67,7 @@ export function HouseStage({ project, version, clientView }: { project: Project;
 
   // C toggles comment mode in orbit (in walk, the viewer handles C itself); V switches Orbit and Walk.
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey || draft) return;
       if ((e.key === "c" || e.key === "C") && mode === "orbit") setCommentMode((v) => !v);
@@ -64,7 +76,7 @@ export function HouseStage({ project, version, clientView }: { project: Project;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, commentMode, draft, setMode]);
+  }, [active, mode, commentMode, draft, setMode]);
 
   // ?comment=<id>: fly to that pin once the house is built.
   const focusId = params.get("comment");
@@ -110,7 +122,7 @@ export function HouseStage({ project, version, clientView }: { project: Project;
   const hudBottom = phone ? "calc(var(--dock-h) + 12px)" : "var(--chrome)";
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-hud">
+    <div className={cn("absolute inset-0 overflow-hidden bg-hud", !active && "pointer-events-none invisible")} aria-hidden={active ? undefined : true}>
       <HouseViewer
         ref={viewer}
         plan={version.plan}

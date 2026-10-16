@@ -103,6 +103,8 @@ function ClientShell({ token }: { token: string }) {
   const [askName, setAskName] = useState<string | null>(null);
   const version = project.current_version_id ? versions[project.current_version_id] : undefined;
   const tab: ClientTab = params.get("view") === "plan" ? "plan" : "house";
+  const [houseSeen, setHouseSeen] = useState(tab === "house");
+  useEffect(() => { if (tab === "house") setHouseSeen(true); }, [tab]);
   const tone = tab === "house" ? "hud" : "light";
   const [approved, setApproved] = useState(() => {
     try { return !!version && localStorage.getItem(approvedKey(version.id)) === "1"; } catch { return false; }
@@ -186,11 +188,13 @@ function ClientShell({ token }: { token: string }) {
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
       <main className="absolute inset-0">
-        {!version ? null : tab === "house" ? (
+        {/* Once opened, the house stays mounted behind the plan (it idles), so switching back is instant. */}
+        {version && houseSeen && (
           <Suspense fallback={<div className="absolute inset-0 grid place-items-center bg-hud text-hud-ink-2"><span className="flex items-center gap-2.5 text-[14px]"><Spinner /> Opening the house…</span></div>}>
-            <HouseStage project={project} version={version} clientView />
+            <HouseStage project={project} version={version} clientView active={tab === "house"} />
           </Suspense>
-        ) : (
+        )}
+        {!version || tab === "house" ? null : (
           <div className="absolute inset-0" style={{ paddingTop: "var(--chrome-top)", paddingBottom: "calc(var(--dock-h) + var(--chrome))" }}>
             <div className="mx-auto h-full max-w-[1100px] px-3 sm:px-6" style={{ paddingRight: sheetRight ? "calc(380px + var(--chrome) * 2)" : undefined }}>
               <div className="h-full overflow-hidden rounded-panel bg-surface p-3 shadow-e1 sm:p-6">
