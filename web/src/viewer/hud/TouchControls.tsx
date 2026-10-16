@@ -3,13 +3,26 @@ import type { ViewerController } from "../core/controller";
 
 const R = 48; // joystick travel (px)
 
+const capture = (el: Element, id: number) => {
+  try {
+    el.setPointerCapture(id);
+  } catch {
+    /* synthetic or already-released pointer */
+  }
+};
+
 /** Two-zone touch controls: left = floating joystick, right = drag to look. Plus comment / finish buttons. */
 export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
   const [joy, setJoy] = useState<{ x: number; y: number; kx: number; ky: number } | null>(null);
-  const joyId = useRef<number | null>(null);
-  const lookId = useRef<number | null>(null);
-  const last = useRef({ x: 0, y: 0 });
+  const joyRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const lookRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const input = ctrl.walk.input;
+
+  const endJoy = () => {
+    joyRef.current = null;
+    input.joy.x = input.joy.y = 0;
+    setJoy(null);
+  };
 
   return (
     <>
@@ -18,33 +31,30 @@ export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
         data-nq-ui=""
         style={{ left: 0, width: "45%" }}
         onPointerDown={(e) => {
-          if (joyId.current !== null) return;
-          joyId.current = e.pointerId;
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          if (joyRef.current) return;
           const r = e.currentTarget.getBoundingClientRect();
-          setJoy({ x: e.clientX - r.left, y: e.clientY - r.top, kx: 0, ky: 0 });
+          joyRef.current = { id: e.pointerId, x: e.clientX - r.left, y: e.clientY - r.top };
+          capture(e.currentTarget, e.pointerId);
+          setJoy({ x: joyRef.current.x, y: joyRef.current.y, kx: 0, ky: 0 });
         }}
         onPointerMove={(e) => {
-          if (e.pointerId !== joyId.current || !joy) return;
+          const j = joyRef.current;
+          if (!j || e.pointerId !== j.id) return;
           const r = e.currentTarget.getBoundingClientRect();
-          let dx = e.clientX - r.left - joy.x, dy = e.clientY - r.top - joy.y;
+          let dx = e.clientX - r.left - j.x, dy = e.clientY - r.top - j.y;
           const len = Math.hypot(dx, dy);
-          if (len > R) { dx = (dx / len) * R; dy = (dy / len) * R; }
+          if (len > R) {
+            dx = (dx / len) * R;
+            dy = (dy / len) * R;
+          }
           input.joy.x = dx / R;
           input.joy.y = -dy / R;
-          setJoy({ ...joy, kx: dx, ky: dy });
+          setJoy({ x: j.x, y: j.y, kx: dx, ky: dy });
         }}
         onPointerUp={(e) => {
-          if (e.pointerId !== joyId.current) return;
-          joyId.current = null;
-          input.joy.x = input.joy.y = 0;
-          setJoy(null);
+          if (joyRef.current && e.pointerId === joyRef.current.id) endJoy();
         }}
-        onPointerCancel={() => {
-          joyId.current = null;
-          input.joy.x = input.joy.y = 0;
-          setJoy(null);
-        }}
+        onPointerCancel={endJoy}
       >
         {joy && (
           <div className="nq-joy" style={{ left: joy.x, top: joy.y }}>
@@ -57,18 +67,19 @@ export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
         data-nq-ui=""
         style={{ right: 0, width: "55%" }}
         onPointerDown={(e) => {
-          lookId.current = e.pointerId;
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          last.current = { x: e.clientX, y: e.clientY };
+          lookRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+          capture(e.currentTarget, e.pointerId);
         }}
         onPointerMove={(e) => {
-          if (e.pointerId !== lookId.current) return;
-          input.look.dx += (e.clientX - last.current.x) * 1.7;
-          input.look.dy += (e.clientY - last.current.y) * 1.7;
-          last.current = { x: e.clientX, y: e.clientY };
+          const l = lookRef.current;
+          if (!l || e.pointerId !== l.id) return;
+          input.look.dx += (e.clientX - l.x) * 1.7;
+          input.look.dy += (e.clientY - l.y) * 1.7;
+          l.x = e.clientX;
+          l.y = e.clientY;
         }}
-        onPointerUp={() => (lookId.current = null)}
-        onPointerCancel={() => (lookId.current = null)}
+        onPointerUp={() => (lookRef.current = null)}
+        onPointerCancel={() => (lookRef.current = null)}
       />
       <div className="nq-touch-btns" data-nq-ui="">
         <button className="nq-btn" onClick={() => ctrl.placeComment(0, 0, true)}>
