@@ -94,6 +94,54 @@ export function buildDeckRailings(ctx: BuildCtx, type: RailType, m: RailMats): v
   }
 }
 
+/**
+ * EN-05: a 7 ft solid privacy screen (4.5 in plastered brick with a coping) on every edge where two balconies or
+ * terraces on an upper level meet without being open to each other, so the shared strip never joins two bedrooms.
+ * It carries a collider: nobody walks around it.
+ */
+export function buildPrivacyScreens(ctx: BuildCtx, mats: { wall: THREE.Material; coping: THREE.Material }): void {
+  const byLevel = new Map<string, Kit>();
+  const H = 7, T = 0.375;
+  const pairs = new Map<string, string[]>();
+  for (const s of ctx.model.screens) {
+    let kit = byLevel.get(s.level.id);
+    if (!kit) byLevel.set(s.level.id, (kit = new Kit()));
+    const floor = Math.max(s.neg.floorH, s.pos.floorH);
+    // reach the slab edge at the open end (the railings stand 0.2 ft out) and tuck into the wall at the other
+    const a = s.a - 0.25, b = s.b + 0.25;
+    const h0 = floor - 0.04;
+    const mid = (a + b) / 2, len = b - a;
+    const [cx, cz, sx, sz] = s.axis === "x" ? [mid, s.c, len, T] : [s.c, mid, T, len];
+    kit.box(mats.wall, cx * FT, ((h0 + floor + H) / 2) * FT, cz * FT, sx * FT, (floor + H - h0) * FT, sz * FT);
+    const [kx, kz] = s.axis === "x" ? [len, T + 0.1] : [T + 0.1, len];
+    kit.box(mats.coping, cx * FT, (floor + H + 0.06) * FT, cz * FT, kx * FT, 0.12 * FT, kz * FT);
+    ctx.guards.push({ level: s.level.id, axis: s.axis, c: s.c, a, b, h: H });
+    const k = s.level.id;
+    pairs.set(k, [...(pairs.get(k) ?? []), `the ${s.neg.name} and the ${s.pos.name}`]);
+  }
+  for (const [lv, kit] of byLevel) {
+    if (kit.empty) continue;
+    const g = kit.build();
+    ctx.add(g, { kind: "wall:privacy_screen", id: `privacy_screens_${lv}`, label: "Privacy screen", level: lv });
+    g.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) {
+        o.userData.collide = true;
+        ctx.collider(o as THREE.Mesh);
+      }
+    });
+  }
+  for (const [lv, list] of pairs) {
+    const level = ctx.plan.levelById.get(lv);
+    ctx.model.notes.add({
+      id: `asbuilt.privacy_screen:${lv}`,
+      title: "Privacy screen added",
+      status: "warn",
+      message: `On the ${level?.name.toLowerCase() ?? lv}, a 7 ft screen now separates ${list.join(", and ")}: they share an edge but neither opens onto the other, so one room could otherwise be reached through the other's balcony.`,
+      element_ids: ctx.model.screens.filter((s) => s.level.id === lv).flatMap((s) => [s.neg.id, s.pos.id]),
+    });
+  }
+}
+
 /** @deprecated kept for reference; the roof module (roof-geo.ts) builds the tank in the brief's material. */
 export function buildWaterTank(ctx: BuildCtx, mats: { plastic: THREE.Material; concrete: THREE.Material; pipe: THREE.Material }): void {
   const plan = ctx.plan;

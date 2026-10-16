@@ -72,6 +72,18 @@ export interface EdgeFeature {
   out: -1 | 1;
 }
 
+/** EN-05: a full-height privacy screen where two outdoor rooms (balconies, terraces) on an upper level meet without
+ *  being open to each other, so neither becomes a way from one bedroom into another. */
+export interface PrivacyScreen {
+  level: LevelM;
+  axis: "x" | "y";
+  c: number;
+  a: number;
+  b: number;
+  neg: RoomM;
+  pos: RoomM;
+}
+
 export interface SlabSpec {
   /** level whose floor this slab is (the level above the gap) */
   level: LevelM;
@@ -96,6 +108,7 @@ export class StructureModel {
   readonly runs: WallRun[] = [];
   readonly runsByLevel = new Map<string, WallRun[]>();
   readonly edges: EdgeFeature[] = [];
+  readonly screens: PrivacyScreen[] = [];
   readonly openings: PlacedOpening[] = [];
   readonly stairs: StairLayout[] = [];
   readonly slabs: SlabSpec[] = [];
@@ -144,7 +157,7 @@ export class StructureModel {
     const plan = this.plan;
     const g = plan.grid(lv.id);
     const isOut = (r: RoomM | null) => !r || r.cat === "outdoor";
-    type K = { kind: "interior" | "exterior" | "porch" | "deck"; out: -1 | 0 | 1; room?: RoomM };
+    type K = { kind: "interior" | "exterior" | "porch" | "deck" | "screen"; out: -1 | 0 | 1; room?: RoomM };
     const kinds = new Map<string, K>();
     const er = g.edgeRuns((neg, pos) => {
       if (neg === pos) return null;
@@ -158,6 +171,9 @@ export class StructureModel {
       } else if (en || ep) {
         k = { kind: "exterior", out: en ? 1 : -1 };
         key = `ext|${(en ? neg : pos)!.id}|${k.out}`;
+      } else if (lv.i > 0 && neg?.cat === "deck" && pos?.cat === "deck" && !plan.isOpen(neg, pos)) {
+        k = { kind: "screen", out: 0 };
+        key = `screen|${neg.id}|${pos.id}`;
       } else if (!lv.isRoof) {
         if (neg?.cat === "porch" && isOut(pos)) k = { kind: "porch", out: 1, room: neg };
         else if (pos?.cat === "porch" && isOut(neg)) k = { kind: "porch", out: -1, room: pos };
@@ -175,6 +191,10 @@ export class StructureModel {
       if (e.b - e.a < 0.05) continue;
       if (k.kind === "porch" || k.kind === "deck") {
         this.edges.push({ level: lv, kind: k.kind, axis: e.axis, c: e.c, a: e.a, b: e.b, room: k.room!, out: k.out as -1 | 1 });
+        continue;
+      }
+      if (k.kind === "screen") {
+        if (e.neg && e.pos) this.screens.push({ level: lv, axis: e.axis, c: e.c, a: e.a, b: e.b, neg: e.neg, pos: e.pos });
         continue;
       }
       const neg = e.neg, pos = e.pos;
