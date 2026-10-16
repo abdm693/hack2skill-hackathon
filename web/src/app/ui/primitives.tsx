@@ -35,16 +35,3 @@ export function StatusIcon({ status, className }: { status: "pass" | "warn" | "f
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={cn("text-[12px] font-medium text-ink-3", className)}>{children}</span>;
 }
-
-/** Corner registration marks (kept for older drawings; the new design doesn't use them). */
-export function CornerMarks({ className, size = 10 }: { className?: string; size?: number }) {
-  const common = "absolute border-ink/25";
-  return (
-    <span aria-hidden className={cn("pointer-events-none absolute inset-0", className)}>
-      <span className={cn(common, "left-0 top-0 border-l border-t")} style={{ width: size, height: size }} />
-      <span className={cn(common, "right-0 top-0 border-r border-t")} style={{ width: size, height: size }} />
-      <span className={cn(common, "bottom-0 left-0 border-b border-l")} style={{ width: size, height: size }} />
-      <span className={cn(common, "bottom-0 right-0 border-b border-r")} style={{ width: size, height: size }} />
-    </span>
-  );
-}

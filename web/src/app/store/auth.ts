@@ -7,7 +7,6 @@
 import { create } from "zustand";
 import { api, userId } from "@/api/client";
 import {
-  AuthError,
   currentUser,
   onSessionChange,
   rememberName,
@@ -136,8 +135,4 @@ onSessionChange((u) => {
 /** Resolve true when the person is (or becomes) signed in; opens the dialog if needed. */
 export function requireAccount(reason: AuthReason = "generic"): Promise<boolean> {
   return useAuth.getState().openAuth({ reason });
-}
-
-export function isAuthError(e: unknown): e is AuthError {
-  return e instanceof AuthError;
 }
