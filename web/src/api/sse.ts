@@ -52,7 +52,7 @@ export function dispatchSSE(
   if (name === "error") {
     const payload = (data ?? {}) as SSEEvents["error"];
     try { handler?.(payload); } catch (err) { console.error("[sse] error handler threw", err); }
-    throw new StreamError(payload.message || "The AI architect hit an error.", payload.recoverable ?? true);
+    throw new StreamError(payload.message || "Naqsha hit a problem. Try again.", payload.recoverable ?? true);
   }
   try {
     handler?.(data);
@@ -137,6 +137,22 @@ async function errorFromResponse(res: Response): Promise<StreamError> {
   return new StreamError(detail ? detail.slice(0, 300) : `Request failed (${res.status})`, recoverable, res.status);
 }
 
+/** Read until the server closes the stream, or cancel after `ms`. */
+async function drain(reader: ReadableStreamDefaultReader<string>, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  try {
+    while (Date.now() < deadline) {
+      const left = deadline - Date.now();
+      const r = await Promise.race([reader.read(), new Promise<null>((res) => setTimeout(() => res(null), left))]);
+      if (r === null) break;
+      if (r.done) return;
+    }
+  } catch {
+    return;
+  }
+  reader.cancel().catch(() => {});
+}
+
 /**
  * Open an SSE stream (POST with a JSON body, or GET) and consume it.
  * Resolves "done" when the server sends `done`, or "empty" on 204 No Content (nothing to stream).
@@ -162,6 +178,7 @@ export async function openSSE(
   };
 
   let reader: ReadableStreamDefaultReader<string> | undefined;
+  let finished = false;
   try {
     resetIdle();
     let res: Response;
@@ -193,7 +210,7 @@ export async function openSSE(
       try {
         chunk = await reader.read();
       } catch (e) {
-        if (idleFired) throw new StreamError("The AI architect went quiet for too long. Try again.", true);
+        if (idleFired) throw new StreamError("Naqsha went quiet for too long. Try again.", true);
         if (isAbortError(e) || outer?.aborted) throw new DOMException("Aborted", "AbortError");
         throw new StreamError("The connection dropped mid-stream. Try again.", true);
       }
@@ -201,15 +218,22 @@ export async function openSSE(
       if (!chunk.done) resetIdle();
       for (const ev of events) {
         const { terminal } = dispatchSSE(handlers, ev.event, parseData(ev.data));
-        if (terminal === "done") return "done";
+        if (terminal === "done") {
+          finished = true;
+          return "done";
+        }
       }
       if (chunk.done) break;
     }
-    throw new StreamError("The connection closed before the AI architect finished.", true);
+    throw new StreamError("The connection closed before Naqsha finished. Try again.", true);
   } finally {
     clearTimeout(idleTimer);
     outer?.removeEventListener("abort", forwardAbort);
-    // Release the connection whether we finished, failed or were aborted.
-    reader?.cancel().catch(() => {});
+    // Release the connection. After `done`, give the server a moment to close the stream itself, so a finished
+    // stream doesn't show up as "aborted" in DevTools; otherwise (error, abort) cancel it now.
+    if (reader) {
+      if (finished) void drain(reader, 1500);
+      else reader.cancel().catch(() => {});
+    }
   }
 }

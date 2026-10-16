@@ -1,5 +1,5 @@
 /** localStorage-backed store for mock mode. */
-import type { Brief, ChatMessage, Comment, Project, Version } from "@contracts/api-types";
+import type { Brief, ChatMessage, Comment, Member, Project, Version } from "@contracts/api-types";
 
 export interface IntakeState {
   step: number; // index into the question list
@@ -15,13 +15,23 @@ export interface MockDB {
   versions: Record<string, Version>;
   comments: Record<string, Comment[]>;
   intake: Record<string, IntakeState>;
+  /** People invited to a project (email "*" = any signed-in person; used by the "shared with you" demo). */
+  members: Record<string, Member[]>;
+  /** Client links. */
+  shares: Record<string, { enabled: boolean; token: string }>;
+  /** Account that owns a project once a guest signed in and claimed it (absent: the browser's guest). */
+  owners: Record<string, string>;
+  /** Display name of the owner of projects shared with you (demo). */
+  ownerNames: Record<string, string>;
+  /** Sample id → your copy of it (cloning again opens the same copy). */
+  clones: Record<string, string>;
 }
 
-const KEY = "naqsha.mock.db.v1";
+const KEY = "naqsha.mock.db.v2";
 let cache: MockDB | null = null;
 
 function empty(): MockDB {
-  return { projects: [], samples: [], messages: {}, versions: {}, comments: {}, intake: {} };
+  return { projects: [], samples: [], messages: {}, versions: {}, comments: {}, intake: {}, members: {}, shares: {}, owners: {}, ownerNames: {}, clones: {} };
 }
 
 export function db(): MockDB {
