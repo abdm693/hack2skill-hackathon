@@ -45,22 +45,15 @@ export function Tooltip({
 
   useLayoutEffect(() => {
     if (!open || !ref.current) return;
+    // Measured once per opening. The tip is `w-max`, so its width doesn't depend on where it sits
+    // (no measure → move → re-measure loop near the viewport's edge).
     const r = ref.current.getBoundingClientRect();
+    const w = tip.current?.offsetWidth ?? 120;
     const h = tip.current?.offsetHeight ?? 28;
     const below = side === "bottom" || r.top - h - 8 < 4;
-    setPos({ x: r.left + r.width / 2, y: below ? r.bottom + 8 : r.top - 8, below });
+    const x = Math.min(window.innerWidth - 8 - w / 2, Math.max(8 + w / 2, r.left + r.width / 2));
+    setPos({ x, y: below ? r.bottom + 8 : r.top - 8, below });
   }, [open, side]);
-
-  useLayoutEffect(() => {
-    // Keep the tip inside the viewport horizontally.
-    const el = tip.current;
-    if (!open || !el || !pos) return;
-    const w = el.offsetWidth;
-    const min = 8 + w / 2;
-    const max = window.innerWidth - 8 - w / 2;
-    const x = Math.min(max, Math.max(min, pos.x));
-    if (Math.abs(x - pos.x) > 0.5) setPos({ ...pos, x });
-  }, [open, pos]);
 
   return (
     <span
@@ -87,7 +80,7 @@ export function Tooltip({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: 0.1 } }}
                 transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                className="pointer-events-none fixed z-[90] flex max-w-[260px] items-center gap-2 rounded-[8px] bg-ink/92 px-2.5 py-1.5 text-[12px] font-medium leading-4 text-white shadow-e2"
+                className="pointer-events-none fixed z-[90] flex w-max max-w-[260px] items-center gap-2 rounded-[8px] bg-ink/92 px-2.5 py-1.5 text-[12px] font-medium leading-4 text-white shadow-e2"
                 style={{
                   left: pos?.x ?? -9999,
                   top: pos?.y ?? -9999,
