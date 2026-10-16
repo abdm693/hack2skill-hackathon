@@ -107,12 +107,11 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
           skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
           const p2 = Math.max(p, lo), q2 = Math.min(q, hi);
           if (q2 - p2 < 0.6) continue;
-          // run the balustrade on past the last nosing so it meets the landing / floor guard without a gap
-          const ext = (a: number) => (Math.abs(a - sEnd) < 1e-3 ? f.tread * 0.5 : 0);
+          // (it ends at the last nosing, where the stairwell guard of the floor above takes over: no handrail
+          // extension, which would narrow a tight top landing)
           const sa = f.sign > 0 ? p2 : q2, sb = f.sign > 0 ? q2 : p2;
-          const sbx = sb + f.sign * ext(sb);
           const [rx0, ry0] = pt(f, sa, c - out * 0.05);
-          const [rx1, ry1] = pt(f, sbx, c - out * 0.05);
+          const [rx1, ry1] = pt(f, sb, c - out * 0.05);
           railing(railKit, glassKit, m.railType, rx0, ry0, hAt(sa) + 0.12, rx1, ry1, hAt(sb) + 0.12, FLIGHT_H, m.rail, { shoe: false, handrailWood: true });
         }
       }

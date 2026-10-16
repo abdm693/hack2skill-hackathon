@@ -201,15 +201,18 @@ function checkRoof(ctx: BuildCtx, res: BuildResult, col: THREE.Mesh): Check {
   const start = new THREE.Vector3(sx0 * FT, f0.h0 * FT + 0.05, -sy0 * FT);
   const wps: THREE.Vector3[] = [];
   for (const l of lays)
-    for (const f of l.flights) {
+    l.flights.forEach((f, fi) => {
       const sEnd = f.s0 + f.sign * (f.n - 1) * f.tread;
       const cm = (f.c0 + f.c1) / 2;
-      // onto the first tread of the very first flight; every other flight from its landing, 0.6 ft before the riser
-      const first = !wps.length;
-      const a0 = first ? f.s0 + f.sign * 0.4 * f.tread : f.s0 - f.sign * 0.6, a1 = sEnd + f.sign * 0.9;
       const P = (a: number, h: number) => (f.axis === "x" ? new THREE.Vector3(a * FT, h * FT, -cm * FT) : new THREE.Vector3(cm * FT, h * FT, -a * FT));
-      wps.push(P(a0, f.h0), P(a1, f.h0 + f.n * f.riser));
-    }
+      if (fi === 0) {
+        // line up in front of the first riser (as far back as the foot strip lets a body stand), then step on
+        const back = Math.min(0.6, Math.max(0.05, l.strip - 1.05));
+        if (wps.length) wps.push(P(f.s0 - f.sign * back, f.h0));
+        wps.push(P(f.s0 + f.sign * 0.4 * f.tread, f.h0 + f.riser));
+      } else wps.push(P(f.s0 - f.sign * 0.6, f.h0));
+      wps.push(P(sEnd + f.sign * 0.9, f.h0 + f.n * f.riser));
+    });
   wps.push(new THREE.Vector3(inside[0] * FT, plan.roof.elev * FT, -inside[1] * FT), new THREE.Vector3(outside[0] * FT, plan.roof.elev * FT, -outside[1] * FT));
   const r = walk(col, start, wps, 120);
   const feetFt = r.feet.y / FT;
