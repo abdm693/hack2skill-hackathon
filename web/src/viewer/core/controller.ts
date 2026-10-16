@@ -438,13 +438,25 @@ export class ViewerController {
     this.updatePins(cam);
     if (this.colliderDirty && mode === "walk" && now > this.colliderTimer) this.ensureCollider();
     if (mode === "walk" && !this.navWarm && this.collider) this.navWarm = this.nav.warm(3);
-    if (this.shadowsDirty) {
+    // a quality change re-sizes (drops) the sun's shadow map: decide it before this frame's shadow pass
+    this.monitorPerf(dt, now);
+    if (this.shadowsDirty || this.shadowMapMissing()) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
     gl.toneMappingExposure = (this.atmosphere?.exposure ?? 1) * (mode === "walk" ? 1.1 : 1);
-    this.monitorPerf(dt, now);
     if (busy) this.invalidate();
+  }
+
+  /**
+   * Would this frame draw a shadow-casting light that has no shadow map yet? three.js then binds its shared empty
+   * depth texture, which (set up without a compare mode) makes every lit draw a WebGL INVALID_OPERATION ("Mismatch
+   * between texture format and sampler type"). Render the shadow pass instead.
+   */
+  private shadowMapMissing(): boolean {
+    const atm = this.atmosphere;
+    for (const l of [atm?.fallbackSun, this.engineSun]) if (l && l.castShadow && l.visible && !l.shadow.map) return true;
+    return false;
   }
 
   private walkFrame(dt: number, now: number, cam: THREE.PerspectiveCamera) {
@@ -2313,7 +2325,7 @@ export class ViewerController {
   renderNow() {
     const gl = this.gl, scene = this.scene, cam = this.camera;
     if (!gl || !scene || !cam) return;
-    if (this.shadowsDirty) {
+    if (this.shadowsDirty || this.shadowMapMissing()) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
