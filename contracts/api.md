@@ -113,8 +113,10 @@ interface Comment {
 | POST | `/api/projects/{pid}/concepts` | `{count?: 4, instruction?: string, base_concept_id?: string}` | **SSE**: `concept.started {index, prompt}` · `concept {index, concept}` · `concept.failed {index, message}` · `done` |
 | POST | `/api/projects/{pid}/concepts/{cid}/select` | | `Project` |
 | POST | `/api/projects/{pid}/design` | `{}` | **SSE**: `stage {stage: "plan" \| "compliance" \| "fix" \| "build" \| "save", message}` · `plan {plan, attempt}` · `compliance {report, attempt}` · `section {section: DesignSection, index}` · `progress {chars}` · `version {version: Version}` · `done` |
+| GET | `/api/projects/{pid}/run` | | **SSE** replay of the running design/revise pipeline (all events so far, then live); **204** if none. Call on project load to resume after a refresh. POST /design and /revise also re-attach if a run is already active. |
 | GET | `/api/projects/{pid}/versions/{vid}` | | `Version` |
 | POST | `/api/projects/{pid}/versions/{vid}/repair` | `{section: string, error: string}` | **SSE**: `section {section, index}` · `done` (Argon fixes one failing section) |
+| POST | `/api/projects/{pid}/versions/{vid}/thumbnail` | `{image_data_url}` | `{url}`: stores a viewport capture as the version and project thumbnail. Call it after the first build. |
 | POST | `/api/projects/{pid}/versions/{vid}/asbuilt` | `{summary: AsBuiltSummary}` | `ComplianceReport` (as-built checks, e.g. facade projections) |
 | GET | `/api/projects/{pid}/comments` | `?version_id` | `{comments: Comment[]}` |
 | POST | `/api/projects/{pid}/comments` | `{version_id, text, anchor, camera, snapshot_data_url?}` | `Comment` |

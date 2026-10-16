@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, sse
+from . import config, runs, sse
 from .agents import architect, concepts, intake, reviser, reviser_adk
 from .compliance import lda
 from .store import blobs, db
@@ -157,10 +157,22 @@ async def design(pid: str, x_naqsha_user: str = Header("anon")):
     p = await owned(pid, x_naqsha_user)
     if not p.get("brief"):
         raise HTTPException(400, "finish the setup first")
+    if (run := runs.active(pid, "design")):  # already designing: attach and replay instead of starting over
+        return sse.stream(run.follow())
     if not (p.get("brief") or {}).get("plot"):
         brief, _ = intake.defaults_for(p["brief"])
         p = await db.update_project(pid, brief=brief, envelope=intake.envelope_for(brief))
-    return sse.stream(architect.design(p))
+    return sse.stream(runs.start(pid, "design", lambda: architect.design(p)).follow())
+
+
+@app.get("/api/projects/{pid}/run")
+async def attach_run(pid: str, x_naqsha_user: str = Header("anon")):
+    """Re-attach to a running design/revise pipeline (replays all events so far). 204 when nothing is running."""
+    await owned(pid, x_naqsha_user)
+    run = runs.active(pid)
+    if not run:
+        return Response(status_code=204)
+    return sse.stream(run.follow())
 
 
 @app.get("/api/projects/{pid}/versions/{vid}")
@@ -191,6 +203,25 @@ async def repair(pid: str, vid: str, body: RepairBody, x_naqsha_user: str = Head
         idx = next(i for i, s in enumerate(v["sections"]) if s["name"] == body.section)
         yield "section", {"section": fixed, "index": idx}
     return sse.stream(gen())
+
+
+class ThumbBody(BaseModel):
+    image_data_url: str
+
+
+@app.post("/api/projects/{pid}/versions/{vid}/thumbnail")
+async def version_thumbnail(pid: str, vid: str, body: ThumbBody, x_naqsha_user: str = Header("anon")):
+    """Store a viewport capture as the version's (and project's) thumbnail."""
+    await owned(pid, x_naqsha_user)
+    v = await db.get_version(pid, vid)
+    if not v:
+        raise HTTPException(404, "version not found")
+    data, mime = blobs.decode_data_url(body.image_data_url)
+    url = await blobs.put(f"projects/{pid}/versions/{vid}.{'jpg' if 'jpeg' in mime else 'png'}", data, mime)
+    v["thumbnail_url"] = url
+    await db.save_version(pid, v)
+    await db.update_project(pid, thumbnail_url=url)
+    return {"url": url}
 
 
 class AsBuiltBody(BaseModel):
@@ -271,6 +302,9 @@ async def revise(pid: str, body: ReviseBody, x_naqsha_user: str = Header("anon")
         comments = [c for c in comments if c["id"] in set(body.comment_ids)]
     if not comments:
         raise HTTPException(400, "no open comments to address")
+    if (run := runs.active(pid, "revise")):
+        return sse.stream(run.follow())
+
     async def gen():
         try:  # agentic ADK reviser first; the single-shot reviser is the safety net (ADK writes nothing until it finishes)
             async for ev in reviser_adk.revise(p, v, comments):
@@ -280,7 +314,7 @@ async def revise(pid: str, body: ReviseBody, x_naqsha_user: str = Header("anon")
             yield "stage", {"stage": "changes", "message": f"Retrying with the direct reviser ({type(e).__name__})…"}
             async for ev in reviser.revise(p, v, comments):
                 yield ev
-    return sse.stream(gen())
+    return sse.stream(runs.start(pid, "revise", gen).follow())
 
 
 # --- AI render of the current viewport -------------------------------------------------------------------------
