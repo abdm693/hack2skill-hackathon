@@ -6,7 +6,8 @@
  * - Units: FEET everywhere in the plan. The 3D engine converts with 1 ft = 0.3048 m.
  * - Plan coordinates are plot-local: origin = FRONT-LEFT corner of the plot as seen from the road.
  *   +x runs along the road to the right (plot width); +y runs away from the road into the plot (plot depth).
- *   The road is at y < 0. 3D mapping: x_m = x_ft*0.3048, z_m = y_ft*0.3048, up = +Y (height).
+ *   The road is at y < 0. 3D mapping: x_m = x_ft*0.3048, z_m = -y_ft*0.3048, up = +Y (height).
+ *   (z is NEGATED so that, seen from the road at +z looking toward -z, plan +x appears on the viewer's RIGHT.)
  * - Room sides: "front" = min-y edge (towards the road), "back" = max-y, "left" = min-x, "right" = max-x.
  * - Rect = {x, y, w, d}: (x, y) is the min corner; w extends along +x and d along +y.
  * - Wall centerlines lie ON room edges. Exterior walls are 0.75 ft (9") thick and interior walls 0.375 ft (4.5").
