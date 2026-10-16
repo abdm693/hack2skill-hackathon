@@ -214,3 +214,9 @@ interface AsBuiltSummary {
 
 ### Samples
 `POST /api/projects/{sample}/clone` returns the caller's existing clone of that sample if one exists (no duplicates). Pass `{fresh: true}` to force a new copy.
+
+### Setup messages
+- `ChatMessage.understood?` is `{guaranteed[], preferences[], assumptions[]}`, the "Here's what I understood" card.
+- `ChatMessage.suggestions?` holds what's-next prompt chips.
+- `input: "floors"` opens the per-floor program editor. It sends chips such as `floor:ground=drawing,kitchen,dirty_kitchen,bedroom:1,bath:2` and `floor:first=bedroom:3,bath:3,lounge`.
+- Tank and solar answers use chips: `tank:plastic` or `tank:concrete`, and `solar:none`, `solar:ready` or `solar:panels`.

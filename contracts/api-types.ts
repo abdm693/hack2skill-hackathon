@@ -54,7 +54,12 @@ export interface ChatMessage {
   created_at: string;
   chips?: Chip[];
   multi?: boolean;
-  input?: "text" | "number" | "plot" | "map" | "style" | "rooms" | null;
+  input?: "text" | "number" | "plot" | "map" | "style" | "rooms" | "floors" | null;
+  /** "Here's what I understood" card: guaranteed = hard rules we will meet (LDA + livable), preferences = wishes we will
+   *  try to honour, assumptions = things the agent decided itself (editable). Sent after a rich message and at completion. */
+  understood?: { guaranteed: string[]; preferences: string[]; assumptions: string[] };
+  /** Suggested next prompts shown as chips under the message ("What's next"). */
+  suggestions?: string[];
   field?: string;
   allow_skip?: boolean;
 }
