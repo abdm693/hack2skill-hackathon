@@ -58,6 +58,19 @@ def _authority_overrides(authority: str) -> tuple[dict, list[str]]:
     return {}, []
 
 
+def corner_splay_ft(band: dict, marla: float) -> float:
+    """The corner splay for a band. Most bands give a number; the 10 marla band splits it: exactly 10 marla → 5 ft,
+    above 10 marla → 10 ft (lda_rules.json)."""
+    v = band.get("corner_splay_ft")
+    if isinstance(v, dict):
+        exact, above = v.get("plot_exactly_10_marla"), v.get("plot_above_10_marla")
+        v = above if (above is not None and marla > 10.05) else exact if exact is not None else above
+    try:
+        return float(v) if v is not None else 5.0
+    except (TypeError, ValueError):
+        return 5.0
+
+
 def envelope(width_ft: float, depth_ft: float, authority: str = "LDA", corner: bool = False, side_on: str = "right") -> dict:
     area = width_ft * depth_ft
     marla = area / MARLA_SQFT
@@ -81,7 +94,7 @@ def envelope(width_ft: float, depth_ft: float, authority: str = "LDA", corner: b
         f"Height up to {max_h:g} ft to top of parapet (mumty ≤ 9′6″ excluded); max {max_st} storeys + basement.",
     ] + notes
     if corner:
-        notes.append(f"Corner plot: keep a {b.get('corner_splay_ft') or 5:g} ft splay at the corner boundary wall.")
+        notes.append(f"Corner plot: keep a {corner_splay_ft(b, marla):g} ft splay at the corner boundary wall.")
     return {
         "authority": authority, "band": b["label"], "setbacks_ft": setbacks, "side_space_note": side_note,
         "max_coverage_pct": cov, "max_far": float(b["max_far"]), "max_height_ft": float(max_h), "max_storeys": int(max_st),
