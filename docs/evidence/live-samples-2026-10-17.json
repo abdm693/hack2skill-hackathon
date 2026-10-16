@@ -1,0 +1,462 @@
+{
+ "_meta": {
+  "what": "Evidence for the measured numbers in docs/pitch/naqsha-deck.pdf, read from the live Cloud Run service.",
+  "captured_on": "2026-10-17",
+  "service": "https://naqsha-242926648187.us-central1.run.app",
+  "how": [
+   "GET /api/samples (public).",
+   "POST /api/projects/{sample}/clone as a fresh guest (what the 'open a sample' button does), then GET the clone's versions and comments.",
+   "gcloud run services describe naqsha --region us-central1 (read-only) for the service settings."
+  ],
+  "not_here": "Per-section latency, end-to-end timings and cost per design are not logged by the service yet, so no timing below comes from a log. The 12-17 s, ~7 min and ~95 s figures are the team's own measurements on the live service. The 5 -> 1 -> 0 fix loop was observed on a separate live run that is not one of the samples."
+ },
+ "cloud_run_service": {
+  "max_instances": 5,
+  "cpu": "2",
+  "memory": "2Gi",
+  "container_concurrency": 40,
+  "timeout_seconds": 3600,
+  "cpu_throttling": false,
+  "session_affinity": true,
+  "startup_cpu_boost": true
+ },
+ "samples": [
+  {
+   "id": "p_8bf503d8a2c4",
+   "name": "Sample · 1 kanal Spanish villa, south-facing",
+   "created_at": "2026-10-16T15:35:52+00:00",
+   "brief": {
+    "bathrooms": 6,
+    "budget": "standard",
+    "style": "Spanish",
+    "city": "Lahore",
+    "auto_filled": [
+     "budget"
+    ],
+    "storeys": 2,
+    "facing": "S",
+    "authority": "LDA",
+    "plot": {
+     "depth_ft": 90.0,
+     "width_ft": 50.0,
+     "corner": false,
+     "area_marla": 20.0
+    },
+    "bedrooms": 5,
+    "spaces": [
+     "drawing",
+     "tv_lounge",
+     "dining",
+     "kitchen",
+     "dirty_kitchen",
+     "servant_quarter",
+     "car_porch:2",
+     "lawn",
+     "prayer",
+     "roof_terrace"
+    ],
+    "basement": false
+   },
+   "envelope": {
+    "buildable_rect": {
+     "d": 73.0,
+     "y": 10.0,
+     "x": 0.0,
+     "w": 45.0
+    },
+    "notes": [
+     "Plot 50×90 ft = 4,500 sq ft ≈ 20.0 marla (1 kanal to 30 marla).",
+     "Setbacks: front 10 ft, rear 7 ft; 5 ft side space on one side.",
+     "Ground coverage up to 65% (2,925 sq ft); FAR 1:2.6 (basement counts).",
+     "Height up to 45 ft to top of parapet (mumty ≤ 9′6″ excluded); max 3 storeys + basement."
+    ],
+    "max_coverage_pct": 65.0,
+    "setbacks_ft": {
+     "rear": 7.0,
+     "right": 5.0,
+     "left": 0.0,
+     "front": 10.0
+    },
+    "max_far": 2.6,
+    "authority": "LDA",
+    "side_space_note": "5 ft side space on one side",
+    "max_storeys": 3,
+    "band": "1 kanal to 30 marla",
+    "max_height_ft": 45.0,
+    "max_ground_coverage_sqft": 2925.0
+   },
+   "concept_models": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image"
+   ],
+   "versions": [
+    {
+     "n": 1,
+     "id": "v_c7688880e2df",
+     "status": "ready",
+     "summary": "v1: 34 spaces, 25 code sections",
+     "created_at": "2026-10-16T15:35:29+00:00"
+    }
+   ]
+  },
+  {
+   "id": "p_19a4237e1c61",
+   "name": "Sample · 10 marla modern home, Johar Town",
+   "created_at": "2026-10-16T14:20:45+00:00",
+   "brief": {
+    "bathrooms": 5,
+    "budget": "standard",
+    "style": "Modern Contemporary",
+    "storeys": 2,
+    "city": "Lahore",
+    "scheme": "Johar Town",
+    "facing": "N",
+    "authority": "LDA",
+    "auto_filled": [
+     "bathrooms",
+     "bedrooms",
+     "budget",
+     "spaces"
+    ],
+    "plot": {
+     "depth_ft": 65.0,
+     "width_ft": 35.0,
+     "corner": false,
+     "area_marla": 10.1
+    },
+    "bedrooms": 4,
+    "spaces": [
+     "drawing",
+     "tv_lounge",
+     "dining",
+     "kitchen",
+     "car_porch:1",
+     "lawn",
+     "store",
+     "dirty_kitchen",
+     "laundry"
+    ],
+    "basement": false
+   },
+   "envelope": {
+    "buildable_rect": {
+     "d": 48.0,
+     "y": 10.0,
+     "x": 0.0,
+     "w": 30.0
+    },
+    "notes": [
+     "Plot 35×65 ft = 2,275 sq ft ≈ 10.1 marla (10 marla and above but less than 1 kanal).",
+     "Setbacks: front 10 ft, rear 7 ft; 5 ft side space on one side.",
+     "Ground coverage up to 70% (1,592 sq ft); FAR 1:2.8 (basement counts).",
+     "Height up to 45 ft to top of parapet (mumty ≤ 9′6″ excluded); max 3 storeys + basement."
+    ],
+    "max_coverage_pct": 70.0,
+    "setbacks_ft": {
+     "rear": 7.0,
+     "right": 5.0,
+     "left": 0.0,
+     "front": 10.0
+    },
+    "max_far": 2.8,
+    "side_space_note": "5 ft side space on one side",
+    "authority": "LDA",
+    "max_storeys": 3,
+    "band": "10 marla and above but less than 1 kanal",
+    "max_height_ft": 45.0,
+    "max_ground_coverage_sqft": 1592.5
+   },
+   "concept_models": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image"
+   ],
+   "versions": [
+    {
+     "n": 1,
+     "created_at": "2026-10-16T13:08:01+00:00",
+     "status": "ready",
+     "summary": "v1: 28 spaces, 23 code sections",
+     "id": "v_33281d4122c3"
+    },
+    {
+     "n": 2,
+     "created_at": "2026-10-16T13:10:41+00:00",
+     "status": "ready",
+     "summary": "Enlarged the master bedroom front window to 13×8.5 ft with a 0.5 ft sill for more morning light; Widened the master bedroom curtains to match the 13 ft window; Changed the drawing room sofa upholstery",
+     "id": "v_dd33f3ac480a"
+    }
+   ]
+  }
+ ],
+ "sample_10_marla": {
+  "source_sample": "p_19a4237e1c61",
+  "clone": "p_784bb1c08d36",
+  "v1": {
+   "id": "v_33281d4122c3",
+   "sections": [
+    "structure",
+    "facade_stone_pier",
+    "facade_left_bay",
+    "facade_right_bay",
+    "interior_ground",
+    "interior_first",
+    "furnish_g_porch",
+    "furnish_g_drawing",
+    "furnish_g_lounge",
+    "furnish_g_dining",
+    "furnish_g_kitchen",
+    "furnish_g_dirty_kitchen",
+    "furnish_g_guest",
+    "furnish_g_service_baths",
+    "furnish_f_master",
+    "furnish_f_balcony",
+    "furnish_f_bed2",
+    "furnish_f_lounge",
+    "furnish_f_bed3",
+    "furnish_f_bed4",
+    "furnish_f_baths_and_laundry",
+    "landscape",
+    "lighting"
+   ],
+   "compliance_counts": {
+    "pass": 42
+   },
+   "metrics": {
+    "covered_area_sqft": 1440.0,
+    "storeys": 2,
+    "total_floor_area_sqft": 2565.0,
+    "plot_area_sqft": 2275.0,
+    "coverage_pct": 63.3,
+    "height_ft": 27.0,
+    "far": 1.13
+   },
+   "levels": [
+    {
+     "id": "ground",
+     "index": 0,
+     "name": "Ground Floor",
+     "elevation_ft": 1.5,
+     "height_ft": 11,
+     "slab_ft": 0.5
+    },
+    {
+     "id": "first",
+     "index": 1,
+     "name": "First Floor",
+     "elevation_ft": 12.5,
+     "height_ft": 11,
+     "slab_ft": 0.5
+    },
+    {
+     "id": "roof",
+     "index": 2,
+     "name": "Roof",
+     "elevation_ft": 23.5,
+     "height_ft": 3.5,
+     "slab_ft": 0.5
+    }
+   ]
+  },
+  "v2_adk_revision": {
+   "id": "v_dd33f3ac480a",
+   "parent_id": "v_33281d4122c3",
+   "created_at": "2026-10-16T13:10:41+00:00",
+   "changes": [
+    {
+     "kind": "plan",
+     "targets": [
+      "f_master_w1"
+     ],
+     "id": "ch1",
+     "summary": "Enlarged the master bedroom front window to 13×8.5 ft with a 0.5 ft sill for more morning light",
+     "comment_ids": [
+      "cm_0a4b21c612eb"
+     ]
+    },
+    {
+     "kind": "section",
+     "targets": [
+      "furnish_f_master"
+     ],
+     "id": "ch2",
+     "summary": "Widened the master bedroom curtains to match the 13 ft window",
+     "comment_ids": [
+      "cm_0a4b21c612eb"
+     ]
+    },
+    {
+     "kind": "section",
+     "targets": [
+      "furnish_g_drawing"
+     ],
+     "id": "ch3",
+     "summary": "Changed the drawing room sofa upholstery to dark green velvet",
+     "comment_ids": [
+      "cm_87e5b922d6d3"
+     ]
+    }
+   ],
+   "compliance_counts": {
+    "pass": 42
+   }
+  },
+  "comments": [
+   {
+    "id": "cm_0a4b21c612eb",
+    "created_at": "2026-10-16T13:09:08+00:00",
+    "text": "Please make the master bedroom window bigger, I want much more morning light.",
+    "anchor": {
+     "kind": "window",
+     "position": [
+      3,
+      5,
+      4
+     ],
+     "label": "Master bedroom window",
+     "level": "first",
+     "normal": [
+      0,
+      0,
+      -1
+     ],
+     "room": "f_master"
+    },
+    "status": "resolved",
+    "resolution": "We enlarged the master bedroom front window from 10×7 ft to 13×8.5 ft with a low 0.5 ft sill to bring in plenty of morning sunlight.",
+    "resolved_in_version": "v_dd33f3ac480a"
+   },
+   {
+    "id": "cm_87e5b922d6d3",
+    "created_at": "2026-10-16T13:09:09+00:00",
+    "text": "Change the drawing room sofa to a dark green velvet one.",
+    "anchor": {
+     "kind": "furniture:sofa_3",
+     "position": [
+      2,
+      0.5,
+      5
+     ],
+     "label": "Sofa",
+     "level": "ground",
+     "normal": [
+      0,
+      1,
+      0
+     ],
+     "room": "g_drawing"
+    },
+    "status": "resolved",
+    "resolution": "We updated the drawing room sofa to a rich dark green velvet finish (#1e4230).",
+    "resolved_in_version": "v_dd33f3ac480a"
+   },
+   {
+    "id": "cm_2581acf761a7",
+    "created_at": "2026-10-16T13:09:10+00:00",
+    "text": "Can we extend the car porch 4 feet forward into the front lawn?",
+    "anchor": {
+     "kind": "slab",
+     "position": [
+      7,
+      1,
+      3
+     ],
+     "label": "Car porch",
+     "level": "ground",
+     "normal": [
+      0,
+      1,
+      0
+     ],
+     "room": "g_porch"
+    },
+    "status": "rejected",
+    "resolution": "Under LDA Building & Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.",
+    "resolved_in_version": "v_dd33f3ac480a"
+   }
+  ]
+ },
+ "sample_1_kanal": {
+  "source_sample": "p_8bf503d8a2c4",
+  "clone": "p_4f6c3f5edb3d",
+  "v1": {
+   "id": "v_c7688880e2df",
+   "sections": [
+    "structure",
+    "facade_spanish_roofs",
+    "facade_arches_and_mouldings",
+    "facade_cupola_and_parapet",
+    "facade_boundary",
+    "interior_spanish_ceilings",
+    "furnish_g_drawing",
+    "furnish_g_lobby",
+    "furnish_g_porch",
+    "furnish_g_lounge",
+    "furnish_g_dining",
+    "furnish_g_kitchen",
+    "furnish_g_dirty_kitchen",
+    "furnish_g_bed1",
+    "furnish_g_servant",
+    "furnish_f_master",
+    "furnish_f_bed2",
+    "furnish_f_lounge",
+    "furnish_f_prayer",
+    "furnish_f_bed3",
+    "furnish_f_bed4",
+    "furnish_f_bed5",
+    "furnish_baths_and_balconies",
+    "landscape",
+    "lighting"
+   ],
+   "fix_history": [
+    {
+     "attempt": 1,
+     "failed": [
+      "room.light:g_dining",
+      "room.size:g_servant",
+      "room.light:f_bed3",
+      "room.light:f_lounge"
+     ],
+     "pass": 44,
+     "fail": 4,
+     "warn": 2
+    },
+    {
+     "attempt": 2,
+     "failed": [],
+     "pass": 50,
+     "fail": 0,
+     "warn": 2
+    }
+   ],
+   "compliance_counts": {
+    "warn": 2,
+    "pass": 50
+   },
+   "metrics": {
+    "covered_area_sqft": 2700.0,
+    "storeys": 2,
+    "total_floor_area_sqft": 4842.0,
+    "plot_area_sqft": 4500.0,
+    "coverage_pct": 60.0,
+    "height_ft": 27.0,
+    "far": 1.08
+   },
+   "advisories": [
+    {
+     "id": "plan.opening:f_bed3_w",
+     "title": "Opening placement",
+     "message": "Opening f_bed3_w is not on an edge of room r_terrace."
+    },
+    {
+     "id": "plan.opening:f_bath3_v",
+     "title": "Opening placement",
+     "message": "Opening f_bath3_v is not on an edge of room r_terrace."
+    }
+   ]
+  }
+ }
+}

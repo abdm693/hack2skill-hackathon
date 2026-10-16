@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naqsha deck</title>
+<meta name="description" content="Naqsha (نقشہ): from a rough idea to a walkable, LDA-checked 3D home, designed by Gemini 4 Argon and a Google ADK agent on Google Cloud. Pitch deck for the Google Cloud AI Builder Cup 2026.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23111113%27/%3E%3Cpath d=%27M9 23V9h4l6 9V9h4v14h-4l-6-9v9z%27 fill=%27%23F6F6F3%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Noto+Nastaliq+Urdu:wght@500&display=block" rel="stylesheet">
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+
+<!-- Shared symbols -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="qr-live" viewBox="0 0 33 33"><path fill="#111113" d="M0 0h7v1h-7zM10 0h1v1h-1zM14 0h1v1h-1zM16 0h1v1h-1zM19 0h1v1h-1zM21 0h1v1h-1zM23 0h1v1h-1zM26 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM9 1h1v1h-1zM12 1h1v1h-1zM15 1h2v1h-2zM18 1h1v1h-1zM21 1h1v1h-1zM24 1h1v1h-1zM26 1h1v1h-1zM32 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM8 2h1v1h-1zM12 2h1v1h-1zM14 2h3v1h-3zM19 2h4v1h-4zM24 2h1v1h-1zM26 2h1v1h-1zM28 2h3v1h-3zM32 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h2v1h-2zM12 3h1v1h-1zM15 3h1v1h-1zM18 3h1v1h-1zM22 3h3v1h-3zM26 3h1v1h-1zM28 3h3v1h-3zM32 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h3v1h-3zM14 4h3v1h-3zM20 4h4v1h-4zM26 4h1v1h-1zM28 4h3v1h-3zM32 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h4v1h-4zM13 5h1v1h-1zM17 5h1v1h-1zM19 5h1v1h-1zM21 5h1v1h-1zM24 5h1v1h-1zM26 5h1v1h-1zM32 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM24 6h1v1h-1zM26 6h7v1h-7zM8 7h1v1h-1zM10 7h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM16 7h1v1h-1zM18 7h6v1h-6zM0 8h1v1h-1zM2 8h5v1h-5zM9 8h2v1h-2zM12 8h2v1h-2zM16 8h5v1h-5zM23 8h2v1h-2zM26 8h5v1h-5zM3 9h3v1h-3zM7 9h1v1h-1zM9 9h2v1h-2zM12 9h2v1h-2zM16 9h2v1h-2zM19 9h1v1h-1zM21 9h1v1h-1zM23 9h1v1h-1zM26 9h2v1h-2zM29 9h2v1h-2zM32 9h1v1h-1zM0 10h1v1h-1zM6 10h1v1h-1zM10 10h6v1h-6zM17 10h1v1h-1zM21 10h1v1h-1zM28 10h1v1h-1zM30 10h2v1h-2zM0 11h1v1h-1zM3 11h2v1h-2zM9 11h3v1h-3zM13 11h1v1h-1zM16 11h4v1h-4zM21 11h1v1h-1zM23 11h3v1h-3zM28 11h4v1h-4zM2 12h1v1h-1zM4 12h1v1h-1zM6 12h1v1h-1zM11 12h2v1h-2zM14 12h1v1h-1zM16 12h1v1h-1zM20 12h1v1h-1zM22 12h1v1h-1zM24 12h1v1h-1zM28 12h2v1h-2zM31 12h1v1h-1zM1 13h3v1h-3zM13 13h1v1h-1zM15 13h1v1h-1zM18 13h1v1h-1zM22 13h3v1h-3zM26 13h2v1h-2zM29 13h1v1h-1zM31 13h2v1h-2zM1 14h2v1h-2zM6 14h1v1h-1zM8 14h1v1h-1zM12 14h1v1h-1zM14 14h3v1h-3zM20 14h3v1h-3zM24 14h4v1h-4zM31 14h1v1h-1zM0 15h1v1h-1zM3 15h2v1h-2zM10 15h1v1h-1zM13 15h3v1h-3zM18 15h1v1h-1zM21 15h3v1h-3zM25 15h2v1h-2zM28 15h3v1h-3zM1 16h1v1h-1zM4 16h4v1h-4zM9 16h2v1h-2zM12 16h1v1h-1zM14 16h2v1h-2zM17 16h2v1h-2zM20 16h1v1h-1zM23 16h1v1h-1zM25 16h1v1h-1zM27 16h3v1h-3zM32 16h1v1h-1zM7 17h3v1h-3zM12 17h1v1h-1zM19 17h1v1h-1zM21 17h3v1h-3zM26 17h2v1h-2zM29 17h2v1h-2zM32 17h1v1h-1zM0 18h3v1h-3zM4 18h4v1h-4zM11 18h2v1h-2zM14 18h3v1h-3zM18 18h1v1h-1zM20 18h2v1h-2zM25 18h4v1h-4zM30 18h2v1h-2zM5 19h1v1h-1zM7 19h1v1h-1zM9 19h3v1h-3zM13 19h2v1h-2zM16 19h1v1h-1zM21 19h1v1h-1zM24 19h1v1h-1zM26 19h7v1h-7zM0 20h1v1h-1zM2 20h5v1h-5zM9 20h1v1h-1zM13 20h1v1h-1zM15 20h1v1h-1zM18 20h2v1h-2zM21 20h1v1h-1zM24 20h2v1h-2zM27 20h3v1h-3zM0 21h1v1h-1zM3 21h3v1h-3zM8 21h1v1h-1zM12 21h6v1h-6zM20 21h2v1h-2zM23 21h1v1h-1zM25 21h2v1h-2zM29 21h2v1h-2zM32 21h1v1h-1zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h2v1h-2zM9 22h2v1h-2zM14 22h1v1h-1zM18 22h2v1h-2zM25 22h2v1h-2zM30 22h2v1h-2zM0 23h1v1h-1zM2 23h2v1h-2zM5 23h1v1h-1zM8 23h3v1h-3zM13 23h1v1h-1zM16 23h1v1h-1zM18 23h4v1h-4zM26 23h2v1h-2zM29 23h4v1h-4zM0 24h1v1h-1zM2 24h1v1h-1zM5 24h2v1h-2zM8 24h1v1h-1zM10 24h1v1h-1zM12 24h3v1h-3zM16 24h5v1h-5zM24 24h6v1h-6zM31 24h2v1h-2zM8 25h3v1h-3zM13 25h1v1h-1zM17 25h1v1h-1zM19 25h1v1h-1zM22 25h3v1h-3zM28 25h1v1h-1zM30 25h1v1h-1zM32 25h1v1h-1zM0 26h7v1h-7zM9 26h1v1h-1zM14 26h2v1h-2zM17 26h1v1h-1zM22 26h3v1h-3zM26 26h1v1h-1zM28 26h1v1h-1zM30 26h2v1h-2zM0 27h1v1h-1zM6 27h1v1h-1zM8 27h1v1h-1zM11 27h2v1h-2zM15 27h1v1h-1zM17 27h3v1h-3zM23 27h2v1h-2zM28 27h4v1h-4zM0 28h1v1h-1zM2 28h3v1h-3zM6 28h1v1h-1zM8 28h1v1h-1zM16 28h1v1h-1zM20 28h3v1h-3zM24 28h6v1h-6zM31 28h2v1h-2zM0 29h1v1h-1zM2 29h3v1h-3zM6 29h1v1h-1zM8 29h1v1h-1zM11 29h1v1h-1zM14 29h2v1h-2zM18 29h1v1h-1zM21 29h1v1h-1zM23 29h3v1h-3zM28 29h1v1h-1zM30 29h1v1h-1zM32 29h1v1h-1zM0 30h1v1h-1zM2 30h3v1h-3zM6 30h1v1h-1zM8 30h2v1h-2zM11 30h2v1h-2zM14 30h3v1h-3zM18 30h1v1h-1zM20 30h3v1h-3zM24 30h1v1h-1zM26 30h2v1h-2zM0 31h1v1h-1zM6 31h1v1h-1zM10 31h2v1h-2zM14 31h2v1h-2zM21 31h1v1h-1zM23 31h1v1h-1zM28 31h3v1h-3zM0 32h7v1h-7zM8 32h1v1h-1zM11 32h8v1h-8zM20 32h1v1h-1zM23 32h2v1h-2zM26 32h2v1h-2zM31 32h1v1h-1z"/></symbol>
+    <marker id="ah" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M2 1.5L10 6L2 10.5" fill="none" stroke="#111113" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="ah3" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M2 1.5L10 6L2 10.5" fill="none" stroke="#6E6E73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="aha" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M2 1.5L10 6L2 10.5" fill="none" stroke="#2747F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="ahf" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M2 1.5L10 6L2 10.5" fill="none" stroke="#C8281E" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="ahw" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M2 1.5L10 6L2 10.5" fill="none" stroke="#F5F5F7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+</svg>
+
+<main class="stage" aria-roledescription="presentation">
+<div class="progress" aria-hidden="true"></div>
+
+<!-- ================================================================
+     01 · Cover
+     ================================================================ -->
+<section class="slide s-cover" data-title="Cover">
+  <div class="left">
+    <div class="cup r" style="--i:0"><span class="dot"></span>Live on Cloud Run · Google Cloud AI Builder Cup 2026</div>
+    <div class="wordmark r" style="--i:1"><span class="en">Naqsha</span><span class="ur" lang="ur">نقشہ</span></div>
+    <p class="tag r" style="--i:2">Walk through your home before the first brick.</p>
+    <p class="desc r" style="--i:3">From a rough idea to an LDA-checked floor plan and a 3D home you can walk through, comment on and change.</p>
+    <p class="scored r" style="--i:4">Gemini 4 Argon designs the house in code. A Google ADK agent revises it. All on Google Cloud.</p>
+    <div class="meta r" style="--i:5">
+      <span class="url">naqsha-242926648187.us-central1.run.app</span>
+      <span class="sub">github.com/abdm693/hack2skill-hackathon</span>
+      <span class="sub"><span class="ph">[Team name]</span> · Lahore first · LDA rules of 9 Feb 2026</span>
+    </div>
+  </div>
+
+  <div class="hero frame">
+    <svg class="cover-svg" viewBox="290 30 980 888" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <pattern id="cv-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#ECECE7" stroke-width="1"/></pattern>
+        <pattern id="cv-stone" width="36" height="13" patternUnits="userSpaceOnUse"><path d="M0 .5H36M0 6.5H36M8 .5V6.5M26 6.5V13" fill="none" stroke="#111113" stroke-width=".9" opacity=".55"/></pattern>
+        <pattern id="cv-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V9" stroke="#111113" stroke-width=".8" opacity=".38"/></pattern>
+        <pattern id="cv-wood" width="16" height="7" patternUnits="userSpaceOnUse"><path d="M0 3.5H16" stroke="#111113" stroke-width=".7" opacity=".5"/></pattern>
+        <pattern id="cv-bars" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M5 0V10" stroke="#111113" stroke-width="1.5"/></pattern>
+        <pattern id="cv-grass" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M2 9l2-6M7 9l1-7M10 9l-1-5" fill="none" stroke="#6E6E73" stroke-width=".8"/></pattern>
+        <pattern id="cv-lattice" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M0 0L16 16M16 0L0 16" fill="none" stroke="#6E6E73" stroke-width=".9"/></pattern>
+        <clipPath id="cv-wipe"><rect class="wipe" x="728" y="-10" width="900" height="1020"/></clipPath>
+      </defs>
+
+      <rect x="0" y="0" width="1600" height="1000" fill="#FFFFFF"/>
+      <rect x="0" y="0" width="1600" height="1000" fill="url(#cv-grid)" class="f" style="--d:.05s"/>
+
+      <!-- street -->
+      <path class="ln thin draw" pathLength="1" style="--d:.25s;--dur:1.5s" d="M0 895H1600"/>
+
+      <!-- neighbours, ghosted: outlines only -->
+      <g class="f" style="--d:.8s">
+        <rect class="nb" x="0" y="255" width="400" height="513"/>
+        <path class="nb" d="M0 330H400M0 548H400"/>
+        <rect class="nb" x="0" y="768" width="305" height="127"/>
+        <rect class="nb" x="1068" y="247" width="532" height="523"/>
+        <path class="nb" d="M1068 322H1600M1068 552H1600"/>
+        <rect class="nb" x="1142" y="770" width="458" height="125"/>
+      </g>
+
+      <!-- crane (gone by the time the house is done) -->
+      <g class="crane-g">
+        <rect class="crane gy" style="--d:1.0s;--dur:1.1s" x="1180" y="104" width="16" height="791" fill="url(#cv-lattice)"/>
+        <g class="jib">
+          <rect class="crane" x="840" y="96" width="600" height="14" fill="url(#cv-lattice)"/>
+          <rect x="1376" y="110" width="52" height="26" fill="#A1A1A6"/>
+          <rect class="crane" x="1170" y="110" width="36" height="24" fill="#FFFFFF"/>
+        </g>
+        <g class="hook" style="transform-box:fill-box;transform-origin:50% 0">
+          <path class="crane" d="M940 110V330"/>
+          <rect class="crane" x="918" y="330" width="44" height="22" fill="#FFFFFF"/>
+        </g>
+      </g>
+
+      <!-- wall fills -->
+      <g class="f" style="--d:2.5s">
+        <rect class="wall" x="400" y="232" width="278" height="528"/>
+        <rect class="wall" x="487" y="177" width="171" height="55"/>
+        <rect class="wall" x="777" y="251" width="318" height="99"/>
+        <rect class="wall" x="777" y="552" width="318" height="24"/>
+        <rect class="wall" x="305" y="760" width="339" height="135"/>
+        <rect class="wall" x="744" y="750" width="39" height="145"/>
+        <rect class="wall" x="1104" y="750" width="38" height="145"/>
+        <rect class="wall" x="1062" y="576" width="33" height="171"/>
+      </g>
+      <g class="hatch-flash" style="--d:1.8s">
+        <rect x="400" y="232" width="278" height="528" fill="url(#cv-hatch)"/>
+        <rect x="777" y="251" width="318" height="99" fill="url(#cv-hatch)"/>
+        <rect x="305" y="760" width="339" height="135" fill="url(#cv-hatch)"/>
+      </g>
+
+      <!-- stone pier rises -->
+      <rect class="gy" style="--d:2.4s;--dur:1.4s" x="678" y="56" width="99" height="844" fill="#E9E9E4"/>
+      <rect class="gy" style="--d:2.55s;--dur:1.4s" x="678" y="56" width="99" height="844" fill="url(#cv-stone)"/>
+
+      <!-- glazing -->
+      <g class="f" style="--d:3.5s">
+        <rect class="glass" x="450" y="352" width="202" height="30"/>
+        <rect class="glass" x="465" y="382" width="187" height="155" opacity=".9"/>
+        <rect class="glass" x="542" y="637" width="135" height="129" opacity=".9"/>
+        <rect class="glass" x="790" y="400" width="121" height="148" opacity=".9"/>
+        <rect x="777" y="480" width="307" height="72" fill="#2A2D35" opacity=".2"/>
+        <rect class="glass" x="743" y="590" width="360" height="15"/>
+        <path d="M540 382V537M615 382V537M615 417H652M611 637V766M850 400V548" stroke="#FFFFFF" stroke-width="2" opacity=".85"/>
+      </g>
+
+      <!-- structure lines -->
+      <g>
+        <rect class="ln draw" pathLength="1" style="--d:.6s" x="305" y="760" width="339" height="135"/>
+        <rect class="ln draw" pathLength="1" style="--d:.7s" x="744" y="750" width="39" height="145"/>
+        <rect class="ln draw" pathLength="1" style="--d:.7s" x="1104" y="750" width="38" height="145"/>
+        <rect class="ln draw" pathLength="1" style="--d:.8s" x="783" y="744" width="321" height="146"/>
+        <rect class="ln thin draw" pathLength="1" style="--d:.9s" x="752" y="734" width="22" height="16"/>
+        <rect class="ln thin draw" pathLength="1" style="--d:.9s" x="1112" y="734" width="22" height="16"/>
+        <rect class="ln draw" pathLength="1" style="--d:.95s;--dur:1.4s" x="400" y="232" width="278" height="528"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.0s;--dur:1.6s" x="678" y="56" width="99" height="844"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.15s;--dur:1.4s" x="777" y="251" width="291" height="74"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.3s" x="777" y="325" width="318" height="25"/>
+        <path class="ln draw" pathLength="1" style="--d:1.4s" d="M400 242H678"/>
+        <path class="ln draw" pathLength="1" style="--d:1.5s" d="M400 590H678M678 602H400"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.6s" x="481" y="177" width="179" height="17"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.65s" x="487" y="194" width="165" height="38"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.75s" x="777" y="350" width="308" height="202"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.8s" x="777" y="552" width="318" height="24"/>
+        <rect class="ln draw" pathLength="1" style="--d:1.9s" x="743" y="590" width="360" height="15"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.0s" x="1062" y="576" width="33" height="171"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.1s" x="450" y="352" width="202" height="30"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.2s" x="465" y="382" width="187" height="155"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.2s" x="777" y="480" width="307" height="72"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.3s" x="790" y="400" width="121" height="148"/>
+        <rect class="ln draw" pathLength="1" style="--d:2.4s" x="542" y="637" width="135" height="129"/>
+        <rect class="ln thin draw" pathLength="1" style="--d:2.5s" x="644" y="730" width="46" height="100"/>
+      </g>
+
+      <!-- gate, fins, lawn -->
+      <g class="f" style="--d:2.9s">
+        <rect x="783" y="744" width="321" height="30" fill="url(#cv-bars)"/>
+        <rect x="783" y="843" width="321" height="47" fill="url(#cv-bars)"/>
+        <rect x="783" y="774" width="321" height="69" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect x="644" y="730" width="46" height="100" fill="url(#cv-bars)" opacity=".8"/>
+      </g>
+      <g>
+        <rect class="gy" style="--d:3.2s" x="872" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect class="gy" style="--d:3.28s" x="900" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect class="gy" style="--d:3.36s" x="928" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect class="gy" style="--d:3.44s" x="956" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect class="gy" style="--d:3.52s" x="984" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+        <rect class="gy" style="--d:3.6s" x="1012" y="357" width="10" height="191" fill="url(#cv-wood)" stroke="#111113" stroke-width="1.2"/>
+      </g>
+      <!-- overhead wires -->
+      <g>
+        <path class="soft draw" pathLength="1" style="--d:4.0s;--dur:1.2s" d="M0 219.5Q800 304 1600 270"/>
+        <path class="soft draw" pathLength="1" style="--d:4.1s;--dur:1.2s" d="M0 228Q800 313 1600 278"/>
+        <path class="soft draw" pathLength="1" style="--d:4.2s;--dur:1.2s" d="M0 236.5Q800 321 1600 285"/>
+      </g>
+
+      <!-- levels from the 10-marla plan: plinth +1'6", first floor +12'6", roof +23'6", parapet 27' -->
+      <g class="f" style="--d:3.0s">
+        <path class="lvl" d="M296 858H398M296 588H398M296 318H398M296 232H398"/>
+        <rect x="298" y="830" width="66" height="22" fill="#FFFFFF"/><text class="lvt" x="300" y="847">+1′6″</text>
+        <rect x="298" y="560" width="76" height="22" fill="#FFFFFF"/><text class="lvt" x="300" y="577">+12′6″</text>
+        <rect x="298" y="290" width="76" height="22" fill="#FFFFFF"/><text class="lvt" x="300" y="307">+23′6″</text>
+        <rect x="298" y="204" width="44" height="22" fill="#FFFFFF"/><text class="lvt" x="300" y="221">27′</text>
+      </g>
+
+      <!-- the house, as Argon wrote it -->
+      <g clip-path="url(#cv-wipe)">
+        <image data-asset="renderFront" x="0" y="0" width="1600" height="1000" preserveAspectRatio="none"/>
+      </g>
+      <g class="seam-g">
+        <line class="seam" x1="728" y1="-10" x2="728" y2="1010"/>
+      </g>
+      <!-- the plot's frontage, across drawing and render -->
+      <g class="f" style="--d:.6s">
+        <path class="dim" d="M305 70H1142M305 60V80M1142 60V80" stroke="#111113"/>
+        <rect x="322" y="55" width="282" height="30" rx="8" fill="#FFFFFF" stroke="#CFCFC8"/>
+        <text class="lvt" x="463" y="76" text-anchor="middle" style="fill:#111113">10 marla · 35′ × 65′ plot</text>
+      </g>
+    </svg>
+    <span class="chip c-lbl f" style="--d:5.6s">The drawing</span>
+    <span class="chip hud c-code f" style="--d:6.0s">The house Gemini 4 Argon wrote as code</span>
+  </div>
+
+  <aside class="notes">
+    <p>"Naqsha is what Pakistani families call a house plan. Every house in Lahore starts with one, usually on paper, then argued over for weeks. We built an agentic web app on Google Cloud that turns a family's idea into a house they can walk through before the first brick is laid, checked against Lahore Development Authority rules at every step. The house on the right wasn't modelled by a person. Gemini 4 Argon wrote it, as code."</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     02 · Problem
+     ================================================================ -->
+<section class="slide s-problem" data-title="The problem">
+  <header class="chrome"><span class="eyebrow">The problem</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head wide">
+    <h1 class="title r" style="--i:0">In Lahore, a house starts as a sketch and a guess</h1>
+  </div>
+
+  <div class="fam">
+    <div class="label r" style="--i:2">Johar Town · 10 marla (35′ × 65′, about 2,275 sq ft)</div>
+    <p class="lede r" style="--i:3;margin-top:12px">A family of six wants four bedrooms on one budget. They start with a paper sketch and a contractor's guess, then weeks of back-and-forth with an architect.</p>
+    <p class="lede r" style="--i:4"><b>Nobody walks through it until it's built.</b></p>
+    <div class="sketch r" style="--i:5">
+      <svg viewBox="0 0 520 300" aria-hidden="true">
+        <defs>
+          <filter id="pencil" x="-5%" y="-5%" width="110%" height="110%">
+            <feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7" result="n"/>
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+          <pattern id="ruled" width="520" height="26" patternUnits="userSpaceOnUse"><path d="M0 25.5H520" stroke="#D9DEEA" stroke-width="1"/></pattern>
+        </defs>
+        <rect x="-40" y="-20" width="600" height="340" fill="url(#ruled)"/>
+        <path d="M44 -20V320" stroke="#E8C4C0" stroke-width="1.2"/>
+        <g filter="url(#pencil)" fill="none" stroke="#55555B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M120 40L326 44L322 262L118 258Z"/>
+          <path d="M121 136L322 140M220 42L218 138M170 138L168 258M168 198L322 200M262 200L262 260"/>
+          <path d="M190 138A26 26 0 0 1 214 114" stroke-width="1.4"/>
+          <path d="M262 228A22 22 0 0 0 284 250" stroke-width="1.4"/>
+          <path d="M126 154h40M126 166h40M126 178h40M126 190h40" stroke-width="1.3"/>
+          <path d="M360 76C380 84 388 104 382 126" stroke-width="1.4"/>
+          <path d="M376 118l6 9 7-8" stroke-width="1.4"/>
+          <path d="M340 240l40 0" stroke-width="1.4"/>
+          <path d="M120 282L326 284" stroke-width="1.3" stroke-dasharray="6 6"/>
+        </g>
+        <g font-family="Geist, sans-serif" font-size="17" fill="#6E6E73" font-style="italic">
+          <text x="134" y="94">bed?</text>
+          <text x="232" y="94">bed + bath</text>
+          <text x="184" y="174">lounge / dining</text>
+          <text x="176" y="238">drawing rm</text>
+          <text x="268" y="238">porch</text>
+          <text x="128" y="150" font-size="14">stairs</text>
+          <text x="338" y="66">4 beds upstairs?</text>
+          <text x="338" y="234">road</text>
+          <text x="348" y="164" font-family="Geist Mono, monospace" font-style="normal" font-size="16">35 × 60</text>
+          <path d="M344 159L420 153" stroke="#6E6E73" stroke-width="1.6"/>
+          <text x="348" y="190" font-family="Geist Mono, monospace" font-style="normal" font-size="16">35 × 65 ?</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <p class="capline r" style="--i:6;left:120px">Illustration: how many plans begin, on paper.</p>
+
+  <div class="plot r" style="--i:4">
+    <svg viewBox="0 0 402 520" width="402" height="520" aria-label="A 35 by 65 foot plot with LDA setbacks: 10 feet front, 7 feet rear, 5 feet on one side">
+      <defs>
+        <pattern id="openhatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V8" stroke="#B5B5AE" stroke-width="1"/></pattern>
+      </defs>
+      <g transform="translate(88 42)">
+        <rect x="0" y="0" width="224" height="416" fill="url(#openhatch)" class="f" style="--d:.9s"/>
+        <rect x="0" y="44.8" width="192" height="307.2" fill="#EDF0FF" class="f" style="--d:1.2s"/>
+        <rect x="0" y="0" width="224" height="416" fill="none" stroke="#111113" stroke-width="2" class="draw" pathLength="1" style="--d:.5s;--dur:1.4s"/>
+        <rect x="0" y="44.8" width="192" height="307.2" fill="none" stroke="#2747F5" stroke-width="2" stroke-dasharray="7 6" class="f" style="--d:1.3s"/>
+        <text x="96" y="184" text-anchor="middle" font-family="Geist, sans-serif" font-size="18" font-weight="600" fill="#111113" class="f" style="--d:1.6s">Buildable</text>
+        <text x="96" y="208" text-anchor="middle" font-family="Geist Mono, monospace" font-size="16" font-weight="500" fill="#46464B" class="f" style="--d:1.6s">30′ × 48′</text>
+        <g font-family="Geist Mono, monospace" font-size="16" font-weight="500" fill="#46464B" class="f" style="--d:1.5s">
+          <path d="M0 -20H224M0 -26V-14M224 -26V-14" stroke="#111113" stroke-width="1"/>
+          <rect x="92" y="-31" width="40" height="22" fill="#F6F6F3"/>
+          <text x="112" y="-14" text-anchor="middle" fill="#111113">35′</text>
+          <path d="M-24 0V416M-30 0H-18M-30 416H-18" stroke="#111113" stroke-width="1"/>
+          <rect x="-40" y="194" width="32" height="26" fill="#F6F6F3"/>
+          <text x="-24" y="213" text-anchor="middle" fill="#111113">65′</text>
+          <text x="96" y="28" text-anchor="middle">7′ rear</text>
+          <text x="96" y="390" text-anchor="middle">10′ front</text>
+          <text x="209" y="200" text-anchor="middle" transform="rotate(-90 209 200)">5′ side</text>
+        </g>
+        <g class="f" style="--d:1.0s">
+          <rect x="-44" y="432" width="312" height="44" fill="#EEEEEA"/>
+          <text x="112" y="460" text-anchor="middle" font-family="Geist, sans-serif" font-size="16" fill="#6E6E73">Road</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <p class="capline r" style="--i:6;left:732px">Same plot, by the rules.</p>
+
+  <div class="rulescol">
+    <div class="label r" style="--i:3">What that plot must respect under the Lahore Development Authority's (LDA) rules of 9 Feb 2026</div>
+    <ul class="rules">
+      <li class="rs" style="--i:5"><span class="v">10′ · 7′ · 5′</span><span>open at the front, the rear and one side</span></li>
+      <li class="rs" style="--i:6"><span class="v">70%</span><span>ground coverage, at most</span></li>
+      <li class="rs" style="--i:7"><span class="v">45′</span><span>to the top of the parapet</span></li>
+      <li class="rs" style="--i:8"><span class="v accent">3 storeys</span><span class="accent">down from 4 in the 2020 text</span></li>
+      <li class="rs" style="--i:9"><span class="v">PCATP stamp</span><span>an architect of the Pakistan Council of Architects and Town Planners signs it</span></li>
+      <li class="rs" style="--i:10"><span class="v">Rs 15 / sq ft</span><span>scrutiny fee, paid again on every revised plan</span></li>
+    </ul>
+    <div class="cost r" style="--i:11">
+      <div class="label">What a mistake costs on this plot · worked out from LDA's fee schedule</div>
+      <div class="row"><span class="big">≈ Rs 38,000</span><span class="t">for each resubmission of the 2,565 sq ft house Naqsha designed for this plot</span></div>
+      <div class="row"><span class="big">Rs 15–30k</span><span class="t">penalty for a porch 4 ft into the front open space: 60 sq ft at Rs 250 or Rs 500</span></div>
+    </div>
+  </div>
+
+  <p class="bottom r" style="--i:12">The rules are written down. They just aren't in the room when the first sketch is drawn.</p>
+  <footer class="foot"><span>Source: LDA Building &amp; Zoning Regulations 2019, consolidated text of 9 Feb 2026, Appendix C</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Picture a family in Johar Town with a 10-marla plot. Their house begins as a pencil sketch and a contractor's best guess. The rules for that plot are precise: ten feet open at the front, seven at the rear, five on one side, seventy percent coverage, forty-five feet, and now three storeys, not four. That changed in LDA's 2026 text. A registered architect must stamp the plan. Mistakes are expensive: every resubmission pays the scrutiny fee again, about thirty-eight thousand rupees for a house like ours, and a porch pushed four feet into the front open space costs fifteen to thirty thousand in penalties, if LDA compounds it at all."</p>
+    <p>Arithmetic: Rs 15 × 2,565 sq ft (total covered area of the 10-marla sample, live API) = Rs 38,475. Porch: 4 ft × 15 ft = 60 sq ft; Rs 250/sq ft (porch projection over the limit) to Rs 500/sq ft (ground-floor open-space violation), both Appendix C [v2026].</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     03 · Journey
+     ================================================================ -->
+<section class="slide s-journey" data-title="The journey">
+  <header class="chrome"><span class="eyebrow">The journey</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">One sitting, from an idea to a house you can walk through</h1>
+    <p class="kicker r" style="--i:1">Brief, concepts, plan, 3D, walk and revise. Shown on the live 10-marla sample.</p>
+  </div>
+
+  <div class="strip">
+    <div class="stop r" style="--i:2">
+      <div class="frame"><img data-asset="liveSetup10m" style="object-view-box:inset(55.1% 1.4% 9.7% 74.1%)"></div>
+      <div class="name">Brief <span class="chip mono out">instant</span></div>
+      <div class="what">Answer one-tap questions, or skip and let the AI choose. The LDA envelope appears as soon as the plot is known.</div>
+      <div class="eng">gemini-3.8-flash + deterministic envelope</div>
+    </div>
+    <div class="stop r" style="--i:3">
+      <div class="frame"><img data-asset="concept10m" style="object-position:62% 50%"></div>
+      <div class="name">Concepts <span class="chip mono out">12–17 s</span></div>
+      <div class="what">Four photoreal exteriors, generated in parallel. Pick one, or remix it in plain words.</div>
+      <div class="eng">gemini-3.1-flash-image × 4</div>
+    </div>
+    <div class="stop r" style="--i:4">
+      <div class="frame" style="background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(22% 34.4% 27.25% 35.3%)"></div>
+      <div class="name">Plan</div>
+      <div class="what">A dimensioned plan, checked against LDA rules and fixed by Argon until it passes.</div>
+      <div class="eng">gemini-4-argon + LDA engine</div>
+    </div>
+    <div class="stop r" style="--i:5">
+      <div class="frame"><img data-asset="liveExplore10m" style="object-view-box:inset(21% 33.4% 12% 26.6%)"></div>
+      <div class="name">3D</div>
+      <div class="what">Argon writes the house as code, and it assembles live: structure, facade, interiors, furniture, landscape.</div>
+      <div class="eng">gemini-4-argon → House SDK code</div>
+    </div>
+    <div class="stop r" style="--i:6">
+      <div class="frame"><img data-asset="viewerWalkHud" style="object-position:38% 50%"></div>
+      <div class="name">Walk <span class="chip mono out">live</span></div>
+      <div class="what">First person, with collisions and stairs. Pin a comment on any surface.</div>
+      <div class="eng">three.js + three-mesh-bvh</div>
+    </div>
+    <div class="stop r" style="--i:7">
+      <div class="frame">
+        <div class="revcard">
+          <div class="where">Car porch, ground floor</div>
+          <div class="q">“Can we extend the car porch 4 feet forward into the front lawn?”</div>
+          <span class="chip fail"><span class="dot"></span>Not possible</span>
+          <div class="a">“…a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space.”</div>
+        </div>
+      </div>
+      <div class="name">Revise <span class="chip mono out">~95 s</span></div>
+      <div class="what">A new version with what changed, or the rule that says no and an alternative.</div>
+      <div class="eng">Google ADK agent, 9 tools</div>
+    </div>
+  </div>
+
+  <svg class="track dg" viewBox="0 0 1680 100" aria-hidden="true">
+    <path class="wire draw" pathLength="1" style="--d:.7s;--dur:1.8s" d="M0 14H1420"/>
+    <path class="wacc draw" pathLength="1" style="--d:2.0s" d="M568 30V44H1112V30"/>
+    <rect x="662" y="52" width="356" height="34" rx="10" fill="#EDF0FF" class="f" style="--d:2.4s"/>
+    <text x="840" y="75" text-anchor="middle" class="t-mi t-acc f" style="--d:2.4s">~7 min, plan + LDA checks + 3D</text>
+    <path class="wire2 dash f" style="--d:2.4s" d="M1420 24C1420 50 1396 52 1278 52C1160 52 1136 50 1136 30" marker-end="url(#ah3)"/>
+    <text class="t-m f" style="--d:2.6s" x="1278" y="78" text-anchor="middle">v2, v3 …</text>
+    <g>
+      <circle class="pop" style="--d:.8s" cx="0" cy="14" r="7" fill="#111113"/>
+      <circle class="pop" style="--d:1.0s" cx="284" cy="14" r="7" fill="#111113"/>
+      <circle class="pop" style="--d:1.2s" cx="568" cy="14" r="7" fill="#111113"/>
+      <circle class="pop" style="--d:1.4s" cx="852" cy="14" r="7" fill="#111113"/>
+      <circle class="pop" style="--d:1.6s" cx="1136" cy="14" r="7" fill="#111113"/>
+      <circle class="pop" style="--d:1.8s" cx="1420" cy="14" r="7" fill="#111113"/>
+    </g>
+    <circle class="packet live-only" r="4.5" fill="#2747F5"><animateMotion dur="5.5s" repeatCount="indefinite" path="M0 14H1420"/></circle>
+  </svg>
+  <footer class="foot"><span>Times measured on the live Cloud Run service · sample homes open instantly, with no wait</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"This is the whole journey in one sitting. The family answers a few one-tap questions, or skips them, and the LDA envelope appears at once. Four concepts arrive in twelve to seventeen seconds. They pick one. Argon plans the floors, our engine checks them and Argon fixes its own violations. Then Argon writes the 3D house as code, and it assembles in front of them. Plan to 3D takes about seven minutes; sample homes open instantly. They walk through it, pin comments, and an ADK agent produces version two in about a minute and a half."</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     04 · Live product
+     ================================================================ -->
+<section class="slide s-live" data-title="Live product">
+  <header class="chrome"><span class="eyebrow">Live product</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">It's live on Cloud Run today</h1>
+    <div class="card qr r" style="--i:1">
+      <div>
+        <div class="h4">Open a sample home and walk it in a minute.</div>
+        <div class="u">naqsha-242926648187<br>.us-central1.run.app</div>
+      </div>
+      <svg viewBox="-2 -2 37 37" width="128" height="128" role="img" aria-label="QR code for the live app"><rect x="-2" y="-2" width="37" height="37" fill="#fff"/><use href="#qr-live"/></svg>
+    </div>
+  </div>
+
+  <div class="big r" style="--i:2">
+    <div class="frame hero"><img data-asset="liveExplore1k" style="object-view-box:inset(28% 22% 9.8% 32%)"></div>
+    <p class="cap"><b>3D.</b> The 1-kanal sample, a second brief: Argon wrote it as 25 code sections.</p>
+  </div>
+  <div class="mid">
+    <div class="r" style="--i:3">
+      <div class="frame plan" style="background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(14.5% .6% 42.4% 36.9%)"></div>
+      <p class="cap"><b>Plan.</b> The 10-marla sample: all 42 LDA checks pass.</p>
+    </div>
+    <div class="r" style="--i:4">
+      <div class="frame rev" style="background:#F2F0EB"><img data-asset="liveRevisions10m" style="object-view-box:inset(69% 31.5% 2.8% 18.9%)"></div>
+      <p class="cap"><b>Revise.</b> A real ADK run: the porch refused, with the rule and an alternative.</p>
+    </div>
+  </div>
+  <div class="phonecol r" style="--i:5">
+    <div class="phone"><img data-asset="liveMobileExplore"></div>
+    <p class="cap"><b>Phone.</b> The same 3D house.</p>
+  </div>
+  <footer class="foot"><span>Captured from the live service on 17 Oct 2026, from the two public sample homes</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Everything in this deck runs at this URL, and these screens were captured from it this week. Open a sample home to skip the seven-minute design run. You can orbit, switch floors, cut a section, slide the sun and walk in first person. The plan screen shows the LDA panel: forty-two of forty-two checks pass. The revisions screen shows a real agent run refusing a porch extension and explaining why. And it works on a phone."</p>
+    <p>The live app still wears the v1 look (brick accent, serif titles). The crops avoid the stage bar where they can. Re-shoot with the v2 UI if it ships before export.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     05 · Argon designs in code
+     ================================================================ -->
+<section class="slide s-code" data-title="Argon designs in code">
+  <header class="chrome"><span class="eyebrow">How Argon designs</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Argon designs in code, not pixels</h1>
+    <p class="kicker r" style="--i:1">So the house is exact, checkable, editable one section at a time, and walkable.</p>
+  </div>
+
+  <svg class="diagram dg" viewBox="0 0 1680 312" aria-label="Two-stage pipeline: Argon plans in JSON checked by the LDA engine, then writes design.js sections that stream to the viewer">
+    <defs>
+      <clipPath id="fs1"><rect x="1406" y="84" width="121" height="80" rx="8"/></clipPath>
+      <clipPath id="fs2"><rect x="1537" y="84" width="121" height="80" rx="8"/></clipPath>
+      <clipPath id="fs3"><rect x="1406" y="196" width="121" height="80" rx="8"/></clipPath>
+      <clipPath id="fs4"><rect x="1537" y="196" width="121" height="80" rx="8"/></clipPath>
+    </defs>
+    <g class="rs" style="--i:2">
+      <rect class="box2" x="0" y="29" width="196" height="92" rx="16"/>
+      <text class="t-h2" x="22" y="68">Brief</text>
+      <text class="t-s" x="22" y="96">+ the chosen concept</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:.7s" d="M200 75H264" marker-end="url(#ah)"/>
+
+    <g class="rs" style="--i:3">
+      <rect class="box" x="270" y="0" width="420" height="150" rx="20"/>
+      <text class="t-m" x="294" y="38">1</text>
+      <text class="t-h" x="318" y="39">Plan</text>
+      <text class="t-m" x="666" y="38" text-anchor="end">gemini-4-argon</text>
+      <text class="t-b" x="294" y="78">A schema-bound JSON plan, in feet:</text>
+      <text class="t-b" x="294" y="102">levels, rooms, doors, windows, stairs,</text>
+      <text class="t-b" x="294" y="126">roof, mumty and boundary wall.</text>
+    </g>
+    <g class="rs" style="--i:4">
+      <rect class="boxhud" x="270" y="192" width="420" height="120" rx="20"/>
+      <text class="t-h2 t-hud" x="294" y="230">LDA engine</text>
+      <text class="t-m t-hud2" x="666" y="229" text-anchor="end">deterministic</text>
+      <text class="t-b t-hud2" x="294" y="264">18 check types, run per room and stair,</text>
+      <text class="t-b t-hud2" x="294" y="290">from LDA's text of 9 Feb 2026</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:1.1s;--dur:.6s" d="M352 152V190" marker-end="url(#ah)"/>
+    <text class="t-m f" style="--d:1.2s" x="364" y="177">check</text>
+    <path class="wacc draw" pathLength="1" style="--d:1.4s;--dur:.6s" d="M520 190V152" marker-end="url(#aha)"/>
+    <text class="t-m t-acc f" style="--d:1.5s" x="532" y="177">fix, ≤ 3 attempts</text>
+    <circle class="packet live-only" r="4" fill="#2747F5"><animateMotion dur="2.4s" repeatCount="indefinite" path="M352 150V192H520V150Z"/></circle>
+
+    <path class="wire draw" pathLength="1" style="--d:1.6s" d="M694 75H750" marker-end="url(#ah)"/>
+
+    <g class="rs" style="--i:5">
+      <rect class="boxhud" x="756" y="0" width="560" height="312" rx="20"/>
+      <text class="t-m t-hud2" x="780" y="38">2</text>
+      <text class="t-h t-hud" x="804" y="39">Build</text>
+      <text class="t-m t-hud2" x="1292" y="38" text-anchor="end">design.js · House SDK</text>
+      <text class="t-m t-hud" x="780" y="74">Inputs: plan JSON · concept image · SDK types</text>
+      <text class="t-b t-hud2" x="780" y="108">Argon writes 23–25 named sections against our SDK:</text>
+      <text class="t-b t-hud2" x="780" y="132">44 PBR presets, 57 furniture types, real wall</text>
+      <text class="t-b t-hud2" x="780" y="156">openings, and raw three.js where a detail is bespoke.</text>
+      <g font-family="Geist Mono, monospace" font-size="16" font-weight="500">
+        <g class="type" style="--d:1.9s"><rect x="780" y="174" width="110" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="792" y="195" fill="#F5F5F7">structure</text></g>
+        <g class="type" style="--d:2.05s"><rect x="898" y="174" width="187" height="30" rx="8" fill="rgb(125 147 255 / .24)"/><text x="910" y="195" fill="#C9D2FF">facade_stone_pier</text></g>
+        <g class="type" style="--d:2.2s"><rect x="1093" y="174" width="168" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="1105" y="195" fill="#F5F5F7">facade_left_bay</text></g>
+        <g class="type" style="--d:2.35s"><rect x="780" y="212" width="168" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="792" y="233" fill="#F5F5F7">interior_ground</text></g>
+        <g class="type" style="--d:2.5s"><rect x="956" y="212" width="178" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="968" y="233" fill="#F5F5F7">furnish_g_lounge</text></g>
+        <g class="type" style="--d:2.65s"><rect x="1142" y="212" width="110" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="1154" y="233" fill="#F5F5F7">landscape</text></g>
+        <g class="type" style="--d:2.8s"><rect x="780" y="250" width="101" height="30" rx="8" fill="rgb(255 255 255 / .09)"/><text x="792" y="271" fill="#F5F5F7">lighting</text></g>
+        <g class="type" style="--d:2.95s"><text x="893" y="271" fill="#A3A3AD">… each tagged {layer, level, room}</text></g>
+      </g>
+    </g>
+
+    <path class="wire draw" pathLength="1" style="--d:2.0s" d="M1320 75H1376" marker-end="url(#ah)"/>
+
+    <g class="rs" style="--i:6">
+      <rect class="box" x="1382" y="0" width="298" height="312" rx="20"/>
+      <text class="t-m" x="1406" y="38">3</text>
+      <text class="t-h" x="1430" y="39">Stream</text>
+      <text class="t-s" x="1406" y="68">renders after every section</text>
+      <image data-asset="liveLayer1" x="1406" y="84" width="121" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#fs1)"/>
+      <image data-asset="liveLayer2" x="1537" y="84" width="121" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#fs2)"/>
+      <image data-asset="renderDollhouse" x="1406" y="196" width="121" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#fs3)"/>
+      <image data-asset="liveLayer4" x="1537" y="196" width="121" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#fs4)"/>
+      <text class="t-m" x="1406" y="184">structure</text>
+      <text class="t-m" x="1537" y="184">+ facade</text>
+      <text class="t-m" x="1406" y="296">+ furniture</text>
+      <text class="t-m" x="1537" y="296">+ landscape</text>
+    </g>
+  </svg>
+
+  <div class="ba">
+    <div class="r" style="--i:6">
+      <div class="frame"><img data-asset="spikeOneshot" style="object-view-box:inset(10% 12.5% 16.5% 12.5%)"></div>
+      <p class="cap"><b>Before: one shot, raw three.js.</b> 1,780 lines in one block.</p>
+    </div>
+    <div class="r" style="--i:7">
+      <div class="frame">
+        <img data-asset="renderFront" style="object-view-box:inset(15% 12.8% 10% 10.6%)">
+        <span class="pier" style="left:165px;top:-4px;width:36px;height:254px"></span>
+      </div>
+      <p class="cap"><b>After: House SDK, in sections.</b> The outlined pier is one section, <span class="mono ink" style="font-size:16px">facade_stone_pier</span>.</p>
+    </div>
+  </div>
+
+  <div class="jump">
+    <div class="label r" style="--i:8">Same model, two ways of working</div>
+    <div class="row rs" style="--i:9;margin-top:12px"><span class="n">481 s</span><span class="t">for the one shot: raw three.js, nothing to see until the end, and a blocky house</span></div>
+    <div class="row rs" style="--i:10"><span class="n">~7 min</span><span class="t">today, for the plan, the LDA checks and a high-fidelity house that renders after every section</span></div>
+    <p class="so rs" style="--i:11">The whole pipeline now takes about as long as the one shot spent writing blocky code alone.</p>
+  </div>
+  <footer class="foot"><span>One-shot spike: 16 Oct 2026, re-shot from a matching front camera · both are 10-marla Lahore houses by Argon</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Our first spike asked Argon to write a whole house in raw three.js. It ran first time, but it took eight minutes and looked blocky. So we split the job. First Argon produces a plan as structured JSON, in feet, small enough for a deterministic engine to check. Then it writes the house as short, named sections against our own House SDK, which holds the hard parts: real openings, PBR materials, a furniture kit. It sees the plan, the concept image the family chose, and the SDK's types. Each section renders as it arrives. This pier is one section, facade_stone_pier. Because the house is code, it's exact, checkable, walkable, and a revision only touches the section that changed."</p>
+    <p>Spike: docs/spikes/README.md (481 s total, first token at 164 s, 1,780 lines). The spike image was re-rendered from Argon's unchanged code with a straight-on camera; its golden-hour lighting is the spike's own.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     06 · Trust
+     ================================================================ -->
+<section class="slide s-trust" data-title="Trust">
+  <header class="chrome"><span class="eyebrow">Trust</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Argon is creative. The rules are code.</h1>
+    <p class="kicker r" style="--i:1">A deterministic engine checks every plan, and enforces safety whatever Argon writes.</p>
+  </div>
+
+  <div class="colA">
+    <div class="lblrow r" style="--i:2"><span class="label">LDA engine</span><span class="st live">Live</span></div>
+    <div class="bigchip r" style="--i:3"><span class="dot"></span><span><span data-count="42">42</span>/42 LDA checks</span></div>
+    <p class="small r" style="--i:3;margin-top:12px;color:var(--ink-2)">on the 10-marla sample. Plans run 42–50 checks, depending on their rooms and stairs.</p>
+    <p class="body r" style="--i:4;margin-top:14px"><b>18 check types</b>, applied per room and per stair: setbacks, coverage, FAR, height, storeys, 8% daylight and stairs.</p>
+    <div class="fix r" style="--i:5">
+      <div class="label">Argon's fix loop, measured live</div>
+      <div class="fixnums"><span style="color:var(--fail)">5</span><span class="a">→</span><span style="color:var(--warn)">1</span><span class="a">→</span><span style="color:var(--pass)">0</span></div>
+      <div class="fixbar"><i class="bar-fill" style="--d:.9s;background:var(--fail)"></i><i class="bar-fill" style="--d:1.2s;background:var(--warn)"></i><span class="zero"></span></div>
+      <div class="fixlbl">attempt 1: 5 · attempt 2: 1 · attempt 3: 0</div>
+      <p class="small" style="margin-top:12px;color:var(--ink-2)">And <span class="mono ink">4 → 0</span> on the 1-kanal sample: three daylight failures and one undersized room, fixed in one retry.</p>
+    </div>
+  </div>
+
+  <div class="colB">
+    <div class="lblrow r" style="--i:3"><span class="label">Livable-home rules</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
+    <ul class="liv">
+      <li class="rs" style="--i:5"><span class="ok"></span><span>Bedrooms open only to a corridor, lounge, balcony or their own bath.</span></li>
+      <li class="rs" style="--i:6"><span class="ok"></span><span>A stair reaches every floor, roof included.</span></li>
+      <li class="rs" style="--i:7"><span class="ok"></span><span>A railing at every drop, enforced by the engine.</span></li>
+      <li class="rs" style="--i:8"><span class="ok"></span><span>Doors kept clear of furniture, with a <span class="mono ink">3′</span> path.</span></li>
+    </ul>
+    <svg class="stair dg r" style="--i:9" viewBox="0 0 544 176" width="544" height="176" aria-label="Stair edge before and after: a 22 foot drop with no railing, then a guard of at least 42 inches">
+      <text x="0" y="18" class="t-m">before</text>
+      <path d="M0 52H180" stroke="#111113" stroke-width="3"/>
+      <path d="M180 52V172" stroke="#C8281E" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <path d="M180 172H230" stroke="#111113" stroke-width="2"/>
+      <path d="M206 60V164" stroke="#C8281E" stroke-width="1.5" marker-start="url(#ahf)" marker-end="url(#ahf)"/>
+      <text x="40" y="106" class="t-mi" style="fill:#C8281E;font-size:20px">22′ drop</text>
+      <text x="40" y="132" class="t-m" style="fill:#C8281E">no railing</text>
+      <text x="300" y="18" class="t-m">after · IBC 2021</text>
+      <path d="M300 52H480" stroke="#111113" stroke-width="3"/>
+      <path d="M480 52V172" stroke="#A1A1A6" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <path d="M480 172H544" stroke="#111113" stroke-width="2"/>
+      <path d="M476 52V30M306 30H476M450 30V52M424 30V52M398 30V52M372 30V52M346 30V52M320 30V52" stroke="#0E7A55" stroke-width="2.4"/>
+      <text x="300" y="106" class="t-mi" style="fill:#0E7A55;font-size:20px">≥ 42″ guard</text>
+      <text x="300" y="132" class="t-m" style="fill:#0E7A55">drop over 30″</text>
+    </svg>
+    <p class="small r" style="--i:10;margin-top:10px;color:var(--ink-2)">We audited three houses (two by Argon, one hand-made). All three had stair-safety defects. LDA doesn't define guards, so we apply IBC 2021.</p>
+  </div>
+
+  <div class="colC">
+    <div class="lblrow r" style="--i:4"><span class="label">The live compliance panel</span></div>
+    <div class="frame panel r" style="--i:5;background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(15.2% .5% 60.75% 78%)"></div>
+    <div class="review r" style="--i:6">
+      <div class="lblrow"><span class="label">Argon self-review</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
+      <p class="small" style="margin-top:10px;color:var(--ink-2)">Argon looks at a rendered image of its own plan and critiques circulation, privacy, daylight and the brief before the family sees it.</p>
+    </div>
+  </div>
+  <footer class="foot"><span>Naqsha is a pre-check, not an approval. A PCATP-registered architect still stamps the plan.</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Trust is the product. Every plan goes through a deterministic engine built from LDA's official 2026 text: eighteen kinds of check, forty-two to fifty on a typical house. Argon gets each failure back in plain terms and fixes it. We've watched it go from five violations to zero, and on our 1-kanal sample from four to zero in a single retry. But LDA-compliant isn't the same as livable. We audited our own houses as a senior Lahore architect would, and found a stair edge with a twenty-two-foot drop and no railing. Code doesn't let that slip, so railings, door clearances and a stair to the roof are now guaranteed by the engine itself."</p>
+    <p>Evidence: docs/evidence/live-samples-2026-10-17.json (42/42 on the 10-marla sample; fix_history 4 → 0 on the 1-kanal sample). The audit is docs/review/architecture-rules.md; the 22 ft drop was in the 1-kanal sample. Livable rules and self-review are in the 18 Oct build: set DECK_SHIPPED once verified.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     07 · ADK revisions
+     ================================================================ -->
+<section class="slide s-adk" data-title="Agentic revisions">
+  <header class="chrome"><span class="eyebrow">Agentic revisions · Google ADK</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Comment in 3D. The agent revises, or tells you which rule says no.</h1>
+    <p class="kicker r" style="--i:1">An agent, not one prompt: it reads only what it needs, dry-runs every layout change, and saves nothing until it finishes.</p>
+  </div>
+
+  <div class="pins frame r" style="--i:2">
+    <svg viewBox="300 230 880 640" preserveAspectRatio="xMidYMid slice" aria-label="The 10-marla house with the three comment pins of the run">
+      <image data-asset="renderFront" x="0" y="0" width="1600" height="1000"/>
+    </svg>
+    <span class="pin" style="left:162px;top:132px;background:var(--author-1)">1</span>
+    <span class="pin" style="left:192px;top:283px;background:var(--author-1)">2</span>
+    <span class="pin" style="left:383px;top:228px;background:var(--author-1)">3</span>
+  </div>
+
+  <div class="log r" style="--i:6">
+    <div class="lh">What the agent changed · v1 → v2</div>
+    <div class="ln"><span class="k">plan</span><span>f_master_w1 <span class="d">· window 10×7 → 13×8.5 ft</span></span></div>
+    <div class="ln"><span class="k">code</span><span>furnish_f_master <span class="d">· curtains to 13 ft</span></span></div>
+    <div class="ln"><span class="k">code</span><span>furnish_g_drawing <span class="d">· green velvet sofa</span></span></div>
+    <div class="ln"><span class="k">check</span><span>42/42 LDA <span class="d">· still pass</span></span></div>
+  </div>
+
+  <svg class="loop dg" viewBox="0 0 402 640" aria-label="The agent loop: look, test against the LDA engine, change, explain">
+    <text class="t-m" x="0" y="16">Google ADK 2.12 · gemini-4-argon</text>
+    <rect class="f" style="--d:.4s" x="0" y="32" width="402" height="482" rx="24" fill="none" stroke="#CFCFC8" stroke-dasharray="6 6"/>
+    <g class="rs" style="--i:4">
+      <rect class="box" x="56" y="56" width="330" height="88" rx="16"/>
+      <text class="t-h2" x="76" y="86">Look</text>
+      <text class="t-m" x="76" y="112">get_room · read_section</text>
+      <text class="t-m" x="76" y="133">list_sections</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:.9s;--dur:.4s" d="M221 146V162" marker-end="url(#ah)"/>
+    <g class="rs" style="--i:5">
+      <rect class="boxacc" x="56" y="166" width="330" height="88" rx="16"/>
+      <text class="t-h2" x="76" y="196">Test</text>
+      <text class="t-m t-acc" x="76" y="222">check_plan_ops</text>
+      <text class="t-s" x="76" y="243">a dry run on the LDA engine</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:1.1s;--dur:.4s" d="M221 256V272" marker-end="url(#ah)"/>
+    <g class="rs" style="--i:6">
+      <rect class="box" x="56" y="276" width="330" height="88" rx="16"/>
+      <text class="t-h2" x="76" y="306">Change only what's needed</text>
+      <text class="t-m" x="76" y="332">apply_plan_ops</text>
+      <text class="t-m" x="76" y="353">write_section · remove_section</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:1.3s;--dur:.4s" d="M221 366V382" marker-end="url(#ah)"/>
+    <g class="rs" style="--i:7">
+      <rect class="box" x="56" y="386" width="330" height="88" rx="16"/>
+      <text class="t-h2" x="76" y="416">Explain</text>
+      <text class="t-m" x="76" y="442">resolve_comment · finish</text>
+    </g>
+    <path class="wire2 draw" pathLength="1" style="--d:1.6s" d="M56 440H36Q26 440 26 430V110Q26 100 36 100H52" marker-end="url(#ah3)"/>
+    <text class="t-m f" style="--d:1.8s" x="26" y="500">↑ back to Look for the next comment</text>
+    <circle class="packet live-only" r="4.5" fill="#2747F5"><animateMotion dur="4s" repeatCount="indefinite" path="M221 100V440H36Q26 440 26 430V110Q26 100 36 100Z"/></circle>
+    <text class="t-s" x="0" y="560">If the ADK run fails, a single-shot</text>
+    <text class="t-s" x="0" y="582">reviser takes over.</text>
+  </svg>
+
+  <div class="results">
+    <div class="runmeta r" style="--i:3"><span>One live run on the 10-marla sample</span><span class="ink">3 comments · ~95 s</span></div>
+    <div class="card res r" style="--i:4">
+      <div class="top"><span class="where">1 · First floor · master bedroom window</span><span class="chip pass"><span class="dot"></span>Done</span></div>
+      <div class="q">“Please make the master bedroom window bigger, I want much more morning light.”</div>
+      <div class="a">“We enlarged the master bedroom front window from 10×7 ft to 13×8.5 ft with a low 0.5 ft sill to bring in plenty of morning sunlight.”</div>
+    </div>
+    <div class="card res r" style="--i:5">
+      <div class="top"><span class="where">2 · Ground floor · drawing room sofa</span><span class="chip pass"><span class="dot"></span>Done</span></div>
+      <div class="q">“Change the drawing room sofa to a dark green velvet one.”</div>
+      <div class="a">“We updated the drawing room sofa to a rich dark green velvet finish (#1e4230).”</div>
+    </div>
+    <div class="card res no r" style="--i:6">
+      <div class="top"><span class="where">3 · Ground floor · car porch</span><span class="chip fail"><span class="dot"></span>Not possible</span></div>
+      <div class="q">“Can we extend the car porch 4 feet forward into the front lawn?”</div>
+      <div class="a">“Under LDA Building &amp; Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.”</div>
+    </div>
+  </div>
+  <footer class="foot"><span>Comments and answers verbatim from the live run, 16 Oct 2026 · pins placed at each comment's anchor</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"This is the moment families love. They walk through the house and leave notes where they stand. Then a Google ADK agent with nine tools takes over. It doesn't reread the whole house. It looks up the room, reads the sections it needs, and dry-runs every layout change against the LDA engine before applying it. In this run it enlarged a window, changed a sofa, and refused to push the porch four feet into the lawn. Those are its own words on the right. It cited the ten-foot front setback, pointed out the driveway already gives tandem parking, and offered to deepen the porch inward instead. About ninety-five seconds."</p>
+    <p>Verbatim from the live API (docs/evidence/live-samples-2026-10-17.json): comments cm_0a4b21c612eb, cm_87e5b922d6d3, cm_2581acf761a7 and the v2 change log. The change log is the run's record of what it wrote, not a tool-call trace; the service doesn't log tool calls yet.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     08 · Architecture
+     ================================================================ -->
+<section class="slide s-arch" data-title="Architecture on Google Cloud">
+  <header class="chrome"><span class="eyebrow">Architecture on Google Cloud</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">One Cloud Run service, Gemini on Vertex AI, state in Firestore</h1>
+  </div>
+
+  <svg class="diagram dg" viewBox="0 0 1112 640" aria-label="Architecture: browser, one Cloud Run service with six modules, and Vertex AI, Firestore, Cloud Storage and Identity Platform">
+    <g class="rs" style="--i:2">
+      <rect class="box" x="0" y="0" width="1112" height="84" rx="20"/>
+      <text class="t-h2" x="24" y="34">Browser</text>
+      <text class="t-m" x="24" y="64">React 19 + Vite · three.js r186 · react-three-fiber · three-mesh-bvh</text>
+      <text class="t-s" x="1088" y="34" text-anchor="end">design.js runs here, after a code screen</text>
+    </g>
+    <path class="wire draw" pathLength="1" style="--d:.7s;--dur:.5s" d="M536 88V130" marker-end="url(#ah)"/>
+    <path class="wire draw" pathLength="1" style="--d:.8s;--dur:.5s" d="M576 130V88" marker-end="url(#ah)"/>
+    <text class="t-m f" style="--d:.9s" x="594" y="116">REST + Server-Sent Events</text>
+
+    <g class="rs" style="--i:3">
+      <rect x="0" y="136" width="1112" height="364" rx="24" fill="#FFFFFF" stroke="#111113" stroke-width="1.5"/>
+      <text class="t-h" x="24" y="174">Cloud Run · naqsha</text>
+      <text class="t-m" x="1088" y="172" text-anchor="end">FastAPI · us-central1 · API and app in one service</text>
+    </g>
+    <g class="rs" style="--i:4">
+      <rect class="box2" x="24" y="196" width="317" height="122" rx="16"/>
+      <text class="t-h2" x="44" y="228">Setup</text>
+      <text class="t-b" x="44" y="256">One-tap turns, LDA envelope</text>
+      <rect class="chipbg" x="44" y="276" width="168" height="30" rx="8"/><text class="t-mi" x="56" y="297">gemini-3.8-flash</text>
+    </g>
+    <g class="rs" style="--i:5">
+      <rect class="box2" x="397" y="196" width="317" height="122" rx="16"/>
+      <text class="t-h2" x="417" y="228">Concepts</text>
+      <text class="t-b" x="417" y="256">Four photoreal exteriors at once</text>
+      <rect class="chipbg" x="417" y="276" width="270" height="30" rx="8"/><text class="t-mi" x="429" y="297">gemini-3.1-flash-image ×4</text>
+    </g>
+    <g class="rs" style="--i:6">
+      <rect class="box2" x="770" y="196" width="317" height="122" rx="16"/>
+      <text class="t-h2" x="790" y="228">Architect</text>
+      <text class="t-b" x="790" y="256">Plan JSON, then design.js</text>
+      <rect class="chipbg" x="790" y="276" width="152" height="30" rx="8"/><text class="t-mi" x="802" y="297">gemini-4-argon</text>
+    </g>
+    <g class="rs" style="--i:7">
+      <rect class="box2" x="24" y="356" width="317" height="122" rx="16"/>
+      <text class="t-h2" x="44" y="388">Detached runs</text>
+      <text class="t-b" x="44" y="416">Jobs outlive the tab; events replay</text>
+      <rect class="chipbg" x="44" y="436" width="116" height="30" rx="8"/><text class="t-mi" x="56" y="457">SSE replay</text>
+    </g>
+    <g class="rs" style="--i:8">
+      <rect class="box2" x="397" y="356" width="317" height="122" rx="16"/>
+      <text class="t-h2" x="417" y="388">Reviser</text>
+      <text class="t-b" x="417" y="416">Google ADK 2.12 agent, 9 tools</text>
+      <rect class="chipbg" x="417" y="436" width="152" height="30" rx="8"/><text class="t-mi" x="429" y="457">gemini-4-argon</text>
+    </g>
+    <g class="rs" style="--i:9">
+      <rect class="boxhud" x="770" y="356" width="317" height="122" rx="16"/>
+      <text class="t-h2 t-hud" x="790" y="388">LDA engine</text>
+      <text class="t-b t-hud2" x="790" y="416">Deterministic, rules as JSON</text>
+      <rect x="790" y="436" width="150" height="30" rx="8" fill="rgb(255 255 255 / .1)"/><text class="t-mi t-hud" x="802" y="457">18 check types</text>
+    </g>
+    <!-- Architect <-> LDA engine -->
+    <path class="wacc draw" pathLength="1" style="--d:1.6s;--dur:.5s" d="M900 320V352" marker-end="url(#aha)"/>
+    <path class="wacc draw" pathLength="1" style="--d:1.8s;--dur:.5s" d="M940 354V322" marker-end="url(#aha)"/>
+    <text class="t-m t-acc f" style="--d:1.9s" x="956" y="343">≤ 3 fix rounds</text>
+    <!-- Reviser <-> LDA engine -->
+    <path class="wacc draw" pathLength="1" style="--d:2.0s;--dur:.5s" d="M716 400H766" marker-end="url(#aha)"/>
+    <path class="wacc draw" pathLength="1" style="--d:2.1s;--dur:.5s" d="M768 434H718" marker-end="url(#aha)"/>
+    <circle class="packet live-only" r="4" fill="#2747F5"><animateMotion dur="2s" repeatCount="indefinite" path="M900 322V354H940V322Z"/></circle>
+
+    <!-- bus to services -->
+    <g class="f" style="--d:2.2s">
+      <path class="wire" d="M556 502V514"/>
+      <path class="wire" d="M139 514H972"/>
+      <path class="wire" d="M139 514V534" marker-end="url(#ah)"/>
+      <path class="wire" d="M417 514V534" marker-end="url(#ah)"/>
+      <path class="wire" d="M694 514V534" marker-end="url(#ah)"/>
+      <path class="wire" d="M972 514V534" marker-end="url(#ah)"/>
+    </g>
+    <g class="rs" style="--i:10">
+      <rect class="boxacc" x="0" y="538" width="262" height="102" rx="18"/>
+      <text class="t-h2" x="20" y="572">Vertex AI</text>
+      <text class="t-s" x="20" y="598">Gemini Enterprise Agent</text>
+      <text class="t-s" x="20" y="620">Platform · global endpoint</text>
+    </g>
+    <g class="rs" style="--i:11">
+      <rect class="box" x="283" y="538" width="262" height="102" rx="18"/>
+      <text class="t-h2" x="303" y="572">Firestore</text>
+      <text class="t-s" x="303" y="598">projects, messages,</text>
+      <text class="t-s" x="303" y="620">versions, comments</text>
+    </g>
+    <g class="rs" style="--i:12">
+      <rect class="box" x="566" y="538" width="262" height="102" rx="18"/>
+      <text class="t-h2" x="586" y="572">Cloud Storage</text>
+      <text class="t-s" x="586" y="598">concepts, renders,</text>
+      <text class="t-s" x="586" y="620">comment snapshots</text>
+    </g>
+    <g class="rs" style="--i:13">
+      <rect class="box" x="850" y="538" width="262" height="102" rx="18"/>
+      <text class="t-h2" x="870" y="572">Identity Platform</text>
+      <text class="t-s" x="870" y="598">accounts, roles, share links</text>
+      <g data-st="build">
+        <rect x="870" y="608" width="204" height="26" rx="7" fill="none" stroke="#CFCFC8"/>
+        <circle cx="885" cy="621" r="3.5" fill="none" stroke="#6E6E73" stroke-width="1.5"/>
+        <text class="t-mi" x="896" y="626" style="font-size:15px;fill:#46464B" data-shipped-text="Live">In the 18 Oct build</text>
+      </g>
+    </g>
+  </svg>
+
+  <div class="models">
+    <div class="label r" style="--i:3">Gemini, matched to each job</div>
+    <div class="m rs" style="--i:4;margin-top:12px"><div class="mt"><span class="job">Setup</span><span class="id">gemini-3.8-flash</span></div><div class="why">Structured turns and one-tap chips. Fast and cheap.</div></div>
+    <div class="m rs" style="--i:5"><div class="mt"><span class="job">Concepts</span><span class="id">gemini-3.1-flash-image</span></div><div class="why">Four at once. Speed over hero quality.</div></div>
+    <div class="m rs" style="--i:6"><div class="mt"><span class="job">Plan</span><span class="id">gemini-4-argon</span></div><div class="why">Schema-bound JSON in feet, reasoned against hard limits.</div></div>
+    <div class="m rs" style="--i:7"><div class="mt"><span class="job">Build</span><span class="id">gemini-4-argon</span></div><div class="why">Long, correct code against our typed SDK, from the concept.</div></div>
+    <div class="m rs" style="--i:8"><div class="mt"><span class="job">Revise</span><span class="id">gemini-4-argon + ADK</span></div><div class="why">Nine tools, a dry run before every write, one save at the end.</div></div>
+    <p class="one rs" style="--i:9"><b>One service, one URL.</b> No CORS, and a deploy is one <span class="mono nw" style="font-size:16px">gcloud run deploy --source .</span></p>
+  </div>
+  <footer class="foot"><span>google-genai 2.31 · google-adk 2.12 · Cloud Run, 3,600 s request timeout</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"The architecture is deliberately simple. One Cloud Run service serves the API and the app. Gemini runs through Vertex AI on the global endpoint, the only place the newest models are served. Firestore holds projects, versions and comments; Cloud Storage holds images. The interesting part is the two loops into the deterministic engine: Argon plans against it, and the ADK reviser dry-runs every change against it. We match the model to the job: Flash for quick turns, Flash Image for four concepts at once, and Argon for anything that has to reason about limits or write long, correct code."</p>
+    <p>Generated code runs in the user's browser after a static screen for 21 banned patterns; a sandboxed iframe is on the roadmap. Identity Platform accounts are in the 18 Oct build.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     09 · Engineering: guardrails
+     ================================================================ -->
+<section class="slide s-eng" data-title="Built for real quotas">
+  <header class="chrome"><span class="eyebrow">Engineering</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Built for real models on real quotas</h1>
+    <p class="kicker r" style="--i:1">Every step of a design run has a guardrail, so a long agent job survives quota errors, bad output and closed tabs.</p>
+  </div>
+
+  <svg class="lane dg" viewBox="0 0 1680 600" aria-hidden="true">
+    <g font-family="Geist, sans-serif">
+      <g class="rs" style="--i:2"><rect class="box" x="0" y="0" width="260" height="96" rx="18"/><text class="t-m" x="20" y="34">1</text><text class="t-h2" x="42" y="35">Gemini call</text><text class="t-m" x="20" y="72">Vertex AI · global</text></g>
+      <g class="rs" style="--i:3"><rect class="box" x="284" y="0" width="260" height="96" rx="18"/><text class="t-m" x="304" y="34">2</text><text class="t-h2" x="326" y="35">Stream</text><text class="t-m" x="304" y="72">SSE to the browser</text></g>
+      <g class="rs" style="--i:4"><rect class="box" x="568" y="0" width="260" height="96" rx="18"/><text class="t-m" x="588" y="34">3</text><text class="t-h2" x="610" y="35">Code screen</text><text class="t-m" x="588" y="72">before a section runs</text></g>
+      <g class="rs" style="--i:5"><rect class="box" x="852" y="0" width="260" height="96" rx="18"/><text class="t-m" x="872" y="34">4</text><text class="t-h2" x="894" y="35">Browser run</text><text class="t-m" x="872" y="72">three.js r186</text></g>
+      <g class="rs" style="--i:6"><rect class="box" x="1136" y="0" width="260" height="96" rx="18"/><text class="t-m" x="1156" y="34">5</text><text class="t-h2" x="1178" y="35">As-built check</text><text class="t-m" x="1156" y="72">3D model vs. LDA</text></g>
+      <g class="rs" style="--i:7"><rect class="box" x="1420" y="0" width="260" height="96" rx="18"/><text class="t-m" x="1440" y="34">6</text><text class="t-h2" x="1462" y="35">Revise</text><text class="t-m" x="1440" y="72">Google ADK 2.12</text></g>
+    </g>
+    <g class="f" style="--d:1s">
+      <path class="wire" d="M262 48H282" marker-end="url(#ah)"/>
+      <path class="wire" d="M546 48H566" marker-end="url(#ah)"/>
+      <path class="wire" d="M830 48H850" marker-end="url(#ah)"/>
+      <path class="wire" d="M1114 48H1134" marker-end="url(#ah)"/>
+      <path class="wire" d="M1398 48H1418" marker-end="url(#ah)"/>
+      <path class="wire2" d="M130 98V140M414 98V140M698 98V140M982 98V140M1266 98V140M1550 98V140"/>
+    </g>
+    <g class="rs" style="--i:14">
+      <rect class="boxhud" x="0" y="402" width="1680" height="204" rx="22"/>
+      <text class="t-h2 t-hud" x="32" y="446">Detached runs</text>
+      <text class="t-b t-hud2" x="190" y="446">A design or revision keeps going when the browser goes away.</text>
+      <text class="t-m t-hud2" x="32" y="505">browser</text>
+      <text class="t-m t-hud2" x="32" y="557">Cloud Run</text>
+      <path d="M150 500H520" stroke="#F5F5F7" stroke-width="2.5"/>
+      <path d="M520 500H1100" stroke="#A3A3AD" stroke-width="2" stroke-dasharray="6 7"/>
+      <path d="M1100 500H1636" stroke="#7D93FF" stroke-width="2.5" marker-end="url(#ahw)"/>
+      <path d="M150 552H1636" stroke="#F5F5F7" stroke-width="2.5" marker-end="url(#ahw)"/>
+      <circle cx="520" cy="500" r="6" fill="#18181B" stroke="#F5F5F7" stroke-width="2"/>
+      <circle cx="1100" cy="500" r="6" fill="#7D93FF"/>
+      <text class="t-m t-hud" x="532" y="486">tab closed</text>
+      <text class="t-m t-hud" x="1112" y="486">tab back: every event replays, then it goes live</text>
+      <text class="t-m t-hud2" x="532" y="584">the run keeps going: CPU always allocated, session affinity</text>
+    </g>
+  </svg>
+
+  <div class="gcards">
+    <div class="g rs" style="--i:8"><div class="gt">Backoff on quota errors</div><p>429s and 5xx errors retry with exponential backoff and jitter: 6 attempts, from 4 s up to 60 s. google-genai and ADK share the policy.</p></div>
+    <div class="g rs" style="--i:9"><div class="gt">Degenerate-decoding watch</div><p>A runaway tail such as <span class="m">35.0000000…</span> aborts and retries the attempt. Prompts cap numbers at 2 decimals.</p></div>
+    <div class="g rs" style="--i:10"><div class="gt">21 banned patterns</div><p>Network, eval, storage, timers and globals are screened out of generated code before it runs.</p></div>
+    <div class="g rs" style="--i:11"><div class="gt">Self-healing sections</div><p>A section that throws is rewritten on its own by Argon. If code is missing, a default design is built from the plan.</p></div>
+    <div class="g rs" style="--i:12"><div class="gt">Nothing in a setback</div><p>No part of the 3D model may reach into an open space beyond the chajja (sunshade) allowance: 3 ft, or 1.5 ft where the space is under 10 ft.</p></div>
+    <div class="g rs" style="--i:13"><div class="gt">A fallback reviser</div><p>If the ADK run fails, a single-shot reviser takes over. ADK saves nothing until it finishes.</p></div>
+  </div>
+  <footer class="foot"><span>Each guardrail is in the public repo: retry policy, stream guard, code screen, repair, as-built check, fallback</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Here is what keeps a seven-minute agent run reliable. The global endpoint's shared quota returns 429s under load, so every call retries with backoff and jitter, in both google-genai and ADK. Constrained decoding sometimes loops on digits, so we watch the stream and cut it off. Generated code is screened before it runs, and a broken section repairs itself. The finished model is checked again: nothing may project into a setback. The ADK agent has a fallback. And the whole run is detached from the browser. None of this shows in the demo, which is the point."</p>
+    <p>Sources: api/app/gemini.py (RETRY), api/app/llm.py (degenerate), web/src/engine/index.ts (BANNED, defaultDesign), api/app/agents/architect.py (repair_section), api/app/compliance/lda.py (check_asbuilt), api/app/main.py (revise fallback), api/app/runs.py.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     10 · Feasibility and scalability
+     ================================================================ -->
+<section class="slide s-feas" data-title="Feasibility and scalability">
+  <header class="chrome"><span class="eyebrow">Feasibility and scalability</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Two briefs, two houses, one pipeline, live today</h1>
+    <p class="kicker r" style="--i:1">And a short, concrete path from one city to many.</p>
+  </div>
+
+  <div class="houses">
+    <div class="house r" style="--i:2">
+      <div class="frame"><img data-asset="liveExplore10m" style="object-view-box:inset(19% 8.2% 12% 8.1%)"></div>
+      <div class="hn"><span class="h4">10-marla modern, Johar Town</span></div>
+      <div class="brief">35′ × 65′ · faces north · 2 storeys · 4 bedrooms</div>
+      <dl>
+        <dt>Spaces</dt><dd>28</dd>
+        <dt>Code sections</dt><dd>23</dd>
+        <dt>LDA checks</dt><dd>42 / 42 pass</dd>
+        <dt>Revision</dt><dd>3 comments: 2 done, 1 refused</dd>
+      </dl>
+    </div>
+    <div class="house r" style="--i:3">
+      <div class="frame"><img data-asset="liveExplore1k" style="object-view-box:inset(27% 7.1% 8% 14%)"></div>
+      <div class="hn"><span class="h4">1-kanal Spanish villa</span></div>
+      <div class="brief">50′ × 90′ · faces south · 2 storeys · 5 bedrooms</div>
+      <dl>
+        <dt>Spaces</dt><dd>34</dd>
+        <dt>Code sections</dt><dd>25</dd>
+        <dt>LDA checks</dt><dd>50 pass · 2 advisory</dd>
+        <dt>Fix loop</dt><dd>4 → 0 in one retry</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="scale">
+    <div class="label r" style="--i:3">How it scales</div>
+    <div class="it rs" style="--i:4;margin-top:12px"><div class="h">Cloud Run, as deployed</div><p>Autoscales to 5 instances today, each 2 vCPU and 2 GiB with 40 concurrent requests, CPU always on. The cap is one flag.</p></div>
+    <div class="it rs" style="--i:5"><div class="h">A shared Gemini quota</div><p>Every call to the global endpoint backs off on 429s, so a burst queues instead of failing.</p></div>
+    <div class="it rs" style="--i:6"><div class="h">Long jobs</div><p>Today: an in-memory event log per instance, held by session affinity. Next: the log in Firestore with Cloud Tasks, so any instance can resume.</p></div>
+    <div class="it rs" style="--i:7"><div class="h">Cost follows intent</div><p>Samples open with no model calls. Briefs and concepts use Flash models; Argon runs only on a full design.</p></div>
+    <div class="it rs" style="--i:8"><div class="h">New cities are data</div><p>Rules live in one JSON file per authority, and DHA's height and storey caps already switch on.</p></div>
+  </div>
+  <footer class="foot"><span>Evidence: the live samples API and the Cloud Run service settings, read 17 Oct 2026, in the public repo</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Is it feasible? It's running. These are the two sample homes on the live service, from two different briefs: a north-facing 10-marla modern house and a south-facing 1-kanal Spanish villa. Different plots, different styles, the same pipeline. Both pass LDA's checks; the villa's plan failed four on the first attempt and Argon fixed them in one retry. How does it scale? Cloud Run autoscales, and every model call backs off on quota errors. Long jobs survive a closed tab today through session affinity; the next step is moving the event log into Firestore so any instance can resume. Costs follow intent: browsing samples costs nothing, and Argon only runs on a full design. A new city is a new rule file."</p>
+    <p>Settings read with gcloud run services describe naqsha on 17 Oct 2026: maxScale 5, 2 vCPU / 2Gi, concurrency 40, cpu-throttling false, sessionAffinity true, timeout 3600. Per-design cost is not measured yet.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     11 · Comparison
+     ================================================================ -->
+<section class="slide s-vs" data-title="Comparison">
+  <header class="chrome"><span class="eyebrow">Naqsha vs maket.ai vs the status quo</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Built for this plot, in this city</h1>
+    <p class="kicker r" style="--i:1">The same 1-kanal brief, 50 ft wide. Maket's own FAQ says its designs aren't ready to build; Naqsha checks every plan against LDA rules first.</p>
+  </div>
+
+  <table class="r" style="--i:2">
+    <colgroup><col style="width:166px"><col style="width:172px"><col style="width:316px"><col style="width:316px"></colgroup>
+    <thead><tr><th></th><th>Status quo</th><th>maket.ai, 16 Oct 2026</th><th class="nq">Naqsha</th></tr></thead>
+    <tbody>
+      <tr><th>Knows the plot</th><td>From memory</td><td>No: it drew a house wider than the plot</td><td class="nq">Envelope first; 42–50 LDA checks per plan</td></tr>
+      <tr><th>Local rooms</th><td>Yes</td><td>US-centric: no drawing room or servant quarter</td><td class="nq">Drawing room, dirty kitchen, servant quarter</td></tr>
+      <tr><th>Floors, stairs</th><td>On paper</td><td>One floor when free; no stairs anywhere</td><td class="nq">Up to 3 storeys, checked stairs, a mumty</td></tr>
+      <tr><th>3D</th><td>None until built</td><td>White-box massing; a walk through walls</td><td class="nq">Facade, interiors, furniture as code; collisions</td></tr>
+      <tr><th>Changes</th><td>Redraw by hand</td><td>Chat edits at 5 credits each, paid plans</td><td class="nq">Pin a comment; the agent revises or cites the rule</td></tr>
+      <tr><th>Speed</th><td>Weeks to a drawing</td><td>About 6 min to a 2D plan: faster than us to 2D</td><td class="nq">About 7 min to a walkable, checked 3D house</td></tr>
+    </tbody>
+  </table>
+
+  <div class="insets">
+    <div class="r" style="--i:3">
+      <div class="frame" style="background:#FAFAF8">
+        <img data-asset="maketPlan" style="object-view-box:inset(14.1% 26.9% 7.3% 32.75%)">
+        <svg viewBox="0 0 331 400" style="position:absolute;inset:0;width:100%;height:100%" aria-label="Maket's house is 59 feet 6 inches wide; the plot is 50 feet">
+          <path d="M39 6V26M292 6V26M39 16H292" stroke="#C8281E" stroke-width="2" fill="none"/>
+          <rect x="111" y="4" width="108" height="24" rx="6" fill="#FDECEA"/>
+          <text x="165" y="21" text-anchor="middle" font-family="Geist Mono, monospace" font-size="15" font-weight="500" fill="#C8281E">59′6″ house</text>
+          <path d="M39 376V396M252 376V396M39 386H252" stroke="#111113" stroke-width="1.5" stroke-dasharray="5 4" fill="none"/>
+          <rect x="105" y="374" width="80" height="24" rx="6" fill="#FFFFFF" stroke="#CFCFC8"/>
+          <text x="145" y="391" text-anchor="middle" font-family="Geist Mono, monospace" font-size="15" font-weight="500" fill="#111113">50′ plot</text>
+        </svg>
+      </div>
+      <p class="cap">maket.ai: a 59′6″ house for a 50 ft plot, with no warning.</p>
+    </div>
+    <div class="r" style="--i:4">
+      <div class="frame" style="background:#F2F0EB"><img data-asset="liveDesign1k" style="object-view-box:inset(18% 29.7% 15.9% 29.9%)"></div>
+      <p class="cap">Naqsha: inside the 10′ front, 7′ rear and 5′ side setbacks.</p>
+    </div>
+  </div>
+  <footer class="foot"><span>Source: our maket.ai teardown on its free tier, 16 Oct 2026</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"We tested maket.ai on the sixteenth, briefing it as a Lahore family with a 1-kanal plot would. It's polished, and we borrowed its best ideas. But it read our plot as the house and drew a building wider than the land, with no warning, because it has no idea what a setback is. Here is our plan for the same plot size, inside its setbacks. Maket has no drawing room and no stairs. To be fair, it gets to a 2D plan faster than we get to a 3D house. We spend those extra minutes on a house that's local, legal and walkable."</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     12 · Collaboration
+     ================================================================ -->
+<section class="slide s-collab" data-title="Collaboration">
+  <header class="chrome"><span class="eyebrow">Collaboration</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">The family, the architect and the builder, in one home</h1>
+  </div>
+
+  <ul class="list">
+    <li class="rs" style="--i:2"><b>One Share dialog.</b> Invite Team or Client by email, or turn on a client link that can comment or only view.</li>
+    <li class="rs" style="--i:3"><b>Clients need no account.</b> They give a name, walk the house and pin comments.</li>
+    <li class="rs" style="--i:4"><b>Every comment has an author:</b> a name, a role and a colour, with replies. Naqsha answers with a feasibility chip.</li>
+    <li class="rs" style="--i:5"><b>The owner decides what goes into the next revision.</b> Team comments go in by default; client comments wait for the owner.</li>
+    <li class="rs" style="--i:6"><b>Accounts</b> on Google Identity Platform. A guest's homes move into the account on sign-in.</li>
+  </ul>
+
+  <div class="mockwrap">
+    <div class="mocklbl r" style="--i:2"><span class="label">The client's view of a shared home</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
+    <div class="mock r" style="--i:3">
+      <div class="bgf"><img data-asset="liveExplore10m" style="object-view-box:inset(21% 3.75% 10% 15%)"></div>
+      <div class="banner"><span class="dot" style="color:var(--accent)"></span><span>Shared by <b>Ahmed Builders</b> · You can comment</span></div>
+      <span class="pin" style="left:445px;top:409px;background:var(--author-1)">1</span>
+      <span class="pin" style="left:274px;top:265px;background:var(--author-2)">2</span>
+      <span class="pin" style="left:479px;top:313px;background:var(--author-3)">3</span>
+      <div class="sheet">
+        <div class="hd"><span class="h4">Comments</span><span class="label">3 open</span></div>
+        <div class="tabs"><span class="on">Open</span><span>Resolved</span><span>Mine</span></div>
+        <div class="cmt">
+          <span class="av" style="background:var(--author-1)">SA</span>
+          <div>
+            <div class="who">Sana A. <span>Client · Ground · Car porch</span></div>
+            <p>Can the porch come 4 ft forward?</p>
+            <div class="reply"><span class="nq" lang="ur">نقشہ</span><span class="chip fail"><span class="dot"></span>Breaks the 10′ front setback</span></div>
+            <div class="incl"><span class="tog"></span>Include in next revision</div>
+          </div>
+        </div>
+        <div class="cmt">
+          <span class="av" style="background:var(--author-2)">BK</span>
+          <div>
+            <div class="who">Bilal K. <span>Team · First · Bedroom 2</span></div>
+            <p>Widen the window toward the side space.</p>
+            <div class="reply"><span class="nq" lang="ur">نقشہ</span><span class="chip pass"><span class="dot"></span>Feasible · daylight improves</span></div>
+            <div class="incl"><span class="tog on"></span>Include in next revision</div>
+          </div>
+        </div>
+        <div class="cmt">
+          <span class="av" style="background:var(--author-3)">HR</span>
+          <div>
+            <div class="who">Hira R. <span>Client · First · Teak louvers</span></div>
+            <p>Warmer wood on the louvers, please.</p>
+          </div>
+        </div>
+      </div>
+      <div class="share z" style="--d:.6s">
+        <div class="h4">Share “Johar Town family home”</div>
+        <div class="row" style="margin-top:14px"><div class="field">naqsha…run.app/s/k7Qe2</div><span class="btn secondary">Copy</span></div>
+        <div class="row" style="margin-top:12px;justify-content:space-between"><span style="font-size:15px;color:var(--ink-2)">Client link</span><span class="seg"><span class="on">Can comment</span><span>Can view</span></span></div>
+      </div>
+    </div>
+  </div>
+  <p class="small contrast r" style="--i:7;position:absolute;left:120px;top:910px;width:544px">For contrast, maket.ai offers a view-only link and nothing else (tested 16 Oct 2026).</p>
+  <footer class="foot"><span>Roles: Owner and Team edit and revise · Client comments and approves · Viewer looks</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"A house is never one person's decision. The owner invites their architect or builder as Team, and their family or client by link. Clients don't need an account. They type a name, walk the house and pin comments. Every comment shows who said it, and Naqsha replies with whether it's feasible. The owner chooses which comments go into the next revision, so a cousin's wish doesn't silently move a wall. Maket, the best-known AI floor-plan tool, offers a view-only link and nothing else."</p>
+    <p>This is a design mock of the 18 Oct build, labelled as such. Replace it with a live capture once collaboration ships, and set DECK_SHIPPED. If it doesn't ship by submission, move this slide's content into the roadmap.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     13 · Impact and business model
+     ================================================================ -->
+<section class="slide s-impact" data-title="Impact and business model">
+  <header class="chrome"><span class="eyebrow">Impact and business model</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head">
+    <h1 class="title r" style="--i:0">Free to imagine. Paid to build. Lahore first, then Punjab.</h1>
+    <p class="kicker r" style="--i:1">One engine for four audiences. A new authority is a rule file, not a rebuild.</p>
+  </div>
+
+  <ul class="aud">
+    <li class="rs" style="--i:2"><div class="h4">Families</div><p class="body">See, walk and agree on the house before paying for drawings, and catch rule breaks before a resubmission that repeats a <span class="nw">≈ Rs 38,000</span> scrutiny fee.</p></li>
+    <li class="rs" style="--i:3"><div class="h4">Architects and builders</div><p class="body">Win the client in the first meeting with a walkable concept and an LDA pre-check.</p></li>
+    <li class="rs" style="--i:4"><div class="h4">Developers and schemes</div><p class="body">A sample home for every plot size in a scheme, to sell plots with.</p></li>
+    <li class="rs" style="--i:5"><div class="h4">PCATP architects, as stamping partners</div><p class="body">They review, stamp and submit a pre-checked plan. A 1:100 print set, the scale LDA asks for, is in the 18 Oct build.</p></li>
+  </ul>
+
+  <div class="right">
+    <div class="label r" style="--i:3">How it grows across Punjab · rules are data</div>
+    <svg class="path dg" viewBox="0 0 786 140" aria-label="Expansion path: LDA, then RDA FDA GDA, MDA, DHA Lahore and Bahria Town">
+      <g class="rs" style="--i:4">
+        <rect x="0" y="8" width="84" height="44" rx="10" fill="#2747F5"/>
+        <text x="42" y="36" text-anchor="middle" class="t-mi" style="fill:#fff">LDA</text>
+        <text x="0" y="78" class="t-s">live today</text>
+      </g>
+      <path class="wire2 draw" pathLength="1" style="--d:.8s;--dur:.4s" d="M88 30H116" marker-end="url(#ah3)"/>
+      <g class="rs" style="--i:5">
+        <rect x="122" y="8" width="176" height="44" rx="10" fill="none" stroke="#CFCFC8"/>
+        <text x="210" y="36" text-anchor="middle" class="t-mi">RDA · FDA · GDA</text>
+        <text x="122" y="78" class="t-s">adopted LDA's</text>
+        <text x="122" y="99" class="t-s">2020 text</text>
+      </g>
+      <path class="wire2 draw" pathLength="1" style="--d:1.0s;--dur:.4s" d="M302 30H330" marker-end="url(#ah3)"/>
+      <g class="rs" style="--i:6">
+        <rect x="336" y="8" width="80" height="44" rx="10" fill="none" stroke="#CFCFC8"/>
+        <text x="376" y="36" text-anchor="middle" class="t-mi">MDA</text>
+        <text x="336" y="78" class="t-s">its own</text>
+        <text x="336" y="99" class="t-s">2020 rules</text>
+      </g>
+      <path class="wire2 draw" pathLength="1" style="--d:1.2s;--dur:.4s" d="M420 30H448" marker-end="url(#ah3)"/>
+      <g class="rs" style="--i:7">
+        <rect x="454" y="8" width="138" height="44" rx="10" fill="none" stroke="#CFCFC8"/>
+        <text x="523" y="36" text-anchor="middle" class="t-mi">DHA Lahore</text>
+        <text x="454" y="78" class="t-s">Aug 2026 bylaws,</text>
+        <text x="454" y="99" class="t-s">39 ft cap</text>
+      </g>
+      <path class="wire2 draw" pathLength="1" style="--d:1.4s;--dur:.4s" d="M596 30H624" marker-end="url(#ah3)"/>
+      <g class="rs" style="--i:8">
+        <rect x="630" y="8" width="150" height="44" rx="10" fill="none" stroke="#CFCFC8"/>
+        <text x="705" y="36" text-anchor="middle" class="t-mi">Bahria Town</text>
+        <text x="630" y="78" class="t-s">bylaws not</text>
+        <text x="630" y="99" class="t-s">published</text>
+      </g>
+      <text x="0" y="134" class="t-b f" style="--d:1.6s">An authority switch is built in: DHA height and storey caps today.</text>
+    </svg>
+
+    <div class="label r" style="--i:6;margin-top:26px">Pricing idea, to test in pilots · no prices set yet</div>
+    <div class="tiers">
+      <div class="card tier r" style="--i:7"><div class="h4">Free</div><p class="small">The brief, the LDA envelope and four concepts.</p><div class="p">free</div></div>
+      <div class="card tier mid r" style="--i:8"><div class="h4">Per home</div><p class="small">Plan, 3D, walkthrough, revisions and a print set.</p><div class="p">paid by the family</div></div>
+      <div class="card tier r" style="--i:9"><div class="h4">Pro seats</div><p class="small">Client links, branded title blocks, many homes, and a referral to a stamping architect.</p><div class="p">per seat, by the firm</div></div>
+    </div>
+    <p class="small ref r" style="--i:10">For reference, maket.ai charges $20 a month (Homeowner) and $100 a month (Pro).</p>
+  </div>
+  <footer class="foot"><span>Pilot metrics to track: first-submission acceptance, days to a first drawing, revision rounds</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Families get to see and walk their home before paying for drawings, and catch rule breaks before they pay the scrutiny fee twice. Architects and builders get a sales tool: a walkable, LDA-checked concept in the first meeting. Developers can show a home for every plot size. And because the law requires a PCATP-registered architect to stamp the plan, we see those architects as partners, not competitors. Pricing is a hypothesis we'll test in pilots. Expansion is mostly data work: three other authorities adopted LDA's 2020 text, and the engine already switches DHA's height and storey caps."</p>
+    <p>Bahria returns the LDA baseline with a caveat until its bylaws are obtained (api/app/compliance/lda.py). No market-size figure is used: none is sourced yet.</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     14 · Vision and roadmap
+     ================================================================ -->
+<section class="slide s-road" data-title="Vision and roadmap">
+  <header class="chrome"><span class="eyebrow">Vision and roadmap</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
+  <div class="head wide">
+    <h1 class="title r" style="--i:0">Every family in Punjab walks through a legal home before paying for drawings</h1>
+  </div>
+  <div class="cols">
+    <div class="card col now r" style="--i:2">
+      <h3 class="h3 accent">Now</h3>
+      <div class="when">the 18 Oct 2026 submission build</div>
+      <ul>
+        <li><span>Livable-home rules and Argon's self-review</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>Collaboration: roles, client links, replies</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>Day and night concepts</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>A per-floor room program</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>Solar-ready roofs, a choice of water tank</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>Print to PDF at 1:100</span><span class="st build" data-live="Live">18 Oct</span></li>
+      </ul>
+      <div class="ms"><span class="label">Milestone</span>Every item verified on the live URL.</div>
+    </div>
+    <div class="card col r" style="--i:3">
+      <h3 class="h3">Next</h3>
+      <div class="when">depth and reach</div>
+      <ul>
+        <li>Drag-to-swap rooms with an instant LDA re-check</li>
+        <li>Google sign-in</li>
+        <li>A sandboxed iframe for generated code</li>
+        <li>Run events in Firestore, resumable anywhere</li>
+        <li>Rule packs for RDA, FDA and GDA, then DHA and Bahria Town</li>
+      </ul>
+      <div class="ms"><span class="label">Milestone</span>Rule packs live for three more authorities.</div>
+    </div>
+    <div class="card col r" style="--i:4">
+      <h3 class="h3">Later</h3>
+      <div class="when">ideas, not yet specified</div>
+      <ul>
+        <li>Pilots with LDA-enlisted PCATP architects</li>
+        <li>Submission-ready sets for LDA's online system</li>
+        <li>Structural and services drafts</li>
+        <li>An Urdu interface</li>
+        <li>Cost estimates</li>
+      </ul>
+      <div class="ms"><span class="label">Milestone</span>A first pilot with practising architects.</div>
+    </div>
+  </div>
+  <footer class="foot"><span>Status: <span class="st live legend" style="height:26px;font-size:14px">Live</span> on the service today · <span class="st build legend" style="height:26px;font-size:14px">18 Oct</span> in the submission build, not yet verified live</span><span class="pg"></span></footer>
+
+  <aside class="notes">
+    <p>"Our vision is simple: every family in Punjab walks through a legal home before paying for drawings. Now is the build we're submitting: livable-home rules, collaboration, day and night concepts and a 1:100 print set. Next is depth and reach: direct manipulation of the plan, Google sign-in, a sandbox for generated code, a resumable event log, and rule packs that take us beyond Lahore. Later is where the business is: pilots with the architects who stamp plans, and drawing sets ready for LDA's online submission. Those are ideas today, not commitments."</p>
+  </aside>
+</section>
+
+<!-- ================================================================
+     15 · Close
+     ================================================================ -->
+<section class="slide s-close" data-title="Close">
+  <div class="bgimg z" style="--d:0s"><img data-asset="renderFront" style="object-position:20% 50%"></div>
+  <div class="fade"></div>
+  <div class="content">
+    <div class="mark r" style="--i:0">Naqsha <span class="ur" lang="ur">نقشہ</span></div>
+    <h1 class="title r" style="--i:1">Walk through your home before the first brick.</h1>
+    <p class="kicker r" style="--i:2">Naqsha is live. Open a sample home in a minute, or design your own in about seven.</p>
+    <p class="echo r" style="--i:3">It said no to the porch, and told us which rule.</p>
+    <div class="links r" style="--i:4">
+      <span class="k">Live</span><span class="v live">naqsha-242926648187.us-central1.run.app</span>
+      <span class="k">Code</span><span class="v">github.com/abdm693/hack2skill-hackathon</span>
+      <span class="k">Demo</span><span class="v"><span class="ph">[video URL, under 3 min]</span></span>
+    </div>
+    <div class="next r" style="--i:5">
+      <div class="label">What we'd build next on Google Cloud</div>
+      <ul>
+        <li>Run events in Firestore with Cloud Tasks, so any instance can resume a design</li>
+        <li>Rule packs for RDA, FDA and GDA, then DHA and Bahria Town</li>
+        <li>A pilot with LDA-enlisted PCATP architects and Lahore builders</li>
+      </ul>
+    </div>
+    <div class="team r" style="--i:6">
+      <span class="ava">photo</span><span class="ava">photo</span><span class="ava">photo</span>
+      <div class="names"><span class="ph">[Team name]</span><br><span class="ph">[Name, role] · [Name, role] · [Name, role]</span></div>
+    </div>
+  </div>
+  <div class="qrc r" style="--i:5">
+    <svg viewBox="-2 -2 37 37" width="132" height="132" role="img" aria-label="QR code for the live app"><rect x="-2" y="-2" width="37" height="37" fill="#fff"/><use href="#qr-live"/></svg>
+    <div><div class="label">Scan to walk it</div><div class="h4" style="margin-top:6px">Live on Cloud Run</div></div>
+  </div>
+  <aside class="notes">
+    <p>"Naqsha takes a family from an idea to a house they can walk through, checked against the rules of the city they're building in. It's live, the code is public, and the agents are real. Argon designs in code, the engine keeps it legal, and ADK revises on request. It said no to the porch, and told us which rule. Next, we'd make every design resumable on any instance, add the next three authorities, and pilot it with the architects who stamp plans. Thank you."</p>
+    <p>Before export: fill the demo URL, the team name and the three names and photos. Make sure the GitHub repo is public (it returned 404 on 17 Oct).</p>
+  </aside>
+</section>
+
+</main>
+
+<div id="notes-panel" aria-live="polite"></div>
+<div id="help">← → navigate · P notes · F full screen</div>
+
+<script src="assets.js"></script>
+<script src="deck.js"></script>
+</body>
+</html>
