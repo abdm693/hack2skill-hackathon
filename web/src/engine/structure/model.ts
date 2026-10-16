@@ -109,6 +109,9 @@ export class StructureModel {
   readonly runsByLevel = new Map<string, WallRun[]>();
   readonly edges: EdgeFeature[] = [];
   readonly screens: PrivacyScreen[] = [];
+  /** EN-06 b: guard rails across window glass that comes within 3 ft of a flight or landing beside it (plan ft;
+   *  the rail runs along `axis` at `c` from a to b, its base following the stair from ha to hb) */
+  readonly stairGuards: { level: string; axis: "x" | "y"; c: number; a: number; b: number; ha: number; hb: number; op: string }[] = [];
   readonly openings: PlacedOpening[] = [];
   readonly stairs: StairLayout[] = [];
   readonly slabs: SlabSpec[] = [];
@@ -146,6 +149,7 @@ export class StructureModel {
     this.computeParapets();
     for (const lv of plan.levels) resolveJunctions(this.runsByLevel.get(lv.id) ?? []);
     this.placeOpenings();
+    this.checkStairWindows();
     this.checkTowerDoor();
     this.computeSlabs();
     this.computePlinth();
@@ -449,6 +453,77 @@ export class StructureModel {
     }
   }
 
+  /**
+   * EN-06 b: a window beside a flight or a landing must keep its glass at least 3 ft above the treads (the pitch
+   * line) or the landing. Its sill is raised when that still leaves 2 ft of glass; otherwise a guard rail is added
+   * across the glazing. Both are reported.
+   */
+  private checkStairWindows(): void {
+    for (const lay of this.stairs) {
+      const lv = lay.stair.from.id;
+      for (const o of this.openings) {
+        if (o.isDoor || o.op.level !== lv) continue;
+        const run = o.run;
+        type Surf = { a: number; b: number; h: (u: number) => number; pitch: (u: number) => number; side: number };
+        const surfs: Surf[] = [];
+        for (const f of lay.flights) {
+          if (f.axis !== run.axis) continue;
+          const mid = (f.c0 + f.c1) / 2;
+          const dir = run.c > mid ? 1 : -1;
+          const face = run.c - (dir * run.t) / 2;
+          const edge = dir > 0 ? f.c1 : f.c0;
+          if (Math.abs(face - edge) > 0.7) continue;
+          const s1 = f.s0 + f.sign * f.n * f.tread;
+          const k = (u: number) => clamp(Math.floor(((u - f.s0) * f.sign) / f.tread), 0, f.n - 1);
+          surfs.push({
+            a: Math.min(f.s0, s1), b: Math.max(f.s0, s1), side: face - dir * 0.15,
+            h: (u) => f.h0 + (k(u) + 1) * f.riser,
+            pitch: (u) => f.h0 + clamp(((u - f.s0) * f.sign) / f.tread + 1, 1, f.n) * f.riser,
+          });
+        }
+        for (const L of lay.landings) {
+          const r = L.rect;
+          const mid = run.axis === "x" ? r.y + r.d / 2 : r.x + r.w / 2;
+          const dir = run.c > mid ? 1 : -1;
+          const face = run.c - (dir * run.t) / 2;
+          const edge = run.axis === "x" ? (dir > 0 ? r.y + r.d : r.y) : dir > 0 ? r.x + r.w : r.x;
+          if (Math.abs(face - edge) > 0.7) continue;
+          const [a, b] = run.axis === "x" ? [r.x, r.x + r.w] : [r.y, r.y + r.d];
+          surfs.push({ a, b, side: face - dir * 0.15, h: () => L.h, pitch: () => L.h });
+        }
+        if (!surfs.length) continue;
+        // the stretches where the glass comes within 3 ft of the surface beside it
+        let worst = -Infinity;
+        const spans: { s: Surf; a: number; b: number }[] = [];
+        for (const sf of surfs) {
+          const a = Math.max(o.u0, sf.a), b = Math.min(o.u1, sf.b);
+          if (b - a < 0.1) continue;
+          let cur: number | null = null;
+          for (let u = a; u <= b + 1e-6; u += 0.25) {
+            const h = sf.h(u);
+            const bad = o.bottom < h + 3 - 0.05 && o.top > h + 0.3;
+            if (bad) worst = Math.max(worst, h);
+            if (bad && cur === null) cur = u;
+            if ((!bad || u + 0.25 > b + 1e-6) && cur !== null) {
+              spans.push({ s: sf, a: Math.max(a, cur - 0.25), b: bad ? b : u });
+              cur = null;
+            }
+          }
+        }
+        if (!spans.length) continue;
+        const label = this.openingLabel(o.op);
+        if (o.top - (worst + 3) >= 2) {
+          o.bottom = worst + 3;
+          this.notes.add({ id: `asbuilt.stair_window_sill:${o.op.id}`, title: "Window sill raised beside the stair", status: "warn", message: `${label} was raised so its glass starts 3 ft above the stair beside it.`, element_ids: [o.op.id] });
+          continue;
+        }
+        for (const sp of spans)
+          this.stairGuards.push({ level: lv, axis: run.axis, c: sp.s.side, a: sp.a, b: sp.b, ha: sp.s.pitch(sp.a), hb: sp.s.pitch(sp.b), op: o.op.id });
+        this.notes.add({ id: `asbuilt.stair_window_guard:${o.op.id}`, title: "Guard rail across a stair window", status: "warn", message: `A guard rail was added across ${label.charAt(0).toLowerCase() + label.slice(1)}: its glass comes within 3 ft of the stair beside it.`, element_ids: [o.op.id] });
+      }
+    }
+  }
+
   /** Every opening left out is reported (EN-01); a missing door is a fail, a missing window a warn. */
   private skipOpening(op: OpeningM, message: string, status?: "warn" | "fail"): void {
     warn(`opening ${op.id}: ${message}`);
@@ -462,8 +537,15 @@ export class StructureModel {
     const kind = op.type === "main_door" ? "main door" : op.type === "double_door" ? "double door" : op.type === "sliding_door" ? "sliding door" : op.type === "garage_door" ? "garage door" : op.type === "arch" ? "arch" : op.type === "ventilator" ? "ventilator" : DOOR_TYPES.includes(op.type) ? "door" : "window";
     if (op.type === "main_door") return "The main door";
     if (op.id === "roof_mumty_door") return "The roof door";
-    if (names.length >= 2) return `The ${kind} between the ${names[0]} and the ${names[1]}`;
-    if (names.length === 1) return `The ${names[0]} ${kind}`;
+    // EN-07: name the floor when a room name repeats on another floor ("Stair Hall" on every storey)
+    const lv = this.plan.levelById.get(op.level);
+    const twin = op.between.some((b) => {
+      const r = this.plan.room(b);
+      return !!r && this.plan.rooms.some((q) => q !== r && q.level !== r.level && q.name.trim().toLowerCase() === r.name.trim().toLowerCase());
+    });
+    const on = twin && lv ? ` on the ${lv.name.toLowerCase()}` : "";
+    if (names.length >= 2) return `The ${kind} between the ${names[0]} and the ${names[1]}${on}`;
+    if (names.length === 1) return `The ${names[0]} ${kind}${on}`;
     return `The ${kind} ${op.id}`;
   }
 

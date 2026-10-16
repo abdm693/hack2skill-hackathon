@@ -157,15 +157,117 @@ export function layoutStairs(plan: PlanModel, notes: NoteLog): StairLayout[] {
     else stacks.push([s]);
   }
   const out: StairLayout[] = [];
-  for (const st of stacks) out.push(...layoutStack(plan, st, notes));
+  for (const st of stacks) {
+    // EN-06: a flight or landing that passes less than 7 ft over a door below (or a door above that would open onto
+    // the stairwell) makes the planner turn the stair around or mirror it, when that clears every door
+    const VARIANTS = [{ flipSign: false, flipArrive: false }, { flipSign: true, flipArrive: false }, { flipSign: false, flipArrive: true }, { flipSign: true, flipArrive: true }];
+    let best: { v: (typeof VARIANTS)[number]; n: number } | null = null;
+    for (const v of VARIANTS) {
+      const scratch = new NoteLogLite();
+      const lays = layoutStack(plan, st, scratch as unknown as NoteLog, v);
+      if (!lays.length) break;
+      const n = blockedDoors(plan, lays).length + scratch.fails * 3;
+      if (!best || n < best.n) best = { v, n };
+      if (n === 0) break;
+    }
+    const v = best?.v ?? VARIANTS[0];
+    const lays = layoutStack(plan, st, notes, v);
+    if (v !== VARIANTS[0] && lays.length)
+      notes.add({
+        id: `asbuilt.stair_turned:${st[0].id}`,
+        title: "Stair turned to clear a door",
+        status: "warn",
+        message: `Stair ${st[0].id} was ${v.flipSign ? "turned around" : "mirrored"}${v.flipSign && v.flipArrive ? " and mirrored" : ""} so that no flight or landing passes over a door below it.`,
+        element_ids: st.map((s) => s.id),
+      });
+    for (const b of blockedDoors(plan, lays))
+      notes.add({
+        id: `asbuilt.stair_blocks_door:${b.op.id}`,
+        title: "Stair landing blocks a door",
+        status: "fail",
+        message: b.under
+          ? `Stair landing blocks ${b.op.id}: the stair passes ${Math.max(0, b.clear).toFixed(1)} ft above the floor in front of it (7 ft needed). Move the door, or turn the stair so its landing is not over it.`
+          : `${b.op.id} opens onto the stairwell of ${b.lay.stair.id} on the ${b.lay.stair.to.name}. Move the door to the landing side of the stair.`,
+        element_ids: [b.op.id, b.lay.stair.id],
+      });
+    out.push(...lays);
+  }
   return out;
 }
 
-function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog): StairLayout[] {
+/** collects notes during a trial layout (only to compare variants) */
+class NoteLogLite {
+  fails = 0;
+  readonly list: unknown[] = [];
+  add(n: { status: string }): void {
+    if (n.status === "fail") this.fails++;
+  }
+}
+
+type PlanOpening = PlanModel["openings"][number];
+
+/**
+ * Doors a stair layout gets in the way of: a door on its from level whose 2.5 ft approach lies under a flight or
+ * landing less than 7 ft up, or a door on its upper level whose approach opens onto the stairwell.
+ */
+export function blockedDoors(plan: PlanModel, lays: StairLayout[]): { lay: StairLayout; op: PlanOpening; clear: number; under: boolean }[] {
+  const DOORS = ["main_door", "door", "double_door", "sliding_door", "arch", "garage_door"];
+  const out: { lay: StairLayout; op: PlanOpening; clear: number; under: boolean }[] = [];
+  const isect = (a: R, b: R): R | null => {
+    const x0 = Math.max(a.x, b.x), x1 = Math.min(a.x + a.w, b.x + b.w), y0 = Math.max(a.y, b.y), y1 = Math.min(a.y + a.d, b.y + b.d);
+    return x1 - x0 > 0.05 && y1 - y0 > 0.05 ? { x: x0, y: y0, w: x1 - x0, d: y1 - y0 } : null;
+  };
+  /** the door's 2.5 ft approach on the stair's side, when the door stands on an edge of the stair's footprint */
+  const approach = (op: PlanOpening, R: R): R | null => {
+    const [x, y] = op.at, hw = op.width / 2;
+    for (const e of [R.y, R.y + R.d]) {
+      if (Math.abs(y - e) > 0.9 || x + hw < R.x || x - hw > R.x + R.w) continue;
+      const inward = e === R.y ? 1 : -1;
+      return { x: x - hw, y: inward > 0 ? y : y - 2.5, w: op.width, d: 2.5 };
+    }
+    for (const e of [R.x, R.x + R.w]) {
+      if (Math.abs(x - e) > 0.9 || y + hw < R.y || y - hw > R.y + R.d) continue;
+      const inward = e === R.x ? 1 : -1;
+      return { x: inward > 0 ? x : x - 2.5, y: y - hw, w: 2.5, d: op.width };
+    }
+    return null;
+  };
+  for (const lay of lays) {
+    const from = lay.stair.from;
+    const floorRoom = plan.roomAt(from.id, lay.rect.x + lay.rect.w / 2, lay.rect.y + lay.rect.d / 2);
+    const floor = floorRoom ? floorRoom.floorH : from.elev;
+    for (const op of plan.openings) {
+      if (!DOORS.includes(op.type)) continue;
+      if (op.level === from.id) {
+        const z = approach(op, lay.rect);
+        if (!z) continue;
+        let low = Infinity;
+        for (const L of lay.landings) if (isect(L.rect, z)) low = Math.min(low, L.h - 0.5);
+        for (const f of lay.flights) {
+          const fr = mk(f.axis, f.s0, f.s0 + f.sign * (f.n - 1) * f.tread, f.c0, f.c1);
+          const ov = isect(fr, z);
+          if (!ov) continue;
+          const [a0, a1] = f.axis === "x" ? [ov.x, ov.x + ov.w] : [ov.y, ov.y + ov.d];
+          const t = f.sign > 0 ? a0 - f.s0 : f.s0 - a1; // nearest the first riser = lowest
+          const k = Math.max(0, Math.floor(t / f.tread));
+          low = Math.min(low, f.h0 + (k + 1) * f.riser - 0.75);
+        }
+        if (low - floor < 7) out.push({ lay, op, clear: low - floor, under: true });
+      } else if (op.level === lay.holeLevel && !lay.stair.to.isRoof) {
+        const z = approach(op, lay.rect);
+        if (z && lay.holes.some((h) => isect(h, z))) out.push({ lay, op, clear: 0, under: false });
+      }
+    }
+  }
+  return out;
+}
+
+function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flipSign: boolean; flipArrive: boolean } = { flipSign: false, flipArrive: false }): StairLayout[] {
   const base = stack[0];
   const R0 = base.rect;
   const axis: "x" | "y" = base.start === "+x" || base.start === "-x" ? "x" : "y";
-  const sign: 1 | -1 = base.start === "+x" || base.start === "+y" ? 1 : -1;
+  const sign0: 1 | -1 = base.start === "+x" || base.start === "+y" ? 1 : -1;
+  const sign: 1 | -1 = v.flipSign ? (-sign0 as 1 | -1) : sign0;
   const pA0 = axis === "x" ? R0.x : R0.y, pA1 = axis === "x" ? R0.x + R0.w : R0.y + R0.d;
   const C0 = axis === "x" ? R0.y : R0.x, C1 = axis === "x" ? R0.y + R0.d : R0.x + R0.w;
   const breadth = C1 - C0;
@@ -194,7 +296,7 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog): StairLay
     .filter((p) => p.rise >= 3);
   if (!per.length) return [];
   const wf = kind === "dogleg" ? Math.min(base.width, (breadth - 0.15) / 2) : kind === "l_shape" ? Math.min(base.width, breadth * 0.5, planLen * 0.5) : Math.min(base.width, breadth);
-  const arriveHigh = arrivalHigh(plan, base, axis, C0, C1);
+  const arriveHigh = arrivalHigh(plan, base, axis, C0, C1) !== v.flipArrive;
 
   // room faces along the run, on every level the stack touches (the roof is handled by the tower)
   const lowSide: Side = axis === "y" ? "front" : "left";

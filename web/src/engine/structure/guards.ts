@@ -62,6 +62,30 @@ export function unguardedDrops(ctx: BuildCtx): DropEdge[] {
   return out;
 }
 
+/** EN-06 b: rails across window glass beside a flight or landing (laid out by the structure model). */
+export function buildStairWindowGuards(ctx: BuildCtx, type: RailType, m: RailMats): void {
+  const list = ctx.model.stairGuards;
+  if (!list.length) return;
+  const kit = new Kit(), glass = new Kit();
+  for (const g of list) {
+    const [x0, y0, x1, y1] = g.axis === "x" ? [g.a, g.c, g.b, g.c] : [g.c, g.a, g.c, g.b];
+    railing(kit, glass, type, x0, y0, g.ha, x1, y1, g.hb, 3.0, m, { handrailWood: true });
+  }
+  const lv = list[0].level;
+  for (const [k, kind] of [[kit, "railing:stair_window"], [glass, "railing:glass"]] as const) {
+    if (k.empty) continue;
+    const grp = k === glass ? k.build(new THREE.Group(), false) : k.build();
+    ctx.add(grp, { kind, id: `stair_window_guards${k === glass ? "_glass" : ""}`, label: "Guard rail at the stair window", level: lv });
+    grp.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) {
+        if (k === glass) (o as THREE.Mesh).renderOrder = 2;
+        o.userData.collide = true;
+        ctx.collider(o as THREE.Mesh);
+      }
+    });
+  }
+}
+
 export function buildDropGuards(ctx: BuildCtx, type: RailType, m: RailMats): void {
   const edges = unguardedDrops(ctx);
   if (!edges.length) return;
