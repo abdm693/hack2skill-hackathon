@@ -165,11 +165,12 @@ export async function buildHouseImpl(
   const summary: AsBuiltSummary = {
     objects: cons.summary,
     section_errors: results.filter((r) => !r.ok).map((r) => ({ section: r.name, error: r.error ?? "error" })),
+    checks: [...(ctx.structureBuilt ? ctx.model.notes.list : []), ...ctx.notes.list],
   };
   const root = ctx.root;
   root.userData.stats = { mergedMeshes: cons.mergedMeshes, meshesBefore, meshesAfter };
   const totalMs = performance.now() - t0;
-  return {
+  const result = {
     root,
     summary,
     sections: results,
@@ -186,6 +187,9 @@ export async function buildHouseImpl(
       root.removeFromParent();
     },
   };
+  // the build context, for dev tools and checks (not part of the contract; not enumerable)
+  Object.defineProperty(result, "ctx", { value: ctx, enumerable: false });
+  return result;
 }
 
 function computeSpawn(ctx: BuildCtx): { position: THREE.Vector3; lookAt: THREE.Vector3 } {

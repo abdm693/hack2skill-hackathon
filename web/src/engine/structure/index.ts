@@ -12,6 +12,7 @@ import { buildSlabs } from "./slabs-geo";
 import { buildStairs } from "./stairs-geo";
 import { buildDeckRailings, buildPorchColumns, buildWaterTank } from "./extras-geo";
 import { buildSite } from "./site-geo";
+import { buildDropGuards } from "./guards";
 import type { RailType } from "./railings";
 
 export interface StructureOpts {
@@ -141,6 +142,7 @@ export function buildStructure(ctx: BuildCtx, opts: StructureOpts = {}): void {
   );
   step("porch", () => buildPorchColumns(ctx, ext));
   step("railings", () => buildDeckRailings(ctx, railType, { ...railMats, rail: steelBlack }));
+  step("guards", () => buildDropGuards(ctx, railType, railMats));
   step("tank", () => buildWaterTank(ctx, { plastic: M.get({ preset: "plastic", color: "#1f2022", roughness: 0.55 }), concrete: coping, pipe: M.get({ preset: "plastic", color: "#dcdad5" }) }));
   step("site", () =>
     buildSite(ctx, {

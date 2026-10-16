@@ -1,13 +1,19 @@
-/** Stairs: marble treads/risers on a concrete waist, landings, stringers, balustrades, hole railings, ramp colliders. */
+/**
+ * Stairs: marble treads/risers on a concrete waist, landings, stringers, balustrades, stairwell guards and ramp
+ * colliders. Fall protection (B.1): every open flight side and landing edge has a balustrade, every stairwell
+ * edge on the upper floor a 3.5 ft guard except exactly where the top flight arrives (and where the next flight up
+ * leaves), and every railing, balustrade and stringer is a walk collider.
+ */
 import * as THREE from "three";
-import { CellGrid } from "../core/grid";
+import { CellGrid, rectContains } from "../core/grid";
 import { MeshBuilder } from "../core/meshbuilder";
 import { Kit } from "../core/shapes";
 import { FT } from "../core/util";
 import type { BuildCtx } from "../core/ctx";
 import type { RoomM } from "../plan/model";
-import { FINISH, type Flight } from "./model";
+import { FINISH, type Flight, type StairLayout } from "./model";
 import { P3, railing, skewBox, type RailMats, type RailType } from "./railings";
+import { subtract, unguarded, type Span } from "./cover";
 
 export interface StairMats {
   tread: (room: RoomM | null) => THREE.Material;
@@ -17,35 +23,46 @@ export interface StairMats {
   railType: RailType;
 }
 
+/** guard height on level floors (IBC 1015: 42 in) and on flights (handrail 34–38 in above the nosing line) */
+export const GUARD_H = 3.5;
+const FLIGHT_H = 3.0;
+
 const pt = (f: { axis: "x" | "y" }, along: number, across: number): [number, number] => (f.axis === "x" ? [along, across] : [across, along]);
+const sEndOf = (f: Flight) => f.s0 + f.sign * (f.n - 1) * f.tread;
+
+/** Where the hole edge on `level` must stay open: the top-riser line of a flight arriving there, and the band of any flight leaving from there. */
+export function openingsOnEdge(ctx: BuildCtx, level: string, axis: "x" | "y", c: number): Span[] {
+  const cuts: Span[] = [];
+  for (const lay of ctx.model.stairs) {
+    if (lay.holeLevel === level) {
+      const t = lay.topRiser;
+      if (t.axis === axis && Math.abs(t.c - c) < 0.08) cuts.push([t.a, t.b]);
+    }
+    if (lay.stair.from.id === level) {
+      const f = lay.flights[0];
+      if (!f || f.axis === axis) continue;
+      const lo = Math.min(f.s0, sEndOf(f)) - f.tread, hi = Math.max(f.s0, sEndOf(f)) + f.tread;
+      if (c > lo && c < hi) cuts.push([f.c0, f.c1]);
+    }
+  }
+  return cuts;
+}
 
 export function buildStairs(ctx: BuildCtx, m: StairMats): void {
   const plan = ctx.plan;
-  /** sub-spans of [a,b] on line (axis, c) NOT covered by a wall face within 0.6 ft */
-  const openSpans = (axis: "x" | "y", c: number, a: number, b: number, level: string): [number, number][] => {
-    const cov: [number, number][] = [];
-    for (const run of ctx.model.runsByLevel.get(level) ?? []) {
-      if (run.axis !== axis) continue;
-      if (![run.c - run.t / 2, run.c + run.t / 2].some((w) => Math.abs(w - c) < 0.6)) continue;
-      const p = Math.max(a, run.ea), q = Math.min(b, run.eb);
-      if (q - p > 0.05) cov.push([p, q]);
-    }
-    cov.sort((p, q) => p[0] - q[0]);
-    const out: [number, number][] = [];
-    let cur = a;
-    for (const [p, q] of cov) {
-      if (p - cur > 0.5) out.push([cur, p]);
-      cur = Math.max(cur, q);
-    }
-    if (b - cur > 0.5) out.push([cur, b]);
-    return out;
+  const holesOn = (lv: string) => ctx.model.stairs.filter((s) => s.holeLevel === lv).flatMap((s) => s.holes);
+  /** a walkable floor point on a level: inside a room (not outdoor) and not in a stairwell */
+  const floorAt = (lv: string, x: number, y: number) => {
+    const r = plan.roomAt(lv, x, y);
+    return !!r && r.cat !== "outdoor" && !holesOn(lv).some((h) => rectContains(h, x, y, -0.02));
   };
 
   for (const lay of ctx.model.stairs) {
     const s = lay.stair;
     const room = plan.roomAt(s.from.id, lay.rect.x + lay.rect.w / 2, lay.rect.y + lay.rect.d / 2);
     const tread = m.tread(room);
-    const kit = new Kit();
+    const kit = new Kit(); // treads, risers, waist, landings: walked on via the ramp colliders
+    const railKit = new Kit(); // stringers, balustrades, guards: walk colliders
     const glassKit = new Kit();
     for (const f of lay.flights) flightGeo(kit, f, tread, m.body);
     for (const L of lay.landings) {
@@ -53,19 +70,26 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
       kit.mb(m.body).box(r.x * FT, (L.h - 0.55) * FT, r.y * FT, (r.x + r.w) * FT, (L.h - FINISH) * FT, (r.y + r.d) * FT);
       kit.mb(tread).box(r.x * FT, (L.h - FINISH) * FT, r.y * FT, (r.x + r.w) * FT, L.h * FT, (r.y + r.d) * FT);
     }
-    // flights: stringer + balustrade on open sides; the inner well always gets a balustrade.
-    // Balustrades stop ~2 treads short of ends that meet a floor so people can step on/off sideways.
+    // flights: stringer + balustrade on every open side; the well sides always get a full balustrade. The
+    // first two treads may be left open on a side only when there is solid floor beside them (step on sideways).
     lay.flights.forEach((f, fi) => {
-      const sEnd = f.s0 + f.sign * (f.n - 1) * f.tread;
+      const sEnd = sEndOf(f);
       const lo0 = Math.min(f.s0, sEnd), hi0 = Math.max(f.s0, sEnd);
-      const gapStart = fi === 0 ? 2 * f.tread : 0;
-      const gapEnd = fi === lay.flights.length - 1 ? 2 * f.tread : 0;
-      const lo = lo0 + (f.sign > 0 ? gapStart : gapEnd), hi = hi0 - (f.sign > 0 ? gapEnd : gapStart);
-      // along-coordinate → nosing-line height
       const hAt = (a: number) => f.h0 + f.riser + (f.n - 1) * f.riser * ((a - f.s0) / (sEnd - f.s0 || 1));
       for (const [c, out] of [[f.c0, -1], [f.c1, 1]] as const) {
         const isWell = lay.flights.some((o) => o !== f && o.axis === f.axis && (out > 0 ? o.c0 > c - 0.05 && o.c0 - c < 1.5 : c > o.c1 - 0.05 && c - o.c1 < 1.5));
-        const fullSpans = isWell ? [[lo0, hi0] as [number, number]] : openSpans(f.axis, c, lo0, hi0, s.from.id);
+        const fullSpans: Span[] = isWell ? [[lo0, hi0]] : unguarded(ctx, s.from.id, f.axis, c, lo0, hi0, 0.6, 0.5, false);
+        let gapStart = 0;
+        if (fi === 0 && !isWell) {
+          let solid = true;
+          for (let k = 0; k <= 4; k++) {
+            const a = f.s0 + f.sign * (k / 4) * 2 * f.tread;
+            const [x, y] = pt(f, a, c + out * 0.6);
+            if (!floorAt(s.from.id, x, y)) solid = false;
+          }
+          if (solid) gapStart = 2 * f.tread;
+        }
+        const lo = lo0 + (f.sign > 0 ? gapStart : 0), hi = hi0 - (f.sign > 0 ? 0 : gapStart);
         for (const [p, q] of fullSpans) {
           // stringer plate along the whole open side
           const cs = c + out * 0.04;
@@ -73,17 +97,20 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
           const [ax, ay] = pt(f, startEnd - (Math.abs(startEnd - f.s0) < 1e-3 ? f.sign * 0.05 : 0), cs);
           const [bx, by] = pt(f, endEnd, cs);
           const hA = hAt(startEnd), hB = hAt(endEnd);
-          skewBox(kit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
-          // balustrade, stopped short of floor-connected ends
+          skewBox(railKit.mb(m.stringer), P3(ax, ay, hA - 0.66), P3(bx - ax, by - ay, hB - hA), new THREE.Vector3(0, 0.78 * FT, 0), side(f, out, 0.06));
           const p2 = Math.max(p, lo), q2 = Math.min(q, hi);
           if (q2 - p2 < 0.6) continue;
+          // run the balustrade on past the last nosing so it meets the landing / floor guard without a gap
+          const ext = (a: number) => (Math.abs(a - sEnd) < 1e-3 ? f.tread * 0.5 : 0);
           const sa = f.sign > 0 ? p2 : q2, sb = f.sign > 0 ? q2 : p2;
+          const sbx = sb + f.sign * ext(sb);
           const [rx0, ry0] = pt(f, sa, c - out * 0.05);
-          const [rx1, ry1] = pt(f, sb, c - out * 0.05);
-          railing(kit, glassKit, m.railType, rx0, ry0, hAt(sa) + 0.12, rx1, ry1, hAt(sb) + 0.12, 3.0, m.rail, { shoe: false, handrailWood: true });
+          const [rx1, ry1] = pt(f, sbx, c - out * 0.05);
+          railing(railKit, glassKit, m.railType, rx0, ry0, hAt(sa) + 0.12, rx1, ry1, hAt(sb) + 0.12, FLIGHT_H, m.rail, { shoe: false, handrailWood: true });
         }
       }
     });
+    // landings: guard every edge where no flight connects and no wall stands
     for (const L of lay.landings) {
       const r = L.rect;
       const edges: ["x" | "y", number, number, number][] = [
@@ -93,42 +120,37 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
         ["y", r.x + r.w, r.y, r.y + r.d],
       ];
       for (const [axis, c, a, b] of edges) {
-        // parts of the edge where a flight connects are left open
         const cover = lay.flights
-          .filter((f) => f.axis !== axis && (Math.abs(f.s0 - c) < 0.3 || Math.abs(f.s0 + f.sign * (f.n - 1) * f.tread - c) < 0.3))
-          .map((f) => [f.c0, f.c1] as [number, number])
-          .sort((p, q) => p[0] - q[0]);
-        const free: [number, number][] = [];
-        let cur = a;
-        for (const [p, q] of cover) {
-          if (p - cur > 0.3) free.push([cur, p]);
-          cur = Math.max(cur, q);
-        }
-        if (b - cur > 0.3) free.push([cur, b]);
+          .filter((f) => f.axis !== axis && (Math.abs(f.s0 - c) < 0.3 || Math.abs(sEndOf(f) - c) < 0.3))
+          .map((f) => [f.c0, f.c1] as Span);
+        const free = subtract([[a, b]], cover, 0.3);
         for (const [p0, q0] of free)
-          for (const [p, q] of openSpans(axis, c, p0, q0, s.from.id)) {
-            const [x0, y0] = axis === "x" ? [p, c] : [c, p];
-            const [x1, y1] = axis === "x" ? [q, c] : [c, q];
-            railing(kit, glassKit, m.railType, x0, y0, L.h, x1, y1, L.h, 3.2, m.rail, { handrailWood: true });
+          for (const [p, q] of unguarded(ctx, s.from.id, axis, c, p0, q0, 0.6, 0.3, false)) {
+            const [x0, y0] = axis === "x" ? [p - 0.1, c] : [c, p - 0.1];
+            const [x1, y1] = axis === "x" ? [q + 0.1, c] : [c, q + 0.1];
+            railing(railKit, glassKit, m.railType, x0, y0, L.h, x1, y1, L.h, GUARD_H, m.rail, { handrailWood: true });
           }
       }
     }
-    // railings around the hole on the upper floor, except at the arrival
+    // stairwell guards on the upper floor: every edge, except the arrival opening and the band of a flight
+    // leaving from that floor (its own balustrade continues the guard)
     const holeG = CellGrid.fromRects(lay.holes.map((h) => ({ rect: h, val: true })));
     const upper = plan.levelById.get(lay.holeLevel)!;
     const er = holeG.edgeRuns((n, p) => (n && !p ? "+" : p && !n ? "-" : null));
     for (const e of er) {
-      const dir = e.key === "+" ? 1 : -1;
+      const dir = e.key === "+" ? 1 : -1; // the floor is on this side of the line
+      // guards of other stairs' holes on the same line count too, but not this stair's own (built below)
+      const spans = unguarded(ctx, upper.id, e.axis, e.c, e.a, e.b, 0.6, 0.2);
+      const keep = subtract(spans, openingsOnEdge(ctx, upper.id, e.axis, e.c), 0.2);
       const c = e.c + dir * 0.12;
-      for (const [p, q] of openSpans(e.axis, e.c, e.a, e.b, upper.id)) {
-        const [x0, y0] = e.axis === "x" ? [p, c] : [c, p];
-        const [x1, y1] = e.axis === "x" ? [q, c] : [c, q];
-        // distance from the arrival point to this segment
-        const ax = lay.arrival.x, ay = lay.arrival.y;
-        const tx = Math.max(Math.min(x0, x1), Math.min(Math.max(x0, x1), ax));
-        const ty = Math.max(Math.min(y0, y1), Math.min(Math.max(y0, y1), ay));
-        if (Math.hypot(ax - tx, ay - ty) < 2.6) continue;
-        railing(kit, glassKit, m.railType, x0, y0, upper.elev, x1, y1, upper.elev, 3.3, m.rail, { handrailWood: true });
+      for (const [p, q] of keep) {
+        // reach into the walls / neighbouring guards at the ends, but not into an opening left for walking
+        const openAt = (u: number) => openingsOnEdge(ctx, upper.id, e.axis, e.c).some(([a, b]) => u >= a - 0.05 && u <= b + 0.05);
+        const p1 = openAt(p) ? p : p - 0.15, q1 = openAt(q) ? q : q + 0.15;
+        const [x0, y0] = e.axis === "x" ? [p1, c] : [c, p1];
+        const [x1, y1] = e.axis === "x" ? [q1, c] : [c, q1];
+        railing(railKit, glassKit, m.railType, x0, y0, upper.elev, x1, y1, upper.elev, GUARD_H, m.rail, { handrailWood: true });
+        ctx.guards.push({ level: upper.id, axis: e.axis, c: e.c, a: p1, b: q1, h: GUARD_H });
       }
     }
     const g = kit.build();
@@ -136,38 +158,54 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
     g.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.userData.collide = false;
     });
+    if (!railKit.empty) {
+      const rg = railKit.build();
+      ctx.add(rg, { kind: "railing:stair", level: s.from.id, room: room?.id, id: `${s.id}_rails`, label: "Stair balustrade" });
+      rg.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) {
+          o.userData.collide = true;
+          ctx.collider(o as THREE.Mesh);
+        }
+      });
+    }
     if (!glassKit.empty) {
       const gg = glassKit.build(new THREE.Group(), false);
       ctx.add(gg, { kind: "railing:glass", level: s.from.id, room: room?.id, id: `${s.id}_glass`, label: "Stair glass balustrade" });
       gg.traverse((o) => {
         if ((o as THREE.Mesh).isMesh) {
           (o as THREE.Mesh).renderOrder = 2;
+          o.userData.collide = true;
           ctx.collider(o as THREE.Mesh);
         }
       });
     }
-    // invisible ramp colliders so the walkthrough glides up the flights
-    lay.flights.forEach((f, i) => {
-      // ramp through the riser midpoints: meets the lower floor/landing at s0 - T/2 and the upper one at end + T/2
-      const mb = new MeshBuilder();
-      const s0 = f.s0 - f.sign * f.tread * 0.5;
-      const s1 = f.s0 + f.sign * (f.n - 0.5) * f.tread;
-      const [ax, ay] = pt(f, s0, f.c0);
-      const [bx, by] = pt(f, s1, f.c0);
-      const o = P3(ax, ay, f.h0);
-      const along = P3(bx - ax, by - ay, f.n * f.riser);
-      const across = f.axis === "x" ? new THREE.Vector3(0, 0, (f.c1 - f.c0) * FT) : new THREE.Vector3((f.c1 - f.c0) * FT, 0, 0);
-      skewBox(mb, o.clone().add(new THREE.Vector3(0, -0.1, 0)), along, new THREE.Vector3(0, 0.1, 0), across);
-      const geo = mb.build();
-      if (geo) ctx.addColliderOnly(geo, { kind: "stair:ramp", level: s.from.id, id: `${s.id}_ramp_${i}` });
-    });
-    for (const L of lay.landings) {
-      const mb = new MeshBuilder();
-      const r = L.rect;
-      mb.box(r.x * FT, (L.h - 0.3) * FT, r.y * FT, (r.x + r.w) * FT, L.h * FT, (r.y + r.d) * FT);
-      const geo = mb.build();
-      if (geo) ctx.addColliderOnly(geo, { kind: "stair:landing", level: s.from.id, id: ctx.uid(`${s.id}_landing`) });
-    }
+    rampColliders(ctx, lay);
+  }
+}
+
+/** invisible ramp colliders so the walkthrough glides up the flights, plus landing slabs */
+function rampColliders(ctx: BuildCtx, lay: StairLayout): void {
+  const s = lay.stair;
+  lay.flights.forEach((f, i) => {
+    // ramp through the riser midpoints: meets the lower floor/landing at s0 - T/2 and the upper one at end + T/2
+    const mb = new MeshBuilder();
+    const s0 = f.s0 - f.sign * f.tread * 0.5;
+    const s1 = f.s0 + f.sign * (f.n - 0.5) * f.tread;
+    const [ax, ay] = pt(f, s0, f.c0);
+    const [bx, by] = pt(f, s1, f.c0);
+    const o = P3(ax, ay, f.h0);
+    const along = P3(bx - ax, by - ay, f.n * f.riser);
+    const across = f.axis === "x" ? new THREE.Vector3(0, 0, (f.c1 - f.c0) * FT) : new THREE.Vector3((f.c1 - f.c0) * FT, 0, 0);
+    skewBox(mb, o.clone().add(new THREE.Vector3(0, -0.1, 0)), along, new THREE.Vector3(0, 0.1, 0), across);
+    const geo = mb.build();
+    if (geo) ctx.addColliderOnly(geo, { kind: "stair:ramp", level: s.from.id, id: `${s.id}_ramp_${i}` });
+  });
+  for (const L of lay.landings) {
+    const mb = new MeshBuilder();
+    const r = L.rect;
+    mb.box(r.x * FT, (L.h - 0.3) * FT, r.y * FT, (r.x + r.w) * FT, L.h * FT, (r.y + r.d) * FT);
+    const geo = mb.build();
+    if (geo) ctx.addColliderOnly(geo, { kind: "stair:landing", level: s.from.id, id: ctx.uid(`${s.id}_landing`) });
   }
 }
 

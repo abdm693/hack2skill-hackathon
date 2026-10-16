@@ -119,7 +119,9 @@ export interface Stair {
 export interface Roof {
   parapet_ft: number; // ~3.5
   mumty?: { rect: Rect; height_ft: number; door_side: "front" | "back" | "left" | "right" }; // stair tower ≤ 9.5 ft
-  water_tank?: { rect: Rect; height_ft: number };
+  water_tank?: { rect: Rect; height_ft: number; material?: "plastic" | "concrete" };
+  /** Rooftop solar: "ready" keeps a clear, unshaded area; "panels" also places panel rows. Rect = reserved array area. */
+  solar?: { mode: "ready" | "panels"; rect?: Rect };
 }
 
 export interface Gate {
@@ -188,5 +190,6 @@ export interface ComplianceCheck {
   value?: number | string;
   limit?: number | string;
   rule_ref?: string; // e.g. "LDA B&ZR 2019 (v2026) §2.7.1(a)"
+  category?: "lda" | "livable"; // regulation vs Naqsha livability rules (room independence, stairs, guards, doors)
   element_ids?: string[]; // room/opening ids, used to highlight in 2D/3D
 }

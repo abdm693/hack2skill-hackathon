@@ -116,6 +116,12 @@ export interface Comment {
 export interface AsBuiltSummary {
   objects: { id: string; layer: Layer; kind?: string; level?: string; room?: string; bbox_ft: { min: Vec3; max: Vec3 } }[];
   section_errors: { section: string; error: string }[];
+  /**
+   * What the engine repaired or could not repair while building (Naqsha "livable" rules enforced in 3D): ids are
+   * "asbuilt.<rule>:<element>", e.g. asbuilt.stair_fit, asbuilt.roof_door_moved, asbuilt.guard_added,
+   * asbuilt.opening_skipped, asbuilt.furniture_moved, asbuilt.furniture_dropped, asbuilt.path_blocked, asbuilt.car_dropped.
+   */
+  checks?: { id: string; title: string; status: "pass" | "warn" | "fail"; message: string; element_ids?: string[] }[];
 }
 
 /** SSE event payloads by event name. */

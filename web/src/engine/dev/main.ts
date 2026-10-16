@@ -10,6 +10,8 @@ import planFixture from "@contracts/fixtures/plan-10-marla.json";
 import planArgon from "@contracts/fixtures/argon-v1-plan.json";
 import designFixture from "@contracts/fixtures/design-10-marla.js?raw";
 import designArgon from "@contracts/fixtures/argon-v1-design.js?raw";
+import planKanal from "@contracts/fixtures/argon-1kanal-plan.json";
+import designKanal from "@contracts/fixtures/argon-1kanal-design.js?raw";
 import { buildHouse, defaultDesign, parseDesign, setTimeOfDay, sunDirection, texturesReady, updateSun, type BuildResult, type DesignSectionSrc } from "../index";
 import { asBuiltCheck } from "./asbuilt";
 
@@ -66,6 +68,8 @@ const designs: Record<string, () => { plan: BuildingPlan; sections: DesignSectio
   "fixture-default": () => ({ plan: planFixture as unknown as BuildingPlan, sections: defaultDesign(planFixture as unknown as BuildingPlan) }),
   argon: () => ({ plan: planArgon as unknown as BuildingPlan, sections: parseDesign(designArgon) }),
   "argon-default": () => ({ plan: planArgon as unknown as BuildingPlan, sections: defaultDesign(planArgon as unknown as BuildingPlan) }),
+  kanal: () => ({ plan: planKanal as unknown as BuildingPlan, sections: parseDesign(designKanal) }),
+  "kanal-default": () => ({ plan: planKanal as unknown as BuildingPlan, sections: defaultDesign(planKanal as unknown as BuildingPlan) }),
 };
 
 let current: BuildResult | null = null;
@@ -432,6 +436,17 @@ renderer.setAnimationLoop(() => {
     }
     frame();
     return renderer.domElement.toDataURL("image/png");
+  },
+  /** Eye at plan (x, y, h ft) looking at (tx, ty, th ft); everything visible, no section cut. */
+  look: (x: number, y: number, h: number, tx: number, ty: number, th: number, fov = 70) => {
+    visibleLevels = null;
+    clip = null;
+    camera.fov = fov;
+    camera.position.set(x * FT, h * FT, -y * FT);
+    controls.target.set(tx * FT, th * FT, -ty * FT);
+    camera.updateProjectionMatrix();
+    controls.update();
+    applyLevels();
   },
   stats: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, buildMs, texWaitMs, ...(window as unknown as { __lastStats?: object }).__lastStats }),
   /** Draw calls of the main colour pass alone (no shadow map, AO or post passes). */

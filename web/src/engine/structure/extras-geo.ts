@@ -73,6 +73,7 @@ export function buildDeckRailings(ctx: BuildCtx, type: RailType, m: RailMats): v
     const a = e.a - 0.2, b = e.b + 0.2;
     const [x0, y0, x1, y1] = e.axis === "x" ? [a, c, b, c] : [c, a, c, b];
     railing(k.kit, k.glass, type, x0, y0, e.room.floorH, x1, y1, e.room.floorH, 3.5, m);
+    ctx.guards.push({ level: e.level.id, axis: e.axis, c, a, b, h: 3.5 });
   }
   for (const [lv, k] of byLevel) {
     if (!k.kit.empty) {
