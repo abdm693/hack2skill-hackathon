@@ -9,7 +9,7 @@ import { relativeTime } from "@/app/lib/utils";
 import { stageLabel, stageTone } from "@/app/lib/steps";
 import { toast } from "@/app/store/toast";
 import { Button } from "@/app/ui/Button";
-import { HouseLineArt, PlotSketch, Wordmark } from "@/app/ui/brand";
+import { PlotSketch, Wordmark } from "@/app/ui/brand";
 import { Dialog, Menu, Pill, type Tone } from "@/app/ui/primitives";
 
 const JOURNEY = [
@@ -226,7 +226,6 @@ function NewProjectCard({ onCreate, creating }: { onCreate: () => void; creating
         className="group relative block w-full overflow-hidden rounded-[24px] bg-sheet text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.8),0_1px_2px_rgb(30_27_23/0.05)] transition-shadow duration-500 hover:shadow-lift"
       >
         <div className="bg-drafting-faint relative px-6 pt-6">
-          <HouseLineArt className="mx-auto max-w-[420px]" />
         </div>
         <div className="flex items-end justify-between gap-4 border-t border-line px-6 py-5">
           <div>

@@ -1,93 +1,119 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { LoaderCircle } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { Tooltip } from "./Tooltip";
 
-const button = cva(
-  "group relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap font-medium transition-[background-color,color,box-shadow,transform,opacity] duration-300 ease-[var(--ease-press)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45",
-  {
-    variants: {
-      variant: {
-        primary:
-          "rounded-full bg-brick text-sheet shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_10px_24px_-12px_rgb(127_49_28/0.7)] hover:bg-brick-deep",
-        ink: "rounded-full bg-ink text-sheet shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-ink-2",
-        outline:
-          "rounded-full bg-plaster text-ink shadow-[0_0_0_1px_var(--color-line-strong),0_1px_2px_rgb(30_27_23/0.06)] hover:shadow-[0_0_0_1px_var(--color-graphite),0_1px_2px_rgb(30_27_23/0.06)]",
-        ghost: "rounded-full text-graphite hover:bg-wash hover:text-ink",
-        glass:
-          "rounded-full bg-night/70 text-sheet shadow-[inset_0_1px_0_rgb(255_255_255/0.1),0_0_0_1px_rgb(255_255_255/0.08)] backdrop-blur-xl hover:bg-night/85",
-        danger: "rounded-full bg-fail text-sheet hover:bg-[#8f1d22]",
-      },
-      size: {
-        xs: "h-7 px-3 text-[12px]",
-        sm: "h-8 px-3.5 text-[13px]",
-        md: "h-10 px-4.5 text-[14px]",
-        lg: "h-12 px-6 text-[15px]",
-        xl: "h-14 px-7 text-[16px]",
-      },
+/*
+ * Pill buttons (DESIGN.md §4). primary: accent, at most one on screen. secondary: surface with a strong line.
+ * quiet: transparent ink-2. ink: the landing's Portal only. hud: glass over 3D. danger: confirm a delete.
+ * Legacy names still work: outline → secondary, ghost → quiet, glass → hud.
+ */
+const base =
+  "group relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium " +
+  "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[160ms] ease-out " +
+  "active:scale-[.97] active:duration-[120ms] outline-none focus-visible:border-accent focus-visible:shadow-focus " +
+  "disabled:pointer-events-none disabled:opacity-45 aria-busy:pointer-events-none";
+
+const variants = {
+  primary: "border-transparent bg-accent text-white hover:bg-accent-press focus-visible:border-accent-press",
+  secondary: "border-line-strong bg-surface text-ink hover:border-ink-4 hover:bg-canvas",
+  quiet: "border-transparent bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
+  ink: "border-transparent bg-ink text-white hover:bg-ink-2",
+  hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.72)] focus-visible:border-hud-accent",
+  danger: "border-transparent bg-fail text-white hover:bg-[#A9211A]",
+} as const;
+
+const button = cva(base, {
+  variants: {
+    variant: { ...variants, outline: variants.secondary, ghost: variants.quiet, glass: variants.hud },
+    size: {
+      xs: "h-7 px-3 text-[12px]",
+      sm: "h-8 px-3.5 text-[13px]",
+      md: "h-10 px-[18px] text-[15px]",
+      lg: "h-12 px-[22px] text-[16px]",
+      xl: "h-14 px-7 text-[17px]",
     },
-    defaultVariants: { variant: "outline", size: "md" },
   },
-);
+  defaultVariants: { variant: "secondary", size: "md" },
+});
+
+export type ButtonVariant = NonNullable<VariantProps<typeof button>["variant"]>;
+export type ButtonSize = NonNullable<VariantProps<typeof button>["size"]>;
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof button> {
+  /** Shows a breathing dot in place of the icon and blocks clicks. */
   loading?: boolean;
   icon?: ReactNode;
-  /** Trailing icon rendered in its own nested circle ("button in button"). */
+  /** Trailing icon (an arrow, a chevron). It nudges right on hover. */
   trailing?: ReactNode;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant, size, loading, icon, trailing, children, disabled, ...rest },
+  { className, variant, size, loading, icon, trailing, children, type = "button", ...rest },
   ref,
 ) {
-  const nested = trailing && (variant === "primary" || variant === "ink" || variant === "glass");
   return (
-    <button
-      ref={ref}
-      className={cn(button({ variant, size }), nested && "pr-1.5", className)}
-      disabled={disabled || loading}
-      aria-busy={loading || undefined}
-      {...rest}
-    >
-      {loading ? <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} /> : icon}
+    <button ref={ref} type={type} className={cn(button({ variant, size }), className)} aria-busy={loading || undefined} {...rest}>
+      {loading ? <span className="size-1.5 rounded-full bg-current animate-breathe" aria-hidden /> : icon}
       {children}
-      {trailing &&
-        (nested ? (
-          <span
-            className={cn(
-              "ml-1 grid place-items-center rounded-full bg-white/14 transition-transform duration-500 ease-[var(--ease-out-quint)] group-hover:translate-x-0.5 group-hover:-translate-y-px",
-              size === "xl" || size === "lg" ? "size-9" : size === "xs" || size === "sm" ? "size-6" : "size-7",
-            )}
-          >
-            {trailing}
-          </span>
-        ) : (
-          <span className="transition-transform duration-500 ease-[var(--ease-out-quint)] group-hover:translate-x-0.5">{trailing}</span>
-        ))}
+      {trailing && <span className="-mr-1 inline-flex transition-transform duration-300 ease-out group-hover:translate-x-0.5">{trailing}</span>}
     </button>
   );
 });
 
-export function IconButton({
-  className,
-  label,
-  children,
-  tone = "light",
-  ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; tone?: "light" | "dark" }) {
-  return (
-    <button
-      aria-label={label}
-      title={label}
-      className={cn(
-        "inline-grid size-8 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] duration-200 active:scale-95 disabled:opacity-40",
-        tone === "light" ? "text-graphite hover:bg-wash hover:text-ink" : "text-sheet/80 hover:bg-white/10 hover:text-sheet",
-        className,
-      )}
-      {...rest}
-    >
+/** Class names for a link styled as a button (e.g. a react-router <Link>). */
+export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {
+  return cn(button({ variant, size }), className);
+}
+
+// ── Icon button ───────────────────────────────────────────────────────────────────────────────────────
+
+const iconButton = cva(
+  "relative inline-grid shrink-0 place-items-center rounded-full border outline-none " +
+    "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[160ms] ease-out active:scale-[.94] " +
+    "focus-visible:border-accent focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-40",
+  {
+    variants: {
+      variant: {
+        quiet: "border-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
+        secondary: "border-line-strong bg-surface text-ink hover:bg-canvas",
+        primary: "border-transparent bg-accent text-white hover:bg-accent-press",
+        hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.72)] focus-visible:border-hud-accent",
+        "hud-quiet": "border-transparent text-hud-ink-2 hover:bg-white/10 hover:text-hud-ink",
+      },
+      size: { xs: "size-7", sm: "size-8", md: "size-10", lg: "size-11" },
+    },
+    defaultVariants: { variant: "quiet", size: "md" },
+  },
+);
+
+export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof iconButton> {
+  /** Required: the accessible name, also shown as the tooltip. */
+  label: string;
+  /** Keys for the tooltip, e.g. ["mod", "K"]. */
+  shortcut?: string[];
+  /** Show the label as a tooltip on hover (default true). */
+  tooltip?: boolean;
+  /** Legacy: "dark" = quiet on a dark surface. */
+  tone?: "light" | "dark";
+}
+
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { className, label, shortcut, tooltip = true, tone, variant, size, children, type = "button", ...rest },
+  ref,
+) {
+  const v = variant ?? (tone === "dark" ? "hud-quiet" : "quiet");
+  const s = size ?? (tone ? "sm" : "md");
+  const btn = (
+    <button ref={ref} type={type} aria-label={label} className={cn(iconButton({ variant: v, size: s }), className)} {...rest}>
       {children}
     </button>
   );
-}
+  return tooltip ? (
+    <Tooltip content={label} shortcut={shortcut}>
+      {btn}
+    </Tooltip>
+  ) : (
+    btn
+  );
+});

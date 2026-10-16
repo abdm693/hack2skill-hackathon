@@ -1,237 +1,194 @@
 @import "tailwindcss";
 
 /*
- * Naqsha design tokens.
- * Lime-plaster off-whites and stone neutrals, graphite ink, and one accent: Lahori brick.
- * Lines are drafting hairlines; radii shrink with hierarchy (sheet > card > control > chip).
+ * Naqsha design tokens (docs/design/DESIGN.md §2, "Calm").
+ * Limestone canvas, white surfaces, one cobalt accent for "next move" or "selected".
+ * The app is light only; anything over 3D or photos uses glass-hud.
  */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-urdu: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Geeza Pro", serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-urdu: "Noto Nastaliq Urdu", serif;
 
-  --color-paper: #f2f0eb;
-  --color-sheet: #faf9f6;
-  --color-plaster: #ffffff;
-  --color-wash: #e9e5dd;
-  --color-wash-2: #e1dcd2;
-  --color-line: #ddd7cc;
-  --color-line-strong: #c6beaf;
-  --color-ink: #1e1b17;
-  --color-ink-2: #34302a;
-  --color-graphite: #5e584f;
-  --color-pencil: #8d877d;
+  --color-canvas: #F6F6F3;      /* page (limestone) */
+  --color-surface: #FFFFFF;     /* cards, sheets */
+  --color-surface-2: #EEEEEA;   /* hover, tracks, chips */
+  --color-surface-3: #E5E5E0;   /* pressed */
+  --color-line: #E4E4DF;
+  --color-line-strong: #CFCFC8;
+  --color-ink: #111113;         /* 17.4:1 */
+  --color-ink-2: #46464B;       /* 8.7:1 */
+  --color-ink-3: #6E6E73;       /* 4.7:1, lowest text */
+  --color-ink-4: #A1A1A6;       /* placeholder/disabled only */
 
-  --color-brick: #9e3f26;
-  --color-brick-deep: #7f311c;
-  --color-brick-soft: #f3e6df;
-  --color-brick-tint: #e6cbbd;
+  --color-accent: #2747F5;      /* 6.35:1 on white */
+  --color-accent-press: #1F3BD6;
+  --color-accent-soft: #EDF0FF;
+  --color-accent-line: #B9C5FF;
 
-  --color-pass: #3e6a4e;
-  --color-pass-soft: #e3ece5;
-  --color-warn: #9c6510;
-  --color-warn-soft: #f4e9d2;
-  --color-fail: #b1262c;
-  --color-fail-soft: #f6e0df;
+  --color-pass: #0E7A55;  --color-pass-soft: #E3F3EC;   /* compliance only */
+  --color-warn: #A35A00;  --color-warn-soft: #FFF3DD;
+  --color-fail: #C8281E;  --color-fail-soft: #FDECEA;
 
-  --color-night: #171512;
+  --color-hud: #18181B;  --color-hud-ink: #F5F5F7;
+  --color-hud-ink-2: #A3A3AD;  --color-hud-accent: #7D93FF;
 
-  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-press: cubic-bezier(0.2, 0, 0, 1);
+  --color-plan-bed: #EEF1FE;  --color-plan-wet: #E6F1F5;  --color-plan-living: #F2F2EF;
+  --color-plan-service: #ECECE8;  --color-plan-outdoor: #E8F1E9;
 
-  --shadow-hair: 0 0 0 1px rgb(30 27 23 / 0.06);
-  --shadow-lift: 0 1px 0 rgb(30 27 23 / 0.04), 0 10px 30px -14px rgb(30 27 23 / 0.16);
-  --shadow-float: 0 1px 0 rgb(30 27 23 / 0.04), 0 24px 48px -20px rgb(30 27 23 / 0.28);
-  --shadow-inset-hi: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --color-author-1: #0D7C72;  --color-author-2: #6A4FD6;  --color-author-3: #C23F78;
+  --color-author-4: #A8641A;  --color-author-5: #4F6378;  --color-author-6: #2F7A3A;
 
-  --animate-shimmer: shimmer 2.2s var(--ease-drawer) infinite;
-  --animate-draw: draw 2.4s var(--ease-out-quint) forwards;
-  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
-  --animate-caret: caret 1s steps(2, start) infinite;
+  --radius-chip: 10px;  --radius-control: 12px;  --radius-card: 20px;
+  --radius-panel: 28px; --radius-media: 32px;
+
+  --shadow-e1: 0 0 0 1px rgb(17 17 19 / .06), 0 1px 2px rgb(17 17 19 / .04);
+  --shadow-e2: 0 0 0 1px rgb(17 17 19 / .05), 0 12px 32px -12px rgb(17 17 19 / .18);
+  --shadow-e3: 0 0 0 1px rgb(17 17 19 / .05), 0 32px 80px -24px rgb(17 17 19 / .30);
+  --shadow-focus: 0 0 0 4px rgb(39 71 245 / .20);
+
+  --text-hero: clamp(3rem, 7.5vw, 7rem); --text-hero--line-height: .95;
+  --text-hero--letter-spacing: -.045em;  --text-hero--font-weight: 600;
+  --text-display: 3rem;    --text-display--line-height: 3.25rem;
+  --text-display--letter-spacing: -.03em; --text-display--font-weight: 600;
+  --text-title: 1.75rem;   --text-title--line-height: 2.125rem;
+  --text-title--letter-spacing: -.02em;  --text-title--font-weight: 600;
+  --text-heading: 1.25rem; --text-heading--line-height: 1.625rem;
+  --text-heading--letter-spacing: -.01em; --text-heading--font-weight: 600;
+  --text-body-lg: 1.0625rem; --text-body-lg--line-height: 1.625rem;
+  --text-body: .9375rem;   --text-body--line-height: 1.375rem;
+  --text-label: .8125rem;  --text-label--line-height: 1.125rem; --text-label--font-weight: 500;
+  --text-caption: .75rem;  --text-caption--line-height: 1rem;
+  --text-caption--letter-spacing: .01em; --text-caption--font-weight: 500;
+
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --ease-camera: cubic-bezier(.65, 0, .35, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  --animate-breathe: breathe 1.6s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.8s var(--ease-sheet) infinite;
 }
 
-/* Keyframes live outside @theme so they are always emitted (some are used from inline styles). */
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+:root {
+  --dur-press: 120ms; --dur-fast: 160ms; --dur-base: 240ms;
+  --dur-panel: 320ms; --dur-slow: 600ms;   /* use as duration-(--dur-panel) */
+  --scrim: rgb(17 17 19 / .32);
+  /* motion spring everywhere: { type: "spring", stiffness: 380, damping: 34 } */
+
+  /* Floating chrome inset: 12px, 16px from 1024px. The project shell sets --dock-h for toasts. */
+  --chrome: 12px;
+  --dock-h: 0px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
 }
-@keyframes draw {
-  to { stroke-dashoffset: 0; }
+@media (min-width: 1024px) {
+  :root { --chrome: 16px; }
 }
-@keyframes appear {
-  to { opacity: 1; }
-}
-@keyframes stamp {
-  0% { opacity: 0; transform: scale(1.6); }
-  60% { opacity: 1; transform: scale(0.94); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes pulse-soft {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-@keyframes caret {
-  to { visibility: hidden; }
-}
-@keyframes dash-march {
-  to { stroke-dashoffset: -24; }
-}
+
+@utility glass-light { background: rgb(255 255 255 / .72); backdrop-filter: blur(20px) saturate(1.8);
+  box-shadow: 0 0 0 1px rgb(17 17 19 / .06), 0 8px 24px -12px rgb(17 17 19 / .16); }
+@utility glass-hud { background: rgb(24 24 27 / .58); backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .10); color: var(--color-hud-ink); }
+@keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 @layer base {
-  html, body, #root { height: 100%; }
-  html { color-scheme: light; }
+  html, body, #root { min-height: 100%; }
+  html { color-scheme: light; -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    background: var(--color-paper);
+    background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01", "ss03";
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
   }
-  ::selection { background: var(--color-brick-tint); color: var(--color-ink); }
-  :focus-visible { outline: 2px solid var(--color-brick); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: var(--color-accent-soft); color: var(--color-ink); }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
   input, textarea, select, button { font: inherit; color: inherit; }
+  input::placeholder, textarea::placeholder { color: var(--color-ink-4); }
   h1, h2, h3, h4 { text-wrap: balance; }
   p { text-wrap: pretty; }
 }
 
-/* Fraunces at display sizes: high optical size, a touch soft. */
-@utility font-display-tight {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 144, "SOFT" 30;
-  letter-spacing: -0.022em;
-}
-@utility font-display-text {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 24;
-  letter-spacing: -0.005em;
-}
-
-/* Drafting-paper grid: minor every 12px, major every 60px. */
-@utility bg-drafting {
-  background-color: var(--color-paper);
-  background-image:
-    linear-gradient(to right, rgb(30 27 23 / 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(30 27 23 / 0.055) 1px, transparent 1px),
-    linear-gradient(to right, rgb(30 27 23 / 0.028) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(30 27 23 / 0.028) 1px, transparent 1px);
-  background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px;
-}
-@utility bg-drafting-faint {
-  background-image:
-    linear-gradient(to right, rgb(30 27 23 / 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(30 27 23 / 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* Hatch used for setbacks and placeholders. */
-@utility bg-hatch {
-  background-image: repeating-linear-gradient(-45deg, rgb(158 63 38 / 0.16) 0 1px, transparent 1px 7px);
-}
-@utility bg-hatch-ink {
-  background-image: repeating-linear-gradient(-45deg, rgb(30 27 23 / 0.08) 0 1px, transparent 1px 8px);
-}
-
-@utility scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-line-strong) transparent;
-}
+@utility tabular { font-variant-numeric: tabular-nums; }
+@utility num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+@utility scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
 
-@utility tabular {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Paper grain, fixed and non-interactive (never on scrolling containers). */
-.grain::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-}
-
-/* Range inputs styled like drafting scales. */
-.range {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 22px;
-  background: transparent;
-  cursor: pointer;
-}
+/* Range inputs: a 2px accent track and a white thumb. */
+.range { -webkit-appearance: none; appearance: none; height: 22px; background: transparent; cursor: pointer; }
 .range::-webkit-slider-runnable-track {
-  height: 2px;
-  background: linear-gradient(to right, var(--color-brick) var(--fill, 0%), rgb(255 255 255 / 0.35) var(--fill, 0%));
-  border-radius: 2px;
+  height: 2px; border-radius: 2px;
+  background: linear-gradient(to right, var(--color-accent) var(--fill, 0%), var(--color-line-strong) var(--fill, 0%));
 }
-.range::-moz-range-track { height: 2px; background: rgb(255 255 255 / 0.35); border-radius: 2px; }
-.range::-moz-range-progress { height: 2px; background: var(--color-brick); }
+.range::-moz-range-track { height: 2px; background: var(--color-line-strong); border-radius: 2px; }
+.range::-moz-range-progress { height: 2px; background: var(--color-accent); }
 .range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px; height: 14px; margin-top: -6px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgb(30 27 23 / 0.25), 0 2px 6px rgb(0 0 0 / 0.25);
-  transition: transform 160ms var(--ease-press);
+  -webkit-appearance: none; width: 16px; height: 16px; margin-top: -7px; border-radius: 999px; background: #fff;
+  box-shadow: var(--shadow-e2); transition: transform var(--dur-press) var(--ease-out);
 }
-.range:active::-webkit-slider-thumb { transform: scale(1.15); }
-.range::-moz-range-thumb {
-  width: 14px; height: 14px; border: 0; border-radius: 999px; background: #fff;
-  box-shadow: 0 0 0 1px rgb(30 27 23 / 0.25), 0 2px 6px rgb(0 0 0 / 0.25);
-}
-.range.range-light::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--color-brick) var(--fill, 0%), var(--color-line) var(--fill, 0%));
-}
-.range.range-light::-moz-range-track { background: var(--color-line); }
+.range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.range::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 999px; background: #fff; box-shadow: var(--shadow-e2); }
 
-/* Code view tokens (tiny highlighter in app/design/CodeBlock.tsx). */
+/* Code view tokens ("Details" only; the tiny highlighter lives in app/design/CodeBlock.tsx). */
 .code-view { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; tab-size: 2; }
-.code-view .tk-com { color: #8b8478; font-style: italic; }
-.code-view .tk-str { color: #b7d3a0; }
-.code-view .tk-num { color: #f2a98e; }
-.code-view .tk-key { color: #cdb7f0; }
-.code-view .tk-fn { color: #93c6e6; }
+.code-view .tk-com { color: #8E8E96; font-style: italic; }
+.code-view .tk-str { color: #A8D5B5; }
+.code-view .tk-num { color: #F5B38A; }
+.code-view .tk-key { color: #B9C5FF; }
+.code-view .tk-fn { color: #8FCBEA; }
+
+/* A blinking caret for streamed text. */
+@keyframes caret { to { visibility: hidden; } }
 
 /*
- * Explore: make room for the app's floating toolbars inside the viewer's own HUD
- * (viewer track classes; harmless if they change). Top bar ≈ 64px, dock ≈ 84px.
+ * Legacy token names (before the overhaul). They point at the new tokens so code that has not moved to the
+ * new names yet still renders in the new palette. Remove this block once nothing in web/src uses them.
  */
-.explore-stage .nq-build-pill,
-.explore-stage .nq-room,
-.explore-stage .nq-banner,
-.explore-stage .nq-mini { top: 72px; }
-.explore-stage .nq-hints,
-.explore-stage .nq-commenting,
-.explore-stage .nq-chip-mock,
-.explore-stage .nq-touch-btns { bottom: 96px; }
-.explore-stage .nq-toast { bottom: 156px; }
-@media (max-width: 639px) {
-  .explore-stage .nq-build-pill,
-  .explore-stage .nq-room,
-  .explore-stage .nq-banner,
-  .explore-stage .nq-mini { top: 116px; }
+@theme {
+  --color-paper: var(--color-canvas);
+  --color-sheet: var(--color-surface);
+  --color-plaster: var(--color-surface);
+  --color-wash: var(--color-surface-2);
+  --color-wash-2: var(--color-surface-3);
+  --color-graphite: var(--color-ink-2);
+  --color-pencil: var(--color-ink-3);
+  --color-brick: var(--color-accent);
+  --color-brick-deep: var(--color-accent-press);
+  --color-brick-soft: var(--color-accent-soft);
+  --color-brick-tint: var(--color-accent-line);
+  --color-night: var(--color-hud);
+  --shadow-hair: 0 0 0 1px rgb(17 17 19 / .06);
+  --shadow-lift: var(--shadow-e2);
+  --shadow-float: var(--shadow-e3);
+  --ease-out-quint: var(--ease-out);
+  --ease-drawer: var(--ease-sheet);
+  --ease-press: cubic-bezier(.2, 0, 0, 1);
+  --animate-pulse-soft: breathe 1.6s ease-in-out infinite;
+  --animate-caret: caret 1s steps(2, start) infinite;
 }
-/* App toasts drop below Explore's top toolbar instead of covering it. */
-body:has(.explore-stage) .app-toaster { top: 128px; }
-@media (max-width: 639px) {
-  body:has(.explore-stage) .app-toaster { top: 196px; }
-}
+@utility font-display-tight { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.03em; }
+@utility font-display-text { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.01em; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 120ms !important;
   }
+}
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
 }
