@@ -37,6 +37,8 @@ export class VisibilityController {
   private bbox = new WeakMap<THREE.Object3D, THREE.Box3>();
   /** Objects held hidden while they wait for their drop-in animation. */
   held = new WeakSet<THREE.Object3D>();
+  /** Objects the viewer hides for its own reasons (cars in walk mode). */
+  suppressed = new WeakSet<THREE.Object3D>();
 
   levelsShown: Set<string> | null = null;
   layersOff = new Set<string>();
@@ -117,8 +119,16 @@ export class VisibilityController {
       if (o === root) return;
       if (!this.base.has(o)) this.base.set(o, o.visible);
       const baseVisible = this.base.get(o)!;
-      o.visible = baseVisible && !this.held.has(o) && !this.hiddenByTags(o);
+      o.visible = baseVisible && !this.held.has(o) && !this.suppressed.has(o) && !this.hiddenByTags(o);
     });
+  }
+
+  /** Hide or show one object for viewer reasons, respecting every other rule. */
+  suppress(o: THREE.Object3D, hidden: boolean) {
+    this.remember(o);
+    if (hidden) this.suppressed.add(o);
+    else this.suppressed.delete(o);
+    o.visible = this.baseVisible(o) && !this.held.has(o) && !this.suppressed.has(o) && !this.hiddenByTags(o);
   }
 
   /** Forget cached state for a subtree that was replaced (bounding boxes moved). */

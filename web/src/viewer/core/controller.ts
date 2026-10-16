@@ -5,31 +5,46 @@
 import * as THREE from "three";
 import type CameraControlsImpl from "camera-controls";
 import type { EffectComposer as EffectComposerImpl, OutlineEffect } from "postprocessing";
-import type { BuildingPlan } from "@contracts/plan";
-import type { Comment, CommentAnchor, Vec3 } from "@contracts/api-types";
+import type { BuildingPlan, Level, Room } from "@contracts/plan";
+import type { AsBuiltSummary, Comment, CommentAnchor, Vec3 } from "@contracts/api-types";
 import type { BuildResult, SectionResult } from "@/engine";
 import type { HouseViewerProps } from "../HouseViewer";
 import { BuildManager } from "./build";
+import { ContextFX, ghostAt, GHOST } from "./context";
 import { engineExtras } from "./engineExtras";
 import { grabCanvas, projectToNdc } from "./capture";
-import { heroPose, houseBox, plotBox } from "./framing";
+import { FloorLift } from "./floors";
+import { ghostBox, heroPose, houseBox, plotBox, roomPose } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
 import { displayLabel, resolveHitTags, type PartRange } from "./tags";
-import { FT, damp, isCoarsePointer, planToWorld, prefersReducedMotion, worldToPlan } from "./units";
+import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, smoothstep, worldToPlan, zOf } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
 import { buildColliderBVH, disposeCollider, type ColliderBVH } from "../walk/collider";
-import { EYE, WalkController } from "../walk/WalkController";
+import { glideSeconds, Navigator, type RoutePlan } from "../walk/route";
+import { DRAG_SENS, EYE, LOCK_SENS, WalkController } from "../walk/WalkController";
 
 export type SuspendableControls = CameraControlsImpl & { suspended: boolean };
 
-type ModeSource = "props" | "handle" | "user" | "finish" | "flyTo";
+type ModeSource = "props" | "handle" | "user" | "flyTo";
 
 const ORBIT_FOV = 50;
 const WALK_FOV = 70;
+/**
+ * Walking field of view: 70° vertical on landscape screens; on a portrait phone that would be a 38° slit, so widen
+ * the vertical angle until about 56° of the room shows side to side (capped before it distorts).
+ */
+function walkFov(aspect: number) {
+  if (!Number.isFinite(aspect) || aspect <= 0) return WALK_FOV;
+  const v = (2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(56) / 2) / aspect) * 180) / Math.PI;
+  return clamp(v, WALK_FOV, 92);
+}
 const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
+const OUTDOOR = new Set(["porch", "balcony", "terrace", "lawn", "driveway", "courtyard", "open_space", "garage"]);
+const IDLE_MS = 2500;
+const HINTS_KEY = "naqsha.walk.coachmark";
 
 const v3 = (v: THREE.Vector3): Vec3 => [round(v.x), round(v.y), round(v.z)];
 const round = (n: number) => Math.round(n * 1000) / 1000;
@@ -72,6 +87,22 @@ function partOverlay(mesh: THREE.Mesh, part: PartRange): THREE.Mesh | null {
   return m;
 }
 
+/** A thin accent frame on a room's floor (orbit goToRoom), fading out. */
+function roomFrame(rect: { x: number; y: number; w: number; d: number }, floorFt: number): THREE.Mesh {
+  const t = 0.09; // m
+  const x0 = rect.x * FT, x1 = (rect.x + rect.w) * FT, z0 = zOf(rect.y + rect.d), z1 = zOf(rect.y);
+  const shape = new THREE.Shape([new THREE.Vector2(x0, z0), new THREE.Vector2(x1, z0), new THREE.Vector2(x1, z1), new THREE.Vector2(x0, z1)]);
+  shape.holes.push(new THREE.Path([new THREE.Vector2(x0 + t, z0 + t), new THREE.Vector2(x0 + t, z1 - t), new THREE.Vector2(x1 - t, z1 - t), new THREE.Vector2(x1 - t, z0 + t)]));
+  const geo = new THREE.ShapeGeometry(shape).rotateX(Math.PI / 2);
+  // ShapeGeometry is in XY; after rotating +90° about X, shape-y maps to world z
+  const mat = new THREE.MeshBasicMaterial({ color: "#7d93ff", transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.y = floorFt * FT + 0.04;
+  m.renderOrder = 9;
+  m.userData = { noPick: true, viewer: "room-frame" };
+  return m;
+}
+
 export interface ThreeBits {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -85,6 +116,9 @@ export class ViewerController {
   readonly walk = new WalkController();
   readonly builds: BuildManager;
   readonly holder = new THREE.Group();
+  readonly ctxfx = new ContextFX();
+  readonly lift = new FloorLift();
+  readonly nav: Navigator;
   props: HouseViewerProps;
 
   gl: THREE.WebGLRenderer | null = null;
@@ -115,25 +149,47 @@ export class ViewerController {
   private fovTarget = ORBIT_FOV;
   private shadowsDirty = true;
   private perf = { samples: 0, sum: 0, settleUntil: 0, locked: false };
-  private dragLook = false;
-  private down: { x: number; y: number; t: number; button: number } | null = null;
+  private down: { x: number; y: number; t: number; button: number; id: number; type: string } | null = null;
+  private drag: { x: number; y: number; moved: number } | null = null;
+  private edge = { since: 0, side: 0 };
   private sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
   private spawnedFor = new WeakSet<BuildResult>();
   private heroDone = false;
-  private userMovedCamera = false;
+  private hadResult = false;
   private readyWaiters: (() => void)[] = [];
   private toastSeq = 0;
   private toastTimer = 0;
   private draftTimer = 0;
+  private hintsTimer = 0;
+  private glideTimer = 0;
+  private routeTimer = 0;
+  private routeSeq = 0;
   private pinEls = new Map<string, HTMLElement | null>();
   private disposed = false;
   private unmountTimer = 0;
+  private lastInput = 0;
+  private unlockedAt = 0;
+  private lockEverSucceeded = false;
+  private lockRefusedToastShown = false;
+  private walkerOnFallback = false;
+  private navWarm = false;
+  private ghostTarget = 1;
+  private lastRoomId: string | null | undefined = undefined;
+  private xfade: HTMLCanvasElement | null = null;
+  private frames: { mesh: THREE.Mesh; start: number }[] = [];
   result: BuildResult | null = null;
 
   constructor(props: HouseViewerProps) {
     this.props = props;
     this.store = makeViewerStore("orbit", isCoarsePointer());
     this.builds = new BuildManager(this);
+    this.nav = new Navigator(props.plan, this.walk);
+    this.nav.sight = (from, dir, max) => {
+      const rc = new THREE.Raycaster(from, dir.clone().normalize(), 0, max);
+      rc.layers.enableAll();
+      const hit = pick(rc, [this.holder], { far: max });
+      return hit ? hit.distance : max;
+    };
     this.holder.name = "naqsha-house";
     this.raycaster.layers.enableAll();
     try {
@@ -151,15 +207,18 @@ export class ViewerController {
     return this.props.plan;
   }
 
+  private get levelsSorted(): Level[] {
+    return [...this.plan.levels].sort((a, b) => a.index - b.index);
+  }
+
   /** Imperative handle exposed through forwardRef (contracts/web-modules.md). */
   readonly handle = {
     capture: (opts?: { width?: number; height?: number }) => this.capture(opts),
     flyTo: (comment: Comment) => this.flyTo(comment),
     setMode: (mode: ViewerMode) => this.setMode(mode, "handle"),
-    // Overhaul additions (contracts/web-modules.md); implemented by the VIEWER track.
-    goToRoom: (_roomId: string) => console.warn("goToRoom: not implemented yet"),
-    setFloor: (_levelId: string) => console.warn("setFloor: not implemented yet"),
-    resetView: () => console.warn("resetView: not implemented yet"),
+    goToRoom: (roomId: string) => this.goToRoom(roomId),
+    setFloor: (levelId: string) => this.setFloor(levelId),
+    resetView: () => this.resetView(),
   };
 
   // ───────────────────────────── lifecycle ─────────────────────────────
@@ -168,6 +227,7 @@ export class ViewerController {
     window.clearTimeout(this.unmountTimer);
     this.disposed = false;
     window.addEventListener("keydown", this.onKeyDown, { capture: true });
+    window.addEventListener("keydown", this.onKeyDownLate);
     window.addEventListener("keyup", this.onKeyUp, { capture: true });
     window.addEventListener("blur", this.onBlur);
     document.addEventListener("visibilitychange", this.onBlur);
@@ -179,6 +239,7 @@ export class ViewerController {
   /** Deferred so a StrictMode remount (unmount → mount in the same tick) keeps the built house. */
   unmount() {
     window.removeEventListener("keydown", this.onKeyDown, { capture: true });
+    window.removeEventListener("keydown", this.onKeyDownLate);
     window.removeEventListener("keyup", this.onKeyUp, { capture: true });
     window.removeEventListener("blur", this.onBlur);
     document.removeEventListener("visibilitychange", this.onBlur);
@@ -197,19 +258,13 @@ export class ViewerController {
     this.cancelAccel?.();
     disposeCollider(this.collider);
     this.collider = null;
-    const shown = this.builds.displayed;
-    if (shown) {
-      shown.result.root.removeFromParent();
-      try {
-        shown.result.dispose();
-      } catch {
-        /* ignore */
-      }
-      this.builds.displayed = null;
-    }
+    this.builds.disposeAll();
+    this.ctxfx.dispose();
     this.result = null;
-    window.clearTimeout(this.toastTimer);
-    window.clearTimeout(this.draftTimer);
+    for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer]) window.clearTimeout(t);
+    window.clearTimeout(this.glideTimer);
+    this.xfade?.remove();
+    this.xfade = null;
     if (import.meta.env.DEV && (window as unknown as { __viewerDebug?: { ctrl?: unknown } }).__viewerDebug?.ctrl === this) {
       delete (window as unknown as { __viewerDebug?: unknown }).__viewerDebug;
     }
@@ -240,6 +295,7 @@ export class ViewerController {
     const plotCenter = plotBox(this.plan).getCenter(new THREE.Vector3());
     this.atmosphere.ground.position.set(plotCenter.x, -0.06, plotCenter.z);
     this.atmosphere.configureShadow(this.atmosphere.fallbackSun, this.store.getState().quality);
+    this.syncGhostBox();
     this.syncSun();
     this.syncSectionCut();
     this.syncVisibility();
@@ -276,10 +332,7 @@ export class ViewerController {
     const b = plotBox(this.plan).expandByScalar(18);
     b.min.y = -2;
     c.setBoundary(b);
-    c.addEventListener("controlstart", () => {
-      this.userMovedCamera = true;
-      this.clearHover();
-    });
+    c.addEventListener("controlstart", () => this.clearHover());
     this.placeHero(false);
   }
 
@@ -298,6 +351,7 @@ export class ViewerController {
       c.removeEventListener("pointerdown", this.onPointerDown);
       c.removeEventListener("pointermove", this.onPointerMove);
       c.removeEventListener("pointerup", this.onPointerUp);
+      c.removeEventListener("pointercancel", this.onPointerUp);
       c.removeEventListener("pointerleave", this.onPointerLeave);
       c.removeEventListener("dblclick", this.onDblClick);
       c.removeEventListener("wheel", this.onWheel);
@@ -308,6 +362,7 @@ export class ViewerController {
     el.addEventListener("pointerdown", this.onPointerDown);
     el.addEventListener("pointermove", this.onPointerMove);
     el.addEventListener("pointerup", this.onPointerUp);
+    el.addEventListener("pointercancel", this.onPointerUp);
     el.addEventListener("pointerleave", this.onPointerLeave);
     el.addEventListener("dblclick", this.onDblClick);
     el.addEventListener("wheel", this.onWheel, { passive: true });
@@ -334,17 +389,26 @@ export class ViewerController {
       busy = true;
       this.shadowsDirty = true;
     }
-    const mode = this.store.getState().mode;
+    if (this.lift.tick(now)) {
+      busy = true;
+      this.shadowsDirty = true;
+    }
+    const s = this.store.getState();
+    const mode = s.mode;
     if (mode === "orbit" && Math.abs(cam.fov - this.fovTarget) > 0.02) {
       cam.fov += (this.fovTarget - cam.fov) * damp(7, dt);
       if (Math.abs(cam.fov - this.fovTarget) < 0.05) cam.fov = this.fovTarget;
       cam.updateProjectionMatrix();
       busy = true;
     }
+    if (this.tickGhost(dt)) busy = true;
+    if (this.tickVehicles(dt, mode)) busy = true;
+    if (this.tickFrames(now)) busy = true;
     if (mode === "walk") this.walkFrame(dt, now, cam);
     else if (this.hoverPending) this.processHover();
     this.updatePins(cam);
     if (this.colliderDirty && mode === "walk" && now > this.colliderTimer) this.ensureCollider();
+    if (mode === "walk" && !this.navWarm && this.collider) this.navWarm = this.nav.warm(3);
     if (this.shadowsDirty) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
@@ -356,6 +420,13 @@ export class ViewerController {
 
   private walkFrame(dt: number, now: number, cam: THREE.PerspectiveCamera) {
     const wasIntro = !!this.walk.transition;
+    // follow the screen's shape (rotating a phone, resizing a panel)
+    const fov = walkFov(cam.aspect);
+    if (Math.abs(fov - this.walk.fov) > 0.5) this.walk.fov = fov;
+    if (!this.walk.transition && Math.abs(cam.fov - this.walk.fov) > 0.05) {
+      cam.fov = this.walk.fov;
+      cam.updateProjectionMatrix();
+    }
     this.walk.update(dt, cam);
     if (wasIntro && !this.walk.transition) this.onIntroDone();
     if (this.minimapMarker) {
@@ -364,14 +435,24 @@ export class ViewerController {
       const D = this.plan.site.plot.depth_ft;
       this.minimapMarker.setAttribute("transform", `translate(${p.x.toFixed(2)} ${(D - p.y).toFixed(2)}) rotate(${((-this.walk.yaw * 180) / Math.PI).toFixed(1)})`);
     }
-    if (now - this.roomAt > 200) {
+    if (now - this.roomAt > 160) {
       this.roomAt = now;
       this.updateRoomLabel();
     }
-    if (now - this.crosshairAt > 120 && this.store.getState().walk === "active") {
+    const s = this.store.getState();
+    if (now - this.crosshairAt > 120 && s.walk === "look" && !s.gliding) {
       this.crosshairAt = now;
       this.updateCrosshairTarget();
     }
+    // the HUD steps back when nothing happens for a while
+    if (Math.hypot(this.walk.vel.x, this.walk.vel.z) > 0.05 || this.walk.glide) this.lastInput = now;
+    const idle = (s.walk === "free" || s.walk === "look") && now - this.lastInput > IDLE_MS;
+    if (idle !== s.idle) this.store.setState({ idle });
+  }
+
+  private activity() {
+    this.lastInput = performance.now();
+    if (this.store.getState().idle) this.store.setState({ idle: false });
   }
 
   // ───────────────────────────── build hooks (called by BuildManager) ─────────────────────────────
@@ -393,7 +474,8 @@ export class ViewerController {
     this.cancelAccel = null;
     this.engineSun = null;
     this.engineHemi = null;
-    // the previous result was disposed by the swap; walking keeps using its merged BVH until the new build lands
+    this.lift.finish();
+    // the previous result went off screen; walking keeps using its merged BVH until the new build lands
     this.result = null;
     this.atmosphere?.setFallbackActive(true);
     this.configureVisibility();
@@ -409,7 +491,14 @@ export class ViewerController {
   }
 
   onBuildComplete(result: BuildResult, _mock: boolean) {
+    const replacing = this.hadResult;
+    this.hadResult = true;
     this.result = result;
+    this.nav.reset(this.plan, []);
+    this.navWarm = false;
+    this.ctxfx.install(result.root);
+    this.syncGhostBox();
+    this.applyVehicleTargets(true);
     this.configureVisibility();
     this.vis.apply(result.root);
     this.adoptEngineSun(result.root);
@@ -423,9 +512,15 @@ export class ViewerController {
     this.cancelAccel?.();
     this.cancelAccel = accelerateLater(result.root);
     this.perf.settleUntil = performance.now() + 2500;
-    if (this.store.getState().mode === "walk") {
+    const walking = this.store.getState().mode === "walk";
+    if (walking) {
       this.ensureCollider();
       if (!this.walk.ready || this.walkerOnFallback) this.spawnWalker(true);
+      else if (replacing) this.keepWalkerStanding();
+    }
+    if (replacing && this.props.preserveCamera === false) {
+      if (walking) this.spawnWalker(true);
+      else this.placeHero(true);
     }
     this.pinEls.clear();
     this.markDirty();
@@ -435,6 +530,7 @@ export class ViewerController {
       const iv = window.setInterval(() => this.invalidate(), 300);
       const stop = () => {
         window.clearInterval(iv);
+        this.ctxfx.syncClones();
         this.invalidate();
       };
       pending.then(stop, stop);
@@ -469,6 +565,121 @@ export class ViewerController {
     }
   }
 
+  // ───────────────────────────── crossfade ─────────────────────────────
+
+  /**
+   * Freeze the current frame over the canvas (a 2D copy) so a scene swap can dissolve instead of cut. Returns false
+   * when there is nothing to show yet or motion is reduced.
+   */
+  beginCrossfade(): boolean {
+    const gl = this.gl, el = this.container;
+    if (!gl || !el || !this.currentRoot() || document.hidden) return false;
+    try {
+      this.renderNow();
+      const src = gl.domElement;
+      const c = this.xfade ?? document.createElement("canvas");
+      c.width = src.width;
+      c.height = src.height;
+      c.getContext("2d")!.drawImage(src, 0, 0);
+      c.className = "nq-xfade";
+      c.style.transition = "none";
+      c.style.opacity = "1";
+      if (!c.isConnected) el.appendChild(c);
+      this.xfade = c;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Dissolve the frozen frame once the new scene has drawn (two frames later). */
+  endCrossfade(ms: number) {
+    const c = this.xfade;
+    if (!c) return;
+    const d = prefersReducedMotion() ? 120 : ms;
+    this.markDirty();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (this.xfade !== c) return;
+        c.style.transition = `opacity ${d}ms cubic-bezier(.22, 1, .36, 1)`;
+        c.style.opacity = "0";
+        window.setTimeout(() => {
+          if (this.xfade === c && c.style.opacity === "0") {
+            c.remove();
+            this.xfade = null;
+          }
+        }, d + 80);
+      }),
+    );
+  }
+
+  private flashTimer = 0;
+  private flashOverlays: THREE.Mesh[] = [];
+
+  /**
+   * After a version swap: a 1.2 s accent outline on what changed (DESIGN Revisions), found by diffing the as-built
+   * summaries (new elements, or ones that moved or resized by more than 3 inches). Skipped when most of the house
+   * changed (a different design altogether) and while walking.
+   */
+  flashChanges(prev: AsBuiltSummary | null, next: BuildResult, delayMs: number) {
+    if (!prev || !this.outline || prefersReducedMotion()) return;
+    const before = new Map(prev.objects.map((o) => [o.id, o]));
+    const changed = new Set<string>();
+    const moved = (a: Vec3, b: Vec3) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) > 0.25;
+    for (const o of next.summary.objects) {
+      if (!o.id || o.id === "unknown" || o.id.startsWith("merged_") || /^light:|^collider|^stair:(ramp|landing)/.test(o.kind ?? "")) continue;
+      const b = before.get(o.id);
+      if (!b || moved(o.bbox_ft.min, b.bbox_ft.min) || moved(o.bbox_ft.max, b.bbox_ft.max)) changed.add(o.id);
+    }
+    if (!changed.size || changed.size > next.summary.objects.length * 0.35) return;
+    window.clearTimeout(this.flashTimer);
+    this.flashTimer = window.setTimeout(() => {
+      if (this.result !== next || this.store.getState().mode !== "orbit" || !this.outline) return;
+      this.clearFlash();
+      const targets: THREE.Object3D[] = [];
+      let budget = 160;
+      next.root.traverseVisible((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || o.userData?.viewer || budget <= 0) return;
+        const parts = o.userData?.parts as PartRange[] | undefined;
+        if (parts?.length) {
+          for (const part of parts) {
+            if (budget <= 0 || !changed.has(String(part.tags.id ?? ""))) continue;
+            const ov = partOverlay(m, part);
+            if (!ov) continue;
+            m.add(ov);
+            this.flashOverlays.push(ov);
+            targets.push(ov);
+            budget--;
+          }
+        } else if (changed.has(String(o.userData?.id ?? ""))) {
+          targets.push(o);
+          budget--;
+        }
+      });
+      if (!targets.length) return;
+      this.outline.selection.set(targets);
+      this.invalidate();
+      this.flashTimer = window.setTimeout(() => {
+        this.clearFlash();
+        // put the hover outline back, if any
+        const t = this.outlined;
+        this.outlined = null;
+        this.setOutline(t);
+        this.invalidate();
+      }, 1200);
+    }, delayMs);
+  }
+
+  private clearFlash() {
+    for (const ov of this.flashOverlays) {
+      ov.removeFromParent();
+      ov.geometry.dispose();
+    }
+    this.flashOverlays = [];
+    this.outline?.selection.clear();
+  }
+
   // ───────────────────────────── prop syncs ─────────────────────────────
 
   private bands(): LevelBand[] {
@@ -476,18 +687,108 @@ export class ViewerController {
     return this.plan.levels.map((l) => ({ id: l.id, floor_y: l.elevation_ft * FT, top_y: (l.elevation_ft + l.height_ft) * FT }));
   }
 
+  /**
+   * Levels to show: the app's `visibleLevels`, further limited by setFloor in orbit. Walking never hides geometry
+   * (DESIGN: "it never hides geometry … and never leaves you mid-air").
+   */
+  private effectiveVisibleLevels(): string[] | undefined {
+    const s = this.store.getState();
+    if (s.mode === "walk") return undefined;
+    const all = this.levelsSorted;
+    let ids = this.props.visibleLevels ?? all.map((l) => l.id);
+    if (s.orbitFloor) {
+      const top = all.find((l) => l.id === s.orbitFloor);
+      if (top) ids = ids.filter((id) => (all.find((l) => l.id === id)?.index ?? 0) <= top.index);
+    }
+    return ids.length === all.length ? undefined : ids;
+  }
+
   private configureVisibility() {
-    this.vis.configure({ visibleLevels: this.props.visibleLevels, layers: this.props.layers }, this.plan.levels, this.bands());
+    this.vis.configure({ visibleLevels: this.effectiveVisibleLevels(), layers: this.props.layers }, this.plan.levels, this.bands());
+  }
+
+  /** Which plan levels currently render (after the dollhouse rule). */
+  private shownLevels(): Set<string> {
+    return new Set(this.plan.levels.filter((l) => !this.vis.levelsShown || this.vis.levelsShown.has(l.id)).map((l) => l.id));
   }
 
   syncVisibility() {
-    this.configureVisibility();
     const root = this.currentRoot();
+    const before = this.shownLevels();
+    const animate = !!root && this.store.getState().mode === "orbit" && !prefersReducedMotion() && !this.store.getState().build.first;
+    let liftMeshes: THREE.Mesh[] = [];
+    if (animate) {
+      this.lift.finish();
+      this.configureVisibility();
+      const after = this.shownLevels();
+      const goingAway = [...before].filter((id) => !after.has(id));
+      if (goingAway.length) liftMeshes = this.levelMeshes(root!, new Set(goingAway), true);
+    } else this.configureVisibility();
+    const after = this.shownLevels();
     if (root) this.vis.apply(root);
+    if (animate) {
+      if (liftMeshes.length && this.scene) this.lift.liftAway(liftMeshes, this.scene);
+      const arriving = [...after].filter((id) => !before.has(id));
+      if (arriving.length) this.lift.settleIn(this.levelRoots(root!, new Set(arriving)));
+    }
     this.colliderDirty = true;
     this.colliderTimer = performance.now() + 150;
+    this.syncGhostBox();
     this.clearHover();
     this.markDirty();
+  }
+
+  /**
+   * The volume neighbours must not hide: the plot up to the top of what is on show (a dollhouse cut or a section
+   * cut lowers it, so neighbours only ghost where they really cover the house).
+   */
+  private syncGhostBox() {
+    const b = ghostBox(this.plan);
+    if (this.vis.levelsShown) {
+      const shown = this.bands().filter((l) => this.vis.levelsShown!.has(l.id));
+      const top = Math.max(...shown.map((l) => l.top_y), 0);
+      if (shown.length) b.max.y = Math.min(b.max.y, top + 0.6);
+    }
+    const cut = this.clipY();
+    if (cut !== null) b.max.y = Math.min(b.max.y, cut);
+    b.max.y = Math.max(b.max.y, b.min.y + 0.5);
+    this.ctxfx.setHouseBox(b);
+  }
+
+  private levelOf(o: THREE.Object3D, root: THREE.Object3D): string | undefined {
+    for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) if (typeof p.userData?.level === "string") return p.userData.level;
+    return undefined;
+  }
+
+  /** Visible meshes of these levels (for the lift-away stand-ins). */
+  private levelMeshes(root: THREE.Object3D, ids: Set<string>, visibleOnly: boolean): THREE.Mesh[] {
+    const out: THREE.Mesh[] = [];
+    const visit = (o: THREE.Object3D) => {
+      if (visibleOnly && !o.visible) return;
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !o.userData?.viewer && !o.userData?.collide && ids.has(this.levelOf(o, root) ?? "")) {
+        const mat = m.material as THREE.Material;
+        if (mat && mat.visible !== false && mat.colorWrite !== false && mat.blending !== THREE.AdditiveBlending) out.push(m);
+      }
+      for (const c of o.children) visit(c);
+    };
+    visit(root);
+    return out;
+  }
+
+  /** Topmost objects of these levels (moved as units when floors settle back in). */
+  private levelRoots(root: THREE.Object3D, ids: Set<string>): THREE.Object3D[] {
+    const out: THREE.Object3D[] = [];
+    const visit = (o: THREE.Object3D) => {
+      const lv = o.userData?.level;
+      if (o !== root && typeof lv === "string" && ids.has(lv) && !o.userData?.viewer && o.userData?.kind !== "merged" && o.userData?.kind !== "section") {
+        out.push(o);
+        return;
+      }
+      for (const c of o.children) visit(c);
+    };
+    visit(root);
+    return out;
   }
 
   syncSectionCut() {
@@ -499,6 +800,7 @@ export class ViewerController {
       this.sectionPlane.constant = cut;
       gl.clippingPlanes = [this.sectionPlane];
     }
+    this.syncGhostBox();
     this.clearHover();
     this.markDirty();
   }
@@ -510,20 +812,31 @@ export class ViewerController {
     const hour = this.props.sunHour;
     const root = this.currentRoot();
     const ex = engineExtras;
-    if (this.engineSun && hour !== undefined && hour !== null && Number.isFinite(hour) && ex.updateSun) {
+    const hasHour = hour !== undefined && hour !== null && Number.isFinite(hour);
+    let altDeg = 30;
+    if (this.engineSun && hasHour && ex.updateSun) {
       // the engine's own sun model: the slider can never disagree with `s.lights.sun({hour})`
       ex.updateSun(this.engineSun, this.plan, hour, this.engineHemi);
       if (root) ex.setTimeOfDay?.(root, this.plan, hour);
-      atm.syncSkyToLight(this.engineSun, ex.sunDirection?.(this.plan, hour).altitude, !!this.engineHemi);
-    } else if (hour === undefined || hour === null || !Number.isFinite(hour)) {
+      const alt = ex.sunDirection?.(this.plan, hour).altitude;
+      atm.syncSkyToLight(this.engineSun, alt, !!this.engineHemi);
+      altDeg = alt !== undefined ? (alt * 180) / Math.PI : sunState(hour, facing).altitudeDeg;
+    } else if (!hasHour) {
       // no slider: keep the design's own sun (engine set it from `s.lights.sun({hour})`)
       if (this.engineSun) atm.syncSkyToLight(this.engineSun, undefined, !!this.engineHemi);
       else atm.applySun(atm.fallbackSun, sunState(17.5, facing), { owned: false, root });
+      altDeg = sunState(17.5, facing).altitudeDeg;
     } else {
       const sun = sunState(hour, facing);
       if (this.engineSun) atm.applySun(this.engineSun, sun, { owned: true, hemi: this.engineHemi, root });
       else atm.applySun(atm.fallbackSun, sun, { owned: false, root });
+      altDeg = sun.altitudeDeg;
     }
+    // night: the `night` prop, or the slider past dusk (civil twilight)
+    const fromSun = hasHour ? 1 - smoothstep(-9, 0.5, altDeg) : 0;
+    const n = this.props.night ? 1 : fromSun;
+    atm.daylightNight = 1 - smoothstep(-2, 16, altDeg);
+    atm.applyNightMode(n, this.engineSun ?? atm.fallbackSun, this.engineHemi, root);
     this.markDirty();
   }
 
@@ -539,6 +852,76 @@ export class ViewerController {
       this.store.setState({ draft: null });
     }
     this.invalidate();
+  }
+
+  /** ghostContext / hideVehicles changed. */
+  syncContext() {
+    this.applyVehicleTargets(false);
+    this.invalidate();
+  }
+
+  // ───────────────────────────── clear view: ghosting + cars ─────────────────────────────
+
+  private tickGhost(dt: number): boolean {
+    const mode = this.store.getState().mode;
+    this.ghostTarget = mode === "orbit" && this.props.ghostContext !== false ? 1 : 0;
+    const g = GHOST.nqGhost;
+    if (g.value === this.ghostTarget) return false;
+    const step = prefersReducedMotion() ? 1 : dt / 0.42;
+    g.value = this.ghostTarget > g.value ? Math.min(this.ghostTarget, g.value + step) : Math.max(this.ghostTarget, g.value - step);
+    return true;
+  }
+
+  private vehicleTarget(mode: ViewerMode): number {
+    const h = this.props.hideVehicles;
+    if (mode === "orbit") return h === true ? 0 : 1;
+    return h === false ? 1 : 0;
+  }
+
+  /** Snap (or start fading) cars toward their target. */
+  private applyVehicleTargets(snap: boolean) {
+    if (!snap) return;
+    const t = this.vehicleTarget(this.store.getState().mode);
+    for (const v of this.ctxfx.vehicles) this.ctxfx.setVehicleOpacity(v, t, (o, hidden) => this.vis.suppress(o, hidden));
+  }
+
+  private tickVehicles(dt: number, mode: ViewerMode): boolean {
+    const vs = this.ctxfx.vehicles;
+    if (!vs.length) return false;
+    const base = this.vehicleTarget(mode);
+    let busy = false;
+    const eye = mode === "walk" ? this.walk.eyePosition(new THREE.Vector3()) : null;
+    for (const v of vs) {
+      let target = base;
+      // shown while walking: fade away when you get close (DESIGN: "fade within 2 m")
+      if (eye && target > 0) target = smoothstep(0.6, 2.0, v.box.distanceToPoint(eye));
+      if (Math.abs(target - v.opacity) < 0.002) {
+        if (v.opacity !== target) this.ctxfx.setVehicleOpacity(v, target, (o, hidden) => this.vis.suppress(o, hidden));
+        continue;
+      }
+      const k = prefersReducedMotion() ? 1 : damp(7, dt);
+      const next = Math.abs(target - v.opacity) < 0.01 ? target : v.opacity + (target - v.opacity) * k;
+      this.ctxfx.setVehicleOpacity(v, next, (o, hidden) => this.vis.suppress(o, hidden));
+      busy = true;
+    }
+    return busy;
+  }
+
+  private tickFrames(now: number): boolean {
+    if (!this.frames.length) return false;
+    this.frames = this.frames.filter((f) => {
+      const t = (now - f.start) / 1900;
+      const mat = f.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.95 * (1 - smoothstep(0.55, 1, t));
+      if (t >= 1) {
+        f.mesh.removeFromParent();
+        f.mesh.geometry.dispose();
+        mat.dispose();
+        return false;
+      }
+      return true;
+    });
+    return true;
   }
 
   // ───────────────────────────── quality ─────────────────────────────
@@ -598,6 +981,59 @@ export class ViewerController {
     c.setLookAt(pos.x, pos.y, pos.z, hit.point.x, hit.point.y, hit.point.z, true);
   }
 
+  /** Orbit: show the house up to `levelId` (dollhouse cut); null shows every floor. */
+  setOrbitFloor(levelId: string | null) {
+    if (this.store.getState().orbitFloor === levelId) return;
+    this.store.setState({ orbitFloor: levelId });
+    this.syncVisibility();
+  }
+
+  /** Orbit goToRoom: cut the house at the room's floor and look down into it, with a brief outline. */
+  private frameRoom(room: Room) {
+    const lvl = this.plan.levels.find((l) => l.id === room.level);
+    const c = this.controls;
+    if (!lvl || !c) return;
+    const top = this.levelsSorted[this.levelsSorted.length - 1];
+    this.setOrbitFloor(top && top.id === lvl.id ? null : lvl.id);
+    const az = c.azimuthAngle;
+    const pose = roomPose(room.rect, lvl.elevation_ft, az);
+    c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, !prefersReducedMotion());
+    if (this.scene) {
+      const f = roomFrame(room.rect, lvl.elevation_ft);
+      this.scene.add(f);
+      this.frames.push({ mesh: f, start: performance.now() });
+    }
+    this.invalidate();
+  }
+
+  // ───────────────────────────── handle: floors, rooms, reset ─────────────────────────────
+
+  setFloor(levelId: string) {
+    const lvl = this.plan.levels.find((l) => l.id === levelId) ?? null;
+    if (this.store.getState().mode === "walk") {
+      if (lvl) this.walkToLevel(lvl);
+      return;
+    }
+    this.setOrbitFloor(lvl ? (lvl.id === this.levelsSorted[this.levelsSorted.length - 1]?.id ? null : lvl.id) : null);
+  }
+
+  goToRoom(roomId: string) {
+    const room = this.plan.rooms.find((r) => r.id === roomId);
+    if (!room) {
+      console.warn(`[viewer] goToRoom: no room "${roomId}"`);
+      return;
+    }
+    if (this.store.getState().mode === "walk") this.walkToRoom(room);
+    else this.frameRoom(room);
+  }
+
+  resetView() {
+    this.store.setState({ orbitFloor: null });
+    if (this.store.getState().mode === "walk") this.leaveWalk("user");
+    else this.syncVisibility();
+    this.placeHero(true);
+  }
+
   // ───────────────────────────── modes ─────────────────────────────
 
   setMode(next: ViewerMode, source: ModeSource) {
@@ -608,35 +1044,69 @@ export class ViewerController {
   }
 
   private enterWalk(initial: boolean) {
-    this.store.setState({ mode: "walk", walk: "intro", target: null, hover: null });
+    this.store.setState({ mode: "walk", walk: "intro", target: null, hover: null, idle: false, help: false });
     const cam = this.camera, c = this.controls;
     if (!cam) return; // attachThree() calls back once the canvas exists
     this.clearHover();
     this.builds.finishAnims();
+    this.lift.finish();
+    // every floor comes back while walking
+    this.configureVisibility();
+    const root = this.currentRoot();
+    if (root) this.vis.apply(root);
+    this.colliderDirty = true;
     this.ensureCollider();
     this.spawnWalker(false);
     if (c) {
       c.suspended = true;
       c.enabled = false;
     }
-    this.walk.fov = WALK_FOV;
+    this.walk.fov = walkFov(cam.aspect);
     this.walk.enabled = false;
     this.walk.beginTransition(cam, initial || prefersReducedMotion() ? 0.01 : 1.15);
     this.perf.settleUntil = performance.now() + 2500;
-    this.invalidate();
+    this.lastRoomId = undefined;
+    this.markDirty();
   }
 
-  private walkerOnFallback = false;
+  /** The main door from the plan: stand outside it, facing in (DESIGN "Spawn at the main door, facing in"). */
+  private doorSpawn(): { pos: THREE.Vector3; look: THREE.Vector3 } | null {
+    const plan = this.plan;
+    const ground = this.levelsSorted.find((l) => l.index >= 0) ?? this.levelsSorted[0];
+    if (!ground) return null;
+    const ops = (plan.openings ?? []).filter((o) => o.level === ground.id);
+    const roomOf = (id: string) => plan.rooms.find((r) => r.id === id);
+    const outsideish = (id: string) => id === "exterior" || OUTDOOR.has(roomOf(id)?.type ?? "");
+    const main =
+      ops.find((o) => o.type === "main_door") ??
+      ops.find((o) => (o.type === "door" || o.type === "double_door") && o.between.some(outsideish) && o.between.some((b) => !outsideish(b)));
+    if (!main) return null;
+    const inside = main.between.map(roomOf).find((r) => r && !OUTDOOR.has(r.type));
+    if (!inside) return null;
+    const [ax, ay] = main.at;
+    const r = inside.rect;
+    const sides: [number, number, number][] = [
+      [Math.abs(ay - r.y), 0, -1],
+      [Math.abs(ay - (r.y + r.d)), 0, 1],
+      [Math.abs(ax - r.x), -1, 0],
+      [Math.abs(ax - (r.x + r.w)), 1, 0],
+    ];
+    sides.sort((a, b) => a[0] - b[0]);
+    const [, nx, ny] = sides[0];
+    const elev = ground.elevation_ft;
+    return { pos: planToWorld(ax + nx * 6.5, ay + ny * 6.5, elev), look: planToWorld(ax, ay, elev + 5.2) };
+  }
 
   private spawnWalker(force: boolean) {
     const res = this.result;
     if (res && (force || !this.spawnedFor.has(res))) {
       this.spawnedFor.add(res);
-      const p = res.spawn.position.clone();
-      // the finished floor of the plan level the spawn is on (spawn may be given at feet or eye height)
-      const levels = [...this.plan.levels].sort((a, b) => b.elevation_ft - a.elevation_ft);
-      const lvl = levels.find((l) => l.elevation_ft * FT <= p.y + 0.35) ?? levels[levels.length - 1];
-      this.walk.setSpawn(p, res.spawn.lookAt.clone(), lvl ? lvl.elevation_ft * FT : undefined);
+      const door = this.doorSpawn();
+      if (door) {
+        this.walk.setSpawn(door.pos, door.look);
+        // the door spot must be on a floor and free; otherwise trust the engine's spawn
+        if (this.walk.overlaps(this.walk.feet) || Math.abs(this.walk.feet.y - door.pos.y) > 1.2) this.engineSpawn(res);
+      } else this.engineSpawn(res);
       this.walkerOnFallback = false;
     } else if (!this.walk.ready) {
       // no house yet: stand on the road facing the plot until the build lands
@@ -646,22 +1116,62 @@ export class ViewerController {
     }
   }
 
+  private engineSpawn(res: BuildResult) {
+    const p = res.spawn.position.clone();
+    const levels = [...this.plan.levels].sort((a, b) => b.elevation_ft - a.elevation_ft);
+    const lvl = levels.find((l) => l.elevation_ft * FT <= p.y + 0.35) ?? levels[levels.length - 1];
+    this.walk.setSpawn(p, res.spawn.lookAt.clone(), lvl ? lvl.elevation_ft * FT : undefined);
+  }
+
+  /** After a rebuild under your feet: stay put if you still can, else step to the nearest free spot. */
+  private keepWalkerStanding() {
+    const f = this.walk.feet;
+    const g = this.walk.groundAt(f, f.y + 0.4, f.y - 0.6);
+    if (g !== null && !this.walk.overlaps(f.clone().setY(g))) {
+      f.y = g;
+      return;
+    }
+    const spot = this.walk.findFreeSpot(f, g ?? f.y, 3);
+    if (spot) this.walk.place(spot, this.walk.yaw, this.walk.pitch);
+    else this.spawnWalker(true);
+  }
+
   private onIntroDone() {
     const s = this.store.getState();
     if (s.walk !== "intro") return;
-    if (this.isLocked()) this.activateWalk();
-    else this.store.setState({ walk: "ready" });
+    this.walk.enabled = true;
+    this.lastInput = performance.now();
+    this.store.setState({ walk: this.isLocked() ? "look" : "free" });
+    this.maybeShowHints();
+  }
+
+  private maybeShowHints() {
+    let seen = false;
+    try {
+      seen = localStorage.getItem(HINTS_KEY) === "1";
+      localStorage.setItem(HINTS_KEY, "1");
+    } catch {
+      /* storage blocked: show it this once */
+    }
+    if (seen) return;
+    this.store.setState({ hints: true });
+    window.clearTimeout(this.hintsTimer);
+    this.hintsTimer = window.setTimeout(() => this.store.setState({ hints: false }), 4500);
   }
 
   private leaveWalk(source: ModeSource) {
     if (this.isLocked()) document.exitPointerLock?.();
     this.walk.enabled = false;
     this.walk.transition = null;
+    if (this.walk.glide) this.walk.cancelGlide();
     this.walk.input.keys.clear();
-    this.dragLook = false;
+    this.walk.input.turn.yaw = this.walk.input.turn.pitch = 0;
+    window.clearTimeout(this.routeTimer);
     const cam = this.camera, c = this.controls;
-    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, level: null });
+    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, roomId: null, level: null, gliding: false, route: null, idle: false, hints: false, help: false, mapLevel: null });
+    this.fireRoomChange(null, null);
     this.setOutline(null);
+    this.syncVisibility();
     if (cam && c) {
       const fwd = cam.getWorldDirection(new THREE.Vector3());
       const ahead = cam.position.clone().addScaledVector(fwd, 3.5);
@@ -669,19 +1179,23 @@ export class ViewerController {
       c.enabled = true;
       c.setLookAt(cam.position.x, cam.position.y, cam.position.z, ahead.x, ahead.y, ahead.z, false);
       if (source !== "flyTo") {
-        const focus = new THREE.Vector3(this.walk.feet.x, this.walk.feet.y + 1, this.walk.feet.z);
-        const back = new THREE.Vector3(fwd.x, 0, fwd.z);
-        if (back.lengthSq() < 1e-6) back.set(0, 0, -1);
-        back.normalize();
-        const pos = focus.clone().addScaledVector(back, -10).add(new THREE.Vector3(0, 9, 0));
-        c.setLookAt(pos.x, pos.y, pos.z, focus.x, focus.y, focus.z, true);
+        // a calm overview from the side you were looking at (not hovering over the water tank)
+        const h = new THREE.Vector3(fwd.x, 0, fwd.z);
+        if (h.lengthSq() < 1e-6) h.set(0, 0, -1);
+        h.normalize();
+        // keep your heading when it shows the street side; otherwise the usual sunny three-quarter front view
+        let azDeg = THREE.MathUtils.radToDeg(Math.atan2(-h.x, -h.z));
+        if (Math.abs(azDeg) > 80) azDeg = 30 * (sunState(this.props.sunHour ?? 16.5, (this.plan.site?.facing ?? "N") as Facing).dir.x >= 0 ? 1 : -1);
+        else if (Math.abs(azDeg) < 18) azDeg = 18 * (azDeg < 0 ? -1 : 1);
+        const pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, !prefersReducedMotion());
       }
     }
     this.fovTarget = ORBIT_FOV;
     this.invalidate();
     if (source !== "props" && this.props.mode !== "orbit") {
       try {
-        this.props.onExitWalk?.(source === "flyTo" ? "flyTo" : source === "finish" ? "finish" : "exit");
+        this.props.onExitWalk?.(source === "flyTo" ? "flyTo" : "exit");
       } catch (e) {
         console.warn("[viewer] onExitWalk threw", e);
       }
@@ -689,78 +1203,169 @@ export class ViewerController {
   }
 
   /**
-   * Jump to another floor (number keys while walking): the stair hall of that level, else its largest room,
-   * at the nearest free spot. A safety net for awkward stairs and a quick way around big houses.
+   * F / "Finish": ask the app to wrap up. The viewer only frees the pointer (so a confirm sheet can be used) and
+   * stays in walk mode; the app confirms and then sets `mode` to "orbit" — or keeps walking if you cancel.
    */
-  gotoLevel(index: number) {
-    const levels = [...this.plan.levels].sort((a, b) => a.index - b.index);
-    const lvl = levels[index];
-    const cam = this.camera;
-    if (!lvl || !cam || this.store.getState().mode !== "walk") return;
-    this.ensureCollider();
-    const rooms = this.plan.rooms.filter((r) => r.level === lvl.id);
-    const enclosed = rooms.filter((r) => !["lawn", "driveway", "open_space", "courtyard", "porch", "balcony", "terrace"].includes(r.type));
-    const pickRoom = enclosed.find((r) => r.type === "stair") ?? [...enclosed].sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d)[0];
-    let target: THREE.Vector3;
-    if (pickRoom) target = planToWorld(pickRoom.rect.x + pickRoom.rect.w / 2, pickRoom.rect.y + pickRoom.rect.d / 2, lvl.elevation_ft);
-    else {
-      // e.g. the roof: stand near the stair tower if there is one, else mid-plot
-      const m = this.plan.roof?.mumty?.rect;
-      const W = this.plan.site.plot.width_ft, D = this.plan.site.plot.depth_ft;
-      target = m ? planToWorld(m.x + m.w + 3, m.y + m.d / 2, lvl.elevation_ft) : planToWorld(W / 2, D / 2, lvl.elevation_ft);
-    }
-    const spot = this.walk.findFreeSpot(target, lvl.elevation_ft * FT) ?? this.walk.findFreeSpot(target.clone().setY(target.y + 0.3), lvl.elevation_ft * FT);
-    if (!spot) {
-      this.toast(`No clear spot on the ${lvl.name.toLowerCase()}`);
-      return;
-    }
-    this.walk.feet.copy(spot);
-    this.walk.camY = spot.y + EYE;
-    this.walk.vel.set(0, 0, 0);
-    this.walk.vy = 0;
-    this.walk.grounded = true;
-    this.walk.beginTransition(cam, prefersReducedMotion() ? 0.01 : 0.6);
-    this.toast(lvl.name);
-  }
-
-  /** "Finish walkthrough" (F, touch Finish): leave walk mode, onExitWalk("finish"). */
   finishWalk() {
     if (this.store.getState().mode !== "walk") return;
-    this.leaveWalk("finish");
+    if (this.isLocked()) document.exitPointerLock?.();
+    this.walk.input.keys.clear();
+    try {
+      this.props.onExitWalk?.("finish");
+    } catch (e) {
+      console.warn("[viewer] onExitWalk threw", e);
+    }
   }
 
-  /** Exit / Back-to-overview buttons: leave walk mode, onExitWalk("exit"). */
+  /** Exit / Back-to-overview: leave walk mode, onExitWalk("exit"). */
   exitWalk() {
     if (this.store.getState().mode !== "walk") return;
     this.leaveWalk("user");
   }
 
-  private activateWalk() {
-    this.walk.enabled = true;
-    this.store.setState({ walk: "active" });
-    this.invalidate();
+  // ───────────────────────────── walk navigation ─────────────────────────────
+
+  private currentLevel(): Level {
+    return this.nav.levelAt(this.walk.feet.y);
   }
 
-  pauseWalk() {
-    if (this.store.getState().walk !== "active") return;
-    this.walk.enabled = false;
-    this.walk.input.keys.clear();
-    this.store.setState({ walk: "paused", target: null });
-    this.setOutline(null);
+  /** Floor stack while walking: glide up/down the stair to that floor's landing, facing into the floor. */
+  private walkToLevel(lvl: Level) {
+    if (!this.camera) return;
+    if (this.walk.transition) this.walk.transition.t = 1;
+    this.ensureCollider();
+    if (!this.walk.ready || !this.collider) return;
+    if (this.currentLevel().id === lvl.id && !this.walk.glide) {
+      this.toast(`You're on the ${lvl.name.toLowerCase()}`);
+      return;
+    }
+    this.walk.cancelGlide();
+    const route = this.nav.route(this.walk.feet.clone(), { kind: "level", level: lvl });
+    if (route.ok && route.pts.length > 1) {
+      this.startGlide(route);
+      return;
+    }
+    // no stair joins these floors: hop there directly (crossfade) to the stair hall or the biggest room
+    const spot = this.levelFallbackSpot(lvl);
+    if (!spot) {
+      this.toast(`No clear spot on the ${lvl.name.toLowerCase()}`);
+      return;
+    }
+    this.jumpTo(spot, this.nav.intoFloorYaw(lvl, spot), -0.06);
+    this.toast(`No stair reaches the ${lvl.name.toLowerCase()} yet, so I've taken you straight there`);
   }
 
-  /** Resume / start walking: pointer lock on desktop (needs a user gesture), immediate on touch. */
+  private levelFallbackSpot(lvl: Level): THREE.Vector3 | null {
+    const rooms = this.plan.rooms.filter((r) => r.level === lvl.id);
+    const enclosed = rooms.filter((r) => !OUTDOOR.has(r.type));
+    const pickRoom = enclosed.find((r) => r.type === "stair") ?? [...enclosed].sort((a, b) => b.rect.w * b.rect.d - a.rect.w * a.rect.d)[0];
+    let target: THREE.Vector3;
+    if (pickRoom) target = planToWorld(pickRoom.rect.x + pickRoom.rect.w / 2, pickRoom.rect.y + pickRoom.rect.d / 2, lvl.elevation_ft);
+    else {
+      const m = this.plan.roof?.mumty?.rect;
+      const W = this.plan.site.plot.width_ft, D = this.plan.site.plot.depth_ft;
+      target = m ? planToWorld(m.x + m.w + 3, m.y + m.d / 2, lvl.elevation_ft) : planToWorld(W / 2, D / 2, lvl.elevation_ft);
+    }
+    return this.walk.findFreeSpot(target, lvl.elevation_ft * FT) ?? this.walk.findFreeSpot(target.clone().setY(target.y + 0.3), lvl.elevation_ft * FT);
+  }
+
+  private walkToRoom(room: Room) {
+    if (!this.camera) return;
+    if (this.walk.transition) this.walk.transition.t = 1;
+    this.ensureCollider();
+    if (!this.walk.ready || !this.collider) return;
+    this.walk.cancelGlide();
+    const route = this.nav.route(this.walk.feet.clone(), { kind: "room", room });
+    if (route.ok && route.pts.length > 1 && !route.blocked) {
+      this.startGlide(route, room.id);
+      return;
+    }
+    if (route.ok && route.blocked) {
+      // furniture stands in the only doorway: say so, and step straight in
+      this.jumpTo(route.end, route.yaw, route.pitch);
+      this.toast(`Furniture blocks the way into the ${room.name.toLowerCase()}, so I've brought you straight in`);
+      return;
+    }
+    const lvl = this.plan.levels.find((l) => l.id === room.level)!;
+    const c = planToWorld(room.rect.x + room.rect.w / 2, room.rect.y + room.rect.d / 2, lvl.elevation_ft);
+    const spot = this.walk.findFreeSpot(c, lvl.elevation_ft * FT, Math.max(1.5, (Math.min(room.rect.w, room.rect.d) * FT) / 2));
+    if (!spot) {
+      this.toast(`There's no room to stand in the ${room.name.toLowerCase()}`);
+      return;
+    }
+    const corner = planToWorld(room.rect.x + room.rect.w, room.rect.y + room.rect.d, 0);
+    const yaw = Math.atan2(-(corner.x - spot.x), -(corner.z - spot.z));
+    this.jumpTo(spot, yaw, -0.06);
+    this.toast(`No door reaches the ${room.name.toLowerCase()} yet, so I've brought you straight in`);
+  }
+
+  /** Minimap click on open ground (no room there): walk to that spot. */
+  walkToPoint(levelId: string, xFt: number, yFt: number) {
+    const lvl = this.plan.levels.find((l) => l.id === levelId);
+    if (!lvl || this.store.getState().mode !== "walk") return;
+    if (this.walk.transition) this.walk.transition.t = 1;
+    this.ensureCollider();
+    if (!this.walk.ready || !this.collider) return;
+    this.walk.cancelGlide();
+    const route = this.nav.route(this.walk.feet.clone(), { kind: "point", level: lvl, x: xFt * FT, z: zOf(yFt) });
+    if (route.ok && route.pts.length > 1) this.startGlide(route);
+    else this.toast("No way to walk there");
+  }
+
+  /** Draw the route on the minimap (300 ms), then glide along it. */
+  private startGlide(route: RoutePlan, toRoom?: string) {
+    window.clearTimeout(this.routeTimer);
+    const id = ++this.routeSeq;
+    this.walk.input.look.dx = this.walk.input.look.dy = 0;
+    this.store.setState({ route: { id, byLevel: route.byLevel, to: toRoom }, gliding: true, mapLevel: null, idle: false });
+    if (prefersReducedMotion()) {
+      this.jumpTo(route.end, route.yaw, route.pitch);
+      this.endGlide(id);
+      return;
+    }
+    const go = () => {
+      if (this.routeSeq !== id || this.store.getState().mode !== "walk") return;
+      this.walk.beginGlide(route.pts, glideSeconds(route), route.yaw, route.pitch, () => this.endGlide(id), undefined, route.weights);
+    };
+    this.routeTimer = window.setTimeout(go, 300);
+  }
+
+  private endGlide(id: number) {
+    if (this.routeSeq !== id) return;
+    this.store.setState({ gliding: false });
+    this.updateRoomLabel();
+    this.lastInput = performance.now();
+    window.clearTimeout(this.routeTimer);
+    this.routeTimer = window.setTimeout(() => {
+      if (this.routeSeq === id) this.store.setState({ route: null });
+    }, 700);
+  }
+
+  /** Teleport with a short crossfade (no route, or reduced motion). */
+  private jumpTo(feet: THREE.Vector3, yaw: number, pitch: number) {
+    const fade = this.beginCrossfade();
+    this.walk.cancelGlide();
+    this.walk.place(feet, yaw, pitch);
+    if (fade) this.endCrossfade(300);
+    this.updateRoomLabel();
+  }
+
+  // ───────────────────────────── pointer lock ─────────────────────────────
+
+  /** Start / resume mouse look: pointer lock on desktop (needs a user gesture); touch and drag mode just walk. */
   requestLock() {
     const s = this.store.getState();
     if (s.mode !== "walk") return;
-    if (this.walk.transition) this.walk.transition.t = 1; // skip the fly-in
-    if (s.touch || this.dragLook) {
-      this.activateWalk();
+    if (this.walk.transition) this.walk.transition.t = 1;
+    if (s.walk === "commenting") this.resumeWalk(false);
+    if (s.touch || s.lockRefused) {
+      this.walk.enabled = true;
+      if (this.store.getState().walk !== "free") this.store.setState({ walk: "free" });
       return;
     }
     const el = this.gl?.domElement as (HTMLCanvasElement & { requestPointerLock(o?: unknown): Promise<void> | void }) | undefined;
     if (!el?.requestPointerLock) {
-      this.fallbackDragLook();
+      this.onLockFailed();
       return;
     }
     const plain = () => {
@@ -779,28 +1384,20 @@ export class ViewerController {
     }
   }
 
-  private lockEverSucceeded = false;
-
   /**
    * Chrome refuses a re-lock for ~1 s after the user pressed Esc. If lock has worked before in this session, that is
    * the likely cause: ask for another click instead of dropping to drag-to-look for good.
    */
   private onLockFailed() {
     if (this.lockEverSucceeded) {
-      if (this.store.getState().walk === "active" && !this.isLocked()) this.pauseWalk();
-      this.toast("Click again to resume walking");
+      this.toast("Click again to look around");
       return;
     }
-    this.fallbackDragLook();
-  }
-
-  private fallbackDragLook() {
-    if (this.store.getState().mode !== "walk") return;
-    if (this.dragLook && this.store.getState().walk === "active") return;
-    this.dragLook = true;
-    this.store.setState({ dragLook: true });
-    this.activateWalk();
-    this.toast("Pointer lock unavailable here: drag to look around");
+    this.store.setState({ lockRefused: true });
+    if (!this.lockRefusedToastShown) {
+      this.lockRefusedToastShown = true;
+      this.toast("Drag to look around");
+    }
   }
 
   isLocked() {
@@ -808,49 +1405,134 @@ export class ViewerController {
   }
 
   private onPointerLockChange = () => {
+    const s = this.store.getState();
     if (this.isLocked()) {
       this.lockEverSucceeded = true;
-      this.dragLook = false;
-      this.store.setState({ dragLook: false });
-      if (this.store.getState().mode === "walk") this.activateWalk();
-    } else if (this.store.getState().walk === "active") this.pauseWalk();
+      this.walk.lookLag = 40;
+      if (s.mode === "walk" && s.walk !== "intro") {
+        this.walk.enabled = true;
+        this.store.setState({ walk: "look", lockRefused: false, target: null });
+      }
+    } else {
+      this.unlockedAt = performance.now();
+      if (s.walk === "look") {
+        this.walk.input.keys.clear();
+        this.store.setState({ walk: "free", target: null });
+      }
+      this.setOutline(null);
+    }
   };
 
   private onPointerLockError = () => this.onLockFailed();
 
   private onLockedMouseMove = (e: MouseEvent) => {
-    if (!this.isLocked() || !this.walk.enabled) return;
+    if (!this.isLocked() || !this.walk.enabled || this.walk.glide) return;
+    this.activity();
     // clamp occasional spikes from some platforms
-    this.walk.input.look.dx += THREE.MathUtils.clamp(e.movementX, -180, 180);
-    this.walk.input.look.dy += THREE.MathUtils.clamp(e.movementY, -180, 180);
+    this.walk.input.look.dx += THREE.MathUtils.clamp(e.movementX, -180, 180) * LOCK_SENS;
+    this.walk.input.look.dy += THREE.MathUtils.clamp(e.movementY, -180, 180) * LOCK_SENS;
   };
+
+  /** Leave the "comment pinned" pause and walk again (re-locking the pointer when that is how you were looking). */
+  resumeWalk(relock = true) {
+    const s = this.store.getState();
+    if (s.mode !== "walk") return;
+    this.walk.enabled = true;
+    this.store.setState({ walk: "free" });
+    if (relock && !s.touch && !s.lockRefused) this.requestLock();
+  }
+
+  setHelp(open: boolean) {
+    this.store.setState({ help: open, hints: false });
+    if (open) this.activity();
+  }
+
+  setMapLevel(levelId: string | null) {
+    this.store.setState({ mapLevel: levelId });
+    this.activity();
+  }
 
   // ───────────────────────────── keyboard ─────────────────────────────
 
   private onKeyDown = (e: KeyboardEvent) => {
     const s = this.store.getState();
-    if (s.mode !== "walk" || isEditable(e.target)) return;
-    if (s.walk === "active") {
-      if (MOVE_KEYS.has(e.code)) {
+    if (s.mode !== "walk" || isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const walking = s.walk === "free" || s.walk === "look";
+    const consume = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (MOVE_KEYS.has(e.code)) {
+      if (walking) {
+        this.activity();
+        // the route is still drawing: walking yourself wins
+        if (s.gliding && !this.walk.glide && e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
+          window.clearTimeout(this.routeTimer);
+          this.routeSeq++;
+          this.store.setState({ gliding: false, route: null });
+        }
         this.walk.input.keys.add(e.code);
-        if (e.code.startsWith("Arrow")) e.preventDefault();
-      } else if (e.code === "KeyC" && !e.repeat) {
-        e.preventDefault();
-        this.placeComment(0, 0, true);
-      } else if (e.code === "KeyF" && !e.repeat) {
-        e.preventDefault();
-        this.finishWalk();
-      } else if (/^Digit[1-9]$/.test(e.code) && !e.repeat) {
-        e.preventDefault();
-        this.gotoLevel(Number(e.code.slice(5)) - 1);
-      } else if (e.code === "Escape" && !this.isLocked()) this.pauseWalk();
-      else if (e.code === "Space") e.preventDefault();
-    } else if (s.walk === "paused" || s.walk === "ready") {
-      if ((e.code === "Enter" || e.code === "Space") && !e.repeat) {
-        e.preventDefault();
-        this.requestLock();
-      } else if (e.code === "KeyF" && !e.repeat) this.finishWalk();
+        consume();
+      }
+      return;
     }
+    if (e.repeat) {
+      if (e.code === "Space") e.preventDefault();
+      return;
+    }
+    switch (e.code) {
+      case "KeyC":
+        if (walking) {
+          consume();
+          this.placeComment(0, 0, true);
+        }
+        break;
+      case "KeyF":
+        if (s.walk !== "intro") {
+          consume();
+          this.finishWalk();
+        }
+        break;
+      case "Slash":
+        if (e.shiftKey) {
+          consume();
+          this.setHelp(!s.help);
+        }
+        break;
+      case "Enter":
+      case "Space":
+        // a focused button (the app's Next, a sheet) keeps its own Enter/Space
+        if ((e.target as Element | null)?.closest?.("button, a[href], [role='button'], summary")) break;
+        if (s.walk === "free" || s.walk === "commenting") {
+          consume();
+          this.requestLock();
+        } else if (e.code === "Space") e.preventDefault();
+        break;
+      default:
+        if (/^Digit[1-9]$/.test(e.code) && walking) {
+          const lvl = this.levelsSorted[Number(e.code.slice(5)) - 1];
+          if (lvl) {
+            consume();
+            this.setFloor(lvl.id);
+          }
+        }
+    }
+  };
+
+  /** Esc runs last (bubble phase) so an app sheet that handles it first (preventDefault) wins. */
+  private onKeyDownLate = (e: KeyboardEvent) => {
+    if (e.code !== "Escape" || e.defaultPrevented || isEditable(e.target)) return;
+    const s = this.store.getState();
+    if (s.mode !== "walk") return;
+    // the Esc that released the pointer lock is not also "leave walk"
+    if (this.isLocked() || performance.now() - this.unlockedAt < 400) return;
+    if (s.help) return this.setHelp(false);
+    if (s.walk === "commenting") return this.resumeWalk(false);
+    if (s.gliding) {
+      this.walk.cancelGlide();
+      return;
+    }
+    if (s.walk === "free" || s.walk === "intro") this.exitWalk();
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
@@ -860,6 +1542,7 @@ export class ViewerController {
   private onBlur = () => {
     this.walk.input.keys.clear();
     this.walk.input.joy.x = this.walk.input.joy.y = 0;
+    this.walk.input.turn.yaw = this.walk.input.turn.pitch = 0;
   };
 
   // ───────────────────────────── pointer ─────────────────────────────
@@ -876,20 +1559,40 @@ export class ViewerController {
 
   private onPointerDown = (e: PointerEvent) => {
     if (this.isUiEvent(e)) return;
-    this.down = { x: e.clientX, y: e.clientY, t: performance.now(), button: e.button };
+    this.down = { x: e.clientX, y: e.clientY, t: performance.now(), button: e.button, id: e.pointerId, type: e.pointerType };
     const s = this.store.getState();
-    if (s.mode === "walk" && this.dragLook && s.walk === "active" && e.pointerType === "mouse") {
-      (e.target as Element).setPointerCapture?.(e.pointerId);
+    if (s.mode !== "walk") return;
+    this.activity();
+    if (e.pointerType !== "touch" && !this.isLocked() && (s.walk === "free" || s.walk === "commenting")) {
+      // drag to look (any button; right-drag for people who'd rather not lock the pointer)
+      this.drag = { x: e.clientX, y: e.clientY, moved: 0 };
+      this.walk.lookLag = 18;
+      try {
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+      } catch {
+        /* synthetic pointer */
+      }
     }
   };
 
   private onPointerMove = (e: PointerEvent) => {
     const s = this.store.getState();
     if (s.mode === "walk") {
-      if (this.dragLook && s.walk === "active" && e.buttons & 1 && e.pointerType === "mouse") {
-        this.walk.input.look.dx += e.movementX * 1.4;
-        this.walk.input.look.dy += e.movementY * 1.4;
+      if (e.pointerType === "touch") return;
+      this.activity();
+      const d = this.drag;
+      if (d && e.buttons && s.walk === "free" && !this.walk.glide) {
+        const dx = e.clientX - d.x, dy = e.clientY - d.y;
+        d.x = e.clientX;
+        d.y = e.clientY;
+        d.moved += Math.abs(dx) + Math.abs(dy);
+        if (d.moved > 40 && !s.dragged) this.store.setState({ dragged: true });
+        this.walk.input.look.dx += dx * DRAG_SENS;
+        this.walk.input.look.dy += dy * DRAG_SENS;
+        this.walk.input.turn.yaw = 0;
+        return;
       }
+      this.edgeLook(e);
       return;
     }
     if (this.isUiEvent(e) || e.pointerType === "touch") return;
@@ -903,13 +1606,44 @@ export class ViewerController {
     this.invalidate();
   };
 
+  /**
+   * Hover-at-the-edge look for embedded browsers without pointer lock: resting the mouse near the left or right
+   * edge turns the view (after a short dwell, so passing through on the way to a button does nothing).
+   */
+  private edgeLook(e: PointerEvent) {
+    const s = this.store.getState();
+    const turn = this.walk.input.turn;
+    if (!s.lockRefused || s.walk !== "free" || e.buttons || this.isUiEvent(e) || this.walk.glide || !this.container) {
+      turn.yaw = 0;
+      this.edge.side = 0;
+      return;
+    }
+    const p = this.local(e);
+    const band = Math.min(90, p.w * 0.07);
+    const side = p.x < band ? -1 : p.x > p.w - band ? 1 : 0;
+    const now = performance.now();
+    if (side !== this.edge.side) {
+      this.edge = { since: now, side };
+      turn.yaw = 0;
+      return;
+    }
+    if (!side || now - this.edge.since < 260) {
+      turn.yaw = 0;
+      return;
+    }
+    const depth = side < 0 ? 1 - p.x / band : 1 - (p.w - p.x) / band;
+    turn.yaw = side * (0.35 + 1.0 * clamp(depth, 0, 1));
+  }
+
   private onPointerUp = (e: PointerEvent) => {
     const d = this.down;
     this.down = null;
-    if (!d || this.isUiEvent(e) || e.button !== 0) return;
-    const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
-    if (moved > 6 || performance.now() - d.t > 650) return;
-    this.onClick(e);
+    const drag = this.drag;
+    this.drag = null;
+    if (!d || this.isUiEvent(e)) return;
+    const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y) + (drag?.moved ?? 0) * 0.25;
+    if (e.type === "pointercancel" || moved > 6 || performance.now() - d.t > 650) return;
+    if (d.button === 0) this.onClick(e);
   };
 
   private onClick(e: PointerEvent) {
@@ -921,8 +1655,23 @@ export class ViewerController {
       }
       return;
     }
-    if (s.walk === "ready" || s.walk === "paused" || s.walk === "commenting" || s.walk === "intro") this.requestLock();
-    else if (s.walk === "active" && this.props.commentMode) this.placeComment(0, 0, true);
+    if (s.walk === "intro") {
+      if (this.walk.transition) this.walk.transition.t = 1;
+      return;
+    }
+    if (s.walk === "commenting") {
+      this.resumeWalk(true);
+      return;
+    }
+    if (s.walk === "look") {
+      if (this.props.commentMode) this.placeComment(0, 0, true);
+      return;
+    }
+    // free: drop a pin where you click (comment mode), else take the mouse for looking around
+    if (this.props.commentMode) {
+      const p = this.local(e);
+      this.placeComment((p.x / p.w) * 2 - 1, -(p.y / p.h) * 2 + 1, true);
+    } else if (!s.touch && !s.lockRefused) this.requestLock();
   }
 
   private onDblClick = (e: MouseEvent) => {
@@ -932,6 +1681,8 @@ export class ViewerController {
 
   private onPointerLeave = () => {
     this.hoverPending = null;
+    this.walk.input.turn.yaw = 0;
+    this.edge.side = 0;
     this.clearHover();
   };
 
@@ -948,10 +1699,13 @@ export class ViewerController {
     return c === null || c === undefined || !Number.isFinite(c) ? null : c;
   }
 
+  /** Hits on neighbours that are ghosted out of the way don't count: you are clicking the house behind them. */
+  private skipGhosted = (h: THREE.Intersection) => !!h.object.userData?.nqGhost && !!this.camera && ghostAt(h.point, this.camera.position) > 0.02;
+
   pickNdc(x: number, y: number, far = 250) {
     if (!this.camera) return null;
     this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-    return pick(this.raycaster, [this.holder], { clipY: this.clipY(), far });
+    return pick(this.raycaster, [this.holder], { clipY: this.clipY(), far, skip: this.skipGhosted });
   }
 
   private pickClient(clientX: number, clientY: number) {
@@ -1009,7 +1763,7 @@ export class ViewerController {
       }
     } else if (t) {
       t.obj.traverseVisible((c) => {
-        if ((c as THREE.Mesh).isMesh && meshes.length < 400 && !c.userData?.noPick) meshes.push(c);
+        if ((c as THREE.Mesh).isMesh && meshes.length < 400 && !c.userData?.noPick && !c.userData?.viewer) meshes.push(c);
       });
       // whole-house or giant groups: tooltip only
       const box = new THREE.Box3().setFromObject(t.obj);
@@ -1023,7 +1777,7 @@ export class ViewerController {
 
   /** {level, room} for a world point from plan rects + level elevations (tags missing → still useful anchors). */
   locate(p: THREE.Vector3, tolerance = 0.1): { level?: string; room?: string } {
-    const levels = [...this.plan.levels].sort((a, b) => a.index - b.index);
+    const levels = this.levelsSorted;
     let level = levels[0];
     for (const l of levels) if (l.elevation_ft * FT <= p.y + tolerance) level = l;
     if (!level) return {};
@@ -1033,14 +1787,27 @@ export class ViewerController {
     return { level: level.id, room: rooms[0]?.id };
   }
 
+  private fireRoomChange(roomId: string | null, levelId: string | null) {
+    if (this.lastRoomId === roomId) return;
+    this.lastRoomId = roomId;
+    try {
+      this.props.onRoomChange?.(roomId, levelId);
+    } catch (e) {
+      console.warn("[viewer] onRoomChange threw", e);
+    }
+  }
+
   private updateRoomLabel() {
-    const where = this.locate(new THREE.Vector3(this.walk.feet.x, this.walk.feet.y + 0.05, this.walk.feet.z), 0.25);
+    const where = this.locate(new THREE.Vector3(this.walk.feet.x, this.walk.feet.y + 0.05, this.walk.feet.z), 0.45);
     const lvl = this.plan.levels.find((l) => l.id === where.level);
     const lowest = Math.min(...this.plan.levels.map((l) => l.index));
     // no room rect here: outdoors on the ground, otherwise name the level (roof terrace, open first-floor area…)
-    const room = where.room ? this.plan.rooms.find((r) => r.id === where.room)?.name ?? null : lvl && lvl.index > lowest ? lvl.name : "Outside";
+    const roomObj = where.room ? this.plan.rooms.find((r) => r.id === where.room) : undefined;
+    const room = roomObj?.name ?? (lvl && lvl.index > lowest ? lvl.name : "Outside");
     const s = this.store.getState();
-    if (s.room !== room || s.level !== (where.level ?? null)) this.store.setState({ room, level: where.level ?? null });
+    const roomId = roomObj?.id ?? null;
+    if (s.room !== room || s.level !== (where.level ?? null) || s.roomId !== roomId) this.store.setState({ room, roomId, level: where.level ?? null });
+    if (this.lastRoomId !== roomId || this.lastRoomId === undefined) this.fireRoomChange(roomId, where.level ?? null);
   }
 
   private updateCrosshairTarget() {
@@ -1064,13 +1831,60 @@ export class ViewerController {
     const res = this.result;
     if (!res) return;
     this.builds.finishAnims();
+    this.lift.finish();
     const root = this.currentRoot();
-    const list = (res.colliders ?? []).filter((m) => m && this.vis.colliderEnabled(m, root));
-    const next = buildColliderBVH(list);
+    const list = [...(res.colliders ?? []), ...this.extraSolids(res)].filter((m) => m && this.vis.colliderEnabled(m, root));
+    // parked cars never block the way in (they are hidden or fade while you walk)
+    const next = buildColliderBVH(list, this.ctxfx.exclusionBoxes());
     disposeCollider(this.collider);
     this.collider = next;
     this.walk.setCollider(next?.bvh ?? null);
+    this.nav.reset(this.plan, list);
+    this.navWarm = false;
     this.colliderDirty = false;
+  }
+
+  private solidsCache = new WeakMap<BuildResult, THREE.Mesh[]>();
+
+  /**
+   * Roof objects you can't walk through that some engine builds leave out of the colliders (the water tank, solar
+   * frames): baked into world-space meshes once per build and added to the walk collider.
+   */
+  private extraSolids(res: BuildResult): THREE.Mesh[] {
+    const hit = this.solidsCache.get(res);
+    if (hit) return hit;
+    const SOLID = /(^|:)(water_tank|tank|solar(_panels?|_array|_frame)?)($|:)/;
+    const out: THREE.Mesh[] = [];
+    const v = new THREE.Vector3();
+    res.root.updateMatrixWorld(true);
+    res.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || o.userData?.viewer || (m as THREE.InstancedMesh).isInstancedMesh) return;
+      const pos = m.geometry?.getAttribute("position") as THREE.BufferAttribute | undefined;
+      if (!pos) return;
+      const idx = m.geometry.index;
+      const parts = o.userData?.parts as PartRange[] | undefined;
+      const ranges: { start: number; count: number }[] = [];
+      if (parts?.length) {
+        for (const p of parts) if (SOLID.test(String(p.tags.kind ?? ""))) ranges.push(p);
+      } else if (SOLID.test(String(o.userData?.kind ?? ""))) ranges.push({ start: 0, count: (idx ? idx.count : pos.count) / 3 });
+      if (!ranges.length) return;
+      const arr: number[] = [];
+      for (const r of ranges)
+        for (let t = r.start; t < r.start + r.count; t++)
+          for (let k = 0; k < 3; k++) {
+            const i = t * 3 + k;
+            v.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+            arr.push(v.x, v.y, v.z);
+          }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+      const solid = new THREE.Mesh(g);
+      solid.userData = { kind: "collider:solid", level: o.userData?.level, viewer: "solid" };
+      out.push(solid);
+    });
+    this.solidsCache.set(res, out);
+    return out;
   }
 
   // ───────────────────────────── pins ─────────────────────────────
@@ -1094,9 +1908,6 @@ export class ViewerController {
       const hiddenLevel = !!level && !!this.vis.levelsShown && this.plan.levels.some((l) => l.id === level) && !this.vis.levelsShown.has(level);
       const visible = !hiddenLevel && (cut === null || pinObj.position.y <= cut + 0.05);
       pinObj.visible = visible;
-      const dist = cam.position.distanceTo(pinObj.position);
-      const s = THREE.MathUtils.clamp(dist * 0.085, 0.9, 7);
-      pinObj.scale.setScalar(s);
       const el = this.pinEl(id);
       if (el) el.dataset.hidden = visible ? "0" : "1";
     }
@@ -1107,12 +1918,13 @@ export class ViewerController {
       const pinObj = kids[this.pinCursor];
       const id = pinObj.userData?.pin as string | undefined;
       if (!id || !pinObj.visible) continue;
-      const head = pinObj.userData.headLocal as THREE.Vector3 | undefined;
-      const p = head ? head.clone().multiplyScalar(pinObj.scale.x).add(pinObj.position) : pinObj.position.clone();
+      const nrm = pinObj.userData.normal as THREE.Vector3 | undefined;
+      const p = pinObj.position.clone();
+      if (nrm) p.addScaledVector(nrm, 0.08);
       const dir = p.clone().sub(cam.position);
       const dist = dir.length();
       this.raycaster.set(cam.position, dir.normalize());
-      const hit = pick(this.raycaster, [this.holder], { clipY: cut, far: Math.max(0, dist - 0.12) });
+      const hit = pick(this.raycaster, [this.holder], { clipY: cut, far: Math.max(0, dist - 0.05), skip: this.skipGhosted });
       const el = this.pinEl(id);
       if (el) el.dataset.occluded = hit ? "1" : "0";
     }
@@ -1125,6 +1937,7 @@ export class ViewerController {
     const cam = this.camera;
     if (!cam || !this.gl) return;
     this.builds.finishAnims();
+    this.lift.finish();
     const hit = this.pickNdc(x, y, 80);
     if (!hit) {
       this.toast("Aim at a wall, floor or object to pin a comment");
@@ -1151,7 +1964,7 @@ export class ViewerController {
     if (fromWalk && this.store.getState().mode === "walk") {
       this.walk.enabled = false;
       this.walk.input.keys.clear();
-      this.store.setState({ walk: "commenting", target: null });
+      this.store.setState({ walk: "commenting", target: null, idle: false });
       if (this.isLocked()) document.exitPointerLock?.();
     }
     try {
@@ -1165,27 +1978,43 @@ export class ViewerController {
   flyTo(comment: Comment) {
     const cam = this.camera;
     if (!cam || !comment?.camera) return;
+    this.store.setState({ selectedPin: comment.id });
     const pos = new THREE.Vector3(...comment.camera.position);
     const tgt = new THREE.Vector3(...comment.camera.target);
     if (this.store.getState().mode === "walk") {
       this.ensureCollider();
       const g = this.walk.groundAt(pos, pos.y - EYE + 0.4, pos.y - EYE - 1.2);
       if (g !== null) {
-        this.walk.feet.set(pos.x, g, pos.z);
+        const feet = new THREE.Vector3(pos.x, g, pos.z);
         const d = tgt.clone().sub(new THREE.Vector3(pos.x, g + EYE, pos.z));
-        this.walk.yaw = Math.atan2(-d.x, -d.z);
-        this.walk.pitch = THREE.MathUtils.clamp(Math.atan2(d.y, Math.hypot(d.x, d.z)), -1.3, 1.3);
-        this.walk.camY = g + EYE;
-        this.walk.vel.set(0, 0, 0);
+        this.walk.cancelGlide();
+        this.walk.place(feet, Math.atan2(-d.x, -d.z), THREE.MathUtils.clamp(Math.atan2(d.y, Math.hypot(d.x, d.z)), -1.3, 1.3));
         this.walk.beginTransition(cam, prefersReducedMotion() ? 0.01 : 0.7);
         this.flashPin(comment.id);
         return;
       }
       this.leaveWalk("flyTo");
     }
+    // the comment's floor must be on show
+    const lvl = comment.anchor?.level;
+    const orbitFloor = this.store.getState().orbitFloor;
+    if (lvl && orbitFloor) {
+      const want = this.plan.levels.find((l) => l.id === lvl), cur = this.plan.levels.find((l) => l.id === orbitFloor);
+      if (want && cur && want.index > cur.index) this.setOrbitFloor(want.id);
+    }
     this.controls?.setLookAt(pos.x, pos.y, pos.z, tgt.x, tgt.y, tgt.z, true);
     this.flashPin(comment.id);
     this.invalidate();
+  }
+
+  /** A pin was clicked: select it (2 px accent ring) and tell the app. */
+  selectPin(id: string) {
+    this.store.setState({ selectedPin: id });
+    try {
+      this.props.onSelectComment?.(id);
+    } catch (e) {
+      console.warn("[viewer] onSelectComment threw", e);
+    }
   }
 
   private flashPin(id: string) {
@@ -1223,7 +2052,7 @@ export class ViewerController {
     try {
       this.renderNow();
       const pinNdc = o.pin ? projectToNdc(o.pin, cam) : null;
-      url = grabCanvas(gl.domElement, { width: o.width, height: o.height, pinNdc, maxAspect: o.maxAspect });
+      url = grabCanvas(gl.domElement, { width: o.width, height: o.height, pinNdc, maxAspect: o.maxAspect, pinColor: "#2747F5" });
     } finally {
       if (this.pinsGroup) this.pinsGroup.visible = pinsVisible;
       this.setOutline(outlined);
@@ -1238,6 +2067,7 @@ export class ViewerController {
     const tex = engineExtras.texturesReady?.();
     if (tex) await Promise.race([tex.catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
     this.builds.finishAnims();
+    this.lift.finish();
     return this.snapshot({ width: opts?.width, height: opts?.height });
   }
 
@@ -1246,7 +2076,7 @@ export class ViewerController {
   toast(text: string) {
     window.clearTimeout(this.toastTimer);
     this.store.setState({ toast: { id: ++this.toastSeq, text } });
-    this.toastTimer = window.setTimeout(() => this.store.setState({ toast: null }), 2600);
+    this.toastTimer = window.setTimeout(() => this.store.setState({ toast: null }), 2800);
   }
 
   /** Dev-only hooks for automated testing (synthetic pointer lock, key presses, teleport). */
@@ -1255,12 +2085,13 @@ export class ViewerController {
     const dbg = {
       ctrl,
       walk: this.walk,
-      state: () => ({ ...ctrl.store.getState(), feet: ctrl.walk.feet.toArray(), yaw: ctrl.walk.yaw, pitch: ctrl.walk.pitch, grounded: ctrl.walk.grounded, colliderTris: ctrl.collider?.triangles ?? 0, fov: ctrl.camera?.fov }),
+      nav: this.nav,
+      state: () => ({ ...ctrl.store.getState(), feet: ctrl.walk.feet.toArray(), yaw: ctrl.walk.yaw, pitch: ctrl.walk.pitch, grounded: ctrl.walk.grounded, colliderTris: ctrl.collider?.triangles ?? 0, fov: ctrl.camera?.fov, ghost: GHOST.nqGhost.value, vehicles: ctrl.ctxfx.vehicles.map((v) => ({ id: v.id, opacity: v.opacity })) }),
       /** Start walking without real pointer lock (automation can't grant it). */
       activate: () => {
         if (ctrl.walk.transition) ctrl.walk.transition.t = 1;
-        ctrl.dragLook = true;
-        ctrl.activateWalk();
+        ctrl.walk.enabled = true;
+        ctrl.store.setState({ walk: "free", lockRefused: true });
       },
       hold: (code: string, ms: number) =>
         new Promise<void>((res) => {
@@ -1270,14 +2101,12 @@ export class ViewerController {
             res();
           }, ms);
         }),
+      /** Look by (dx, dy) pointer-lock pixels. */
       look: (dx: number, dy = 0) => {
-        ctrl.walk.input.look.dx += dx;
-        ctrl.walk.input.look.dy += dy;
+        ctrl.walk.input.look.dx += dx * LOCK_SENS;
+        ctrl.walk.input.look.dy += dy * LOCK_SENS;
       },
-      setYaw: (deg: number, pitchDeg = 0) => {
-        ctrl.walk.yaw = THREE.MathUtils.degToRad(deg);
-        ctrl.walk.pitch = THREE.MathUtils.degToRad(pitchDeg);
-      },
+      setYaw: (deg: number, pitchDeg = 0) => ctrl.walk.setLook(THREE.MathUtils.degToRad(deg), THREE.MathUtils.degToRad(pitchDeg)),
       teleport: (x: number, y: number, z: number) => ctrl.walk.teleport(new THREE.Vector3(x, y, z)),
       teleportPlan: (xFt: number, yFt: number, hFt = 30) => ctrl.walk.teleport(planToWorld(xFt, yFt, hFt)),
       comment: () => ctrl.placeComment(0, 0, ctrl.store.getState().mode === "walk"),
@@ -1286,6 +2115,12 @@ export class ViewerController {
       setQuality: (q: Quality) => ctrl.setQuality(q, true),
       snapshot: (w = 640) => ctrl.snapshot({ width: w }),
       setLookAt: (p: Vec3, t: Vec3, animate = false) => ctrl.controls?.setLookAt(p[0], p[1], p[2], t[0], t[1], t[2], animate),
+      goToRoom: (id: string) => ctrl.goToRoom(id),
+      setFloor: (id: string) => ctrl.setFloor(id),
+      route: (roomId: string) => {
+        const room = ctrl.plan.rooms.find((r) => r.id === roomId);
+        return room ? ctrl.nav.route(ctrl.walk.feet.clone(), { kind: "room", room }) : null;
+      },
     };
     (window as unknown as { __viewerDebug: typeof dbg }).__viewerDebug = dbg;
   }

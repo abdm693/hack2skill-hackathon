@@ -6,6 +6,8 @@
  * - Rebuilds are incremental on screen: sections whose code (and plan) are unchanged since the last build are
  *   rebuilt silently off-screen, the new root is swapped in at the first changed section, and only changed
  *   sections animate. Streaming one more section therefore never flickers or replays the whole house.
+ * - A different plan (a version switch, before/after) is built entirely off screen while the current house stays up,
+ *   then crossfades in; the camera never moves. The last few finished builds are kept, so flipping back is instant.
  * - Stale builds (plan/sections changed mid-build) finish fast and are disposed.
  */
 import * as THREE from "three";
@@ -29,6 +31,17 @@ interface Displayed {
   result: BuildResult;
   keys: Map<string, string>;
   mock: boolean;
+  sig: string;
+  planHash: string;
+}
+
+function disposeResult(r: BuildResult) {
+  try {
+    r.root.removeFromParent();
+    r.dispose();
+  } catch (e) {
+    console.warn("[viewer] dispose failed", e);
+  }
 }
 
 interface DropAnim {
@@ -50,8 +63,12 @@ const KIND_RANK: [RegExp, number][] = [
 const PACE_MS: Record<Layer, number> = { structure: 1150, facade: 320, interior: 160, furniture: 150, landscape: 320, lighting: 160, custom: 220 };
 const DROP_M: Record<Layer, number> = { structure: 0.85, facade: 0.6, interior: 0.3, furniture: 0.45, landscape: 0.35, lighting: 0.0, custom: 0.5 };
 
+/** Finished builds kept besides the one on screen (instant before/after and version flips). */
+const MAX_CACHED = 2;
+
 export class BuildManager {
   displayed: Displayed | null = null;
+  private cache = new Map<string, Displayed>();
   private seq = 0;
   private lastSig = "";
   private anims: DropAnim[] = [];
@@ -74,7 +91,13 @@ export class BuildManager {
     const sig = `${planHash}|${[...keys].map(([n, k]) => `${n}:${k}`).join(",")}`;
     if (sig === this.lastSig) return;
     this.lastSig = sig;
-    void this.run(plan, sections, keys);
+    const hit = this.cache.get(sig);
+    if (hit) {
+      this.cancel();
+      this.showCached(hit);
+      return;
+    }
+    void this.run(plan, sections, keys, sig, planHash);
   }
 
   /** Forget the content signature so the next request rebuilds even if nothing changed (StrictMode remounts). */
@@ -86,18 +109,70 @@ export class BuildManager {
     this.seq++;
   }
 
-  private async run(plan: BuildingPlan, sections: DesignSectionSrc[], keys: Map<string, string>) {
+  /** Move a build off screen into the cache (evicting and disposing the oldest). */
+  private retire(d: Displayed | null) {
+    if (!d) return;
+    d.result.root.removeFromParent();
+    this.cache.delete(d.sig);
+    this.cache.set(d.sig, d);
+    while (this.cache.size > MAX_CACHED) {
+      const [k, v] = this.cache.entries().next().value as [string, Displayed];
+      this.cache.delete(k);
+      if (v !== this.displayed) disposeResult(v.result);
+    }
+  }
+
+  /** Dispose everything (viewer unmount). */
+  disposeAll() {
+    for (const d of this.cache.values()) if (d !== this.displayed) disposeResult(d.result);
+    this.cache.clear();
+    if (this.displayed) {
+      disposeResult(this.displayed.result);
+      this.displayed = null;
+    }
+  }
+
+  /** A build we already have: swap it in with a short crossfade. */
+  private showCached(d: Displayed) {
+    const ctrl = this.ctrl;
+    this.clearAnims();
+    const fade = ctrl.beginCrossfade();
+    this.cache.delete(d.sig);
+    const prev = this.displayed;
+    const prevSummary = prev?.result.summary ?? null;
+    for (const child of [...ctrl.holder.children]) child.removeFromParent();
+    this.displayed = d;
+    this.retire(prev);
+    ctrl.holder.add(d.result.root);
+    ctrl.onRootAttached(d.result.root);
+    ctrl.onSectionApplied(d.result.root, null);
+    ctrl.onBuildComplete(d.result, d.mock);
+    ctrl.setBuildState({ phase: "ready", done: d.result.sections.length, total: d.result.sections.length, current: undefined, failed: d.result.sections.filter((s) => !s.ok).length, mock: d.mock, first: false });
+    if (fade) ctrl.endCrossfade(360);
+    ctrl.flashChanges(prevSummary, d.result, 360);
+    try {
+      ctrl.props.onReady?.({ summary: d.result.summary, sections: d.result.sections });
+    } catch (e) {
+      console.warn("[viewer] onReady threw", e);
+    }
+  }
+
+  private async run(plan: BuildingPlan, sections: DesignSectionSrc[], keys: Map<string, string>, sig: string, planHash: string) {
     const token = ++this.seq;
     const ctrl = this.ctrl;
     const prev = this.displayed;
     const prevKeys = prev?.keys ?? new Map<string, string>();
     const total = sections.length;
     const quiet = () => prefersReducedMotion() || document.hidden;
+    // A different plan (version switch, before/after) or a rewrite of most sections: build it off screen, keep the
+    // current house up meanwhile and crossfade at the end. Streaming one more section stays incremental.
+    const changed = [...keys].filter(([n, k]) => prevKeys.get(n) !== k).length;
+    const offscreen = !!prev && (prev.planHash !== planHash || changed > 2);
     // mutable build state shared with the callbacks below
     const st = { done: 0, failed: 0, swapped: false, attached: null as THREE.Group | null, seen: new WeakSet<THREE.Object3D>(), mock: false };
     const stale = () => token !== this.seq;
 
-    ctrl.setBuildState({ phase: "building", done: 0, total, current: sections[0]?.name, error: undefined, failed: 0 });
+    ctrl.setBuildState({ phase: "building", done: 0, total, current: sections[0]?.name, error: undefined, failed: 0, ...(offscreen ? { first: false } : {}) });
 
     const swapIn = (root: THREE.Group) => {
       if (st.swapped || stale()) return;
@@ -105,14 +180,9 @@ export class BuildManager {
       st.attached = root;
       this.clearAnims();
       for (const child of [...ctrl.holder.children]) child.removeFromParent();
-      if (this.displayed) {
-        try {
-          this.displayed.result.dispose();
-        } catch (e) {
-          console.warn("[viewer] dispose failed", e);
-        }
-        this.displayed = null;
-      }
+      const old = this.displayed;
+      this.displayed = null;
+      this.retire(old);
       ctrl.holder.add(root);
       ctrl.onRootAttached(root);
     };
@@ -121,6 +191,20 @@ export class BuildManager {
       if (stale()) return;
       st.done++;
       if (!r.ok) st.failed++;
+      const totalNow = Math.max(total, st.done);
+      const report = () => {
+        ctrl.setBuildState({ done: st.done, total: totalNow, current: r.name, failed: st.failed, mock: st.mock });
+        try {
+          ctrl.props.onBuildProgress?.(r, st.done, totalNow);
+        } catch (e) {
+          console.warn("[viewer] onBuildProgress threw", e);
+        }
+      };
+      if (offscreen) {
+        collectNewUnits(root, st.seen);
+        report();
+        return;
+      }
       const key = keys.get(r.name);
       const known = !!prev && key !== undefined && prevKeys.get(r.name) === key;
       if (!known) swapIn(root);
@@ -131,13 +215,7 @@ export class BuildManager {
         if (animate) this.dropIn(units, r.layer);
         ctrl.onSectionApplied(root, r);
       }
-      const totalNow = Math.max(total, st.done);
-      ctrl.setBuildState({ done: st.done, total: totalNow, current: r.name, failed: st.failed, mock: st.mock });
-      try {
-        ctrl.props.onBuildProgress?.(r, st.done, totalNow);
-      } catch (e) {
-        console.warn("[viewer] onBuildProgress threw", e);
-      }
+      report();
       if (st.swapped && !known && !quiet()) await sleep(PACE_MS[r.layer] ?? 200);
       // After the last section the engine consolidates meshes (bakes world transforms into merged geometry):
       // every drop-in must be back at rest by then, or merged walls would keep their mid-air offset.
@@ -171,22 +249,22 @@ export class BuildManager {
     }
 
     if (stale()) {
-      result.root.removeFromParent();
-      try {
-        result.dispose();
-      } catch {
-        /* ignore */
-      }
+      if (result.root.parent === ctrl.holder) result.root.removeFromParent();
+      disposeResult(result);
       return;
     }
+    const fade = !st.swapped && !!prev && ctrl.beginCrossfade();
+    const prevSummary = offscreen ? prev?.result.summary ?? null : null;
     if (!st.swapped) {
-      // every section was unchanged: swap silently (no animation)
+      // off screen, or every section was unchanged: swap now (no drop-in animation)
       swapIn(result.root);
       ctrl.onSectionApplied(result.root, null);
     }
-    this.displayed = { result, keys, mock: st.mock };
+    this.displayed = { result, keys, mock: st.mock, sig, planHash };
     ctrl.onBuildComplete(result, st.mock);
     ctrl.setBuildState({ phase: "ready", done: st.done, total: Math.max(total, st.done), current: undefined, failed: st.failed, mock: st.mock, first: false });
+    if (fade) ctrl.endCrossfade(600);
+    if (prevSummary) ctrl.flashChanges(prevSummary, result, 600);
     try {
       ctrl.props.onReady?.({ summary: result.summary, sections: result.sections });
     } catch (e) {
@@ -231,7 +309,7 @@ export class BuildManager {
       if (!a.revealed) {
         a.revealed = true;
         vis.held.delete(a.obj);
-        a.obj.visible = vis.baseVisible(a.obj) && !vis.hiddenByTags(a.obj);
+        a.obj.visible = vis.baseVisible(a.obj) && !vis.suppressed.has(a.obj) && !vis.hiddenByTags(a.obj);
       }
       const t = Math.min(1, (now - a.start) / a.dur);
       a.obj.position.y = a.baseY + a.height * (1 - easeOutCubic(t));
@@ -260,7 +338,7 @@ export class BuildManager {
       a.obj.position.y = a.baseY;
       if (!a.obj.matrixAutoUpdate) a.obj.updateMatrix();
       this.ctrl.vis.held.delete(a.obj);
-      a.obj.visible = this.ctrl.vis.baseVisible(a.obj) && !this.ctrl.vis.hiddenByTags(a.obj);
+      a.obj.visible = this.ctrl.vis.baseVisible(a.obj) && !this.ctrl.vis.suppressed.has(a.obj) && !this.ctrl.vis.hiddenByTags(a.obj);
     }
     this.anims.length = 0;
     this.ctrl.onAnimationsSettled();

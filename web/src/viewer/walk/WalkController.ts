@@ -6,27 +6,35 @@
  * only), while the feet follow the floor through short downward BVH raycasts. Steps < STEP_UP and the engine's
  * invisible stair ramps are climbed without bumps, gravity takes over beyond SNAP_DOWN, and the 1e-5 epsilon from
  * the research notes stops float noise from cancelling gravity.
+ *
+ * Besides walking it runs two scripted camera moves: the fly-in from orbit (`transition`) and the room navigator's
+ * glide (`glide`), which carries the walker along a precomputed path through doors and up stairs.
  */
 import * as THREE from "three";
 import type { MeshBVH } from "three-mesh-bvh";
-import { clamp, damp, easeInOutCubic } from "../core/units";
+import { clamp, damp, easeInOutCubic, smoothstep } from "../core/units";
 
 export const RADIUS = 0.28; // capsule radius (m): 2.5 ft doors (~0.66 m clear inside frames) pass comfortably
 export const EYE = 1.6; // eye height (m)
-const HEAD = 1.78; // top of the capsule
-const STEP_UP = 0.36; // highest step climbed without a ramp (plinth/threshold/stair riser)
+export const HEAD = 1.78; // top of the capsule
+export const STEP_UP = 0.36; // highest step climbed without a ramp (plinth/threshold/stair riser)
 const SNAP_DOWN = 0.5; // follow floors/ramps downward up to this much per frame while grounded
 const WALK = 1.5; // m/s
 const RUN = 3.0; // m/s
 const GRAVITY = -9.81 * 1.8;
 const ACCEL = 11; // velocity smoothing (1/s)
-const LOOK_SENS = 0.0022; // rad per pixel
+/** Radians per pixel of pointer-locked mouse movement (a typical FPS sensitivity). */
+export const LOCK_SENS = 0.0022;
+/** Radians per CSS pixel for drag-to-look (a 500 px drag turns ~95°). */
+export const DRAG_SENS = 0.0033;
 const MAX_PITCH = THREE.MathUtils.degToRad(84);
 
 export interface WalkInput {
   keys: Set<string>;
   joy: { x: number; y: number }; // touch joystick, −1..1 (y = forward)
-  look: { dx: number; dy: number }; // accumulated pixels since the last frame
+  look: { dx: number; dy: number }; // accumulated radians since the last frame (already scaled by sensitivity)
+  /** Continuous turn rate (rad/s), e.g. hover-at-the-edge look. */
+  turn: { yaw: number; pitch: number };
 }
 
 export interface WalkTransition {
@@ -37,8 +45,25 @@ export interface WalkTransition {
   dur: number;
 }
 
+/** A scripted walk along a path of feet positions (world, m). */
+export interface Glide {
+  pts: THREE.Vector3[];
+  /** cumulative TIME-length (segment length × weight): the glide advances uniformly along this */
+  cum: number[];
+  total: number;
+  t: number;
+  dur: number;
+  yaw0: number;
+  pitch0: number;
+  yaw1: number;
+  pitch1: number;
+  onDone?: (completed: boolean) => void;
+  onProgress?: (s: number, total: number) => void;
+}
+
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
 const _seg = new THREE.Line3();
 const _box = new THREE.Box3();
 const _ray = new THREE.Ray();
@@ -48,10 +73,46 @@ const _push = new THREE.Vector3();
 const _before = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
+/** Shortest signed angle from a to b. */
+export function angleDelta(a: number, b: number) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** CSS cubic-bezier(x1, y1, x2, y2) easing, solved for x by Newton iterations (DESIGN --ease-camera = .65,0,.35,1). */
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (t: number) => ((ax * t + bx) * t + cx) * t;
+  const sy = (t: number) => ((ay * t + by) * t + cy) * t;
+  const dx = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x: number) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const e = sx(t) - x;
+      if (Math.abs(e) < 1e-5) break;
+      const d = dx(t);
+      if (Math.abs(d) < 1e-6) break;
+      t -= e / d;
+    }
+    return sy(clamp(t, 0, 1));
+  };
+}
+export const easeCamera = cubicBezier(0.65, 0, 0.35, 1);
+
 export class WalkController {
   feet = new THREE.Vector3();
   yaw = 0;
   pitch = 0;
+  /** Look targets: mouse input moves these, the view follows with a little smoothing (`lookLag`). */
+  private yawGoal = 0;
+  private pitchGoal = 0;
+  /** Smoothing rate for look (1/s); Infinity = raw. Drag-to-look uses a softer value than pointer lock. */
+  lookLag = 38;
   vel = new THREE.Vector3();
   vy = 0;
   grounded = false;
@@ -59,14 +120,26 @@ export class WalkController {
   bvh: MeshBVH | null = null;
   spawn = { feet: new THREE.Vector3(), yaw: 0, pitch: 0 };
   transition: WalkTransition | null = null;
+  glide: Glide | null = null;
   fov = 70;
-  input: WalkInput = { keys: new Set(), joy: { x: 0, y: 0 }, look: { dx: 0, dy: 0 } };
-  /** true while the player is allowed to move (pointer locked / touch active). */
+  input: WalkInput = { keys: new Set(), joy: { x: 0, y: 0 }, look: { dx: 0, dy: 0 }, turn: { yaw: 0, pitch: 0 } };
+  /** true while the player is allowed to move. */
   enabled = false;
   private hasPose = false;
 
   setCollider(bvh: MeshBVH | null) {
     this.bvh = bvh;
+  }
+
+  /** Snap the look goal to the current view (after scripted moves). */
+  syncLook() {
+    this.yawGoal = this.yaw;
+    this.pitchGoal = this.pitch;
+  }
+
+  setLook(yaw: number, pitch: number) {
+    this.yaw = this.yawGoal = yaw;
+    this.pitch = this.pitchGoal = clamp(pitch, -MAX_PITCH, MAX_PITCH);
   }
 
   /** Highest walkable surface under (x, z) between `top` and `bottom` (world Y), sampled at 5 points. */
@@ -84,19 +157,37 @@ export class WalkController {
     return best;
   }
 
-  /** Would a capsule standing at `feet` overlap walls or furniture? */
-  overlaps(feet: THREE.Vector3): boolean {
+  /** One downward ray at (x, z): the first surface between `top` and `bottom`. */
+  groundAt1(x: number, z: number, top: number, bottom: number): number | null {
+    if (!this.bvh) return null;
+    _ray.origin.set(x, top, z);
+    _ray.direction.copy(DOWN);
+    const hit = this.bvh.raycastFirst(_ray, THREE.DoubleSide, 0, top - bottom);
+    return hit ? hit.point.y : null;
+  }
+
+  /** Horizontal free distance from `from` along `dir` (unit, y ignored), up to `max`. */
+  clearDistance(from: THREE.Vector3, dir: THREE.Vector3, max: number): number {
+    if (!this.bvh) return max;
+    _ray.origin.copy(from);
+    _ray.direction.set(dir.x, 0, dir.z).normalize();
+    const hit = this.bvh.raycastFirst(_ray, THREE.DoubleSide, 0, max);
+    return hit ? hit.distance : max;
+  }
+
+  /** Would a capsule (radius `r`) standing at `feet` overlap walls or furniture? */
+  overlaps(feet: THREE.Vector3, r = RADIUS): boolean {
     if (!this.bvh) return false;
-    _seg.start.set(feet.x, feet.y + STEP_UP + RADIUS, feet.z);
-    _seg.end.set(feet.x, feet.y + HEAD - RADIUS, feet.z);
+    _seg.start.set(feet.x, feet.y + STEP_UP + r, feet.z);
+    _seg.end.set(feet.x, feet.y + HEAD - r, feet.z);
     _box.makeEmpty().expandByPoint(_seg.start).expandByPoint(_seg.end);
-    _box.min.addScalar(-RADIUS + 0.02);
-    _box.max.addScalar(RADIUS - 0.02);
+    _box.min.addScalar(-r + 0.02);
+    _box.max.addScalar(r - 0.02);
     let hit = false;
     this.bvh.shapecast({
       intersectsBounds: (box) => box.intersectsBox(_box),
       intersectsTriangle: (tri) => {
-        if (tri.closestPointToSegment(_seg, _v, _v2) < RADIUS - 0.02) {
+        if (tri.closestPointToSegment(_seg, _v, _v2) < r - 0.02) {
           hit = true;
           return true;
         }
@@ -106,13 +197,13 @@ export class WalkController {
   }
 
   /**
-   * Nearest free standing spot to `pos` on the floor at ~`floorY` (spiral search, ≤ 3 m). Engines sometimes put the
-   * spawn on a parked car or a planter; this keeps the walkthrough from starting on a roof or inside a wall.
+   * Nearest free standing spot to `pos` on the floor at ~`floorY` (spiral search, ≤ `maxR` m). Engines sometimes put
+   * the spawn on a parked car or a planter; this keeps the walkthrough from starting on a roof or inside a wall.
    */
-  findFreeSpot(pos: THREE.Vector3, floorY: number): THREE.Vector3 | null {
+  findFreeSpot(pos: THREE.Vector3, floorY: number, maxR = 3): THREE.Vector3 | null {
     const p = new THREE.Vector3();
-    for (let r = 0; r <= 3.0001; r += 0.25) {
-      const n = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 0.35);
+    for (let r = 0; r <= maxR + 1e-4; r += 0.2) {
+      const n = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 0.3);
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2;
         p.set(pos.x + Math.cos(a) * r, floorY, pos.z + Math.sin(a) * r);
@@ -137,9 +228,8 @@ export class WalkController {
     const g = spot ? spot.y : floor;
     this.feet.set(spot?.x ?? pos.x, g ?? pos.y, spot?.z ?? pos.z);
     if (lookAt) {
-      _v.subVectors(lookAt, _v2.set(pos.x, this.feet.y + EYE, pos.z));
-      this.yaw = Math.atan2(-_v.x, -_v.z);
-      this.pitch = clamp(Math.atan2(_v.y, Math.hypot(_v.x, _v.z)), -0.5, 0.5);
+      _v.subVectors(lookAt, _v2.set(this.feet.x, this.feet.y + EYE, this.feet.z));
+      this.setLook(Math.atan2(-_v.x, -_v.z), clamp(Math.atan2(_v.y, Math.hypot(_v.x, _v.z)), -0.5, 0.5));
     }
     this.vel.set(0, 0, 0);
     this.vy = 0;
@@ -155,14 +245,24 @@ export class WalkController {
     this.spawn.pitch = this.pitch;
   }
 
+  /** Stand exactly here (already validated), looking along yaw/pitch. */
+  place(feet: THREE.Vector3, yaw: number, pitch: number) {
+    this.feet.copy(feet);
+    this.setLook(yaw, pitch);
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.grounded = true;
+    this.camY = feet.y + EYE;
+    this.hasPose = true;
+  }
+
   get ready() {
     return this.hasPose;
   }
 
   respawn() {
     this.feet.copy(this.spawn.feet);
-    this.yaw = this.spawn.yaw;
-    this.pitch = this.spawn.pitch;
+    this.setLook(this.spawn.yaw, this.spawn.pitch);
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.camY = this.feet.y + EYE;
@@ -170,7 +270,37 @@ export class WalkController {
 
   /** Eased fly-in from the current camera pose to the walker's eye. */
   beginTransition(camera: THREE.PerspectiveCamera, dur = 1.1) {
+    this.glide = null;
     this.transition = { fromPos: camera.position.clone(), fromQuat: camera.quaternion.clone(), fromFov: camera.fov, t: 0, dur };
+  }
+
+  /**
+   * Walk the camera along `pts` (feet positions, ≥ 2) in `dur` seconds with the DESIGN camera ease, looking ahead
+   * along the path and settling on (yaw1, pitch1). Movement keys cancel it (`onDone(false)`).
+   */
+  beginGlide(pts: THREE.Vector3[], dur: number, yaw1: number, pitch1: number, onDone?: (completed: boolean) => void, onProgress?: (s: number, total: number) => void, weights?: number[]) {
+    if (pts.length < 2) {
+      if (pts[0]) this.place(pts[0], yaw1, pitch1);
+      onDone?.(true);
+      return;
+    }
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]) * (weights?.[i] ?? 1));
+    this.transition = null;
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.glide = { pts, cum, total: cum[cum.length - 1], t: 0, dur: Math.max(0.05, dur), yaw0: this.yaw, pitch0: this.pitch, yaw1, pitch1, onDone, onProgress };
+  }
+
+  /** Stop a glide where it is (the walker keeps standing there). */
+  cancelGlide() {
+    const g = this.glide;
+    if (!g) return;
+    this.glide = null;
+    this.grounded = true;
+    this.vel.set(0, 0, 0);
+    this.syncLook();
+    g.onDone?.(false);
   }
 
   eyePosition(out: THREE.Vector3) {
@@ -182,19 +312,101 @@ export class WalkController {
     return out.setFromEuler(_euler);
   }
 
+  private pointAt(g: Glide, s: number, out: THREE.Vector3) {
+    const { pts, cum } = g;
+    if (s <= 0) return out.copy(pts[0]);
+    if (s >= g.total) return out.copy(pts[pts.length - 1]);
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] <= s) lo = mid;
+      else hi = mid;
+    }
+    const span = cum[hi] - cum[lo] || 1;
+    return out.lerpVectors(pts[lo], pts[hi], (s - cum[lo]) / span);
+  }
+
+  private updateGlide(dt: number, camera: THREE.PerspectiveCamera) {
+    const g = this.glide!;
+    // any movement key takes control back
+    if (this.input.keys.size && [...this.input.keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight")) {
+      this.cancelGlide();
+      return true;
+    }
+    const moving = g.t < 1;
+    if (moving) {
+      g.t = Math.min(1, g.t + dt / g.dur);
+      const s = easeCamera(g.t) * g.total;
+      this.pointAt(g, s, this.feet);
+      // look ahead along the path (time-length ≈ metres on floors); settle on the final view over the last stretch
+      const ahead = this.pointAt(g, Math.min(g.total, s + 1.6), _v3);
+      const dx = ahead.x - this.feet.x, dz = ahead.z - this.feet.z;
+      const hd = Math.hypot(dx, dz);
+      let pathYaw = this.yaw, pathPitch = 0;
+      if (hd > 0.08) {
+        pathYaw = Math.atan2(-dx, -dz);
+        pathPitch = clamp(Math.atan2(ahead.y - this.feet.y, hd) * 0.5, -0.3, 0.3);
+      }
+      const settle = smoothstep(0.6, 0.96, g.t);
+      const start = smoothstep(0, 0.16, g.t);
+      let yaw = g.yaw0 + angleDelta(g.yaw0, pathYaw) * start;
+      yaw = yaw + angleDelta(yaw, g.yaw1) * settle;
+      let pitch = g.pitch0 + (pathPitch - g.pitch0) * start;
+      pitch = pitch + (g.pitch1 - pitch) * settle;
+      this.turnToward(yaw, pitch, dt);
+      g.onProgress?.(s, g.total);
+    } else {
+      // arrived: finish turning to face the room at a calm pace
+      this.turnToward(g.yaw1, g.pitch1, dt);
+    }
+    this.camY = this.feet.y + EYE;
+    camera.position.set(this.feet.x, this.camY, this.feet.z);
+    camera.quaternion.copy(this.eyeQuaternion(_q));
+    camera.updateMatrixWorld();
+    if (!moving && Math.abs(angleDelta(this.yaw, g.yaw1)) < 0.01 && Math.abs(this.pitch - g.pitch1) < 0.01) {
+      this.glide = null;
+      this.yaw = g.yaw1;
+      this.pitch = g.pitch1;
+      this.syncLook();
+      this.grounded = true;
+      this.vel.set(0, 0, 0);
+      camera.quaternion.copy(this.eyeQuaternion(_q));
+      camera.updateMatrixWorld();
+      g.onDone?.(true);
+    }
+    return true;
+  }
+
+  /** Ease the view toward (yaw, pitch), never faster than a comfortable head turn (~150°/s). */
+  private turnToward(yaw: number, pitch: number, dt: number) {
+    const k = damp(7, dt);
+    const maxStep = 2.6 * dt;
+    const dy = clamp(angleDelta(this.yaw, yaw) * k, -maxStep, maxStep);
+    const dp = clamp((pitch - this.pitch) * k, -maxStep * 0.6, maxStep * 0.6);
+    // close enough: land exactly (no endless approach)
+    this.yaw += Math.abs(angleDelta(this.yaw, yaw)) < 0.004 ? angleDelta(this.yaw, yaw) : dy;
+    this.pitch += Math.abs(pitch - this.pitch) < 0.004 ? pitch - this.pitch : dp;
+  }
+
   /** Advance one frame and write the camera. Returns true while something moved. */
   update(dt: number, camera: THREE.PerspectiveCamera): boolean {
     dt = Math.min(dt, 0.1);
     if (this.transition) return this.updateTransition(dt, camera);
+    if (this.glide) return this.updateGlide(dt, camera);
 
-    // look
-    const { look, keys, joy } = this.input;
-    if (this.enabled && (look.dx || look.dy)) {
-      this.yaw -= look.dx * LOOK_SENS;
-      this.pitch = clamp(this.pitch - look.dy * LOOK_SENS, -MAX_PITCH, MAX_PITCH);
+    // look: input moves the goal, the view follows (frame-rate independent)
+    const { look, keys, joy, turn } = this.input;
+    if (this.enabled) {
+      this.yawGoal -= look.dx + turn.yaw * dt;
+      this.pitchGoal = clamp(this.pitchGoal - look.dy - turn.pitch * dt, -MAX_PITCH, MAX_PITCH);
     }
     look.dx = 0;
     look.dy = 0;
+    const lk = Number.isFinite(this.lookLag) ? damp(this.lookLag, dt) : 1;
+    const dyaw = angleDelta(this.yaw, this.yawGoal);
+    const turning = Math.abs(dyaw) > 1e-5 || Math.abs(this.pitchGoal - this.pitch) > 1e-5;
+    this.yaw += dyaw * lk;
+    this.pitch += (this.pitchGoal - this.pitch) * lk;
 
     // wish direction from keys + joystick, relative to yaw
     let f = 0, s = 0;
@@ -225,9 +437,11 @@ export class WalkController {
     if (this.bvh) {
       const steps = clamp(Math.ceil(moveLen / 0.035), 1, 10);
       for (let i = 0; i < steps; i++) {
+        const px = this.feet.x, pz = this.feet.z;
         this.feet.x += (this.vel.x * dt) / steps;
         this.feet.z += (this.vel.z * dt) / steps;
         this.resolveWalls();
+        if (this.grounded) this.guardEdge(px, pz);
       }
       this.followFloor(dt);
     } else {
@@ -249,7 +463,7 @@ export class WalkController {
     camera.position.set(this.feet.x, this.camY, this.feet.z);
     camera.quaternion.copy(this.eyeQuaternion(_q));
     camera.updateMatrixWorld();
-    return moveLen > 1e-5 || Math.abs(dy) > 1e-4 || !this.grounded;
+    return moveLen > 1e-5 || Math.abs(dy) > 1e-4 || !this.grounded || turning;
   }
 
   private updateTransition(dt: number, camera: THREE.PerspectiveCamera) {
@@ -265,8 +479,33 @@ export class WalkController {
     camera.fov = tr.fromFov + (this.fov - tr.fromFov) * e;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-    if (tr.t >= 1) this.transition = null;
+    if (tr.t >= 1) {
+      this.transition = null;
+      this.syncLook();
+    }
     return true;
+  }
+
+  /**
+   * Safety net: never step off an edge into a drop (an unguarded stairwell, a balcony without its railing yet, the
+   * roof's edge). If the ground is gone under the new position, slide along the edge, or stay put.
+   */
+  private guardEdge(px: number, pz: number) {
+    const top = this.feet.y + STEP_UP + 0.02, bottom = this.feet.y - SNAP_DOWN - 0.05;
+    if (this.groundAt(this.feet, top, bottom) !== null) return;
+    const nx = this.feet.x, nz = this.feet.z;
+    this.feet.set(nx, this.feet.y, pz);
+    if (this.groundAt(this.feet, top, bottom) !== null) {
+      this.vel.z = 0;
+      return;
+    }
+    this.feet.set(px, this.feet.y, nz);
+    if (this.groundAt(this.feet, top, bottom) !== null) {
+      this.vel.x = 0;
+      return;
+    }
+    this.feet.set(px, this.feet.y, pz);
+    this.vel.x = this.vel.z = 0;
   }
 
   /** Horizontal capsule push-out against everything that isn't floor/ceiling-like. */

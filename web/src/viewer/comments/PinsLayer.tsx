@@ -5,34 +5,32 @@ import { Html } from "@react-three/drei";
 import type { Comment, CommentAnchor } from "@contracts/api-types";
 import type { ViewerController } from "../core/controller";
 
-export const STATUS_COLOR: Record<Comment["status"], string> = {
-  open: "#f59e0b",
-  resolved: "#10b981",
-  partial: "#3b82f6",
-  rejected: "#ef4444",
-};
+/** DESIGN author hues (--color-author-1…6): a person keeps their colour across Plan and House. */
+export const AUTHOR_HUES = ["#0D7C72", "#6A4FD6", "#C23F78", "#A8641A", "#4F6378", "#2F7A3A"];
 
-const UP = new THREE.Vector3(0, 1, 0);
-const stemGeo = new THREE.CylinderGeometry(0.009, 0.009, 1, 8).translate(0, 0.5, 0);
-const headGeo = new THREE.SphereGeometry(0.06, 20, 14);
-const ringGeo = new THREE.RingGeometry(0.035, 0.055, 24).rotateX(-Math.PI / 2);
-const stemMat = new THREE.MeshStandardMaterial({ color: "#ffffff", emissive: "#ffffff", emissiveIntensity: 0.35, roughness: 0.4 });
-const headMats = new Map<string, THREE.MeshStandardMaterial>();
-const headMat = (color: string) => {
-  if (!headMats.has(color)) headMats.set(color, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7, roughness: 0.3, side: THREE.DoubleSide }));
-  return headMats.get(color)!;
-};
+export function authorHue(c: Pick<Comment, "author">): string {
+  const key = c.author?.id || c.author?.name;
+  if (!key) return AUTHOR_HUES[0];
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AUTHOR_HUES[h % AUTHOR_HUES.length];
+}
 
-/** Comment pins: sphere + stem in 3D, numbered badge in DOM (drei <Html>), coloured by status. */
+/**
+ * Comment pins: a 24 px teardrop whose tip sits exactly on the anchor point, in the author's hue with a white ring
+ * and the comment's number (the same number as in Plan). DOM via drei <Html>; the controller hides pins on hidden
+ * floors or above the section cut, and marks occluded ones (dimmed in orbit, hidden while walking).
+ */
 export function PinsLayer({ ctrl, comments }: { ctrl: ViewerController; comments?: Comment[] }) {
   const draft = useStore(ctrl.store, (s) => s.draft);
+  const selected = useStore(ctrl.store, (s) => s.selectedPin);
   const ref = useCallback((g: THREE.Group | null) => void (ctrl.pinsGroup = g), [ctrl]);
   return (
     <group ref={ref} name="naqsha-pins">
       {(comments ?? []).map((c, i) => (
-        <Pin key={c.id} ctrl={ctrl} id={c.id} n={String(i + 1)} anchor={c.anchor} status={c.status} text={c.text} />
+        <Pin key={c.id} ctrl={ctrl} id={c.id} n={String(i + 1)} anchor={c.anchor} status={c.status} text={c.text} hue={authorHue(c)} author={c.author?.name} selected={selected === c.id} />
       ))}
-      {draft && <Pin key="__draft" ctrl={ctrl} id="__draft" n="+" anchor={draft} status="open" draft />}
+      {draft && <Pin key="__draft" ctrl={ctrl} id="__draft" n="+" anchor={draft} status="open" hue="#2747F5" draft />}
     </group>
   );
 }
@@ -43,40 +41,35 @@ interface PinProps {
   n: string;
   anchor: Pick<CommentAnchor, "position" | "normal" | "level">;
   status: Comment["status"];
+  hue: string;
   text?: string;
+  author?: string;
   draft?: boolean;
+  selected?: boolean;
 }
 
-const Pin = memo(function Pin({ ctrl, id, n, anchor, status, text, draft }: PinProps) {
+const STATUS_WORD: Record<Comment["status"], string> = { open: "", resolved: "Done", partial: "Partly done", rejected: "Not possible" };
+
+const Pin = memo(function Pin({ ctrl, id, n, anchor, status, hue, text, author, draft, selected }: PinProps) {
   const px = anchor.position.join(), nx = anchor.normal.join();
-  const { pos, quat, head, length } = useMemo(() => {
-    const p = new THREE.Vector3(...anchor.position);
+  const { pos, normal } = useMemo(() => {
     const nrm = new THREE.Vector3(...anchor.normal);
-    if (nrm.lengthSq() < 1e-6) nrm.copy(UP);
-    nrm.normalize();
-    // stand up from floors, lean out of walls (keeps badges readable from eye height)
-    const dir = nrm.clone().lerp(UP, nrm.y > 0.7 ? 1 : 0.45).normalize();
-    const len = 0.32;
-    return { pos: p, quat: new THREE.Quaternion().setFromUnitVectors(UP, dir), head: dir.clone().multiplyScalar(len), length: len };
+    if (nrm.lengthSq() < 1e-6) nrm.set(0, 1, 0);
+    return { pos: new THREE.Vector3(...anchor.position), normal: nrm.normalize() };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [px, nx]);
-  const color = STATUS_COLOR[status] ?? STATUS_COLOR.open;
-  const userData = useMemo(() => ({ pin: id, level: anchor.level, headLocal: head, noPick: true }), [id, anchor.level, head]);
+  const userData = useMemo(() => ({ pin: id, level: anchor.level, normal, noPick: true }), [id, anchor.level, normal]);
   const onClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!draft) ctrl.props.onSelectComment?.(id);
+      if (!draft) ctrl.selectPin(id);
     },
     [ctrl, id, draft],
   );
+  const word = STATUS_WORD[status];
   return (
     <group position={pos} userData={userData}>
-      <group quaternion={quat}>
-        <mesh geometry={stemGeo} material={stemMat} scale={[1, length, 1]} renderOrder={2} />
-        <mesh geometry={headGeo} material={headMat(color)} position={[0, length, 0]} renderOrder={2} />
-        <mesh geometry={ringGeo} material={headMat(color)} position={[0, 0.004, 0]} />
-      </group>
-      <Html position={head.toArray()} center zIndexRange={[20, 0]} wrapperClass="nq-pin-wrap">
+      <Html zIndexRange={[20, 0]} wrapperClass="nq-pin-wrap">
         <button
           type="button"
           className="nq-pin"
@@ -84,13 +77,22 @@ const Pin = memo(function Pin({ ctrl, id, n, anchor, status, text, draft }: PinP
           data-pin={id}
           data-status={status}
           data-draft={draft ? "1" : "0"}
-          style={{ "--pin": color } as React.CSSProperties}
+          data-selected={selected ? "1" : "0"}
+          style={{ "--pin": hue } as React.CSSProperties}
           onClick={onClick}
           onPointerDown={(e) => e.stopPropagation()}
-          aria-label={draft ? "New comment" : `Comment ${n}${text ? `: ${text}` : ""}`}
+          aria-label={draft ? "New comment" : `Comment ${n}${author ? ` by ${author}` : ""}${word ? ` (${word.toLowerCase()})` : ""}${text ? `: ${text}` : ""}`}
         >
-          <span className="nq-pin-n">{n}</span>
-          {text && <span className="nq-pin-tip">{text.length > 90 ? `${text.slice(0, 88)}…` : text}</span>}
+          <span className="nq-pin-drop" aria-hidden>
+            <span className="nq-pin-n">{n}</span>
+          </span>
+          {text && (
+            <span className="nq-pin-tip" aria-hidden>
+              {author && <b>{author}</b>}
+              {text.length > 90 ? `${text.slice(0, 88)}…` : text}
+              {word && <i>{word}</i>}
+            </span>
+          )}
         </button>
       </Html>
     </group>
