@@ -61,7 +61,18 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
     [...rooms].filter((rm) => x >= rm.rect.x && x <= rm.rect.x + rm.rect.w && y >= rm.rect.y && y <= rm.rect.y + rm.rect.d).sort((a, b) => a.rect.w * a.rect.d - b.rect.w * b.rect.d)[0] ?? null;
 
   return (
-    <div className="nq-mini nq-glass nq-ui" data-nq-ui="" data-help={help ? "1" : "0"}>
+    <div
+      className="nq-mini nq-glass nq-ui"
+      data-nq-ui=""
+      data-help={help ? "1" : "0"}
+      // the map never fades while you are reading or using it ("Drawing room · Click to go" must still click)
+      onPointerEnter={(e) => e.pointerType !== "touch" && ctrl.setHudHover(true)}
+      onPointerLeave={() => ctrl.setHudHover(false)}
+      onFocus={() => ctrl.setHudHover(true, "focus")}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) ctrl.setHudHover(false, "focus");
+      }}
+    >
       <div className="nq-mini-head">
         <div className="nq-mini-floors" role="group" aria-label="Map floor">
           {levels.length > 1 &&

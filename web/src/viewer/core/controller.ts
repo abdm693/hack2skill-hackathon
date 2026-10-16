@@ -18,7 +18,7 @@ import { ghostBox, heroPose, houseBox, plotBox, roomPose } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
-import { displayLabel, resolveHitTags, type PartRange } from "./tags";
+import { displayLabel, humanLabel, resolveHitTags, roomName, type PartRange } from "./tags";
 import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, smoothstep, worldToPlan, zOf } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
@@ -161,6 +161,11 @@ export class ViewerController {
   private toastTimer = 0;
   private draftTimer = 0;
   private hintsTimer = 0;
+  private promptTimer = 0;
+  private pinnedTimer = 0;
+  /** the pointer is over (or focus is in) the minimap / help card: the HUD never steps back meanwhile */
+  private hudHover = false;
+  private lastDocMove = 0;
   private glideTimer = 0;
   private routeTimer = 0;
   private routeSeq = 0;
@@ -170,7 +175,6 @@ export class ViewerController {
   private lastInput = 0;
   private unlockedAt = 0;
   private lockEverSucceeded = false;
-  private lockRefusedToastShown = false;
   private walkerOnFallback = false;
   private navWarm = false;
   private ghostTarget = 1;
@@ -192,6 +196,10 @@ export class ViewerController {
     };
     this.holder.name = "naqsha-house";
     this.raycaster.layers.enableAll();
+    // the app's chrome can recede with the walk HUD: `:root[data-nq-walk-idle]` (viewer.css, DESIGN "after 2.5s idle")
+    this.store.subscribe((s, prev) => {
+      if (s.idle !== prev.idle && typeof document !== "undefined") document.documentElement.toggleAttribute("data-nq-walk-idle", s.idle && s.mode === "walk");
+    });
     try {
       const q = localStorage.getItem("naqsha.viewer.quality") as Quality | null;
       if (q === "high" || q === "balanced" || q === "performance") {
@@ -219,6 +227,7 @@ export class ViewerController {
     goToRoom: (roomId: string) => this.goToRoom(roomId),
     setFloor: (levelId: string) => this.setFloor(levelId),
     resetView: () => this.resetView(),
+    cancelDraft: () => this.cancelDraft(),
   };
 
   // ───────────────────────────── lifecycle ─────────────────────────────
@@ -234,7 +243,17 @@ export class ViewerController {
     document.addEventListener("pointerlockchange", this.onPointerLockChange);
     document.addEventListener("pointerlockerror", this.onPointerLockError);
     document.addEventListener("mousemove", this.onLockedMouseMove);
+    document.addEventListener("pointermove", this.onDocPointerMove, { passive: true });
   }
+
+  /** Moving the mouse anywhere (the app's chrome too) brings a receded walk HUD back. */
+  private onDocPointerMove = (e: PointerEvent) => {
+    if (e.pointerType === "touch" || this.store.getState().mode !== "walk") return;
+    const now = performance.now();
+    if (now - this.lastDocMove < 100) return;
+    this.lastDocMove = now;
+    this.activity();
+  };
 
   /** Deferred so a StrictMode remount (unmount → mount in the same tick) keeps the built house. */
   unmount() {
@@ -246,6 +265,8 @@ export class ViewerController {
     document.removeEventListener("pointerlockchange", this.onPointerLockChange);
     document.removeEventListener("pointerlockerror", this.onPointerLockError);
     document.removeEventListener("mousemove", this.onLockedMouseMove);
+    document.removeEventListener("pointermove", this.onDocPointerMove);
+    document.documentElement.removeAttribute("data-nq-walk-idle");
     if (this.isLocked()) document.exitPointerLock?.();
     this.unmountTimer = window.setTimeout(() => this.dispose(), 0);
   }
@@ -261,7 +282,7 @@ export class ViewerController {
     this.builds.disposeAll();
     this.ctxfx.dispose();
     this.result = null;
-    for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer]) window.clearTimeout(t);
+    for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer, this.promptTimer, this.pinnedTimer]) window.clearTimeout(t);
     window.clearTimeout(this.glideTimer);
     this.xfade?.remove();
     this.xfade = null;
@@ -446,13 +467,45 @@ export class ViewerController {
     }
     // the HUD steps back when nothing happens for a while
     if (Math.hypot(this.walk.vel.x, this.walk.vel.z) > 0.05 || this.walk.glide) this.lastInput = now;
-    const idle = (s.walk === "free" || s.walk === "look") && now - this.lastInput > IDLE_MS;
+    // never while the pointer rests on (or focus is in) the minimap or the help card: "click to go" must still work
+    const idle = (s.walk === "free" || s.walk === "look") && !this.hudHover && !s.help && now - this.lastInput > IDLE_MS;
     if (idle !== s.idle) this.store.setState({ idle });
   }
 
   private activity() {
     this.lastInput = performance.now();
     if (this.store.getState().idle) this.store.setState({ idle: false });
+  }
+
+  private hudFocus = false;
+  private hudPointer = false;
+
+  /** The minimap / help card is under the pointer or has focus (MiniMap reports it). */
+  setHudHover(on: boolean, via: "pointer" | "focus" = "pointer") {
+    if (via === "pointer") this.hudPointer = on;
+    else this.hudFocus = on;
+    this.hudHover = this.hudPointer || this.hudFocus;
+    this.activity();
+  }
+
+  /** Show "Click (or drag) to look around" for a few seconds (after starting to walk, or letting go of the mouse). */
+  private showLookPrompt(ms = 4000) {
+    const s = this.store.getState();
+    if (s.touch || s.mode !== "walk") return;
+    window.clearTimeout(this.promptTimer);
+    if (!s.prompt) this.store.setState({ prompt: true });
+    this.promptTimer = window.setTimeout(() => this.store.setState({ prompt: false }), ms);
+  }
+
+  /** The first look, step or glide: the prompt (and the one-time coachmark) have done their job. */
+  private hideLookPrompt(alsoHints = false) {
+    window.clearTimeout(this.promptTimer);
+    const s = this.store.getState();
+    if (s.prompt) this.store.setState({ prompt: false });
+    if (alsoHints && s.hints) {
+      window.clearTimeout(this.hintsTimer);
+      this.store.setState({ hints: false });
+    }
   }
 
   // ───────────────────────────── build hooks (called by BuildManager) ─────────────────────────────
@@ -847,9 +900,17 @@ export class ViewerController {
 
   onCommentsChanged() {
     this.pinEls.clear();
-    if (this.store.getState().draft) {
-      window.clearTimeout(this.draftTimer);
-      this.store.setState({ draft: null });
+    const draft = this.store.getState().draft;
+    if (draft) {
+      // the draft became a real comment (same anchor): its pin replaces the draft one. Other changes (a teammate's
+      // note arriving) leave the draft alone while the composer is still open.
+      const near = (a: Vec3 | undefined, b: Vec3) => !!a && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 0.01;
+      const saved = (this.props.comments ?? []).some((c) => near(c.anchor?.position, draft.position));
+      if (saved) {
+        window.clearTimeout(this.draftTimer);
+        this.store.setState({ draft: null });
+        if (this.store.getState().walk === "commenting") this.notePinned();
+      }
     }
     this.invalidate();
   }
@@ -1143,6 +1204,7 @@ export class ViewerController {
     this.lastInput = performance.now();
     this.store.setState({ walk: this.isLocked() ? "look" : "free" });
     this.maybeShowHints();
+    if (!this.isLocked()) this.showLookPrompt();
   }
 
   private maybeShowHints() {
@@ -1156,7 +1218,7 @@ export class ViewerController {
     if (seen) return;
     this.store.setState({ hints: true });
     window.clearTimeout(this.hintsTimer);
-    this.hintsTimer = window.setTimeout(() => this.store.setState({ hints: false }), 4500);
+    this.hintsTimer = window.setTimeout(() => this.store.setState({ hints: false }), 4000);
   }
 
   private leaveWalk(source: ModeSource) {
@@ -1168,7 +1230,10 @@ export class ViewerController {
     this.walk.input.turn.yaw = this.walk.input.turn.pitch = 0;
     window.clearTimeout(this.routeTimer);
     const cam = this.camera, c = this.controls;
-    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, roomId: null, level: null, gliding: false, route: null, idle: false, hints: false, help: false, mapLevel: null });
+    window.clearTimeout(this.promptTimer);
+    window.clearTimeout(this.pinnedTimer);
+    this.hudHover = this.hudPointer = this.hudFocus = false;
+    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, roomId: null, level: null, gliding: false, route: null, idle: false, hints: false, prompt: false, pinned: false, help: false, mapLevel: null });
     this.fireRoomChange(null, null);
     this.setOutline(null);
     this.syncVisibility();
@@ -1316,6 +1381,7 @@ export class ViewerController {
   private startGlide(route: RoutePlan, toRoom?: string) {
     window.clearTimeout(this.routeTimer);
     const id = ++this.routeSeq;
+    this.hideLookPrompt();
     this.walk.input.look.dx = this.walk.input.look.dy = 0;
     this.store.setState({ route: { id, byLevel: route.byLevel, to: toRoom }, gliding: true, mapLevel: null, idle: false });
     if (prefersReducedMotion()) {
@@ -1389,15 +1455,9 @@ export class ViewerController {
    * the likely cause: ask for another click instead of dropping to drag-to-look for good.
    */
   private onLockFailed() {
-    if (this.lockEverSucceeded) {
-      this.toast("Click again to look around");
-      return;
-    }
-    this.store.setState({ lockRefused: true });
-    if (!this.lockRefusedToastShown) {
-      this.lockRefusedToastShown = true;
-      this.toast("Drag to look around");
-    }
+    // one message only: the centre prompt ("Click to look around" again, or "Drag to look around"), never a toast too
+    if (!this.lockEverSucceeded) this.store.setState({ lockRefused: true });
+    if (this.store.getState().walk === "free") this.showLookPrompt();
   }
 
   isLocked() {
@@ -1412,12 +1472,15 @@ export class ViewerController {
       if (s.mode === "walk" && s.walk !== "intro") {
         this.walk.enabled = true;
         this.store.setState({ walk: "look", lockRefused: false, target: null });
+        this.hideLookPrompt(true);
       }
     } else {
       this.unlockedAt = performance.now();
       if (s.walk === "look") {
         this.walk.input.keys.clear();
         this.store.setState({ walk: "free", target: null });
+        // let go of the mouse (Esc): say once more how to get it back
+        this.showLookPrompt();
       }
       this.setOutline(null);
     }
@@ -1433,13 +1496,37 @@ export class ViewerController {
     this.walk.input.look.dy += THREE.MathUtils.clamp(e.movementY, -180, 180) * LOCK_SENS;
   };
 
-  /** Leave the "comment pinned" pause and walk again (re-locking the pointer when that is how you were looking). */
+  /** Leave the commenting pause and walk again (re-locking the pointer when that is how you were looking). */
   resumeWalk(relock = true) {
     const s = this.store.getState();
     if (s.mode !== "walk") return;
+    window.clearTimeout(this.pinnedTimer);
     this.walk.enabled = true;
-    this.store.setState({ walk: "free" });
+    this.lastInput = performance.now();
+    this.store.setState({ walk: "free", pinned: false });
     if (relock && !s.touch && !s.lockRefused) this.requestLock();
+    else this.showLookPrompt();
+  }
+
+  /**
+   * The app closed the comment composer without saving (Esc, ×): drop the draft pin and walk on right away.
+   * Exposed on the handle (`cancelDraft`).
+   */
+  cancelDraft() {
+    window.clearTimeout(this.draftTimer);
+    if (this.store.getState().draft) this.store.setState({ draft: null });
+    if (this.store.getState().walk === "commenting") this.resumeWalk(false);
+    this.invalidate();
+  }
+
+  /** The note was saved: "Note pinned" for about 2 s, then walking resumes. */
+  private notePinned() {
+    window.clearTimeout(this.pinnedTimer);
+    this.store.setState({ pinned: true });
+    this.pinnedTimer = window.setTimeout(() => {
+      this.store.setState({ pinned: false });
+      if (this.store.getState().walk === "commenting") this.resumeWalk(false);
+    }, 2000);
   }
 
   setHelp(open: boolean) {
@@ -1457,14 +1544,20 @@ export class ViewerController {
   private onKeyDown = (e: KeyboardEvent) => {
     const s = this.store.getState();
     if (s.mode !== "walk" || isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-    const walking = s.walk === "free" || s.walk === "look";
+    let walking = s.walk === "free" || s.walk === "look";
     const consume = () => {
       e.preventDefault();
       e.stopPropagation();
     };
     if (MOVE_KEYS.has(e.code)) {
+      // "Note pinned" is showing: a step means walk on now
+      if (s.walk === "commenting" && s.pinned && !s.draft) {
+        this.resumeWalk(false);
+        walking = true;
+      }
       if (walking) {
         this.activity();
+        if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") this.hideLookPrompt();
         // the route is still drawing: walking yourself wins
         if (s.gliding && !this.walk.glide && e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
           window.clearTimeout(this.routeTimer);
@@ -1586,6 +1679,7 @@ export class ViewerController {
         d.x = e.clientX;
         d.y = e.clientY;
         d.moved += Math.abs(dx) + Math.abs(dy);
+        if (d.moved > 8 && (s.prompt || s.hints)) this.hideLookPrompt(true);
         if (d.moved > 40 && !s.dragged) this.store.setState({ dragged: true });
         this.walk.input.look.dx += dx * DRAG_SENS;
         this.walk.input.look.dy += dy * DRAG_SENS;
@@ -1620,7 +1714,9 @@ export class ViewerController {
     }
     const p = this.local(e);
     const band = Math.min(90, p.w * 0.07);
-    const side = p.x < band ? -1 : p.x > p.w - band ? 1 : 0;
+    let side = p.x < band ? -1 : p.x > p.w - band ? 1 : 0;
+    // never while the pointer is on, or within 24 px of, any control (the floor rail, the bottom-left buttons…)
+    if (side && this.nearHud(e.clientX, e.clientY, 24)) side = 0;
     const now = performance.now();
     if (side !== this.edge.side) {
       this.edge = { since: now, side };
@@ -1633,6 +1729,23 @@ export class ViewerController {
     }
     const depth = side < 0 ? 1 - p.x / band : 1 - (p.w - p.x) / band;
     turn.yaw = side * (0.35 + 1.0 * clamp(depth, 0, 1));
+    this.hideLookPrompt(true);
+  }
+
+  /**
+   * Is anything but the 3D view under the pointer or within `pad` px of it? The app's chrome floats over the viewer
+   * as siblings (not our children), so this asks the document what is on top at a few points around the cursor.
+   */
+  private nearHud(x: number, y: number, pad: number): boolean {
+    const c = this.container;
+    if (!c) return false;
+    for (const dy of [0, -pad, pad])
+      for (const dx of [0, -pad, pad]) {
+        const el = document.elementFromPoint(x + dx, y + dy);
+        if (!el) continue;
+        if (!c.contains(el) || el.closest("[data-nq-ui], button, a[href], input, select, textarea, [role='button']")) return true;
+      }
+    return false;
   }
 
   private onPointerUp = (e: PointerEvent) => {
@@ -1946,10 +2059,11 @@ export class ViewerController {
     const tags = resolveHitTags(hit, this.currentRoot());
     const normal = hitNormal(hit, this.raycaster.ray.direction);
     const where = this.locate(hit.point.clone().addScaledVector(normal, 0.05));
-    const label = tags.label ?? displayLabel(tags, this.plan).title;
     const anchor: CommentAnchor = { position: v3(hit.point), normal: v3(normal) };
     // untagged hits: infer level/room from the plan, but only when the point is inside a room (not a street tree)
     const level = tags.level ?? (where.room ? where.level : undefined), room = tags.room ?? where.room;
+    // one human label: "TV in the upper family lounge", "Floor plant in the drawing room"
+    const label = humanLabel(tags.kind, tags.label, roomName(this.plan, room));
     if (level) anchor.level = level;
     if (room) anchor.room = room;
     if (tags.id) anchor.element_id = tags.id;
@@ -1959,11 +2073,14 @@ export class ViewerController {
     const target = position.clone().addScaledVector(this.raycaster.ray.direction, hit.distance);
     const snapshot = this.snapshot({ width: 640, pin: hit.point, maxAspect: 0.75 });
     window.clearTimeout(this.draftTimer);
-    this.store.setState({ draft: { position: anchor.position, normal: anchor.normal } });
-    this.draftTimer = window.setTimeout(() => this.store.setState({ draft: null }), 60000);
+    window.clearTimeout(this.pinnedTimer);
+    this.store.setState({ draft: { position: anchor.position, normal: anchor.normal }, pinned: false });
+    // safety net only: the app closes the draft with cancelDraft() or by saving it
+    this.draftTimer = window.setTimeout(() => this.cancelDraft(), 15 * 60000);
     if (fromWalk && this.store.getState().mode === "walk") {
       this.walk.enabled = false;
       this.walk.input.keys.clear();
+      this.hideLookPrompt(true);
       this.store.setState({ walk: "commenting", target: null, idle: false });
       if (this.isLocked()) document.exitPointerLock?.();
     }

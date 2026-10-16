@@ -17,7 +17,10 @@
  * HUD zones (DESIGN "House: explore and walk HUD"): the viewer draws only the crosshair, the walk prompts, the
  * minimap (top-right, 72 px down, under the app's people capsule), one-line toasts (top-centre, 72 px down) and the
  * touch joystick. Everything else (title, view switch, floor stack, Orbit/Walk, dock, room pill) is the app's.
- * While walking it marks itself `data-idle="1"` after 2.5 s without input so the app can let its chrome recede too.
+ * While walking it marks itself `data-idle="1"` after 2.5 s without input, and the document root
+ * `data-nq-walk-idle`, so the app's chrome recedes too (viewer.css: anything marked `data-nq-recede`, and the shell's
+ * floating rows over the view). DESIGN: after 2.5 s idle only the crosshair and the room pill remain. The minimap
+ * never recedes while the pointer is on it.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import * as THREE from "three";
@@ -46,6 +49,11 @@ export interface ViewerHandle {
   setFloor(levelId: string): void;
   /** Back to the hero view (orbit). */
   resetView(): void;
+  /**
+   * The comment composer closed without saving (Esc, ×): drop the draft pin and, in walk, walk on at once. Saving
+   * needs no call: the new comment arriving in `comments` shows "Note pinned" for ~2 s, then walking resumes.
+   */
+  cancelDraft(): void;
 }
 
 export interface HouseViewerProps {

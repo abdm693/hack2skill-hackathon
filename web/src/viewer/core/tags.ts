@@ -95,6 +95,7 @@ const KIND_WORDS: Record<string, string> = {
   tv: "TV",
   tv_unit: "TV unit",
   ac_split: "AC",
+  ac_outdoor: "AC outdoor unit",
   sofa_3: "3-seat sofa",
   sofa_2: "2-seat sofa",
   sofa_l: "L-shaped sofa",
@@ -104,17 +105,107 @@ const KIND_WORDS: Record<string, string> = {
   dining_table_4: "Dining table",
   dining_table_6: "Dining table",
   dining_table_8: "Dining table",
+  plant_floor: "Floor plant",
+  mirror_wall: "Wall mirror",
+  sink_kitchen: "Kitchen sink",
+  sink: "Sink",
   car_sedan: "Car",
   car_suv: "SUV",
+  vehicle: "Car",
+  water_tank: "Water tank",
+  false_ceiling: "False ceiling",
+  accent_wall: "Accent wall",
+  led_strip: "LED strip",
+  downlights: "Downlights",
 };
+
+/** Words that keep their capitals inside a sentence. */
+const KEEP_CAPS = /^(TV|WC|AC|LED|LDA|UPS|[A-Z]{2,}\d*)$/;
 
 /** "furniture:sofa_3" → "3-seat sofa", "facade:fins" → "Fins", "stair_ramp" → "Stair ramp". */
 export function humanizeKind(kind?: string): string {
   if (!kind) return "Element";
   const last = kind.split(":").pop() || kind;
   if (KIND_WORDS[last]) return KIND_WORDS[last];
+  // "railing:glass" reads "Glass railing", "window:glass" → "Window glass"
+  const segs = kind.split(":");
+  if (segs.length >= 2 && /^(glass|stair|exterior|interior|coping|pillar|panel|light)$/.test(last)) {
+    const head = segs[segs.length - 2].replace(/[_-]+/g, " ");
+    const adjective = /^(stair|exterior|interior)$/.test(last) || (last === "glass" && head !== "window" && head !== "door");
+    const s = adjective ? `${last} ${head}` : `${head} ${last}`;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
   const s = last.replace(/[_-]+/g, " ").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** A name inside a sentence: "Upper Family Lounge" → "upper family lounge" (TV, WC and the like keep their capitals). */
+export function inSentence(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => (KEEP_CAPS.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+}
+
+/** "the kitchen", "bedroom 2" (numbered rooms read without "the"). */
+export function theRoom(name: string): string {
+  const s = inSentence(name);
+  return /\d/.test(s) || /^(the|a|an)\s/.test(s) ? s : `the ${s}`;
+}
+
+/** First letter up, the rest as written. */
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * The one human label for a thing in the house: "TV in the upper family lounge", "Floor plant in the drawing room",
+ * "Wall in bedroom 2", "Water tank". Engine labels that only repeat "<Room name> <type>" are rebuilt from the kind;
+ * hand-written labels ("AC outdoor unit", "Palm") are kept, sentence-cased.
+ */
+export function humanLabel(kind?: string, label?: string, room?: string): string {
+  const last = (kind ?? "").split(":").pop() ?? "";
+  const typeWords = last.replace(/[_-]+/g, " ").trim().toLowerCase();
+  let auto = !label;
+  if (label && room) {
+    const l = label.trim().toLowerCase(), r = room.trim().toLowerCase();
+    // "Upper Family Lounge tv", "Drawing Room plant floor", or just the room name again
+    if (l === r || (typeWords && (l === `${r} ${typeWords}` || l.startsWith(`${r} `) && l.endsWith(typeWords)))) auto = true;
+  }
+  if (label && !room && typeWords && label.trim().toLowerCase() === typeWords) auto = true;
+  let name = auto ? humanizeKind(kind) : cap(label!.trim());
+  if (!auto && room && name.toLowerCase().startsWith(`${room.toLowerCase()} `)) {
+    // "Car Porch roof": a label that names its room already reads fine, just in sentence case
+    return cap(inSentence(name));
+  }
+  name = cap(inSentence(name));
+  if (!room || name.toLowerCase().includes(room.trim().toLowerCase())) return name;
+  return `${name} in ${theRoom(room)}`;
+}
+
+/** Build-card words for a design section: "Building the roof", "Furnishing the kitchen". */
+export function sectionStage(name: string | undefined, plan?: BuildingPlan): string {
+  if (!name) return "";
+  const n = name.toLowerCase().replace(/_auto$/, "");
+  let m = n.match(/^furnish(?:ing)?_(.+)$/);
+  if (m) {
+    const id = m[1];
+    const rm = plan?.rooms.find((r) => r.id === id || r.id.toLowerCase() === id);
+    if (rm) return `Furnishing ${theRoom(rm.name)}`;
+    return `Furnishing ${theRoom(id.replace(/^[bgfstr]_/, "").replace(/_/g, " "))}`;
+  }
+  if (/^structure/.test(n)) return "Raising the walls and slabs";
+  if (/roof/.test(n)) return "Building the roof";
+  if (/^facade_boundary|boundary/.test(n)) return "Building the boundary wall";
+  if (/^facade/.test(n)) return "Dressing the facade";
+  m = n.match(/^interior(?:s)?(?:_(.+))?$/);
+  if (m) {
+    const lvl = m[1] && plan?.levels.find((l) => l.id === m![1]);
+    return lvl ? `Finishing the ${inSentence(lvl.name)}` : "Finishing the interiors";
+  }
+  if (/^(landscape|site|garden)/.test(n)) return "Planting the garden";
+  if (/^(light|lights|lighting)/.test(n)) return "Lighting the house";
+  if (/^stair/.test(n)) return "Building the stairs";
+  return `Building the ${n.replace(/[_-]+/g, " ")}`;
 }
 
 export function roomName(plan: BuildingPlan | undefined, roomId?: string): string | undefined {
@@ -127,10 +218,8 @@ export function levelName(plan: BuildingPlan | undefined, levelId?: string): str
   return plan.levels.find((l) => l.id === levelId)?.name;
 }
 
-/** Hover / anchor label: `userData.label`, else "<Kind> · <Room name>". */
+/** Hover / anchor label: "TV in the upper family lounge", with the floor underneath. */
 export function displayLabel(t: Omit<ResolvedTags, "element">, plan?: BuildingPlan): { title: string; subtitle?: string } {
   const rn = roomName(plan, t.room);
-  if (t.label) return { title: t.label, subtitle: rn ?? levelName(plan, t.level) };
-  const title = rn ? `${humanizeKind(t.kind)} · ${rn}` : humanizeKind(t.kind);
-  return { title, subtitle: levelName(plan, t.level) };
+  return { title: humanLabel(t.kind, t.label, rn), subtitle: levelName(plan, t.level) };
 }

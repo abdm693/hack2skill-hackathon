@@ -11,15 +11,9 @@ import { useCallback, useEffect, useRef } from "react";
 import { useStore } from "zustand";
 import type { BuildingPlan } from "@contracts/plan";
 import type { ViewerController } from "../core/controller";
+import { sectionStage } from "../core/tags";
 import { MiniMap } from "./MiniMap";
 import { TouchControls } from "./TouchControls";
-
-const prettySection = (name?: string) => {
-  if (!name) return "";
-  const m = name.match(/^furnish_(.+)$/);
-  if (m) return `Furnishing ${m[1].replace(/^[gfsr]_/, "").replace(/_/g, " ")}`;
-  return name.replace(/_auto$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-};
 
 export function Hud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: BuildingPlan; commentMode: boolean }) {
   const mode = useStore(ctrl.store, (s) => s.mode);
@@ -48,7 +42,7 @@ function BuildOverlay({ ctrl }: { ctrl: ViewerController }) {
       {b.phase === "building" && b.first && (
         <div className="nq-build-card nq-glass" role="status" aria-live="polite">
           <h3>Assembling your home</h3>
-          <p>{b.done === 0 ? "Laying out the plan" : prettySection(b.current)}</p>
+          <p>{b.done === 0 ? "Laying out the plan" : sectionStage(b.current, ctrl.plan)}</p>
           <div className="nq-bar">
             <i style={{ width: `${Math.max(4, pct)}%` }} />
           </div>
@@ -85,6 +79,7 @@ function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: Bu
   const target = useStore(ctrl.store, (s) => s.target);
   const touch = useStore(ctrl.store, (s) => s.touch);
   const gliding = useStore(ctrl.store, (s) => s.gliding);
+  const pinned = useStore(ctrl.store, (s) => s.pinned);
   const walking = phase === "free" || phase === "look";
   return (
     <>
@@ -97,13 +92,11 @@ function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: Bu
       {phase === "look" && target && !gliding && <div className="nq-target">{target.title}</div>}
       {!touch && walking && <MiniMap ctrl={ctrl} plan={plan} />}
       <Prompt ctrl={ctrl} plan={plan} />
-      {phase === "commenting" && (
-        <div className="nq-centre-chip nq-glass nq-ui" data-nq-ui="" role="status">
+      {/* only once the note is saved (the composer is open while commenting) */}
+      {pinned && (
+        <div className="nq-centre-chip nq-glass" data-pinned="1" role="status">
           <span className="nq-dot" />
-          <span>Pinned. Add your note, then keep walking.</span>
-          <button className="nq-btn" onClick={() => ctrl.resumeWalk(true)}>
-            Keep walking
-          </button>
+          <span>Note pinned</span>
         </div>
       )}
       {touch && walking && <TouchControls ctrl={ctrl} />}
@@ -116,13 +109,14 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
   const phase = useStore(ctrl.store, (s) => s.walk);
   const touch = useStore(ctrl.store, (s) => s.touch);
   const refused = useStore(ctrl.store, (s) => s.lockRefused);
-  const dragged = useStore(ctrl.store, (s) => s.dragged);
+  const prompt = useStore(ctrl.store, (s) => s.prompt);
   const hints = useStore(ctrl.store, (s) => s.hints);
   const help = useStore(ctrl.store, (s) => s.help);
   const gliding = useStore(ctrl.store, (s) => s.gliding);
   const floors = plan.levels.length;
-  // pointer lock refused: tell people to drag until they have; otherwise "click to look" is the way back into mouse look
-  const showPrompt = phase === "free" && !gliding && !touch && !(refused && dragged);
+  // "Click to look around" (or "Drag…" when the pointer can't be locked) for 4 s after you start walking or let go of
+  // the mouse; gone at the first look, step or glide. It is the only place that says how to look (no toast as well).
+  const showPrompt = prompt && phase === "free" && !gliding && !touch;
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (help) close.current?.focus();
@@ -164,7 +158,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
       {help && !touch && (
         <div className="nq-help nq-glass nq-ui" data-nq-ui="" role="dialog" aria-label="Walking controls">
           <div className="nq-help-head">
-            <b>Walking</b>
+            <b>Walking controls</b>
             <button ref={close} className="nq-icon" onClick={() => ctrl.setHelp(false)} aria-label="Close">
               <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
                 <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -172,8 +166,6 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
             </button>
           </div>
           <dl>
-            <dt>Look around</dt>
-            <dd>{refused ? "Drag" : "Click, then the mouse"}</dd>
             <dt>Move</dt>
             <dd>
               <Kbd>W</Kbd>
@@ -181,21 +173,26 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
               <Kbd>S</Kbd>
               <Kbd>D</Kbd>
             </dd>
+            <dt>Look</dt>
+            <dd>{refused ? "Drag the mouse" : "Mouse (click first)"}</dd>
             <dt>Run</dt>
             <dd>
               <Kbd>Shift</Kbd>
             </dd>
-            <dt>Go to a room</dt>
-            <dd>Click the map</dd>
+            <dt>Rooms</dt>
+            <dd>
+              <Kbd>M</Kbd> or the map
+            </dd>
             {floors > 1 && (
               <>
-                <dt>Change floor</dt>
+                <dt>Floors</dt>
                 <dd>
-                  <Kbd>1</Kbd>…<Kbd>{String(Math.min(9, floors))}</Kbd>
+                  <Kbd>1</Kbd>–<Kbd>{String(Math.min(9, floors))}</Kbd> or <Kbd>[</Kbd>
+                  <Kbd>]</Kbd>
                 </dd>
               </>
             )}
-            <dt>Pin a comment</dt>
+            <dt>Comment</dt>
             <dd>
               <Kbd>C</Kbd>
             </dd>
@@ -203,7 +200,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
             <dd>
               <Kbd>F</Kbd>
             </dd>
-            <dt>Let go · leave</dt>
+            <dt>Leave</dt>
             <dd>
               <Kbd>Esc</Kbd>
             </dd>

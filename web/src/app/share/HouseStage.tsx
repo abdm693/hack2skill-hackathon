@@ -176,7 +176,7 @@ export function HouseStage({
               snapshot={draft.snapshot}
               place={anchorPlace(draft.anchor, version.plan)}
               askName={clientView}
-              onCancel={() => setDraft(null)}
+              onCancel={() => { setDraft(null); viewer.current?.cancelDraft(); }}
               onPost={post}
             />
           )}
