@@ -37,10 +37,12 @@ export interface DockProps {
   /** What Ask does when the view registers nothing. */
   defaultSubmit: (text: string) => void | Promise<void>;
   commands: Command[];
+  /** Whether Naqsha's line opens the conversation sheet (false where there is none, e.g. the client view). */
+  conversation?: boolean;
 }
 
 export function Dock(props: DockProps) {
-  const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands } = props;
+  const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands, conversation = true } = props;
   const ctx = useActiveAskContext();
   // What Naqsha is doing right now (setup, concepts, night, design, revise), from the one project store.
   const activity = useNaqshaActivity();
@@ -234,7 +236,8 @@ export function Dock(props: DockProps) {
           >
             <button
               type="button"
-              onClick={() => toggleChat(true)}
+              onClick={() => conversation && toggleChat(true)}
+              disabled={!conversation}
               className={cn(
                 "relative flex max-w-full items-center gap-2.5 overflow-hidden rounded-full py-2 pl-3 pr-4 text-left text-[14px] outline-none focus-visible:shadow-focus",
                 hud ? "glass-hud text-hud-ink" : "glass-light text-ink-2",
@@ -265,8 +268,9 @@ export function Dock(props: DockProps) {
                 {line && (
                   <button
                     type="button"
-                    onClick={() => toggleChat()}
-                    title="Open the conversation (⌘J)"
+                    onClick={() => conversation && toggleChat()}
+                    disabled={!conversation}
+                    title={conversation ? "Open the conversation (⌘J)" : undefined}
                     className={cn(
                       "flex max-w-full items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-left text-[14px] leading-5 outline-none transition-colors focus-visible:shadow-focus",
                       hud ? "glass-hud text-hud-ink hover:bg-[rgb(24_24_27/.7)]" : "glass-light text-ink-2 hover:text-ink",

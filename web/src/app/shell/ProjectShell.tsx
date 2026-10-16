@@ -328,6 +328,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
               defaultSuggestions={defaultSuggestions}
               defaultSubmit={defaultSubmit}
               commands={commands}
+              conversation={editor}
             />
           </div>
         </div>

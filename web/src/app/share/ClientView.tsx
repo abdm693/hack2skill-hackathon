@@ -309,6 +309,7 @@ function ClientShell({ token }: { token: string }) {
               defaultSuggestions={[]}
               defaultSubmit={submit}
               commands={commands}
+              conversation={false}
             />
           </div>
         </div>

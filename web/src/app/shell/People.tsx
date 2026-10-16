@@ -71,6 +71,7 @@ export function People({ project, tone, compact }: { project: Project; tone: "li
         <button
           type="button"
           onClick={() => void startShare()}
+          aria-label="Share"
           className={cn(
             "inline-flex h-9 items-center gap-2 rounded-full px-4 text-[14px] font-medium outline-none transition-colors focus-visible:shadow-focus",
             hud ? "bg-hud-ink text-ink hover:bg-white" : "bg-ink text-white hover:bg-ink-2",
