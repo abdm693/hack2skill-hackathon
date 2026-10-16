@@ -203,6 +203,26 @@
 .code-view .tk-key { color: #cdb7f0; }
 .code-view .tk-fn { color: #93c6e6; }
 
+/*
+ * Explore: make room for the app's floating toolbars inside the viewer's own HUD
+ * (viewer track classes; harmless if they change). Top bar ≈ 64px, dock ≈ 84px.
+ */
+.explore-stage .nq-build-pill,
+.explore-stage .nq-room,
+.explore-stage .nq-banner,
+.explore-stage .nq-mini { top: 72px; }
+.explore-stage .nq-hints,
+.explore-stage .nq-commenting,
+.explore-stage .nq-chip-mock,
+.explore-stage .nq-touch-btns { bottom: 96px; }
+.explore-stage .nq-toast { bottom: 156px; }
+@media (max-width: 639px) {
+  .explore-stage .nq-build-pill,
+  .explore-stage .nq-room,
+  .explore-stage .nq-banner,
+  .explore-stage .nq-mini { top: 116px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -248,7 +248,7 @@ export function ExploreStep() {
   const asBuiltIssues = asBuilt?.checks.filter((c) => c.status !== "pass") ?? [];
 
   return (
-    <div className="relative h-full overflow-hidden bg-night">
+    <div className="explore-stage relative h-full overflow-hidden bg-night">
       <div className="absolute inset-0">
         <HouseViewer
           key={shown.id}
@@ -271,7 +271,7 @@ export function ExploreStep() {
       </div>
 
       {/* Top bar */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start gap-2 p-3 sm:p-4">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex flex-wrap items-start gap-2 p-3 sm:p-4">
         <div className="pointer-events-auto flex items-center gap-2">
           <Menu
             align="left"
@@ -357,18 +357,9 @@ export function ExploreStep() {
         </div>
       </div>
 
-      {/* Status chips: build progress, as-built check, failed sections */}
-      <div className="pointer-events-none absolute left-3 top-[108px] flex flex-col items-start gap-2 sm:left-4 sm:top-[72px]">
+      {/* Status chips (the viewer shows its own build progress): as-built check, failed sections */}
+      <div className="pointer-events-none absolute bottom-[92px] left-3 z-40 flex flex-col items-start gap-2 sm:left-4">
         <AnimatePresence>
-          {build && (
-            <motion.div key="build" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={glass("flex items-center gap-2.5 rounded-full px-3.5 py-2 text-[12.5px]")}>
-              <Spinner className="size-3.5 text-[#e7a58f]" />
-              Building <span className="font-mono text-[11.5px] text-sheet/80">{build.name}</span>
-              <span className="tabular text-sheet/55">
-                {build.done}/{build.total}
-              </span>
-            </motion.div>
-          )}
           {!build && asBuilt && (
             <motion.div key="asbuilt" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={glass("pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px]")} title={asBuiltIssues.map((c) => c.message).join("\n") || "Facade and landscape elements stay out of the setbacks"}>
               {asBuiltIssues.length ? <CircleAlert className="size-3.5 text-[#f3c27a]" /> : <ShieldCheck className="size-3.5 text-[#9fd0ae]" />}
@@ -387,31 +378,17 @@ export function ExploreStep() {
         </AnimatePresence>
       </div>
 
-      {/* Comment-mode hint */}
-      <AnimatePresence>
-        {commentMode && !draft && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="pointer-events-none absolute left-1/2 top-[120px] -translate-x-1/2 rounded-full bg-brick px-4 py-2 text-[13px] font-medium text-sheet shadow-float sm:top-[72px]"
-          >
-            {mode === "walk" ? "Press C to pin a comment where you're looking" : "Click any surface to pin a comment. Esc to stop."}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Composer */}
       <AnimatePresence>
         {draft && (
-          <div className="absolute inset-0 z-20 grid place-items-center bg-black/25 p-4">
+          <div className="absolute inset-0 z-50 grid place-items-center bg-black/25 p-4">
             <Composer draft={draft} plan={plan} onCancel={() => setDraft(null)} onSave={saveDraft} />
           </div>
         )}
       </AnimatePresence>
 
       {/* Dock */}
-      <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3 transition-[padding] duration-500 ease-[var(--ease-drawer)] sm:p-4", drawer && "md:pr-[392px]")}>
+      <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center p-3 transition-[padding] duration-500 ease-[var(--ease-drawer)] sm:p-4", drawer && "md:pr-[392px]")}>
         <div className={glass("no-scrollbar pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-[22px] p-1.5")}>
           <div className="flex items-center gap-0.5 pr-1">
             {LAYERS.map((l) => (
@@ -471,9 +448,8 @@ export function ExploreStep() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-[92px] right-3 flex flex-col items-end gap-2 sm:right-6"
+            className="absolute bottom-[92px] right-3 z-40 flex flex-col items-end gap-2 sm:right-6"
           >
-            <span className={glass("hidden rounded-full px-3 py-1.5 text-[12px] text-sheet/80 md:block")}>WASD to move, drag to look, C to comment, Esc to leave</span>
             <Button variant="primary" size="xl" onClick={() => void finish()} loading={finishing} disabled={!openCount} trailing={<ArrowRight className="size-[18px]" strokeWidth={1.75} />}>
               Finish walkthrough ({openCount} comment{openCount === 1 ? "" : "s"})
             </Button>
@@ -489,7 +465,7 @@ export function ExploreStep() {
             animate={{ x: 0 }}
             exit={{ x: "105%" }}
             transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-            className={glass("absolute bottom-3 right-3 top-3 z-10 w-[min(360px,calc(100%-1.5rem))] overflow-hidden rounded-[24px] sm:bottom-4 sm:right-4 sm:top-4")}
+            className={glass("absolute bottom-3 right-3 top-3 z-[45] w-[min(360px,calc(100%-1.5rem))] overflow-hidden rounded-[24px] sm:bottom-4 sm:right-4 sm:top-4")}
           >
             <CommentsDrawer
               comments={shownComments}
