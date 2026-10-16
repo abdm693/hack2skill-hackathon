@@ -1,14 +1,14 @@
 /**
  * Mock streams for concepts, design and revise. Event order and shapes follow the live API
  * (api/app/agents/*): design runs plan → LDA check → fix loop (5 → 1 → 0 failures) → 23 sections → save;
- * revise streams the ADK agent's tool activity as `stage` lines, then changes, comment resolutions and a version.
+ * revise lives in ./revise.ts.
  * Timings are compressed versions of the real ones (scale with localStorage["naqsha.mock.speed"]).
  */
-import type { Change, Comment, Concept, DesignSection, Version } from "@contracts/api-types";
+import type { Change, Concept, DesignSection, Version } from "@contracts/api-types";
 import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
 import type { ConceptsBody } from "../client";
 import { clone, db, findProject, now, save, touch, uid } from "./db";
-import { ARGON_SECTIONS, CONCEPT_IMAGES, REMIX_IMAGES, clonePlan, revisedSection } from "./fixtures";
+import { ARGON_SECTIONS, CONCEPT_IMAGES, REMIX_IMAGES, clonePlan } from "./fixtures";
 import { ARGON_REPORT, recheck } from "./lda";
 import { ev, type Step } from "./stream";
 
@@ -150,13 +150,15 @@ export async function* designScript(pid: string): AsyncGenerator<Step> {
   yield ev("done", {});
 }
 
-function saveVersion(
+export function saveVersion(
   pid: string,
   plan: BuildingPlan,
   sections: DesignSection[],
   compliance: ComplianceReport,
   summary: string,
   changes: Change[] = [],
+  /** The version this one revises (defaults to the project's current version). */
+  parentId?: string,
 ): Version {
   const p = findProject(pid);
   const selected = p.concepts.find((c) => c.id === p.selected_concept_id) ?? p.concepts[0];
@@ -164,7 +166,7 @@ function saveVersion(
     id: uid("v"),
     n: p.versions.length + 1,
     created_at: now(),
-    parent_id: p.current_version_id ?? undefined,
+    parent_id: parentId ?? p.current_version_id ?? undefined,
     plan,
     sections,
     compliance,
@@ -180,182 +182,4 @@ function saveVersion(
   touch(p);
   save();
   return clone(version);
-}
-
-// ── Revise (ADK-style agent activity) ───────────────────────────────────────────────────────────────
-
-type Kind = "projection" | "bigger" | "material" | "remove" | "general";
-
-function classify(text: string): Kind {
-  const t = text.toLowerCase();
-  const outward = /\b(extend|forward|outward|project|cantilever|push (it )?out)|into the (front|lawn|setback|road)|another (floor|storey)|4th|fourth/.test(t);
-  if (outward) return "projection";
-  if (/bigger|larger|wider|deeper|more space|spacious|enlarge|cramped|small|tight/.test(t)) return "bigger";
-  if (/material|wood|marble|stone|colou?r|paint|tile|glass|brick|finish|darker|lighter|louver|cladding/.test(t)) return "material";
-  if (/remove|delete|get rid|no need|don't need/.test(t)) return "remove";
-  return "general";
-}
-
-export const PORCH_REJECTION =
-  "Under LDA Building & Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.";
-
-const BALCONY_REJECTION =
-  "A balcony or extension here would project into the 10 ft front open space, which LDA doesn't allow for houses (B&ZR 2019 §5.1.8). As an alternative I can add a 3 ft sunshade (chajja), the most the front setback permits, or deepen the existing balcony inward.";
-
-/** Deepen Bedroom 2 by 2 ft into the front balcony (110 → 130 sq ft). */
-export function deepenBedroom2(plan: BuildingPlan): boolean {
-  const bed = plan.rooms.find((r) => r.id === "f_bed2");
-  const balcony = plan.rooms.find((r) => r.id === "f_balcony");
-  const bath = plan.rooms.find((r) => r.id === "f_bath2");
-  if (!bed || !balcony) return false;
-  bed.rect = { ...bed.rect, y: bed.rect.y - 2, d: bed.rect.d + 2 };
-  if (bath) bath.rect = { ...bath.rect, y: bath.rect.y - 2, d: bath.rect.d + 2 };
-  balcony.rect = { ...balcony.rect, d: balcony.rect.d - 2 };
-  for (const o of plan.openings) {
-    if (o.id === "f_bed2_slide") o.at = [o.at[0], o.at[1] - 2];
-  }
-  return true;
-}
-
-const stage = (message: string, s: "changes" | "plan" | "compliance" | "fix" | "build" | "save" = "changes") => ev("stage", { stage: s, message });
-
-export async function* reviseScript(pid: string, versionId: string, commentIds?: string[]): AsyncGenerator<Step> {
-  const d = db();
-  const p = findProject(pid);
-  const base = d.versions[versionId];
-  if (!base) {
-    yield ev("error", { message: "That version no longer exists.", recoverable: false });
-    return;
-  }
-  const open = (d.comments[pid] ?? []).filter((c) => c.version_id === versionId && c.status === "open");
-  const comments = commentIds?.length ? open.filter((c) => commentIds.includes(c.id)) : open;
-  if (!comments.length) {
-    yield ev("error", { message: "There are no open comments to address.", recoverable: false });
-    return;
-  }
-
-  p.stage = "revising";
-  touch(p);
-  save();
-
-  yield stage(`Argon is reviewing your ${comments.length} comment(s)…`);
-  yield 1400;
-
-  const plan = clone(base.plan);
-  let report = base.compliance;
-  const changes: Change[] = [];
-  const sections: DesignSection[] = [...base.sections];
-  const resolutions = new Map<string, { status: Comment["status"]; resolution: string }>();
-  const replace = (s: DesignSection | null) => {
-    if (!s) return;
-    const i = sections.findIndex((x) => x.name === s.name);
-    if (i >= 0) sections[i] = s;
-  };
-
-  for (const c of comments) {
-    const kind = classify(c.text);
-    const where = c.anchor.room ?? c.anchor.element_id ?? c.anchor.label ?? "the view";
-    yield stage(`Looking at ${where}…`);
-    yield 1100;
-
-    if (kind === "projection") {
-      yield stage("Testing a layout change…");
-      yield 900;
-      yield stage("Checking proposed layout changes against LDA rules…");
-      yield 1200;
-      resolutions.set(c.id, { status: "rejected", resolution: /porch|car/.test(c.text.toLowerCase()) ? PORCH_REJECTION : BALCONY_REJECTION });
-      yield stage("Resolving comment…");
-      yield 600;
-      continue;
-    }
-
-    if (kind === "bigger" && !changes.some((x) => x.kind === "plan")) {
-      yield stage("Reading furnish_f_bed2…");
-      yield 800;
-      yield stage("Testing a layout change…");
-      yield 900;
-      yield stage("Checking proposed layout changes against LDA rules…");
-      yield 1100;
-      yield stage("Applying layout change…");
-      deepenBedroom2(plan);
-      report = recheck(plan);
-      yield 700;
-      yield ev("plan", { plan, attempt: 1 });
-      yield ev("compliance", { report, attempt: 1 });
-      yield 500;
-      yield stage("Rewriting furnish_f_bed2…");
-      yield 1400;
-      const s = revisedSection("furnish_f_bed2", "Bedroom 2 is 2 ft deeper; the bed moves back and a study desk fits by the balcony door.");
-      replace(s);
-      if (s) yield ev("section", { section: s, index: sections.findIndex((x) => x.name === s.name) });
-      changes.push({
-        id: `ch${changes.length + 1}`,
-        summary: "Deepened Bedroom 2 by 2 ft into the front balcony (110 → 130 sq ft)",
-        kind: "plan",
-        targets: ["f_bed2", "f_bath2", "f_balcony"],
-        comment_ids: [c.id],
-      });
-      resolutions.set(c.id, {
-        status: "resolved",
-        resolution: "Bedroom 2 is now 10×13 ft (130 sq ft), up from 110, by taking 2 ft from the front balcony, which stays 3 ft deep. It still passes every LDA room-size and daylight check.",
-      });
-      yield stage("Resolving comment…");
-      yield 600;
-      continue;
-    }
-
-    if (kind === "material" || kind === "general") {
-      yield stage("Reading facade_right_bay…");
-      yield 900;
-      yield stage("Rewriting facade_right_bay…");
-      yield 1600;
-      const s = revisedSection("facade_right_bay", "warmer teak louvers wrap the balcony; the stone pier now runs to the parapet.");
-      replace(s);
-      if (s) yield ev("section", { section: s, index: sections.findIndex((x) => x.name === s.name) });
-      const existing = changes.find((x) => x.kind === "section");
-      if (existing) existing.comment_ids.push(c.id);
-      else changes.push({ id: `ch${changes.length + 1}`, summary: "Rewrote the right-bay facade: warmer teak louvers and a full-height stone pier", kind: "section", targets: ["facade_right_bay"], comment_ids: [c.id] });
-      resolutions.set(c.id, {
-        status: kind === "material" ? "resolved" : "partial",
-        resolution: kind === "material"
-          ? "Updated the facade here: the teak louvers are warmer and wrap the balcony, and the stone pier now runs up to the parapet."
-          : "I read this as a facade note and refreshed the right bay. Tell me more if you meant something specific and I'll take it further.",
-      });
-      yield stage("Resolving comment…");
-      yield 600;
-      continue;
-    }
-
-    // remove, or a second "bigger" request
-    yield stage("Testing a layout change…");
-    yield 900;
-    yield stage("Checking proposed layout changes against LDA rules…");
-    yield 1000;
-    resolutions.set(c.id, {
-      status: "partial",
-      resolution: kind === "remove"
-        ? "Removing it would leave the room without its required daylight or access, so I kept it but simplified the furniture around it."
-        : "Only one room could grow this round without breaking a setback; I prioritised Bedroom 2. Ask again and I'll try another trade-off.",
-    });
-    yield stage("Resolving comment…");
-    yield 600;
-  }
-
-  yield ev("changes", { changes });
-  yield stage("Saving the revised version…", "save");
-  yield 900;
-
-  const summary = changes.map((c) => c.summary).join("; ").slice(0, 200) || "Revision";
-  const version = saveVersion(pid, plan, sections, report, summary, changes);
-  for (const c of comments) {
-    const r = resolutions.get(c.id) ?? { status: "partial" as const, resolution: "Reviewed; no specific change was needed." };
-    c.status = r.status;
-    c.resolution = r.resolution;
-    c.resolved_in_version = version.id;
-    save();
-    yield 350;
-    yield ev("comment", { comment: clone(c) });
-  }
-  yield ev("version", { version });
-  yield ev("done", {});
 }

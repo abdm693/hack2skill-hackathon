@@ -6,7 +6,8 @@ import { clone, db, findProject, latency, now, save, sleep, touch, uid } from ".
 import { RENDER_IMAGE } from "./fixtures";
 import { intakeScript } from "./intake";
 import { envelopeFor, recheck } from "./lda";
-import { conceptsScript, designScript, reviseScript } from "./scripts";
+import { conceptsScript, designScript } from "./scripts";
+import { reviseScript } from "./revise";
 import { ensureSamples, seedIfEmpty } from "./seed";
 import { play } from "./stream";
 

@@ -10,7 +10,7 @@ import { db, save, uid } from "./db";
 import { ARGON_SECTIONS, CONCEPT_IMAGES, clonePlan, revisedSection } from "./fixtures";
 import { demoSetupState } from "./intake";
 import { ARGON_REPORT, envelopeFor, recheck } from "./lda";
-import { PORCH_REJECTION, deepenBedroom2 } from "./scripts";
+import { PORCH_REJECTION, deepenBedroom2 } from "./revise";
 
 const SEED_KEY = "naqsha.mock.seeded";
 /** Same key format as app/lib/fixloop.ts (the fix loop of the real run went 5 → 1 → 0). */
