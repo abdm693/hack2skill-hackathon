@@ -73,7 +73,9 @@ export interface Concept {
 
 export interface DesignSection { name: string; layer: Layer; code: string }
 
-export interface Change { id: string; summary: string; kind: "plan" | "section"; targets: string[]; comment_ids: string[] }
+export interface Change { id: string; summary: string; kind: "plan" | "section"; targets: string[]; comment_ids: string[];
+  /** Made for the typed request (revise {instruction}) rather than a pinned comment. */
+  from_request?: boolean }
 
 export interface Version {
   id: string;

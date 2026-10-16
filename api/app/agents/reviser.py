@@ -124,6 +124,12 @@ async def finalize(project: dict, version: dict, plan: dict, sections: list[dict
                    agent: str) -> AsyncIterator[tuple[str, dict]]:
     """Save the revised version, resolve each comment and post the resolution as a reply from Naqsha."""
     pid = project["id"]
+    real = {c["id"] for c in comments}
+    for ch in changes:  # the typed request isn't a comment: flag it instead of counting it
+        ids = list(ch.get("comment_ids") or [])
+        if "request" in ids or (instruction and not ids):
+            ch["from_request"] = True
+        ch["comment_ids"] = [i for i in ids if i in real]
     yield "changes", {"changes": changes}
     yield "stage", {"stage": "save", "message": "Saving the revised version…"}
     fresh = await db.get_project(pid)
