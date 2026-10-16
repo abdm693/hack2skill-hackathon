@@ -8,6 +8,8 @@ from typing import AsyncIterator
 
 from fastapi.responses import StreamingResponse
 
+from . import busy
+
 log = logging.getLogger("naqsha.sse")
 
 
@@ -20,6 +22,8 @@ def stream(gen: AsyncIterator[tuple[str, dict]], ping_every: float = 15.0) -> St
         queue: asyncio.Queue = asyncio.Queue()
 
         async def pump():
+            busy.set_notifier(lambda secs, _r: queue.put_nowait(("stage", {"stage": "wait", "message": busy.message(secs),
+                                                                             "busy": True, "retry_in": round(secs) if secs else None})))
             try:
                 async for ev in gen:
                     await queue.put(ev)

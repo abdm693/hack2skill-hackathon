@@ -1,13 +1,16 @@
-"""The architect: Gemini Argon designs the house in two stages.
+"""The architect: Gemini Argon designs the house in three steps.
 
-Stage 1 (plan): a BuildingPlan JSON constrained by a schema. The LDA engine checks it, and the violations go back
-to Argon until it complies (up to PLAN_MAX_ATTEMPTS).
-Stage 2 (build): Argon writes design.js, sections of code against the House SDK, streamed to the browser one
-section at a time so the user watches the house assemble.
+1. Plan: a BuildingPlan JSON. Deterministic repairs (openings snapped onto their walls, code stairs fitted into their hall,
+   the stair tower over the stair) run on every attempt; the LDA engine and Naqsha's planning rules check it and their
+   failures, with fix hints, go back to Argon (up to PLAN_MAX_ATTEMPTS). The best attempt wins, not the last.
+2. Self-review: each floor is drawn as an image (Pillow) and Argon critiques it like a senior architect, with a room table,
+   the adjacency list and the brief. Real problems get one revision pass, kept only if it breaks no rule.
+3. Build: Argon writes design.js, sections of code against the House SDK, streamed one section at a time.
 """
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import AsyncIterator
@@ -15,133 +18,87 @@ from typing import AsyncIterator
 from google.genai import types
 
 from .. import config, llm
-from ..compliance import lda
+from ..compliance import lda, planning
 from ..gemini import client
 from ..store import blobs, db
+from . import drawing
 
+log = logging.getLogger("naqsha.architect")
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "contracts"
+EXAMPLE_PLAN = Path(__file__).with_name("examples") / "plan-10-marla.json"
 
 
 def _read(path: Path) -> str:
     return path.read_text() if path.exists() else ""
 
 
-Pt = {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}
-RECT = {"type": "object", "properties": {k: {"type": "number"} for k in ("x", "y", "w", "d")}, "required": ["x", "y", "w", "d"]}
-ROOM_TYPES = ["drawing", "lounge", "dining", "kitchen", "dirty_kitchen", "bedroom", "master_bedroom", "guest_bedroom", "bath", "powder",
-              "dressing", "study", "prayer", "store", "laundry", "servant", "stair", "lobby", "corridor", "porch", "garage", "balcony",
-              "terrace", "courtyard", "lawn", "driveway", "open_space"]
-OPENING_TYPES = ["main_door", "door", "double_door", "sliding_door", "window", "corner_window", "ventilator", "arch", "garage_door"]
-SIDES4 = ["front", "back", "left", "right"]
-
-PLAN_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "schema": {"type": "string", "enum": ["naqsha.plan/1"]},
-        "units": {"type": "string", "enum": ["ft"]},
-        "site": {"type": "object", "properties": {
-            "plot": {"type": "object", "properties": {"width_ft": {"type": "number"}, "depth_ft": {"type": "number"},
-                                                       "area_marla": {"type": "number"}, "corner": {"type": "boolean"}},
-                     "required": ["width_ft", "depth_ft", "area_marla", "corner"]},
-            "facing": {"type": "string", "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]},
-            "road_width_ft": {"type": "number"},
-            "authority": {"type": "string"}, "scheme": {"type": "string"}, "city": {"type": "string"},
-            "setbacks_ft": {"type": "object", "properties": {k: {"type": "number"} for k in ("front", "rear", "left", "right")},
-                            "required": ["front", "rear", "left", "right"]},
-            "boundary_wall": {"type": "object", "properties": {k: {"type": "number"} for k in ("front_height_ft", "side_height_ft", "rear_height_ft")},
-                              "required": ["front_height_ft", "side_height_ft", "rear_height_ft"]},
-            "gates": {"type": "array", "items": {"type": "object", "properties": {
-                "id": {"type": "string"}, "at": Pt, "width_ft": {"type": "number"},
-                "kind": {"type": "string", "enum": ["sliding", "swing", "pedestrian"]}}, "required": ["id", "at", "width_ft", "kind"]}},
-        }, "required": ["plot", "facing", "authority", "city", "setbacks_ft", "boundary_wall", "gates"]},
-        "levels": {"type": "array", "items": {"type": "object", "properties": {
-            "id": {"type": "string"}, "name": {"type": "string"}, "index": {"type": "integer"},
-            "elevation_ft": {"type": "number"}, "height_ft": {"type": "number"}, "slab_ft": {"type": "number"}},
-            "required": ["id", "name", "index", "elevation_ft", "height_ft", "slab_ft"]}},
-        "rooms": {"type": "array", "items": {"type": "object", "properties": {
-            "id": {"type": "string"}, "level": {"type": "string"}, "name": {"type": "string"},
-            "type": {"type": "string", "enum": ROOM_TYPES}, "rect": RECT,
-            "open_to": {"type": "array", "items": {"type": "string"}},
-            "floor_finish": {"type": "string", "enum": ["marble", "porcelain_tile", "terrazzo", "wood", "ceramic_tile", "concrete", "grass", "paving"]},
-            "ceiling_height_ft": {"type": "number"}}, "required": ["id", "level", "name", "type", "rect"]}},
-        "openings": {"type": "array", "items": {"type": "object", "properties": {
-            "id": {"type": "string"}, "level": {"type": "string"}, "type": {"type": "string", "enum": OPENING_TYPES},
-            "at": Pt, "width_ft": {"type": "number"}, "height_ft": {"type": "number"}, "sill_ft": {"type": "number"},
-            "between": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
-            "swing": {"type": "string", "enum": ["in", "out"]}},
-            "required": ["id", "level", "type", "at", "width_ft", "height_ft", "between"]}},
-        "stairs": {"type": "array", "items": {"type": "object", "properties": {
-            "id": {"type": "string"}, "from_level": {"type": "string"}, "to_level": {"type": "string"}, "rect": RECT,
-            "kind": {"type": "string", "enum": ["dogleg", "straight", "l_shape"]}, "width_ft": {"type": "number"},
-            "riser_in": {"type": "number"}, "tread_in": {"type": "number"},
-            "start": {"type": "string", "enum": ["+x", "-x", "+y", "-y"]}},
-            "required": ["id", "from_level", "to_level", "rect", "kind", "width_ft", "riser_in", "tread_in", "start"]}},
-        "roof": {"type": "object", "properties": {
-            "parapet_ft": {"type": "number"},
-            "mumty": {"type": "object", "properties": {"rect": RECT, "height_ft": {"type": "number"},
-                                                        "door_side": {"type": "string", "enum": SIDES4}}, "required": ["rect", "height_ft", "door_side"]},
-            "water_tank": {"type": "object", "properties": {"rect": RECT, "height_ft": {"type": "number"}}, "required": ["rect", "height_ft"]}},
-            "required": ["parapet_ft"]},
-        "style": {"type": "object", "properties": {
-            "name": {"type": "string"}, "summary": {"type": "string"},
-            "palette": {"type": "array", "items": {"type": "string"}}, "materials": {"type": "array", "items": {"type": "string"}}},
-            "required": ["name", "summary", "palette", "materials"]},
-        "notes": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["schema", "units", "site", "levels", "rooms", "openings", "stairs", "roof", "style"],
-}
-
 PLAN_SYSTEM = """You are a senior Lahore architect and a precise space planner. You design single-family houses that comply with
-the LDA Building & Zoning Regulations 2019 (consolidated 2026) and feel right for Pakistani family life.
+the LDA Building & Zoning Regulations 2019 (consolidated 2026) and that a family will love living in for decades.
 
-Output ONE BuildingPlan JSON (schema enforced). Follow the conventions in the TypeScript reference exactly:
+Output ONE BuildingPlan JSON. Follow the conventions in the TypeScript reference exactly:
 - FEET; origin at the plot's front-left corner; +x along the road, +y into the plot; the road is at y < 0.
-- Rooms are axis-aligned rectangles. Rooms on the same level must NOT overlap; neighbouring rooms share edges exactly.
-  Snap every coordinate to 0.5 ft. At ground level, tile the building envelope fully (no unexplained gaps).
-- Every building room (all types except lawn/driveway/open_space/courtyard) must lie inside the setback lines:
-  x ≥ left setback, x+w ≤ plot width − right setback, y ≥ front setback, y+d ≤ plot depth − rear setback.
-  This includes porches and balconies (LDA forbids projections of rooms, porches or balconies into mandatory open spaces).
-- Add outdoor rooms for the open spaces: driveway + lawn in the front setback, open_space for side/rear spaces.
-- Openings: `at` is a point exactly ON a shared room edge (or on an exterior edge for "exterior"). Doors connect rooms that
-  share that edge. Windows only on exterior edges, or onto porch/balcony/terrace/open_space. Never put windows on a party wall
-  (a plot edge with zero setback: neighbours build right against it).
-- Every enclosed room needs a door (or open_to). Bedrooms need attached baths where the brief asks.
-- LDA minimums: habitable rooms ≥ 100 sq ft and ≥ 8 ft wide; kitchen ≥ 50 sq ft and ≥ 6 ft wide; clear height ≥ 9.5 ft
-  (use 11 ft floor-to-floor, 0.5 ft slab); glazing to outside ≥ 8% of floor area for habitable rooms and kitchens;
-  baths need an external opening ≥ 2 sq ft (a ventilator is fine); stairs: flight width ≥ 3.5 ft, riser ≤ 7.5 in,
-  tread ≥ 10 in, ≤ 15 risers per flight; parapet ≥ 2.75 ft (use 3.5); mumty ≤ 9.5 ft; boundary walls ≤ 7 ft;
-  height (top of parapet above the road) and storeys within the envelope given; ground coverage within the maximum.
-- Levels: ground (index 0, elevation = plinth, e.g. 1.5), first, second as needed, then a final "roof" level whose height_ft
-  equals the parapet height. Use one stair per level transition, stacked in the same stair hall, plus a roof mumty over it.
-- Pakistani planning sense:
-  - the drawing room near the entrance (guests enter it directly from the porch);
-  - a family TV lounge as the heart of the home;
-  - a kitchen next to dining, plus a dirty kitchen or service access at the rear;
-  - a car porch at the front within the building line, usually under a first-floor room;
-  - the master bedroom upstairs at the front with a balcony;
-  - a servant quarter at the rear or on the roof for larger plots;
-  - a prayer corner if requested.
-- DAYLIGHT SELF-CHECK before answering (the most common LDA failure). Every habitable room (drawing, lounge, dining,
-  bedrooms, study, servant, prayer) and every kitchen or dirty kitchen needs windows (or a sliding door) whose total
-  width×height ≥ 8% of its floor area. Those windows must open onto an exterior edge facing a setback or open space, or onto a
-  porch, balcony, terrace, courtyard or open_space room. A stair hall, corridor or another room does NOT count. Rooms in the
-  middle of a narrow house need a side space, a courtyard/light well, or rearranging so they touch the outside. Put the dirty
-  kitchen on the rear or side exterior edge with a window. Check each room against this rule before you answer.
-- Style: palette (hex) and materials matching the brief and the chosen concept image.
-- notes: 3–6 short sentences explaining key decisions and how LDA rules shaped the plan.
+- Rooms are axis-aligned rectangles. Rooms on the same level never overlap; neighbouring rooms share edges exactly. Snap
+  coordinates to 0.5 ft (0.25 where needed). At ground level, tile the building envelope fully.
+- Every building room (all types except lawn/driveway/open_space/courtyard) lies inside the setback lines, porches and
+  balconies included. Add outdoor rooms for the open spaces: driveway and lawn in front, open_space for side and rear spaces.
+- Openings: `at` is a point ON the wall the two rooms share (or on the room's own outside wall for "exterior"), on the same
+  level. Windows go on outside walls or onto a same-level porch, balcony, terrace or open_space; never on a party wall (a
+  plot edge with zero setback).
+- LDA minimums: habitable rooms ≥ 100 sq ft and ≥ 8 ft wide; kitchen ≥ 50 sq ft and ≥ 6 ft wide; clear height ≥ 9.5 ft (11 ft
+  floor-to-floor, 0.5 ft slab); windows ≥ 8% of the floor area for habitable rooms and kitchens; baths ≥ 2 sq ft open to the
+  outside; parapet 3.5 ft; mumty ≤ 9.5 ft; boundary walls ≤ 7 ft; height, storeys and ground coverage within the envelope.
+- Levels: ground (index 0, elevation = plinth 1.5), first, second as needed, then a final "roof" level whose height_ft equals
+  the parapet height.
+
+STAIRS (objective geometry, checked):
+- For 11 ft floor-to-floor: 19 risers of 6.95 in, 10 in treads, 3.5 ft flights, so a dog-leg rect of 7.5 ft × 11 ft along `start`.
+- A dog-leg STARTS and ARRIVES at its start edge (min-y edge for "+y", max-y for "-y", min-x for "+x", max-x for "-x"). On every
+  floor the stair hall = the stair rect + 3.5 ft clear at that edge, across its full breadth (≥ 8 × 14.5 ft). That strip is the
+  landing at the foot and at the top: connect it to the floor and keep door swings out of it.
+- One stair per level transition INCLUDING the top storey to the roof, all stacked (same rect, kind and start).
+- roof.mumty.rect = the top-floor stair hall; roof.mumty.door_side = the start-end side (front for "+y", back for "-y", left
+  for "+x", right for "-x"). If that side is a party wall, use a long side and make the hall ≥ 3.6 ft longer than the stair there.
+
+ARCHITECT'S COMMON SENSE: plan the way a thoughtful Lahore architect would. Every room has its own way in from circulation: a
+bedroom opens onto a corridor, lobby, stair hall or the family lounge (plus its own bath, dressing or balcony), never through
+another bedroom, a bath, the kitchen or the drawing room; a bath has exactly one door, and the master bath opens into the master
+bedroom. Guests reach the drawing room from the porch or lobby without seeing the family's rooms; the family reaches the lounge
+without crossing the drawing room. Doors sit near room corners on walls the two rooms share; each bedroom keeps a solid wall for
+the bed and each lounge one for the TV. Rooms take daylight from their own outside wall on their own floor. Stack baths over
+baths. Proportions stay livable; passages are at least 4 ft wide.
+
+THE BRIEF: honour the per-floor program (brief.floors) and the family's preferences (brief.preferences, brief.notes) exactly:
+the bedroom count, the rooms on each floor, attached baths, an open kitchen, parents downstairs. They are promises.
+
+ROOF: solar-ready roofs stay clear: no minarets, domes or chhatris unless asked; the stair tower and tank sit in one corner.
+roof.water_tank.material follows brief.water_tank ("plastic" sits on the stair tower, its rect inside roof.mumty.rect;
+"concrete" sits on the roof slab beside it). roof.solar = {"mode": brief.solar} when it is "ready" or "panels".
+
+Pakistani planning sense: the drawing room near the entrance (guests enter from the porch); a family TV lounge at the heart;
+the kitchen beside the dining with a dirty kitchen or service access at the rear; a car porch at the front within the
+building line; on larger plots the master bedroom upstairs at the front with a balcony and a servant quarter at the rear.
+Style: palette (hex) and materials matching the brief and the chosen concept image.
+notes: 3–6 short sentences explaining the key decisions and how the rules shaped the plan.
 Write ids as <level-initial>_<name>, e.g. g_drawing, f_master, f_master_bath."""
 
+BRIEF_KEYS = ("city", "authority", "scheme", "plot", "facing", "storeys", "basement", "bedrooms", "bathrooms", "spaces", "floors",
+              "water_tank", "solar", "preferences", "style", "style_notes", "budget", "notes")
 
-def _plan_prompt(brief: dict, env: dict, concept_url: str | None) -> str:
+
+def _brief_for_prompt(brief: dict) -> dict:
+    return {k: brief[k] for k in BRIEF_KEYS if brief.get(k) not in (None, "", [], {})}
+
+
+def _plan_prompt(brief: dict, env: dict, concept) -> str:
     return (
-        f"BRIEF:\n{json.dumps(brief, indent=1)}\n\n"
+        f"BRIEF:\n{json.dumps(_brief_for_prompt(brief), indent=1)}\n\n"
         f"LDA ENVELOPE (deterministic, from the regulations):\n{json.dumps({k: v for k, v in env.items() if k != '_band'}, indent=1)}\n\n"
         f"TYPESCRIPT REFERENCE for the plan (conventions + types):\n{_read(CONTRACTS / 'plan.ts')}\n\n"
-        f"EXAMPLE of a good, compliant plan for a 10 marla LDA plot (style reference only; design for THIS brief):\n"
-        f"{json.dumps(json.loads(_read(CONTRACTS / 'fixtures' / 'plan-10-marla.json')), separators=(',', ':'))}\n\n"
+        f"EXAMPLE of a good plan for a 10 marla LDA plot that passes every check (reference only; design for THIS brief):\n"
+        f"{json.dumps(json.loads(_read(EXAMPLE_PLAN)), separators=(',', ':'))}\n\n"
         + ("The attached image is the concept the family chose: match its massing (porch side, balcony, roof features, "
-           "window rhythm) where the LDA rules allow.\n" if concept_url else "")
+           "window rhythm) where the rules allow.\n" if concept else "")
         + "Now produce the BuildingPlan JSON for this brief."
     )
 
@@ -156,19 +113,75 @@ async def _concept_part(project: dict) -> types.Part | None:
 
 
 def _clean_plan(plan: dict, brief: dict) -> dict:
-    """Deterministic fixes for small Argon slips (ids, snapping, schema tags)."""
+    """Deterministic fixes for small slips (schema tags, snapping, plot from the brief, roof services from the brief)."""
     plan["schema"], plan["units"] = "naqsha.plan/1", "ft"
     snap = lambda v: round(float(v) * 4) / 4  # noqa: E731
     for r in plan.get("rooms", []):
-        r["rect"] = {k: snap(r["rect"][k]) for k in ("x", "y", "w", "d")}
+        if isinstance(r.get("rect"), dict) and all(k in r["rect"] for k in ("x", "y", "w", "d")):
+            r["rect"] = {k: snap(r["rect"][k]) for k in ("x", "y", "w", "d")}
     for o in plan.get("openings", []):
-        o["at"] = [snap(o["at"][0]), snap(o["at"][1])]
+        if isinstance(o.get("at"), list) and len(o["at"]) == 2:
+            o["at"] = [snap(o["at"][0]), snap(o["at"][1])]
     p = plan.setdefault("site", {}).setdefault("plot", {})
     if brief.get("plot"):
         p.update({k: brief["plot"][k] for k in ("width_ft", "depth_ft", "area_marla", "corner") if k in brief["plot"]})
     if brief.get("coordinates"):
         plan["site"]["coordinates"] = brief["coordinates"]
+    roof = plan.setdefault("roof", {"parapet_ft": 3.5})
+    if roof.get("mumty"):
+        roof["mumty"]["height_ft"] = min(float(roof["mumty"].get("height_ft") or 9), 9.5)
+    if roof.get("water_tank") and brief.get("water_tank") in ("plastic", "concrete"):
+        roof["water_tank"]["material"] = brief["water_tank"]
+    if brief.get("solar") in ("ready", "panels"):
+        roof["solar"] = {**(roof.get("solar") or {}), "mode": brief["solar"]}
+    elif brief.get("solar") == "none":
+        roof.pop("solar", None)
     return plan
+
+
+def prepare(plan: dict, brief: dict) -> tuple[dict, list[str]]:
+    """Clean and repair a plan deterministically. Returns (plan, what was repaired)."""
+    plan = _clean_plan(plan, brief)
+    repairs = []
+    try:
+        if (moved := planning.normalize(plan)):
+            repairs.append(f"aligned {len(moved)} door{'s' if len(moved) > 1 else ''} and window{'s' if len(moved) > 1 else ''} with their walls")
+        if planning.repair_stairs(plan):
+            repairs.append("fitted the stairs to code inside the stair hall")
+        if planning.repair_mumty(plan):
+            repairs.append("set the stair tower over the stair with its door at the top landing")
+    except Exception:  # a repair must never sink the run
+        log.exception("deterministic repair failed")
+    return plan, repairs
+
+
+def _score(report: dict) -> tuple[int, int]:
+    c = lda.counts(report)
+    return c["fail"], c["warn"]
+
+
+def _feedback(report: dict) -> str:
+    return ("The plan checker found these problems. Fix every FAIL (and the WARNs where it's easy); keep everything else "
+            "unchanged.\n" + lda.violations_text(report) + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
+
+
+async def _ask_plan(contents: list) -> AsyncIterator[tuple[str, object]]:
+    async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768):
+        yield kind, val
+
+
+def _model_turn(plan: dict) -> types.Content:
+    return types.Content(role="model", parts=[types.Part.from_text(text=json.dumps(plan, separators=(",", ":")))])
+
+
+def _user_turn(text: str) -> types.Content:
+    return types.Content(role="user", parts=[types.Part.from_text(text=text)])
+
+
+def _status(report: dict) -> str:
+    c = lda.counts(report)
+    lda_c, liv = c.get("lda", {"pass": 0, "total": 0}), c.get("livable", {"pass": 0, "total": 0})
+    return f"{lda_c['pass']}/{lda_c['total']} LDA · {liv['pass']}/{liv['total']} livable"
 
 
 async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
@@ -176,37 +189,167 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
     env = lda.envelope(brief["plot"]["width_ft"], brief["plot"]["depth_ft"], brief.get("authority") or "LDA",
                        bool(brief["plot"].get("corner")))
     concept = await _concept_part(project)
-    contents: list = [types.Content(role="user", parts=([concept] if concept else []) + [types.Part.from_text(text=_plan_prompt(brief, env, concept))])]
-    plan, report, history = None, None, []
+    first = types.Content(role="user", parts=([concept] if concept else []) + [types.Part.from_text(text=_plan_prompt(brief, env, concept))])
+    contents = [first]
+    best, history = None, []
+
     for attempt in range(1, config.PLAN_MAX_ATTEMPTS + 1):
-        yield "stage", {"stage": "plan" if attempt == 1 else "fix",
-                        "message": "Argon is laying out the floors…" if attempt == 1 else f"Argon is fixing the plan (attempt {attempt})…"}
-        text = ""
-        async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768):
+        if attempt == 1:
+            yield "stage", {"stage": "plan", "message": "Laying out the floors…"}
+        else:
+            k = best[0][0]
+            yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt} of {config.PLAN_MAX_ATTEMPTS})…"}
+        obj = None
+        async for kind, val in _ask_plan(contents):
             if kind == "progress":
                 yield "progress", {"chars": val}
             else:
-                obj, text = val
-        plan = _clean_plan(obj, brief)
+                obj = val[0]
+        plan, repairs = prepare(obj, brief)
         yield "plan", {"plan": plan, "attempt": attempt}
-        yield "stage", {"stage": "compliance", "message": "Checking the plan against LDA regulations…"}
-        report = lda.check(plan)
-        history.append({"attempt": attempt, **{k: sum(1 for c in report["checks"] if c["status"] == k) for k in ("pass", "warn", "fail")},
-                        "failed": [c["id"] for c in report["checks"] if c["status"] == "fail"]})
+        report = lda.check(plan, brief)
+        c = lda.counts(report)
+        yield "stage", {"stage": "compliance", "message": f"Checking {c.get('lda', {}).get('total', 0)} LDA rules and "
+                                                          f"{c.get('livable', {}).get('total', 0)} livability rules…"}
+        fails, warns = _score(report)
+        history.append({"attempt": attempt, "pass": sum(1 for c in report["checks"] if c["status"] == "pass"), "warn": warns,
+                        "fail": fails, "failed": [c["id"] for c in report["checks"] if c["status"] == "fail"], "repairs": repairs})
         yield "compliance", {"report": report, "attempt": attempt}
+        if best is None or (fails, warns) < best[0]:
+            best = ((fails, warns), plan, report, attempt)
         if report["ok"]:
             break
-        contents = contents[:1] + [types.Content(role="model", parts=[types.Part.from_text(text=json.dumps(plan, separators=(",", ":")))]),
-                     types.Content(role="user", parts=[types.Part.from_text(text=(
-                         "The LDA compliance engine reported these problems with your plan:\n" + lda.violations_text(report) +
-                         "\n\nReturn the corrected COMPLETE BuildingPlan JSON. Fix every FAIL; fix WARNs where reasonable. "
-                         "Keep everything else unchanged."))])]
-    yield "_result", {"plan": plan, "report": report, "history": history}
+        # continue from the best plan so far, with its specific failures and fix hints
+        contents = [first, _model_turn(best[1]), _user_turn(_feedback(best[2]))]
+    (_, plan, report, at) = best
+    if at != history[-1]["attempt"]:  # the last attempt was worse: show the one we keep
+        yield "plan", {"plan": plan, "attempt": at}
+        yield "compliance", {"report": report, "attempt": at}
+    yield "_result", {"plan": plan, "report": report, "history": history, "first": first, "chosen_attempt": at}
 
 
-# --- Stage 2: design.js --------------------------------------------------------------------------------
+# --- Step 2: the architect's self-review ------------------------------------------------------------------------------
+REVIEW_SYSTEM = """You are a senior Lahore architect reviewing floor plans drawn by a junior before they go to the family. Software
+has already checked the LDA regulations and the hard livability rules; your job is the judgement software can't make. Study the
+drawings (road at the bottom of each sheet) with the room table and the adjacency list, and critique like an architect:
+- circulation: natural routes, no rooms used as corridors, no wasted passages, the kitchen-dining-lounge relationship;
+- privacy: guests vs family (purdah), bedrooms away from the entrance and the drawing room, baths not opening onto living areas;
+- proportions: rooms too long and thin, too small for their use or oversized; awkward leftover spaces;
+- daylight and air: rooms that will be dark or stuffy; cross-ventilation;
+- the brief: anything the family asked for that is missing or misplaced;
+- furniture: a bed with side tables and a wardrobe, a sofa set facing a TV, a dining table for six, each with 3 ft paths and doors
+  that don't hit furniture;
+- roof access: the stair reaches the roof under the stair tower, with its door beside the top landing.
+Call an issue "major" only if the family would suffer from it every day; don't nitpick taste or ask for things outside the brief.
+Each fix must be concrete (which room, which wall, how many feet) and must keep the plan inside the setbacks.
+Return JSON: {"verdict": "approve" | "revise", "summary": "<one calm sentence for the family: what you would improve, or what
+works>", "issues": [{"severity": "major" | "minor", "rooms": ["<room ids>"], "problem": "...", "fix": "..."}]}"""
+
+
+def room_table(plan: dict) -> str:
+    ix = planning.PlanIndex(plan)
+    lines = ["id | name | type | floor | size | area | opens to"]
+    for r in ix.rooms:
+        x0, y0, x1, y1 = ix.R[r["id"]]
+        nbs = sorted(ix.name(n) for n in ix.adj.get(r["id"], ()))
+        lines.append(f"{r['id']} | {r.get('name')} | {r.get('type')} | {ix.lname(r.get('level'))} | {x1 - x0:g} x {y1 - y0:g} ft | "
+                     f"{(x1 - x0) * (y1 - y0):.0f} sq ft | {', '.join(nbs) or '-'}")
+    return "\n".join(lines)
+
+
+async def review(project: dict, plan: dict, report: dict) -> dict:
+    """Argon looks at the drawn floors and critiques them. Returns {verdict, summary, issues}."""
+    brief = project.get("brief") or {}
+    parts: list = []
+    for lid, lname, png in drawing.render_all(plan):
+        parts += [types.Part.from_text(text=f"{lname} plan:"), types.Part.from_bytes(data=png, mime_type="image/png")]
+    remaining = [f"- [{c['status'].upper()}] {c['message']}" for c in report["checks"] if c["status"] in ("fail", "warn")]
+    text = (f"THE FAMILY'S BRIEF:\n{json.dumps(_brief_for_prompt(brief))}\n\nROOMS (feet):\n{room_table(plan)}\n\n"
+            f"STAIRS: {json.dumps(plan.get('stairs'))}\nROOF: {json.dumps(plan.get('roof'))}\n\n"
+            f"ISSUES THE SOFTWARE STILL REPORTS:\n{chr(10).join(remaining) or '(none)'}\n\nReview the plan now.")
+    parts.append(types.Part.from_text(text=text))
+    out = None
+    async for kind, val in llm.stream_json(config.MODEL_REVIEW, [types.Content(role="user", parts=parts)], REVIEW_SYSTEM,
+                                           max_tokens=6144):
+        if kind == "result":
+            out = val[0]
+    out = out if isinstance(out, dict) else {}
+    issues = [i for i in out.get("issues") or [] if isinstance(i, dict) and i.get("problem")]
+    return {"verdict": "revise" if out.get("verdict") == "revise" and issues else "approve", "summary": str(out.get("summary") or ""),
+            "issues": issues}
+
+
+async def _plan_images(pid: str, run_id: str, plan: dict) -> list[dict]:
+    out = []
+    for lid, lname, png in drawing.render_all(plan):
+        try:
+            url = await blobs.put(f"projects/{pid}/plans/{run_id}-{lid}.png", png, "image/png")
+            out.append({"level": lid, "name": lname, "url": url})
+        except Exception:
+            log.exception("plan image upload failed")
+    return out
+
+
+async def self_review(project: dict, plan: dict, report: dict, first: types.Content, history: list) -> AsyncIterator[tuple[str, dict]]:
+    """Critique the drawn plan; if there are real problems, revise once and keep the revision only if it breaks no rule."""
+    brief = project["brief"]
+    yield "stage", {"stage": "review", "message": "Reviewing the drawings like an architect…"}
+    try:
+        crit = await review(project, plan, report)
+    except Exception as e:
+        log.exception("review failed")
+        yield "_result", {"plan": plan, "report": report, "review": {"verdict": "skipped", "summary": "", "issues": [],
+                                                                       "error": type(e).__name__}}
+        return
+    majors = [i for i in crit["issues"] if i.get("severity") == "major"]
+    if crit["verdict"] != "revise" or not majors:
+        msg = crit["summary"] or "The circulation, privacy and daylight read well."
+        yield "stage", {"stage": "review", "message": f"Reviewed the drawings. {msg}"}
+        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False}}
+        return
+    yield "stage", {"stage": "review", "message": f"Improving the plan: {crit['summary'] or majors[0]['problem']}"}
+    asks = "\n".join(f"- [{i.get('severity', 'minor').upper()}] {i['problem']} Fix: {i.get('fix', '')}"
+                     + (f" (rooms: {', '.join(i.get('rooms') or [])})" if i.get("rooms") else "") for i in crit["issues"])
+    contents = [first, _model_turn(plan), _user_turn(
+        "A senior architect reviewed your drawings and asks for these improvements:\n" + asks +
+        "\nMake the MAJOR ones (and the minor ones where easy) while keeping everything that already works and every rule that "
+        "already passes. Return the COMPLETE BuildingPlan JSON.")]
+    base = _score(report)
+    cand = cand_rep = None
+    for round_ in (1, 2):
+        try:
+            obj = None
+            async for kind, val in _ask_plan(contents):
+                if kind == "progress":
+                    yield "progress", {"chars": val}
+                else:
+                    obj = val[0]
+            cand, _ = prepare(obj, brief)
+            cand_rep = lda.check(cand, brief)
+        except Exception:
+            log.exception("review revision failed")
+            cand = None
+            break
+        if _score(cand_rep)[0] <= base[0] or round_ == 2:
+            break
+        yield "stage", {"stage": "fix", "message": "Re-checking the improved plan…"}
+        contents = [first, _model_turn(cand), _user_turn(_feedback(cand_rep))]
+    attempt = len(history) + 1
+    if cand is not None and _score(cand_rep)[0] <= base[0]:
+        history.append({"attempt": attempt, "review": True, "fail": _score(cand_rep)[0], "warn": _score(cand_rep)[1],
+                        "failed": [c["id"] for c in cand_rep["checks"] if c["status"] == "fail"]})
+        yield "plan", {"plan": cand, "attempt": attempt}
+        yield "compliance", {"report": cand_rep, "attempt": attempt}
+        yield "stage", {"stage": "review", "message": f"Improved after review: {crit['summary'] or majors[0]['problem']}"}
+        yield "_result", {"plan": cand, "report": cand_rep, "review": {**crit, "applied": True}}
+    else:
+        yield "stage", {"stage": "review", "message": "Kept the checked plan; the suggested changes would have broken a rule."}
+        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False}}
+
+
+# --- Step 3: design.js --------------------------------------------------------------------------------
 BUILD_SYSTEM = """You are Naqsha's 3D design engineer. You write design.js: code that builds a high-fidelity, fully furnished 3D
-model of a house with the House SDK (three.js underneath). The plan (structure) is already decided and LDA-checked; your job is
+model of a house with the House SDK (three.js underneath). The plan (structure) is already decided and checked; your job is
 to make it look like a premium architectural visualization that matches the family's chosen concept image.
 
 OUTPUT FORMAT: plain text only, no markdown fences. A sequence of sections, each exactly:
@@ -224,24 +367,29 @@ Order and naming:
 4. `furnish_<room_id> [furniture]`: ONE section per enclosed room (and the porch: a car). Place key pieces explicitly with
    `against`/`along_ft` or `at`/`rot_deg` in room-local feet, sized to the room. Use s.auto_furnish(room) only for minor rooms.
    Include Pakistani touches: ceiling fans, split ACs in bedrooms and lounges, a prayer mat if there's a prayer room.
+   Never put a TV, painting, mirror, wardrobe or bookshelf across a door or window; keep 3 ft clear in front of every door and
+   a 3 ft path through each room; the car sits in the porch bay, never in front of the main door.
 5. `landscape [landscape]`: lawn, paving, planters, trees (ashoka, palm), and s.landscape.street({ neighbours: true, streetlights: true }).
 6. `lighting [lighting]`: s.lights.sun({ hour: 17.5 }) and s.lights.interior().
 
+Roof: keep it clear for solar unless the brief asks otherwise: no domes, cupolas, minarets, chhatris or pergolas; the water tank
+and solar frame come from the plan.
 Rules: Only use APIs that exist in the SDK reference. Coordinates are plan FEET (x along the road, y into the plot, h above the
 road crown). Keep each section under about 60 lines, self-contained, with const declarations local to it. Never use fetch, XMLHttpRequest,
-WebSocket, import(), eval, Function, document, window or storage. Prefer clarity over cleverness. The code is shown to the
-user, so add a brief comment at the top of each section saying what it builds."""
+WebSocket, import(), eval, Function, document, window or storage. Prefer clarity over cleverness. Add a brief comment at the top
+of each section saying what it builds."""
 
 
 def _build_prompt(plan: dict, brief: dict) -> str:
     example = _read(CONTRACTS / "fixtures" / "design-10-marla.js")
     engine_notes = _read(CONTRACTS / "engine-notes.md")
+    keys = ("style", "style_notes", "budget", "notes", "spaces", "floors", "water_tank", "solar", "preferences")
     return (
         f"HOUSE SDK REFERENCE (TypeScript declarations; the API you can call):\n{_read(CONTRACTS / 'house-sdk.d.ts')}\n\n"
         + (f"ENGINE NOTES (behaviour details and gotchas):\n{engine_notes}\n\n" if engine_notes else "")
         + (f"EXAMPLE design.js for a different 10-marla plan (format and quality reference only):\n{example}\n\n" if example else "")
         + f"THE PLAN TO BUILD (BuildingPlan JSON, feet):\n{json.dumps(plan)}\n\n"
-        f"FAMILY BRIEF: {json.dumps({k: brief.get(k) for k in ('style', 'style_notes', 'budget', 'notes', 'spaces')})}\n\n"
+        f"FAMILY BRIEF: {json.dumps({k: brief.get(k) for k in keys if brief.get(k) not in (None, '', [], {})})}\n\n"
         "The attached image (if any) is the chosen exterior concept. Match its facade composition and materials.\n"
         "Write design.js now."
     )
@@ -290,7 +438,7 @@ async def write_design(project: dict, plan: dict, extra_instruction: str | None 
     text = _build_prompt(plan, project.get("brief") or {}) + (f"\n\nADDITIONAL INSTRUCTIONS:\n{extra_instruction}" if extra_instruction else "")
     contents = [types.Content(role="user", parts=([concept] if concept else []) + [types.Part.from_text(text=text)])]
     cfg = types.GenerateContentConfig(system_instruction=BUILD_SYSTEM, max_output_tokens=65536)
-    yield "stage", {"stage": "build", "message": "Argon is writing the 3D model as code…"}
+    yield "stage", {"stage": "build", "message": "Building the 3D model…"}
     parser, total = SectionStream(), 0
     async for chunk in await client().aio.models.generate_content_stream(model=config.MODEL_ARCHITECT, contents=contents, config=cfg):
         if not chunk.text:
@@ -321,16 +469,25 @@ async def repair_section(project: dict, version: dict, name: str, error: str) ->
 
 
 async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
-    """Full pipeline: plan (+ compliance loop), then design.js, then save a Version."""
+    """Full pipeline: plan (+ fix loop) → self-review → design.js → save a Version."""
     pid = project["id"]
+    run_id = db.new_id("r_")
     await db.update_project(pid, stage="planning")
-    plan = report = None
+    plan = report = first = None
     history: list = []
     async for ev, data in make_plan(project):
         if ev == "_result":
-            plan, report, history = data["plan"], data["report"], data["history"]
+            plan, report, history, first = data["plan"], data["report"], data["history"], data["first"]
         else:
             yield ev, data
+    rev: dict = {}
+    if config.SELF_REVIEW:
+        async for ev, data in self_review(project, plan, report, first, history):
+            if ev == "_result":
+                plan, report, rev = data["plan"], data["report"], data["review"]
+            else:
+                yield ev, data
+    images = await _plan_images(pid, run_id, plan)
     await db.update_project(pid, stage="building")
     sections: list[dict] = []
     async for ev, data in write_design(project, plan):
@@ -338,15 +495,15 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
             sections = data["sections"]
         else:
             yield ev, data
-    yield "stage", {"stage": "save", "message": "Saving version…"}
+    yield "stage", {"stage": "save", "message": "Saving the version…"}
     fresh = await db.get_project(pid)
     n = len(fresh.get("versions") or []) + 1
     version = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": fresh.get("current_version_id"),
                "plan": plan, "sections": sections, "compliance": report, "changes": [], "status": "ready",
-               "fix_history": history}
+               "fix_history": history, "review": rev, "plan_images": images, "brief_snapshot": fresh.get("brief")}
     await db.save_version(pid, version)
-    summary = f"v{n}: {len(plan['rooms'])} spaces, {len(sections)} code sections"
+    summary = _status(report)
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": version["id"], "n": n, "created_at": version["created_at"],
                                                                            "status": "ready", "summary": summary}],
-                            current_version_id=version["id"], stage="ready")
+                            current_version_id=version["id"], stage="ready", brief_changed=False)
     yield "version", {"version": version}

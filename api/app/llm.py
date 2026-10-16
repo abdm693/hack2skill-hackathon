@@ -36,12 +36,14 @@ def parse_json(text: str):
 
 
 async def stream_json(model: str, contents, system: str, max_tokens: int, attempts: int = 2,
-                      on_progress=None) -> AsyncIterator[tuple[str, object]]:
-    """Yields ("progress", chars) while streaming and finally ("result", (obj, text))."""
+                      on_progress=None, thinking: str | None = None) -> AsyncIterator[tuple[str, object]]:
+    """Yields ("progress", chars) while streaming and finally ("result", (obj, text)). `thinking` sets the thinking level
+    ("LOW" for quick calls)."""
     last_err: Exception | None = None
     for attempt in range(attempts):
         cfg = types.GenerateContentConfig(system_instruction=system + "\n" + NUM_RULE, response_mime_type="application/json",
-                                          max_output_tokens=max_tokens)
+                                          max_output_tokens=max_tokens,
+                                          thinking_config=types.ThinkingConfig(thinking_level=thinking) if thinking else None)
         text = ""
         try:
             async for chunk in await client().aio.models.generate_content_stream(model=model, contents=contents, config=cfg):

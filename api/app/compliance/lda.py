@@ -140,8 +140,6 @@ def check(plan: dict, brief: dict | None = None) -> dict:
 
     levels = {lv["id"]: lv for lv in plan.get("levels", [])}
     rooms = plan.get("rooms", [])
-    by_id = {r["id"]: r for r in rooms}
-    openings = plan.get("openings", [])
     checks: list[dict] = []
     ix = planning.PlanIndex(plan)
 
