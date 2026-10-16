@@ -177,7 +177,7 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
                        bool(brief["plot"].get("corner")))
     concept = await _concept_part(project)
     contents: list = [types.Content(role="user", parts=([concept] if concept else []) + [types.Part.from_text(text=_plan_prompt(brief, env, concept))])]
-    plan, report = None, None
+    plan, report, history = None, None, []
     for attempt in range(1, config.PLAN_MAX_ATTEMPTS + 1):
         yield "stage", {"stage": "plan" if attempt == 1 else "fix",
                         "message": "Argon is laying out the floors…" if attempt == 1 else f"Argon is fixing the plan (attempt {attempt})…"}
@@ -191,6 +191,8 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
         yield "plan", {"plan": plan, "attempt": attempt}
         yield "stage", {"stage": "compliance", "message": "Checking the plan against LDA regulations…"}
         report = lda.check(plan)
+        history.append({"attempt": attempt, **{k: sum(1 for c in report["checks"] if c["status"] == k) for k in ("pass", "warn", "fail")},
+                        "failed": [c["id"] for c in report["checks"] if c["status"] == "fail"]})
         yield "compliance", {"report": report, "attempt": attempt}
         if report["ok"]:
             break
@@ -199,7 +201,7 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
                          "The LDA compliance engine reported these problems with your plan:\n" + lda.violations_text(report) +
                          "\n\nReturn the corrected COMPLETE BuildingPlan JSON. Fix every FAIL; fix WARNs where reasonable. "
                          "Keep everything else unchanged."))])]
-    yield "_result", {"plan": plan, "report": report}
+    yield "_result", {"plan": plan, "report": report, "history": history}
 
 
 # --- Stage 2: design.js --------------------------------------------------------------------------------
@@ -323,9 +325,10 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
     pid = project["id"]
     await db.update_project(pid, stage="planning")
     plan = report = None
+    history: list = []
     async for ev, data in make_plan(project):
         if ev == "_result":
-            plan, report = data["plan"], data["report"]
+            plan, report, history = data["plan"], data["report"], data["history"]
         else:
             yield ev, data
     await db.update_project(pid, stage="building")
@@ -339,7 +342,8 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
     fresh = await db.get_project(pid)
     n = len(fresh.get("versions") or []) + 1
     version = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": fresh.get("current_version_id"),
-               "plan": plan, "sections": sections, "compliance": report, "changes": [], "status": "ready"}
+               "plan": plan, "sections": sections, "compliance": report, "changes": [], "status": "ready",
+               "fix_history": history}
     await db.save_version(pid, version)
     summary = f"v{n}: {len(plan['rooms'])} spaces, {len(sections)} code sections"
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": version["id"], "n": n, "created_at": version["created_at"],

@@ -186,7 +186,12 @@ async def attach_run(pid: str, x_naqsha_user: str = Header("anon")):
     run = runs.active(pid)
     if not run:
         return Response(status_code=204)
-    return sse.stream(run.follow())
+
+    async def replay():
+        yield "run", {"kind": run.kind}
+        async for ev in run.follow():
+            yield ev
+    return sse.stream(replay())
 
 
 @app.get("/api/projects/{pid}/versions/{vid}")
@@ -362,6 +367,8 @@ if WEB_DIST.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        if path.startswith("api/"):
+            return JSONResponse({"detail": "not found"}, status_code=404)
         f = WEB_DIST / path
         if path and f.is_file():
             return FileResponse(f)

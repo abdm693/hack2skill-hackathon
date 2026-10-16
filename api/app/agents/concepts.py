@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import AsyncIterator
 
 from google.genai import types
@@ -49,10 +50,17 @@ async def _generate_one(pid: str, prompt: str, ref: tuple[bytes, str] | None = N
     contents: list = [prompt]
     if ref:
         contents = [types.Part.from_bytes(data=ref[0], mime_type=ref[1]), prompt]
-    resp = await client().aio.models.generate_content(
-        model=model or config.MODEL_IMAGE, contents=contents,
-        config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"],
-                                           image_config=types.ImageConfig(aspect_ratio="16:9")))
+    for attempt in range(4):  # back off on 429 / RESOURCE_EXHAUSTED (per-minute image quota with 4 in parallel)
+        try:
+            resp = await client().aio.models.generate_content(
+                model=model or config.MODEL_IMAGE, contents=contents,
+                config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"],
+                                                   image_config=types.ImageConfig(aspect_ratio="16:9")))
+            break
+        except Exception as e:
+            if attempt == 3 or not any(t in str(e) for t in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")):
+                raise
+            await asyncio.sleep(3 * 2 ** attempt + random.random() * 2)
     for part in resp.candidates[0].content.parts:
         if part.inline_data and part.inline_data.data:
             cid = db.new_id("c_")

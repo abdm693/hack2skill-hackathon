@@ -21,6 +21,7 @@ PLOT_PRESETS = {  # typical Lahore scheme dimensions (docs/research/lda-regulati
 }
 
 AUTHORITIES = {"LDA", "DHA", "BAHRIA", "RDA", "FDA", "MDA", "GDA", "OTHER"}
+STYLE_NAMES = ["Modern Contemporary", "Spanish", "Classic", "Minimalist", "Mediterranean", "Mughal Revival", "Industrial"]
 ESSENTIAL = ["authority", "plot", "storeys", "bedrooms", "bathrooms", "spaces", "style"]
 
 SYSTEM = """You are "Naqsha", a warm, expert Lahore architect running a quick project setup chat for a family designing a house
@@ -100,6 +101,47 @@ def _normalize_plot(plot: dict | None) -> dict | None:
     if not w or not d:
         return None
     return {"width_ft": float(w), "depth_ft": float(d), "area_marla": round(w * d / lda.MARLA_SQFT, 1), "corner": bool(plot.get("corner"))}
+
+
+FACINGS = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
+SPACE_IDS = {"drawing", "tv_lounge", "dining", "kitchen", "dirty_kitchen", "servant_quarter", "lawn", "prayer", "store",
+             "laundry", "roof_terrace", "study", "gym"}
+
+
+def parse_chips(chips: list[str] | None) -> dict:
+    """Structured widget tokens → brief patch (plot:35x65, corner:true, storeys:2, bedrooms:4, bathrooms:5,
+    coords:31.47,74.27, space ids, car_porch:N, style names, authority and facing values)."""
+    patch: dict = {}
+    spaces: list[str] = []
+    styles = {k.lower(): k for k in STYLE_NAMES}
+    for raw in chips or []:
+        c = str(raw).strip()
+        key, _, val = c.partition(":")
+        k = key.lower()
+        try:
+            if k == "plot" and "x" in val:
+                w, d = (float(v) for v in val.lower().split("x", 1))
+                patch.setdefault("plot", {}).update(width_ft=w, depth_ft=d)
+            elif k == "corner":
+                patch.setdefault("plot", {})["corner"] = val.lower() == "true"
+            elif k in ("storeys", "bedrooms", "bathrooms"):
+                patch[k] = int(float(val))
+            elif k == "coords" and "," in val:
+                lat, lng = (float(v) for v in val.split(",", 1))
+                patch["coordinates"] = {"lat": lat, "lng": lng}
+            elif k == "car_porch" or c in SPACE_IDS:
+                spaces.append(c)
+            elif c.lower() in styles:
+                patch["style"] = styles[c.lower()]
+            elif c.upper() in AUTHORITIES:
+                patch["authority"] = c.upper()
+            elif c.upper() in FACINGS:
+                patch["facing"] = c.upper()
+        except ValueError:
+            continue
+    if spaces:
+        patch["spaces"] = spaces
+    return patch
 
 
 def merge_brief(brief: dict, patch: dict, auto: list[str]) -> dict:
@@ -194,6 +236,9 @@ async def run_turn(project: dict, message: str | None, action: str | None, chips
         yield "intake.complete", {"brief": brief, "envelope": env}
         return
 
+    structured = parse_chips(chips)
+    if structured:  # widget answers are applied directly; the model only needs to ask the next question
+        brief = merge_brief(brief, structured, [])
     history = await db.list_messages(pid)
     convo = "\n".join(f"{m['role'].upper()}: {m['text']}" for m in history[-14:])
     last_q = next((m for m in reversed(history) if m["role"] == "assistant"), None)
