@@ -9,6 +9,7 @@ dependencies = [
   "google-cloud-storage==3.17.1",
   "uvicorn[standard]",
   "pydantic>=2",
+  "pillow>=11",
 ]
 
 [dependency-groups]
