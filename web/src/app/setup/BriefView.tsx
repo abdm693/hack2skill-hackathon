@@ -43,7 +43,9 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
 
   // "Decide everything for me": once the brief is complete, carry on to concepts (which choose and plan).
   useEffect(() => {
-    if (autopilot && complete && !busy) goTo("concepts", { state: { autopilot: true } });
+    if (!autopilot || !complete || busy) return;
+    chat.stopAutopilot();
+    goTo("concepts", { state: { autopilot: true } });
   }, [autopilot, complete, busy, goTo]);
 
   const save = useCallback(

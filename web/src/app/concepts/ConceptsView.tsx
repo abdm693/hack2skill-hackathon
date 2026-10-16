@@ -105,7 +105,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
       const p = await api.selectConcept(project.id, l.concept.id);
       onProjectChange(p);
       const fresh = force || !project.current_version_id;
-      goTo("plan", { state: fresh ? { autostart: true } : undefined });
+      goTo("plan", { state: fresh ? { autostart: true, walk: autopilot } : undefined });
       if (force) void flow.design(project.id);
     } catch (e) {
       notify.error("Couldn't choose that concept", e);
@@ -115,16 +115,20 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   };
 
   // "Decide everything for me": take the first concept as soon as it lands.
-  const autopilot = (location.state as { autopilot?: boolean } | null)?.autopilot;
+  const [autopilot] = useState(() => !!(location.state as { autopilot?: boolean } | null)?.autopilot);
   const autoDone = useRef(false);
+  useEffect(() => {
+    // Forget the request in history so a reload or Back doesn't choose again.
+    if (autopilot) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!autopilot || autoDone.current) return;
     const first = roots[0];
     if (!first) return;
     autoDone.current = true;
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-    const t = setTimeout(() => void choose(first, !!project.current_version_id), 1200);
-    return () => clearTimeout(t);
+    // Let the first image land on screen for a beat, then carry on (deliberately not cancelled on re-render).
+    setTimeout(() => void choose(first, !!project.current_version_id), 1400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autopilot, roots.length]);
 

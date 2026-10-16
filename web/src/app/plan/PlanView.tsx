@@ -56,7 +56,8 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  // Arriving from "Plan this one": start straight away.
+  // Arriving from "Plan this one": start straight away. From "Decide everything", carry on into the house when built.
+  const [walkWhenBuilt] = useState(() => !!(location.state as { walk?: boolean } | null)?.walk);
   useEffect(() => {
     const st = location.state as { autostart?: boolean } | null;
     if (!st?.autostart) return;
@@ -64,6 +65,13 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     if (!running && !project.current_version_id && !["planning", "building"].includes(project.stage)) void flow.design(project.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const builtVid = run?.status === "done" ? run.version?.id : undefined;
+  useEffect(() => {
+    if (walkWhenBuilt && builtVid) {
+      const t = setTimeout(() => goTo("house"), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [walkWhenBuilt, builtVid, goTo]);
 
   // During a run show only the run's own drawing and checks: never the previous version's.
   const plan = running ? run?.plan : version?.plan;
