@@ -63,7 +63,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean
       // Back to where the person was: the caller's choice (e.g. the card's More button), else the element that had
       // focus when this opened, if it still exists. A menu item that opened the dialog is gone by now.
       const target = returnRef.current?.() ?? (before && document.contains(before) ? before : null);
-      if (target) requestAnimationFrame(() => target.focus({ preventScroll: true }));
+      if (target) window.setTimeout(() => target.focus({ preventScroll: true }), 0);
     };
   }, [active, ref]);
 }

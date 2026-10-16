@@ -198,7 +198,8 @@ export function Landing() {
             </ul>
           ) : samples.length ? (
             <ul className={cn("mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2", samples.length > 2 && "lg:grid-cols-3")}>
-              {samples.map((s, i) => {
+              {/* The home the hero animates comes first. */}
+              {[...samples].sort((a, b) => Number(b.id === hero?.id) - Number(a.id === hero?.id)).map((s, i) => {
                 const img = assetUrl(s.thumbnail_url);
                 return (
                   <Reveal key={s.id} delay={i * 0.06} as="li">

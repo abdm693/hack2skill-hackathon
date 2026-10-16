@@ -54,6 +54,23 @@ export function cornerSide(plan: BuildingPlan): "left" | "right" {
   return sb.left > sb.right ? "left" : "right";
 }
 
+/**
+ * What room labels must keep clear of on a level: each stair's drawing, and its "Up" / "Down" mark (which sits just
+ * outside the flights).
+ */
+export function stairAvoid(plan: BuildingPlan, levelId: string, ppf: number): Box[] {
+  const up = plan.stairs.filter((s) => s.from_level === levelId).map((s) => ({ d: stairDrawing(s, plan.levels), dir: "up" as const }));
+  const down = up.length ? [] : plan.stairs.filter((s) => s.to_level === levelId).map((s) => ({ d: stairDrawing(s, plan.levels), dir: "down" as const }));
+  const out: Box[] = [];
+  for (const { d, dir } of [...up, ...down]) {
+    out.push({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d });
+    const [sx, sy] = dir === "up" ? d.path[0] : d.path[d.path.length - 1];
+    const hw = 16 / ppf;
+    out.push({ x0: sx - hw, y0: sy - 22 / ppf, x1: sx + hw, y1: sy + 14 / ppf });
+  }
+  return out;
+}
+
 // ── The drawing ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface PlanSheetProps {
@@ -131,7 +148,7 @@ export const PlanSheet = memo(function PlanSheet({
 
   const labels = useMemo(() => {
     if (labelsProp) return labelsProp;
-    const avoid: Box[] = geo.stairs.map(({ d }) => ({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d }));
+    const avoid: Box[] = level ? stairAvoid(plan, level.id, ppf) : [];
     return layoutLabels(geo.labelled, ppf, { avoid, site: new Set(geo.site.map((r) => r.id)), deltas: deltaStrings(deltas) });
   }, [labelsProp, geo, ppf, deltas]);
 
@@ -585,7 +602,8 @@ function RoofLabels({ plan, Y, px, W, D }: { plan: BuildingPlan; Y: (y: number) 
   const taken: R[] = [];
   const out: ReactNode[] = [];
   const hit = (a: R, b: R) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.d && b.y < a.y + a.d;
-  const place = (key: string, shape: R, title: string, sub: string | undefined, allowInside: boolean, avoid: R[]) => {
+  /** `around`: the box the caption goes beside (the stair tower, for a tank standing on it); the leader starts at `shape`. */
+  const place = (key: string, shape: R, title: string, sub: string | undefined, allowInside: boolean, avoid: R[], around: R = shape) => {
     const tw = px(Math.max(measure(title, FS), sub ? measure(sub, SUB, true) : 0));
     const th = px(FS * 1.2 + (sub ? SUB * 1.3 : 0));
     const text = (x: number, top: number, anchor: "start" | "middle" | "end") => (
@@ -611,15 +629,25 @@ function RoofLabels({ plan, Y, px, W, D }: { plan: BuildingPlan; Y: (y: number) 
     }
     // Beside it with a leader: right, left, behind (up the page), in front.
     const gap = px(10);
-    const cy = shape.y + shape.d / 2;
+    const A = around;
+    const cy = A.y + A.d / 2;
+    const sx = shape.x + shape.w / 2;
+    const sy = shape.y + shape.d / 2;
+    // Above or below, centred on the shape but kept inside the plot.
+    const midX = Math.max(0.5, Math.min(W - 0.5 - tw, A.x + A.w / 2 - tw / 2));
     const cands: { box: R; anchor: "start" | "end" | "middle"; tx: number; lead: [number, number, number, number] }[] = [
-      { box: { x: shape.x + shape.w + gap, y: cy - th / 2, w: tw, d: th }, anchor: "start", tx: shape.x + shape.w + gap, lead: [shape.x + shape.w, cy, shape.x + shape.w + gap - px(2), cy] },
-      { box: { x: shape.x - gap - tw, y: cy - th / 2, w: tw, d: th }, anchor: "end", tx: shape.x - gap, lead: [shape.x, cy, shape.x - gap + px(2), cy] },
-      { box: { x: shape.x + shape.w / 2 - tw / 2, y: shape.y + shape.d + gap, w: tw, d: th }, anchor: "middle", tx: shape.x + shape.w / 2, lead: [shape.x + shape.w / 2, shape.y + shape.d, shape.x + shape.w / 2, shape.y + shape.d + gap - px(2)] },
-      { box: { x: shape.x + shape.w / 2 - tw / 2, y: shape.y - gap - th, w: tw, d: th }, anchor: "middle", tx: shape.x + shape.w / 2, lead: [shape.x + shape.w / 2, shape.y, shape.x + shape.w / 2, shape.y - gap + px(2)] },
+      { box: { x: A.x + A.w + gap, y: cy - th / 2, w: tw, d: th }, anchor: "start", tx: A.x + A.w + gap, lead: [A === shape ? A.x + A.w : sx, A === shape ? cy : sy, A.x + A.w + gap - px(2), cy] },
+      { box: { x: A.x - gap - tw, y: cy - th / 2, w: tw, d: th }, anchor: "end", tx: A.x - gap, lead: [A === shape ? A.x : sx, A === shape ? cy : sy, A.x - gap + px(2), cy] },
+      { box: { x: midX, y: A.y + A.d + gap, w: tw, d: th }, anchor: "middle", tx: midX + tw / 2, lead: [A === shape ? A.x + A.w / 2 : sx, A === shape ? A.y + A.d : sy, A.x + A.w / 2, A.y + A.d + gap - px(2)] },
+      { box: { x: midX, y: A.y - gap - th, w: tw, d: th }, anchor: "middle", tx: midX + tw / 2, lead: [A === shape ? A.x + A.w / 2 : sx, A === shape ? A.y : sy, A.x + A.w / 2, A.y - gap + px(2)] },
     ];
-    const fits = (b: R) => b.x >= 0.5 && b.x + b.w <= W - 0.5 && b.y >= 0.5 && b.y + b.d <= D - 0.5 && !avoid.some((a) => hit(a, b)) && !taken.some((t) => hit(t, b));
-    const c = cands.find((k) => fits(k.box)) ?? cands.find((k) => k.box.x >= 0 && k.box.x + k.box.w <= W) ?? cands[0];
+    const inPlot = (b: R) => b.x >= 0.5 && b.x + b.w <= W - 0.5 && b.y >= 0.5 && b.y + b.d <= D - 0.5;
+    const clearOfLabels = (b: R) => !taken.some((t) => hit(t, b));
+    const c =
+      cands.find((k) => inPlot(k.box) && clearOfLabels(k.box) && !avoid.some((a) => hit(a, k.box))) ??
+      cands.find((k) => inPlot(k.box) && clearOfLabels(k.box)) ??
+      cands.find((k) => clearOfLabels(k.box)) ??
+      cands[0];
     taken.push(c.box);
     out.push(
       <g key={key}>
@@ -635,7 +663,8 @@ function RoofLabels({ plan, Y, px, W, D }: { plan: BuildingPlan; Y: (y: number) 
   if (tank) {
     const name = tank.material === "plastic" ? "Plastic tank" : tank.material === "concrete" ? "Concrete tank" : "Water tank";
     const onTower = !!(m && inside(tank.rect, m.rect));
-    place("tank", tank.rect, onTower ? `${name} above` : name, undefined, !onTower, [...(m ? [m.rect] : []), ...stairsUp].filter((r) => r !== tank.rect));
+    // A tank on the stair tower's roof is labelled beside the tower (its own box sits over the flights).
+    place("tank", tank.rect, onTower ? `${name} above` : name, undefined, !onTower, [...(m ? [m.rect] : []), ...stairsUp].filter((r) => r !== tank.rect), onTower && m ? m.rect : tank.rect);
   }
   if (solar?.rect) place("solar", solar.rect, solar.mode === "panels" ? "Solar panels" : "Kept clear for solar", `${num(solar.rect.w * solar.rect.d)} sq ft`, true, solids);
   return <g>{out}</g>;
@@ -1086,7 +1115,10 @@ export function FloorPlan({
     };
   };
   const onFocusRoom = useCallback(
-    (rm: Room | null) => setTapped(rm ? { room: rm, ...roomCentre(rm) } : null),
+    (rm: Room | null) => {
+      setHover(null);
+      setTapped(rm ? { room: rm, ...roomCentre(rm) } : null);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [v.cx, v.cy, v.z, ppf0, size.w, size.h, plan],
   );
@@ -1116,7 +1148,8 @@ export function FloorPlan({
       ...(plan.stairs.some((s) => s.from_level === level) ? [] : plan.stairs.filter((s) => s.to_level === level)),
     ].map((s) => stairDrawing(s, plan.levels));
     const labelled = [...site, ...building];
-    const avoid: Box[] = stairs.map((d) => ({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d }));
+    void stairs;
+    const avoid: Box[] = stairAvoid(plan, level, labelPpf || 1);
     return layoutLabels(labelled, labelPpf || 1, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
   }, [plan, level, rooms, labelPpf, fontTick, deltas, measured]);
   useEffect(() => {

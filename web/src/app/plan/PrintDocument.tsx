@@ -14,7 +14,7 @@ import type { BuildingPlan, ComplianceCheck, Level } from "@contracts/plan";
 import { assetUrl } from "@/api/client";
 import { FACING_LABEL, plotLabel } from "@/api/domain";
 import { feetInches, num } from "@/app/lib/utils";
-import { PlanDefs, PlanSheet, sheetBounds } from "./FloorPlan";
+import { PlanDefs, PlanSheet, sheetBounds, stairAvoid } from "./FloorPlan";
 import { layoutLabels } from "./labels";
 import { area, coveredArea, isRoofLevel, levelName, levelsOf, roomsOn, SITE_TYPES, sentenceCase } from "./model";
 import { categoryOf, summarize, tallyLine, valueLine } from "./compliance";
@@ -74,9 +74,10 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
   const date = new Date(version.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const [compliancePages, setCompliancePages] = useState(1);
   const pages = (options.cover ? 1 : 0) + levels.length + (options.compliance ? compliancePages : 0);
-  let page = 0;
-  const block = (title: string, sheetNo: string, scaled = false) => (
-    <TitleBlock project={project} version={version} date={date} title={title} sheet={sheetNo} scale={scaled ? `1:${scale} at ${paper.label}` : undefined} page={++page} pages={pages} />
+  // Page numbers are explicit (the compliance sheets re-render on their own once measured).
+  const firstCompliancePage = (options.cover ? 1 : 0) + levels.length + 1;
+  const block = (title: string, sheetNo: string, pageNo: number, scaled = false) => (
+    <TitleBlock project={project} version={version} date={date} title={title} sheet={sheetNo} scale={scaled ? `1:${scale} at ${paper.label}` : undefined} page={pageNo} pages={pages} />
   );
   const mm = (n: number) => `${(n * lay.fs).toFixed(2)}mm`;
   return (
@@ -114,7 +115,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
                 </div>
                 <SitePlan plan={plan} widthMm={lay.sidebar + 24} heightMm={paper.h * (options.paper === "a4" ? 0.26 : 0.3)} />
                 <AreaSchedule plan={plan} report={version.compliance} />
-                <div style={{ marginTop: "auto" }}>{block("Cover and area schedule", "A-000")}</div>
+                <div style={{ marginTop: "auto" }}>{block("Cover and area schedule", "A-000", 1)}</div>
               </FitColumn>
             </div>
           </section>
@@ -122,7 +123,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
 
         {levels.map((l, i) => (
           <FloorSheet key={l.id} plan={plan} level={l} scale={scale} project={project} sidebar={lay.sidebar}>
-            {block(`${levelName(l)} plan`, `A-${101 + i}`, true)}
+            {block(`${levelName(l)} plan`, `A-${101 + i}`, (options.cover ? 2 : 1) + i, true)}
           </FloorSheet>
         ))}
 
@@ -132,7 +133,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
             version={version}
             paper={options.paper}
             onPages={setCompliancePages}
-            block={(n) => block(n === 0 ? "Compliance report" : `Compliance report, continued`, `A-${900 + n}`)}
+            block={(n) => block(n === 0 ? "Compliance report" : `Compliance report, continued`, `A-${900 + n}`, firstCompliancePage + n)}
           />
         )}
       </div>
@@ -161,7 +162,8 @@ function FitColumn({ width, children }: { width: number; children: ReactNode }) 
   });
   return (
     <div ref={outer} style={{ width: `${width}mm`, flexShrink: 0, minHeight: 0, height: "100%", overflow: "hidden" }}>
-      <div ref={inner} style={{ zoom, display: "flex", flexDirection: "column", gap: "4mm", minHeight: zoom < 1 ? undefined : "100%", width: zoom < 1 ? `${100 / zoom}%` : "100%" }}>
+      {/* CSS zoom scales lengths, not percentages: width stays 100% of the column. */}
+      <div ref={inner} style={{ zoom, display: "flex", flexDirection: "column", gap: "4mm", minHeight: zoom < 1 ? undefined : "100%", width: "100%" }}>
         {children}
       </div>
     </div>
@@ -195,7 +197,7 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
   const labels = useMemo(() => {
     const isGround = level.index === 0;
     const site = isGround ? plan.rooms.filter((r) => r.level === level.id && SITE_TYPES.has(r.type)) : [];
-    return layoutLabels([...site, ...plan.rooms.filter((r) => r.level === level.id && !SITE_TYPES.has(r.type))], ppf, { site: new Set(site.map((r) => r.id)) });
+    return layoutLabels([...site, ...plan.rooms.filter((r) => r.level === level.id && !SITE_TYPES.has(r.type))], ppf, { site: new Set(site.map((r) => r.id)), avoid: stairAvoid(plan, level.id, ppf) });
   }, [plan, level, ppf]);
   const keys = labels.filter((l) => l.kind === "key");
   const rows: ScheduleRow[] = roomsOn(plan, level.id)

@@ -263,6 +263,11 @@ export function defaultProgram(brief: Brief | null, env: Envelope | null): Progr
     g.master = 1;
     g.bed = Math.max(0, (g.bed ?? 0) - 1);
   }
+  // Rooms asked for by name: a gym and a kitchenette go upstairs (the top floor), a powder room by the drawing room.
+  const top = upper[upper.length - 1];
+  if (spaces.has("gym")) p[top ?? "ground"]!.gym = 1;
+  if (spaces.has("kitchenette") && top) p[top]!.kitchenette = 1;
+  if (spaces.has("powder") || spaces.has("powder_room")) g.powder = 1;
   if (spaces.has("laundry") || marla >= 7) p.roof!.laundry = 1;
   if (spaces.has("roof_terrace")) p.roof!.terrace = 1;
   for (const l of Object.keys(p) as LevelId[]) {

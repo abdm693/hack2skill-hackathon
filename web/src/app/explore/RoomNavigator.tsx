@@ -12,14 +12,19 @@ const ROOM_ORDER = ["living", "bed", "wet", "service", "outdoor"];
 export function RoomNavigator({ plan, current, onGo, open = true }: { plan: BuildingPlan; current: string | null; onGo: (id: string) => void; open?: boolean }) {
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
-  // The panel is placed (and made visible) a frame after it mounts; focus the search once it can take focus.
+  // The panel is placed (and made visible) a frame after it mounts: keep trying to focus the search until it can
+  // take focus (a hidden panel can't), for about a second.
   useEffect(() => {
     if (!open) return;
     const fine = window.matchMedia?.("(pointer: fine)").matches ?? true;
     if (!fine) return;
-    const t = window.setTimeout(() => search.current?.focus({ preventScroll: true }), 40);
-    const t2 = window.setTimeout(() => { if (document.activeElement !== search.current) search.current?.focus({ preventScroll: true }); }, 160);
-    return () => { window.clearTimeout(t); window.clearTimeout(t2); };
+    let n = 0;
+    const t = window.setInterval(() => {
+      const el = search.current;
+      if (el && document.activeElement !== el) el.focus({ preventScroll: true });
+      if ((el && document.activeElement === el) || ++n > 14) window.clearInterval(t);
+    }, 70);
+    return () => window.clearInterval(t);
   }, [open]);
   const levels = levelsOf(plan);
   const rooms = plan.rooms.filter((r) => !SITE_TYPES.has(r.type) && r.type !== "stair");
@@ -58,7 +63,7 @@ export function RoomNavigator({ plan, current, onGo, open = true }: { plan: Buil
                 className={cn("flex w-full items-center justify-between gap-3 rounded-control px-2 py-1.5 text-left text-[13.5px] outline-none hover:bg-white/8 focus-visible:shadow-focus", r.id === current && "bg-white/10")}
               >
                 <span className="truncate">{sentenceCase(r.name)}</span>
-                {r.id === current ? <span className="text-[12px] text-hud-accent">You're here</span> : <span className="font-mono text-[11.5px] tabular-nums text-hud-ink-2">{feetInches(r.rect.w)} × {feetInches(r.rect.d)}</span>}
+                {r.id === current ? <span className="text-[12px] text-hud-accent">You're here</span> : <span className="font-mono text-[12px] tabular-nums text-hud-ink-2">{feetInches(r.rect.w)} × {feetInches(r.rect.d)}</span>}
               </button>
             ))}
           </div>

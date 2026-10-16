@@ -17,7 +17,7 @@ export function Kbd({ children, keys, tone = "light", className }: { children?: 
         <kbd
           key={i}
           className={cn(
-            "inline-grid h-5 min-w-5 place-items-center rounded-[6px] px-1 font-sans text-[11px] font-medium leading-none",
+            "inline-grid h-5 min-w-5 place-items-center rounded-[6px] px-1 font-sans text-[12px] font-medium leading-none",
             tone === "light" ? "bg-surface text-ink-3 shadow-[inset_0_0_0_1px_var(--color-line),0_1px_0_var(--color-line)]" : "bg-white/10 text-hud-ink-2",
           )}
         >

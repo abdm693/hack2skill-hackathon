@@ -43,7 +43,7 @@ function withUnit(v: number, unit: string | undefined, id: string): string {
   const u = (unit ?? "").trim();
   if (u === "ft" || u === "feet") return feetInches(v);
   if (u === "%") return `${num(v, v % 1 ? 1 : 0)}%${id === "plan.roof.solar" ? " clear" : ""}`;
-  if (u === "sq ft" || u === "sqft") return `${num(v)} sq ft`;
+  if (u === "sq ft" || u === "sqft") return `${num(v, v < 10 && v % 1 ? 1 : 0)} sq ft`;
   if (u === "in") return `${num(v, 1)} in`;
   if (!u) return num(v, 2);
   // Count units read naturally in the singular: "1 side", "1 storey".

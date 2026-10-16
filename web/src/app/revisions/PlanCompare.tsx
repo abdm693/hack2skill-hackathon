@@ -7,7 +7,7 @@ import type { BuildingPlan } from "@contracts/plan";
 import { cn } from "@/app/lib/utils";
 import { FloorStack, stackItems } from "@/app/design/FloorStack";
 import { Segmented } from "@/app/design/kit";
-import { PlanDefs, PlanSheet, deltaStrings, sheetBounds } from "@/app/plan/FloorPlan";
+import { PlanDefs, PlanSheet, deltaStrings, sheetBounds, stairAvoid } from "@/app/plan/FloorPlan";
 import { stairDrawing } from "@/app/plan/geometry";
 import { layoutLabels, type Box, type Label } from "@/app/plan/labels";
 import { SITE_TYPES, areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
@@ -59,7 +59,8 @@ export function PlanCompare({ before, after, changed, caption, className }: { be
       ...after.stairs.filter((s) => s.from_level === level),
       ...(after.stairs.some((s) => s.from_level === level) ? [] : after.stairs.filter((s) => s.to_level === level)),
     ].map((s) => stairDrawing(s, after.levels));
-    const avoid: Box[] = stairs.map((d) => ({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d }));
+    void stairs;
+    const avoid: Box[] = stairAvoid(after, level, ppf);
     return layoutLabels([...site, ...building], ppf, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
   }, [after, level, levels, ppf, deltas]);
   const keys = labels.filter((l): l is Extract<Label, { kind: "key" }> => l.kind === "key");

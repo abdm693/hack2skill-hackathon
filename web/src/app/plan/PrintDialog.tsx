@@ -112,7 +112,8 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
               Preview
             </Button>
             <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => go()} disabled={!sheets} loading={busy}>
-              Print {sheets} {sheets === 1 ? "sheet" : "sheets"}
+              {/* The compliance report takes as many sheets as it needs (more on A4), so the count is "from". */}
+              {compliance ? `Print ${sheets}+ sheets` : `Print ${sheets} ${sheets === 1 ? "sheet" : "sheets"}`}
             </Button>
           </>
         }

@@ -238,7 +238,7 @@ export function Kbd({ children, className, tone = "light" }: { children: ReactNo
   return (
     <kbd
       className={cn(
-        "inline-grid h-5 min-w-5 place-items-center rounded-[6px] px-1 font-mono text-[11px] font-medium",
+        "inline-grid h-5 min-w-5 place-items-center rounded-[6px] px-1 font-mono text-[12px] font-medium",
         tone === "light" ? "bg-surface-2 text-ink-3 shadow-[inset_0_-1px_0_var(--color-line-strong)]" : "bg-white/12 text-hud-ink-2",
         className,
       )}
@@ -428,7 +428,15 @@ export function Popover({
   label?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
+  const [pos, setPosState] = useState<CSSProperties>({ visibility: "hidden" });
+  const posKey = useRef("");
+  // Only re-render when the placement actually changes (it is re-checked while open).
+  const setPos = useCallback((p: CSSProperties) => {
+    const k = JSON.stringify(p);
+    if (k === posKey.current) return;
+    posKey.current = k;
+    setPosState(p);
+  }, []);
   const [asSheet, setAsSheet] = useState(false);
   // Read through a ref: callers pass a fresh arrow each render, and re-placing on every render would make it jump.
   const avoidRef = useRef(avoid);
@@ -479,7 +487,7 @@ export function Popover({
       }
     }
     setPos({ left, top, maxHeight: maxH, visibility: "visible" });
-  }, [anchor, side, align, offset, sheetBelow, sheetFull]);
+  }, [anchor, side, align, offset, sheetBelow, sheetFull, setPos]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -488,12 +496,15 @@ export function Popover({
     const ro = new ResizeObserver(place);
     if (panel.current) ro.observe(panel.current);
     window.addEventListener("resize", place);
+    // Re-check now and then: what it must avoid (the minimap) can appear after it opened.
+    const tick = window.setInterval(place, 500);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("resize", place);
+      window.clearInterval(tick);
     };
-  }, [open, place]);
+  }, [open, place, setPos]);
 
   useEffect(() => {
     if (!open) return;

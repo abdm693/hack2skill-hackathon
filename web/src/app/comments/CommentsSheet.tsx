@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import type { Comment, Project } from "@contracts/api-types";
-import { userId } from "@/api/client";
+import { api, userId } from "@/api/client";
 import { canEdit } from "@/app/lib/views";
 import { useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
@@ -58,10 +58,26 @@ export function CommentsSheet({
   const me = useMemo(() => ({ ids: [user?.uid, clientView ? undefined : userId()].filter(Boolean) as string[], name: clientView ? guestName : user?.name }), [user, clientView, guestName]);
   // Threads on earlier versions (resolved notes, with Naqsha's answers) stay readable after a revision, for everyone,
   // and the filters apply to them too.
-  const earlierAll = useMemo(
-    () => (versionId ? comments.filter((c) => c.version_id !== versionId).sort((a, b) => b.created_at.localeCompare(a.created_at)) : []),
-    [comments, versionId],
-  );
+  // The owner's store holds the shown version's comments only: fetch the other versions' threads when the sheet opens.
+  const [others, setOthers] = useState<Comment[]>([]);
+  useEffect(() => {
+    if (!open || clientView || !versionId || project.versions.length < 2) return;
+    let alive = true;
+    api
+      .listComments(project.id)
+      .then((all) => alive && setOthers(all.filter((c) => c.version_id !== versionId)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [open, clientView, versionId, project.id, project.versions.length]);
+  const earlierAll = useMemo(() => {
+    if (!versionId) return [];
+    const seen = new Set<string>();
+    return [...comments.filter((c) => c.version_id !== versionId), ...others]
+      .filter((c) => !seen.has(c.id) && seen.add(c.id))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }, [comments, others, versionId]);
   const earlier = useMemo(() => earlierAll.filter((c) => matches(c, filter, me)), [earlierAll, filter, me]);
   const shown = useMemo(() => list.filter((c) => matches(c, filter, me)), [list, filter, me]);
   const groups = useMemo(() => groupComments(shown, plan), [shown, plan]);

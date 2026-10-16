@@ -135,7 +135,7 @@ export function TitleCapsule({
           </button>
         )}
         {!compact && status && (
-          <span className={cn("tabular truncate text-[11px] font-medium leading-[14px]", hud ? "text-hud-ink-2" : "text-ink-3")}>
+          <span className={cn("tabular truncate text-[12px] font-medium leading-[14px]", hud ? "text-hud-ink-2" : "text-ink-3")}>
             {status}
           </span>
         )}
