@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config, sse
-from .agents import architect, concepts, intake, reviser
+from .agents import architect, concepts, intake, reviser, reviser_adk
 from .compliance import lda
 from .store import blobs, db
 
@@ -271,7 +271,16 @@ async def revise(pid: str, body: ReviseBody, x_naqsha_user: str = Header("anon")
         comments = [c for c in comments if c["id"] in set(body.comment_ids)]
     if not comments:
         raise HTTPException(400, "no open comments to address")
-    return sse.stream(reviser.revise(p, v, comments))
+    async def gen():
+        try:  # agentic ADK reviser first; the single-shot reviser is the safety net (ADK writes nothing until it finishes)
+            async for ev in reviser_adk.revise(p, v, comments):
+                yield ev
+        except Exception as e:
+            logging.exception("ADK reviser failed; falling back")
+            yield "stage", {"stage": "changes", "message": f"Retrying with the direct reviser ({type(e).__name__})…"}
+            async for ev in reviser.revise(p, v, comments):
+                yield ev
+    return sse.stream(gen())
 
 
 # --- AI render of the current viewport -------------------------------------------------------------------------
