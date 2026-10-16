@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, ImageOff, RefreshCw, Shuffle, Wand } from "lucide-react";
-import type { Concept } from "@contracts/api-types";
+import type { Concept, Project } from "@contracts/api-types";
 import { assetUrl } from "@/api/client";
 import { FACING_LABEL, plotLabel } from "@/api/domain";
 import { cn } from "@/app/lib/utils";
@@ -160,7 +160,15 @@ export function ConceptsStep() {
               />
             </motion.div>
           ) : (
-            <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="xl:grid xl:grid-cols-[minmax(0,1fr)_290px] xl:gap-10"
+            >
+              <div className="min-w-0">
               {groups.map((g, gi) =>
                 g.tiles.length ? (
                   <section key={g.key} className={gi === 0 ? "mt-6" : "mt-8"}>
@@ -170,7 +178,7 @@ export function ConceptsStep() {
                         {g.subtitle && <p className="text-[13.5px] text-graphite">“{g.subtitle}”</p>}
                       </div>
                     )}
-                    <div className={cn("grid gap-5", g.key === "roots" ? "max-w-[1240px] md:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3")}>
+                    <div className={cn("grid gap-5", g.key === "roots" ? "md:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3")}>
                       {g.tiles.map((t) => (
                         <ConceptTile
                           key={t.key}
@@ -188,11 +196,55 @@ export function ConceptsStep() {
               {!project.concepts.length && !run && (
                 <p className="mt-10 text-[14px] text-graphite">No concepts yet.</p>
               )}
+              </div>
+              <ChoosingGuide project={project} />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+/** Side guide on wide screens: what the concepts were drawn from, and what choosing one does. */
+function ChoosingGuide({ project }: { project: Project }) {
+  const b = project.brief;
+  const rows = [
+    ["Plot", b?.plot?.area_marla ? `${plotLabel(b.plot.area_marla)}, ${b.plot.width_ft}' × ${b.plot.depth_ft}'` : null],
+    ["Facing", b?.facing ? FACING_LABEL[b.facing] : null],
+    ["Floors", b?.storeys ? `${b.storeys} storeys` : null],
+    ["Rooms", b?.bedrooms ? `${b.bedrooms} bedrooms, ${b.bathrooms ?? b.bedrooms + 1} baths` : null],
+    ["Style", b?.style || null],
+  ].filter((r): r is [string, string] => !!r[1]);
+  return (
+    <aside className="mt-6 hidden self-start xl:sticky xl:top-6 xl:block">
+      <div className="rounded-[22px] bg-plaster p-5 ring-1 ring-line">
+        <p className="font-display-text text-[17px] font-medium text-ink">Drawn from your brief</p>
+        <dl className="mt-3 space-y-2">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3 text-[13px]">
+              <dt className="text-pencil">{k}</dt>
+              <dd className="text-right text-ink">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <ol className="mt-5 space-y-4 px-1">
+        {[
+          ["Pick the massing you like", "Materials and colours can change later. The concept guides the plan and the 3D model."],
+          ["Remix in a few words", "“More wood, darker glass” gives two new versions that keep the same house."],
+          ["Change your mind any time", "Come back and choose another concept before or after the design."],
+        ].map(([t, d], i) => (
+          <li key={t} className="flex gap-3">
+            <span className="font-display-text text-[14px] text-brick">{i + 1}</span>
+            <span>
+              <span className="block text-[13.5px] font-semibold text-ink">{t}</span>
+              <span className="mt-0.5 block text-[12.5px] leading-relaxed text-graphite">{d}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 

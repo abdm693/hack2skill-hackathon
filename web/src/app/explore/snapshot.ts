@@ -66,6 +66,8 @@ export function anchorLabel(anchor: CommentAnchor, plan?: BuildingPlan): string 
   const room = anchor.room ? plan?.rooms.find((r) => r.id === anchor.room)?.name ?? anchor.room : undefined;
   const level = anchor.level ? plan?.levels.find((l) => l.id === anchor.level)?.name ?? anchor.level : undefined;
   const what = anchor.label && anchor.label !== room ? anchor.label : undefined;
-  const parts = [what, room, level?.toLowerCase()].filter(Boolean);
+  // "Car porch roof" already says where it is; don't repeat "Car Porch".
+  const roomPart = room && what?.toLowerCase().includes(room.toLowerCase()) ? undefined : room;
+  const parts = [what, roomPart, level?.toLowerCase()].filter(Boolean);
   return parts.length ? parts.join(", ").replace(/^\w/, (c) => c.toUpperCase()) : "This view";
 }

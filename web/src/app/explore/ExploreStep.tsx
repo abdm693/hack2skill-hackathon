@@ -94,7 +94,7 @@ export function ExploreStep() {
   const [cutFt, setCutFt] = useState<number | null>(null);
   const [sun, setSun] = useState(17.5);
   const [commentMode, setCommentMode] = useState(false);
-  const [drawer, setDrawer] = useState(false);
+  const [drawer, setDrawer] = useState(() => params.get("comments") === "open");
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<CommentDraft | null>(null);
   const [build, setBuild] = useState<{ done: number; total: number; name: string } | null>(null);

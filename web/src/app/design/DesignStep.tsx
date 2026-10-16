@@ -17,11 +17,15 @@ import { DesignTimeline } from "./Timeline";
 type MobileTab = "progress" | "drawing" | "compliance";
 
 /** A finished version shown without a live run: rebuild a compact timeline from it. */
-function staticItems(v: Version): FeedItem[] {
+function staticItems(v: Version, loop?: number[]): FeedItem[] {
   const at = new Date(v.created_at).getTime();
+  const attempts = loop && loop.length > 1 ? loop.length : 1;
   const items: FeedItem[] = [
-    { id: "s-plan", at, kind: "plan", attempt: 1, plan: v.plan },
-    { id: "s-comp", at, kind: "compliance", attempt: 1, report: v.compliance },
+    { id: "s-plan", at, kind: "plan", attempt: attempts, plan: v.plan },
+    ...(attempts > 1
+      ? [{ id: "s-fix", at, kind: "stage", stage: "fix", message: `Argon fixed ${loop!.join(" → ")} LDA violations over ${attempts} checks` } as FeedItem]
+      : []),
+    { id: "s-comp", at, kind: "compliance", attempt: attempts, report: v.compliance },
     { id: "s-build", at, kind: "stage", stage: "build", message: `Argon wrote the 3D model as ${v.sections.length} code sections` },
     ...v.sections.map((s, i): FeedItem => ({ id: `s-sec-${s.name}`, at, kind: "section", index: i, section: s })),
     { id: "s-ver", at, kind: "version", version: v },
@@ -68,7 +72,7 @@ export function DesignStep() {
   const plan = override?.plan ?? run.plan ?? version?.plan;
   const report = run.compliance ?? version?.compliance;
   const attempt = run.complianceAttempt;
-  const shownRun: Run | null = run.items.length ? run : version ? { ...run, status: "done", items: staticItems(version), resumed: true } : null;
+  const shownRun: Run | null = run.items.length ? run : version ? { ...run, status: "done", items: staticItems(version, loadFixLoop(version.id)), resumed: true } : null;
 
   const issues = useMemo(
     () => (report && !report.ok ? report.checks.filter((c) => c.status === "fail").flatMap((c) => c.element_ids ?? []) : []),
@@ -86,6 +90,15 @@ export function DesignStep() {
   const explore = () => navigate("../explore");
   const idle = !running && !shownRun && !plan;
 
+  if (idle && currentVid) {
+    return (
+      <div className="grid h-full place-items-center">
+        <div className="flex items-center gap-3 text-[14px] text-graphite">
+          <Spinner className="text-brick" /> Loading the drawings…
+        </div>
+      </div>
+    );
+  }
   if (idle) return <ReadyToDesign onStart={() => void runDesign()} />;
 
   return (

@@ -104,6 +104,11 @@ const BRICK = "#9e3f26";
 // Margins around the plot, in feet.
 const M = { l: 10, r: 11, t: 10, b: 15 };
 
+function inset(r: { x: number; y: number; w: number; d: number }, by: number) {
+  const b = Math.min(by, r.w / 4, r.d / 4);
+  return { x: r.x + b, y: r.y + b, w: r.w - 2 * b, d: r.d - 2 * b };
+}
+
 function shortLevel(name: string) {
   return name.replace(/\s*floor$/i, "").trim();
 }
@@ -467,16 +472,19 @@ function Sheet({ plan, levelId, roofish, px, ppf, setbacks, highlight, tone, iss
           ))}
       </g>
 
-      {/* Outlines on top: highlights, issues, changes */}
+      {/* Outlines on top, inset from the walls so they read against the poché: issues, changes, highlights */}
       <g pointerEvents="none" fill="none">
         {geo.rooms.filter((r) => bad.has(r.id)).map((r) => (
-          <rect key={`bo-${r.id}`} {...rect(r.rect)} stroke="#b1262c" strokeWidth={1.6} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
+          <rect key={`bo-${r.id}`} {...rect(inset(r.rect, 0.65))} stroke="#b1262c" strokeWidth={1.6} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
         ))}
         {geo.rooms.filter((r) => chg.has(r.id)).map((r) => (
-          <rect key={`ch-${r.id}`} {...rect(r.rect)} stroke={BRICK} strokeWidth={1.8} strokeDasharray="6 3" vectorEffect="non-scaling-stroke" />
+          <g key={`ch-${r.id}`}>
+            <rect {...rect(r.rect)} fill="rgb(158 63 38 / 0.09)" />
+            <rect {...rect(inset(r.rect, 0.65))} stroke={BRICK} strokeWidth={1.8} strokeDasharray="6 3" vectorEffect="non-scaling-stroke" />
+          </g>
         ))}
         {geo.rooms.filter((r) => hl.has(r.id)).map((r) => (
-          <rect key={`ho-${r.id}`} {...rect(r.rect)} stroke={t.stroke} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+          <rect key={`ho-${r.id}`} {...rect(inset(r.rect, 0.6))} stroke={t.stroke} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
         ))}
       </g>
 
@@ -504,6 +512,8 @@ function nameCandidates(name: string, taken: Set<string>): string[] {
   const words = name.split(/\s+/).filter(Boolean);
   const out = [name];
   if (words.length > 1) {
+    // "Powder Room" → "Powder", "Side Open Space" → "Side Open"
+    if (/^(room|space|area|hall)$/i.test(words[words.length - 1])) out.push(words.slice(0, -1).join(" "));
     out.push(`${words[0][0]}. ${words.slice(1).join(" ")}`);
     out.push(words.slice(1).join(" "));
     out.push(words[words.length - 1]);
@@ -521,7 +531,7 @@ function RoomLabel({ r, Y, px, ppf, site, taken }: { r: Room; Y: (y: number) => 
   const base = site ? (big ? 11 : 10) : big ? 11 : 9.5; // px
   const minFs = 6.5;
   const dimFs = big ? 10 : 8.5;
-  const widthOf = (s: string, f: number) => s.length * f * (site ? 0.52 : 0.66);
+  const widthOf = (s: string, f: number) => s.length * f * (site ? 0.54 : 0.71);
 
   // Pick the first name form that fits horizontally, else vertically (tall rooms), else shrunk.
   let label = "";
@@ -529,10 +539,10 @@ function RoomLabel({ r, Y, px, ppf, site, taken }: { r: Room; Y: (y: number) => 
   let vertical = false;
   for (const cand of nameCandidates(r.name, taken)) {
     const text = site ? cand : cand.toUpperCase();
-    const wFit = widthOf(text, base) <= wPx - 6 && hPx >= base * 1.5;
-    const vFit = widthOf(text, base) <= hPx - 6 && wPx >= base * 1.5 && hPx > wPx;
+    const wFit = widthOf(text, base) <= wPx - 12 && hPx >= base * 1.5;
+    const vFit = widthOf(text, base) <= hPx - 12 && wPx >= base * 1.5 && hPx > wPx;
     if (wFit || vFit) { label = text; vertical = !wFit; break; }
-    const room = Math.max(wPx, hPx) - 6;
+    const room = Math.max(wPx, hPx) - 12;
     const shrunk = (base * room) / widthOf(text, base);
     if (shrunk >= minFs && Math.min(wPx, hPx) >= shrunk * 1.4) { label = text; fs = Math.min(base, shrunk); vertical = hPx > wPx; break; }
   }
