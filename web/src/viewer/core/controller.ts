@@ -811,7 +811,7 @@ export class ViewerController {
       altDeg = sun.altitudeDeg;
     }
     // night: the `night` prop, or the slider past dusk (civil twilight)
-    const fromSun = hasHour ? 1 - smoothstep(-7, 1, altDeg) : 0;
+    const fromSun = hasHour ? 1 - smoothstep(-9, 0.5, altDeg) : 0;
     const n = this.props.night ? 1 : fromSun;
     atm.daylightNight = 1 - smoothstep(-2, 16, altDeg);
     atm.applyNightMode(n, this.engineSun ?? atm.fallbackSun, this.engineHemi, root);

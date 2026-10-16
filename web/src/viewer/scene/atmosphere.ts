@@ -132,6 +132,12 @@ export class Atmosphere {
   nightness = 0;
   readonly ground: THREE.Mesh;
   readonly fallbackSun = new THREE.DirectionalLight("#fff3e2", 3.0);
+  /**
+   * Night: a warm flood from the street onto the front of the house (the way a night photograph of a home is lit),
+   * so the house, not the neighbours, holds the eye. Always in the scene (intensity 0 by day) so turning night on
+   * never changes the light count and never recompiles a shader.
+   */
+  readonly facadeLight = new THREE.SpotLight("#ffcf9a", 0, 34, 0.7, 0.65, 1.6);
   readonly env: THREE.Texture;
   private engineSunBase = new WeakMap<THREE.DirectionalLight, number>();
   private configured = new WeakMap<THREE.DirectionalLight, string>();
@@ -181,6 +187,9 @@ export class Atmosphere {
     this.fallbackSun.castShadow = true;
     this.fallbackSun.userData = { viewer: "fallback-sun" };
     scene.add(this.fallbackSun, this.fallbackSun.target);
+    this.facadeLight.castShadow = false;
+    this.facadeLight.userData = { viewer: "facade-light" };
+    scene.add(this.facadeLight, this.facadeLight.target);
   }
 
   /** Keep shadows crisp and stable: fit an orthographic frustum around the plot's bounding sphere. */
@@ -328,6 +337,16 @@ export class Atmosphere {
   applyNightMode(n: number, light: THREE.DirectionalLight | null, hemi: THREE.HemisphereLight | null, root: THREE.Object3D | null) {
     n = Math.min(1, Math.max(0, n));
     this.nightness = n;
+    {
+      // aim the flood at the front of the house box (the road is at +z)
+      const b = this.shadowFocus;
+      const cx = (b.min.x + b.max.x) / 2, width = b.max.x - b.min.x, top = b.max.y, front = b.max.z - 1.5;
+      this.facadeLight.position.set(cx, 0.6, front + 8.5);
+      this.facadeLight.target.position.set(cx, top * 0.42, front - 1.5);
+      this.facadeLight.angle = Math.min(1.1, Math.atan2(width * 0.62, 9));
+      this.facadeLight.target.updateMatrixWorld();
+      this.facadeLight.intensity = 120 * n * n;
+    }
     this.night.visible = n > 0.001;
     this.night.material.uniforms.uAlpha.value = n;
     this.sky.visible = n < 0.999;
@@ -349,18 +368,18 @@ export class Atmosphere {
       dir.lerp(MOON_DIR, n).normalize();
       light.position.copy(tgt).addScaledVector(dir, dist);
       light.updateMatrixWorld();
-      const moon = 0.3 * ((light.userData.intensityScale as number) ?? 1);
+      const moon = 0.15 * ((light.userData.intensityScale as number) ?? 1);
       light.intensity = light.intensity + (moon - light.intensity) * n;
       light.color.lerp(MOON_COLOR, n);
     }
     if (hemi) {
       hemi.color.lerp(NIGHT_HEMI_SKY, n);
       hemi.groundColor.lerp(NIGHT_HEMI_GROUND, n);
-      hemi.intensity = hemi.intensity + (0.13 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
+      hemi.intensity = hemi.intensity + (0.06 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
     }
     (this.scene.fog as THREE.Fog).color.lerp(NIGHT_FOG, n);
-    this.scene.environmentIntensity = lerp(this.scene.environmentIntensity, 0.035, n);
-    this.exposure = lerp(this.exposure, 1.2, n);
+    this.scene.environmentIntensity = lerp(this.scene.environmentIntensity, 0.015, n);
+    this.exposure = lerp(this.exposure, 1.05, n);
     (this.ground.material as THREE.MeshStandardMaterial).color.lerp(new THREE.Color("#8d8f94"), n);
     if (root) applyNight(root, Math.max(n, this.daylightNight));
   }
@@ -381,7 +400,8 @@ export class Atmosphere {
   dispose() {
     this.probe?.rt.dispose();
     this.probe = null;
-    this.scene.remove(this.sky, this.night, this.ground, this.fallbackSun, this.fallbackSun.target);
+    this.scene.remove(this.sky, this.night, this.ground, this.fallbackSun, this.fallbackSun.target, this.facadeLight, this.facadeLight.target);
+    this.facadeLight.dispose();
     this.sky.geometry.dispose();
     this.sky.material.dispose();
     this.night.geometry.dispose();

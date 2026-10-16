@@ -55,7 +55,7 @@ export interface HouseViewerProps {
   visibleLevels?: string[];
   layers?: Partial<Record<Layer, boolean>>;
   sectionCut?: number | null;
-  /** 6..19 is day; later hours run through dusk into night (≥ 20). */
+  /** Lahore sun, 6..19 by day; past sunset (~18:45) the light runs through dusk (19:00) into night (19:30 on). */
   sunHour?: number;
   comments?: Comment[];
   commentMode?: boolean;
