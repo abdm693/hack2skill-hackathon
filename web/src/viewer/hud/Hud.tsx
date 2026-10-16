@@ -1,5 +1,13 @@
-/** DOM overlays for HouseViewer. They subscribe to low-frequency store slices only; nothing here renders per frame. */
-import { useCallback, useMemo, useRef } from "react";
+/**
+ * DOM overlays for HouseViewer. They subscribe to low-frequency store slices only; nothing here renders per frame.
+ *
+ * Zones (DESIGN "House: explore and walk HUD"), so nothing ever overlaps the app's floating chrome:
+ * - centre: crosshair, the "Click to look around" prompt, the one-time coachmark, "comment pinned"
+ * - top-centre slot (72 px down, under the app's view switch): build progress, comment mode, toasts
+ * - top-right, 72 px down (under the app's people capsule): the 168 px minimap with its ? help
+ * - phone: no minimap; the joystick and look pad fill the lower screen above the app's dock
+ */
+import { useCallback, useEffect, useRef } from "react";
 import { useStore } from "zustand";
 import type { BuildingPlan } from "@contracts/plan";
 import type { ViewerController } from "../core/controller";
@@ -9,8 +17,8 @@ import { TouchControls } from "./TouchControls";
 const prettySection = (name?: string) => {
   if (!name) return "";
   const m = name.match(/^furnish_(.+)$/);
-  if (m) return `Furnishing ${m[1].replace(/^[gf]_/, "").replace(/_/g, " ")}`;
-  return name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  if (m) return `Furnishing ${m[1].replace(/^[gfsr]_/, "").replace(/_/g, " ")}`;
+  return name.replace(/_auto$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 };
 
 export function Hud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: BuildingPlan; commentMode: boolean }) {
@@ -18,8 +26,8 @@ export function Hud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan:
   return (
     <div className="nq-layer">
       <BuildOverlay ctrl={ctrl} />
-      {mode === "orbit" ? <OrbitHud ctrl={ctrl} commentMode={commentMode} /> : <WalkHud ctrl={ctrl} plan={plan} commentMode={commentMode} />}
-      <Toast ctrl={ctrl} />
+      {mode === "orbit" ? <OrbitHud ctrl={ctrl} /> : <WalkHud ctrl={ctrl} plan={plan} commentMode={commentMode} />}
+      <TopSlot ctrl={ctrl} commentMode={commentMode} />
     </div>
   );
 }
@@ -40,7 +48,7 @@ function BuildOverlay({ ctrl }: { ctrl: ViewerController }) {
       {b.phase === "building" && b.first && (
         <div className="nq-build-card nq-glass" role="status" aria-live="polite">
           <h3>Assembling your home</h3>
-          <p>{b.done === 0 ? "Laying out the plan…" : prettySection(b.current)}</p>
+          <p>{b.done === 0 ? "Laying out the plan" : prettySection(b.current)}</p>
           <div className="nq-bar">
             <i style={{ width: `${Math.max(4, pct)}%` }} />
           </div>
@@ -50,28 +58,16 @@ function BuildOverlay({ ctrl }: { ctrl: ViewerController }) {
           </div>
         </div>
       )}
-      {b.phase === "building" && !b.first && (
-        <div className="nq-build-pill nq-glass" role="status">
-          <span className="nq-spin" />
-          {prettySection(b.current) || "Updating"} · {b.done}/{b.total || "…"}
-        </div>
-      )}
       {b.mock && b.phase !== "building" && <div className="nq-chip-mock nq-glass">Preview geometry · engine pending</div>}
     </>
   );
 }
 
-function OrbitHud({ ctrl, commentMode }: { ctrl: ViewerController; commentMode: boolean }) {
+function OrbitHud({ ctrl }: { ctrl: ViewerController }) {
   const hover = useStore(ctrl.store, (s) => s.hover);
   const tipRef = useCallback((el: HTMLDivElement | null) => void (ctrl.tooltipEl = el), [ctrl]);
   return (
     <>
-      {commentMode && (
-        <div className="nq-banner nq-glass">
-          <span className="nq-dot" />
-          <span>Comment mode · click any surface to pin a note</span>
-        </div>
-      )}
       <div ref={tipRef} className="nq-tip nq-glass" data-on={hover ? "1" : "0"} aria-hidden>
         {hover && (
           <>
@@ -86,100 +82,178 @@ function OrbitHud({ ctrl, commentMode }: { ctrl: ViewerController; commentMode: 
 
 function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: BuildingPlan; commentMode: boolean }) {
   const phase = useStore(ctrl.store, (s) => s.walk);
-  const room = useStore(ctrl.store, (s) => s.room);
-  const levelId = useStore(ctrl.store, (s) => s.level);
   const target = useStore(ctrl.store, (s) => s.target);
   const touch = useStore(ctrl.store, (s) => s.touch);
-  const levelName = useMemo(() => plan.levels.find((l) => l.id === levelId)?.name, [plan, levelId]);
-  const active = phase === "active";
+  const gliding = useStore(ctrl.store, (s) => s.gliding);
+  const walking = phase === "free" || phase === "look";
   return (
     <>
-      {(active || phase === "commenting" || phase === "paused") && room && (
-        <div className="nq-room nq-glass">
-          <small>You are in</small>
-          <strong>{room}</strong>
-          {levelName && <span>{levelName}</span>}
+      {walking && (
+        <div className="nq-cross" data-look={phase === "look" ? "1" : "0"} data-target={target ? "1" : "0"} data-comment={commentMode ? "1" : "0"} aria-hidden>
+          <b />
+          <i />
         </div>
       )}
-      {(active || phase === "paused" || phase === "commenting") && <MiniMap ctrl={ctrl} plan={plan} levelId={levelId} roomName={room} />}
-      {active && (
-        <>
-          <div className="nq-cross" data-target={target ? "1" : "0"} data-comment={commentMode ? "1" : "0"}>
-            <b />
-            <i />
-          </div>
-          {target && <div className="nq-target">{target.title}</div>}
-          {!touch && (
-            <div className="nq-hints nq-glass">
-              <span><span className="nq-kbd">W</span><span className="nq-kbd">A</span><span className="nq-kbd">S</span><span className="nq-kbd">D</span> move</span>
-              <span><span className="nq-kbd">Shift</span> run</span>
-              <span><span className="nq-kbd">C</span> comment</span>
-              <span><span className="nq-kbd">F</span> finish</span>
-              <span><span className="nq-kbd">Esc</span> pause</span>
-              {plan.levels.length > 1 && <span className="nq-hint-floors"><span className="nq-kbd">1–{plan.levels.length}</span> floor</span>}
-            </div>
-          )}
-          {touch && <TouchControls ctrl={ctrl} />}
-        </>
+      {phase === "look" && target && !gliding && <div className="nq-target">{target.title}</div>}
+      {!touch && walking && <MiniMap ctrl={ctrl} plan={plan} />}
+      <Prompt ctrl={ctrl} plan={plan} />
+      {phase === "commenting" && (
+        <div className="nq-centre-chip nq-glass nq-ui" data-nq-ui="" role="status">
+          <span className="nq-dot" />
+          <span>Pinned. Add your note, then keep walking.</span>
+          <button className="nq-btn" onClick={() => ctrl.resumeWalk(true)}>
+            Keep walking
+          </button>
+        </div>
       )}
-      <WalkGate ctrl={ctrl} phase={phase} touch={touch} floors={plan.levels.length} />
+      {touch && walking && <TouchControls ctrl={ctrl} />}
     </>
   );
 }
 
-function WalkGate({ ctrl, phase, touch, floors }: { ctrl: ViewerController; phase: string; touch: boolean; floors: number }) {
-  const start = useCallback(() => ctrl.requestLock(), [ctrl]);
-  const exit = useCallback(() => ctrl.exitWalk(), [ctrl]);
-  const startRef = useRef<HTMLButtonElement>(null);
-  if (phase === "ready" || phase === "paused") {
-    const paused = phase === "paused";
-    return (
-      <div className="nq-gate nq-ui" data-nq-ui="" onClick={start}>
-        <div className="nq-gate-card nq-glass" onClick={(e) => e.stopPropagation()}>
-          <h3>{paused ? "Paused" : "Walk through your home"}</h3>
-          <p>{paused ? "Pick up where you left off, or head back to the overview." : touch ? "Drag the left pad to move and the right side to look around." : "Look around with the mouse and move like in a game. Pin comments on anything you’d change."}</p>
-          <div className="nq-gate-actions">
-            <button ref={startRef} className="nq-btn" onClick={start} autoFocus>
-              {paused ? "Resume walk" : touch ? "Tap to start" : "Click to start"}
+/** The centre prompt: how to take the mouse, the one-time coachmark, and the ? help card. */
+function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) {
+  const phase = useStore(ctrl.store, (s) => s.walk);
+  const touch = useStore(ctrl.store, (s) => s.touch);
+  const refused = useStore(ctrl.store, (s) => s.lockRefused);
+  const dragged = useStore(ctrl.store, (s) => s.dragged);
+  const hints = useStore(ctrl.store, (s) => s.hints);
+  const help = useStore(ctrl.store, (s) => s.help);
+  const gliding = useStore(ctrl.store, (s) => s.gliding);
+  const floors = plan.levels.length;
+  // pointer lock refused: tell people to drag until they have; otherwise "click to look" is the way back into mouse look
+  const showPrompt = phase === "free" && !gliding && !touch && !(refused && dragged);
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (help) close.current?.focus();
+  }, [help]);
+  return (
+    <>
+      {(showPrompt || ((hints || (touch && phase === "free")) && phase !== "commenting")) && !help && (
+        <div className="nq-prompt" data-hints={hints ? "1" : "0"}>
+          {showPrompt && (
+            <button className="nq-prompt-main nq-glass nq-ui" data-nq-ui="" onClick={() => ctrl.requestLock()} disabled={refused}>
+              <MouseIcon />
+              <span>{refused ? "Drag to look around" : "Click to look around"}</span>
             </button>
-            <button className="nq-btn ghost" onClick={exit}>
-              {paused ? "Exit walk" : "Back to overview"}
-            </button>
-          </div>
-          {!touch && (
-            <div className="nq-gate-keys">
-              <span><span className="nq-kbd">WASD</span> move</span>
-              <span><span className="nq-kbd">Shift</span> run</span>
-              <span><span className="nq-kbd">C</span> comment</span>
-              <span><span className="nq-kbd">F</span> finish</span>
-              <span><span className="nq-kbd">Esc</span> pause</span>
-              {floors > 1 && <span><span className="nq-kbd">1–{floors}</span> jump to floor</span>}
+          )}
+          {hints && (
+            <div className="nq-coach nq-glass" role="note">
+              {touch ? (
+                <span>Left thumb to move · right thumb to look</span>
+              ) : (
+                <>
+                  <span>
+                    <Kbd>W</Kbd>
+                    <Kbd>A</Kbd>
+                    <Kbd>S</Kbd>
+                    <Kbd>D</Kbd> to move
+                  </span>
+                  <span>
+                    <Kbd>Esc</Kbd> to stop
+                  </span>
+                  <span>
+                    <Kbd>?</Kbd> for more
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>
-      </div>
-    );
-  }
-  if (phase === "commenting") {
-    return (
-      <div className="nq-commenting nq-glass nq-ui" data-nq-ui="">
-        <span className="nq-dot" />
-        Comment pinned · add your note, then keep walking
-        <button className="nq-btn" onClick={start}>
-          Resume walk
-        </button>
-      </div>
-    );
-  }
-  return null;
+      )}
+      {help && !touch && (
+        <div className="nq-help nq-glass nq-ui" data-nq-ui="" role="dialog" aria-label="Walking controls">
+          <div className="nq-help-head">
+            <b>Walking</b>
+            <button ref={close} className="nq-icon" onClick={() => ctrl.setHelp(false)} aria-label="Close">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <dl>
+            <dt>Look around</dt>
+            <dd>{refused ? "Drag" : "Click, then move the mouse"}</dd>
+            <dt>Move</dt>
+            <dd>
+              <Kbd>W</Kbd>
+              <Kbd>A</Kbd>
+              <Kbd>S</Kbd>
+              <Kbd>D</Kbd>
+            </dd>
+            <dt>Run</dt>
+            <dd>
+              <Kbd>Shift</Kbd>
+            </dd>
+            <dt>Go to a room</dt>
+            <dd>Click it on the map</dd>
+            {floors > 1 && (
+              <>
+                <dt>Change floor</dt>
+                <dd>
+                  <Kbd>1</Kbd>…<Kbd>{String(Math.min(9, floors))}</Kbd>
+                </dd>
+              </>
+            )}
+            <dt>Pin a comment</dt>
+            <dd>
+              <Kbd>C</Kbd>
+            </dd>
+            <dt>Finish</dt>
+            <dd>
+              <Kbd>F</Kbd>
+            </dd>
+            <dt>Stop looking · leave</dt>
+            <dd>
+              <Kbd>Esc</Kbd>
+            </dd>
+          </dl>
+        </div>
+      )}
+    </>
+  );
 }
 
-function Toast({ ctrl }: { ctrl: ViewerController }) {
-  const t = useStore(ctrl.store, (s) => s.toast);
-  if (!t) return null;
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="nq-kbd">{children}</kbd>;
+}
+
+function MouseIcon() {
   return (
-    <div key={t.id} className="nq-toast nq-glass" role="status">
-      {t.text}
+    <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden>
+      <rect x="1" y="1" width="12" height="16" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 4v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** The top-centre slot, under the app's view switch: build progress, comment mode, one-line toasts. */
+function TopSlot({ ctrl, commentMode }: { ctrl: ViewerController; commentMode: boolean }) {
+  const t = useStore(ctrl.store, (s) => s.toast);
+  const mode = useStore(ctrl.store, (s) => s.mode);
+  const updating = useStore(ctrl.store, (s) => s.build.phase === "building" && !s.build.first);
+  const done = useStore(ctrl.store, (s) => s.build.done);
+  const total = useStore(ctrl.store, (s) => s.build.total);
+  if (!t && !updating && !(commentMode && mode === "orbit")) return null;
+  return (
+    <div className="nq-slot">
+      {updating && (
+        <div className="nq-pill nq-glass" role="status">
+          <span className="nq-breathe" />
+          Updating your home <span className="nq-mono">{done}/{total || "…"}</span>
+        </div>
+      )}
+      {commentMode && mode === "orbit" && !updating && (
+        <div className="nq-pill nq-glass">
+          <span className="nq-dot" />
+          Click anything to pin a note
+        </div>
+      )}
+      {t && (
+        <div key={t.id} className="nq-toast" role="status">
+          {t.text}
+        </div>
+      )}
     </div>
   );
 }

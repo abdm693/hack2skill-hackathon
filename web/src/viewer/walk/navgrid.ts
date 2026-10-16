@@ -1,0 +1,303 @@
+/**
+ * Walkability grid for one floor, probed from the same BVH the walker collides with (so a path on the grid is a path
+ * a person can actually walk: through doorways, around sofas, never through a wall). Used by the room navigator to
+ * plan glides; A* with a clearance cost keeps routes in the middle of corridors and doorways.
+ */
+import * as THREE from "three";
+import { STEP_UP, type WalkController } from "./WalkController";
+
+/** Probe radius for "can stand here": a little under the walker's capsule so 2.5 ft doors always have a free cell. */
+const PROBE_R = 0.2;
+const MAX_CLR = 4;
+
+export interface GridBounds { x0: number; z0: number; x1: number; z1: number }
+
+export class NavGrid {
+  readonly nx: number;
+  readonly nz: number;
+  readonly free: Uint8Array;
+  readonly h: Float32Array;
+  readonly clr: Uint8Array;
+  private built = false;
+  private cursor = 0;
+
+  constructor(
+    readonly levelId: string,
+    readonly floorY: number,
+    readonly b: GridBounds,
+    readonly cell = 0.2,
+    /** Accepted floor band around floorY (m): the ground level also walks the lawn, porch steps and footpath. */
+    readonly band: [number, number] = [-0.35, 0.35],
+  ) {
+    this.nx = Math.max(1, Math.ceil((b.x1 - b.x0) / cell));
+    this.nz = Math.max(1, Math.ceil((b.z1 - b.z0) / cell));
+    const n = this.nx * this.nz;
+    this.free = new Uint8Array(n);
+    this.h = new Float32Array(n).fill(NaN);
+    this.clr = new Uint8Array(n);
+  }
+
+  get ready() {
+    return this.built;
+  }
+
+  idx(ix: number, iz: number) {
+    return iz * this.nx + ix;
+  }
+
+  cx(i: number) {
+    return this.b.x0 + ((i % this.nx) + 0.5) * this.cell;
+  }
+
+  cz(i: number) {
+    return this.b.z0 + (Math.floor(i / this.nx) + 0.5) * this.cell;
+  }
+
+  center(i: number, out = new THREE.Vector3()) {
+    return out.set(this.cx(i), this.h[i], this.cz(i));
+  }
+
+  cellAt(x: number, z: number): number {
+    const ix = Math.floor((x - this.b.x0) / this.cell), iz = Math.floor((z - this.b.z0) / this.cell);
+    if (ix < 0 || iz < 0 || ix >= this.nx || iz >= this.nz) return -1;
+    return this.idx(ix, iz);
+  }
+
+  /**
+   * Probe cells for up to `budgetMs` (all of them when budgetMs is Infinity). Returns true once the grid is complete.
+   * Cheap enough per floor (~5–12k cells) to finish in a few idle frames after the walk collider is built.
+   */
+  build(walk: WalkController, budgetMs = Infinity): boolean {
+    if (this.built) return true;
+    const t0 = performance.now();
+    const n = this.nx * this.nz;
+    const p = new THREE.Vector3();
+    const top = this.floorY + this.band[1] + STEP_UP;
+    const bottom = this.floorY + this.band[0] - 0.05;
+    while (this.cursor < n) {
+      const i = this.cursor++;
+      const x = this.cx(i), z = this.cz(i);
+      const g = walk.groundAt1(x, z, top, bottom);
+      if (g !== null && g >= this.floorY + this.band[0] && g <= this.floorY + this.band[1]) {
+        this.h[i] = g;
+        p.set(x, g, z);
+        if (!walk.overlaps(p, PROBE_R)) this.free[i] = 1;
+      }
+      if ((i & 63) === 0 && performance.now() - t0 > budgetMs) return false;
+    }
+    this.computeClearance();
+    this.built = true;
+    return true;
+  }
+
+  /** Chessboard distance (in cells, capped) from every free cell to the nearest blocked one. */
+  private computeClearance() {
+    const { nx, nz, free, clr } = this;
+    const q: number[] = [];
+    for (let i = 0; i < free.length; i++) {
+      if (!free[i]) {
+        clr[i] = 0;
+        q.push(i);
+      } else clr[i] = 255;
+    }
+    // border cells count as next to a wall
+    for (let ix = 0; ix < nx; ix++)
+      for (const iz of [0, nz - 1]) {
+        const i = this.idx(ix, iz);
+        if (free[i] && clr[i] > 1) {
+          clr[i] = 1;
+          q.push(i);
+        }
+      }
+    for (let iz = 0; iz < nz; iz++)
+      for (const ix of [0, nx - 1]) {
+        const i = this.idx(ix, iz);
+        if (free[i] && clr[i] > 1) {
+          clr[i] = 1;
+          q.push(i);
+        }
+      }
+    for (let head = 0; head < q.length; head++) {
+      const i = q[head];
+      const d = clr[i];
+      if (d >= MAX_CLR) continue;
+      const ix = i % nx, iz = (i / nx) | 0;
+      for (let oz = -1; oz <= 1; oz++)
+        for (let ox = -1; ox <= 1; ox++) {
+          const jx = ix + ox, jz = iz + oz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = this.idx(jx, jz);
+          if (clr[j] > d + 1) {
+            clr[j] = d + 1;
+            q.push(j);
+          }
+        }
+    }
+    for (let i = 0; i < clr.length; i++) if (clr[i] === 255) clr[i] = MAX_CLR;
+  }
+
+  /** Nearest free cell to (x, z) within `maxR` m whose floor is within `dy` of `y` (when given). */
+  nearestFree(x: number, z: number, maxR = 1.5, y?: number, dy = 0.45): number {
+    const c = this.cellAt(x, z);
+    const R = Math.ceil(maxR / this.cell);
+    const ix0 = Math.floor((x - this.b.x0) / this.cell), iz0 = Math.floor((z - this.b.z0) / this.cell);
+    let best = -1, bestD = Infinity;
+    const ok = (i: number) => this.free[i] && (y === undefined || Math.abs(this.h[i] - y) <= dy);
+    if (c >= 0 && ok(c)) return c;
+    for (let iz = iz0 - R; iz <= iz0 + R; iz++) {
+      if (iz < 0 || iz >= this.nz) continue;
+      for (let ix = ix0 - R; ix <= ix0 + R; ix++) {
+        if (ix < 0 || ix >= this.nx) continue;
+        const i = this.idx(ix, iz);
+        if (!ok(i)) continue;
+        const d = (this.cx(i) - x) ** 2 + (this.cz(i) - z) ** 2;
+        if (d < bestD && d <= maxR * maxR) {
+          bestD = d;
+          best = i;
+        }
+      }
+    }
+    return best;
+  }
+
+  private passable(a: number, b: number) {
+    return this.free[b] === 1 && Math.abs(this.h[a] - this.h[b]) <= STEP_UP;
+  }
+
+  /** A* (8-connected, no corner cutting) with a soft penalty near walls. Returns cell indices start → goal. */
+  findPath(start: number, goal: number): number[] | null {
+    if (start < 0 || goal < 0 || !this.free[start] || !this.free[goal]) return null;
+    if (start === goal) return [start];
+    const { nx, nz } = this;
+    const n = nx * nz;
+    const g = new Float32Array(n).fill(Infinity);
+    const came = new Int32Array(n).fill(-1);
+    const closed = new Uint8Array(n);
+    const gx = goal % nx, gz = (goal / nx) | 0;
+    const hfn = (i: number) => {
+      const dx = Math.abs((i % nx) - gx), dz = Math.abs(((i / nx) | 0) - gz);
+      return Math.max(dx, dz) + 0.4142 * Math.min(dx, dz);
+    };
+    const heap = new MinHeap();
+    g[start] = 0;
+    heap.push(start, hfn(start));
+    const penalty = [3, 1.6, 0.45, 0.1, 0];
+    while (heap.size) {
+      const i = heap.pop();
+      if (i === goal) break;
+      if (closed[i]) continue;
+      closed[i] = 1;
+      const ix = i % nx, iz = (i / nx) | 0;
+      for (let oz = -1; oz <= 1; oz++)
+        for (let ox = -1; ox <= 1; ox++) {
+          if (!ox && !oz) continue;
+          const jx = ix + ox, jz = iz + oz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (closed[j] || !this.passable(i, j)) continue;
+          if (ox && oz && (!this.passable(i, iz * nx + jx) || !this.passable(i, jz * nx + ix))) continue;
+          const step = ox && oz ? 1.4142 : 1;
+          const cost = g[i] + step * (1 + penalty[Math.min(this.clr[j], 4)]);
+          if (cost < g[j]) {
+            g[j] = cost;
+            came[j] = i;
+            heap.push(j, cost + hfn(j));
+          }
+        }
+    }
+    if (came[goal] < 0) return null;
+    const out: number[] = [];
+    for (let c = goal; c !== -1; c = came[c]) out.push(c);
+    return out.reverse();
+  }
+
+  /** Straight walkable line between two cells (sampled at half-cell steps), keeping some clearance. */
+  los(a: number, b: number, minClr: number): boolean {
+    const ax = this.cx(a), az = this.cz(a), bx = this.cx(b), bz = this.cz(b);
+    const len = Math.hypot(bx - ax, bz - az);
+    const steps = Math.max(1, Math.ceil(len / (this.cell * 0.5)));
+    let prev = a;
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      const c = this.cellAt(ax + (bx - ax) * t, az + (bz - az) * t);
+      if (c < 0 || !this.free[c]) return false;
+      if (c !== prev) {
+        if (Math.abs(this.h[c] - this.h[prev]) > STEP_UP) return false;
+        if (this.clr[c] < minClr) return false;
+        prev = c;
+      }
+    }
+    return true;
+  }
+
+  /** Greedy string pulling: keep only the turning points of a cell path. */
+  simplify(path: number[]): number[] {
+    if (path.length <= 2) return path.slice();
+    const out = [path[0]];
+    let anchor = 0;
+    while (anchor < path.length - 1) {
+      let far = anchor + 1;
+      const need = Math.min(2, this.clr[path[anchor]]);
+      for (let k = path.length - 1; k > anchor + 1; k--) {
+        const m = Math.min(need, this.clr[path[k]]);
+        if (this.los(path[anchor], path[k], Math.max(1, m))) {
+          far = k;
+          break;
+        }
+      }
+      out.push(path[far]);
+      anchor = far;
+    }
+    return out;
+  }
+
+  /** Is cell i inside the world-space rect (x0..x1, z0..z1)? */
+  inRect(i: number, r: { x0: number; x1: number; z0: number; z1: number }) {
+    const x = this.cx(i), z = this.cz(i);
+    return x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+  }
+}
+
+class MinHeap {
+  private ids: number[] = [];
+  private keys: number[] = [];
+  get size() {
+    return this.ids.length;
+  }
+  push(id: number, key: number) {
+    const ids = this.ids, keys = this.keys;
+    let i = ids.length;
+    ids.push(id);
+    keys.push(key);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (keys[p] <= key) break;
+      ids[i] = ids[p];
+      keys[i] = keys[p];
+      i = p;
+    }
+    ids[i] = id;
+    keys[i] = key;
+  }
+  pop(): number {
+    const ids = this.ids, keys = this.keys;
+    const top = ids[0];
+    const lastId = ids.pop()!, lastKey = keys.pop()!;
+    const n = ids.length;
+    if (n) {
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        if (l >= n) break;
+        const c = r < n && keys[r] < keys[l] ? r : l;
+        if (keys[c] >= lastKey) break;
+        ids[i] = ids[c];
+        keys[i] = keys[c];
+        i = c;
+      }
+      ids[i] = lastId;
+      keys[i] = lastKey;
+    }
+    return top;
+  }
+}

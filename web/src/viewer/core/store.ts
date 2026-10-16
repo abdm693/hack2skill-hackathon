@@ -3,8 +3,11 @@ import { createStore } from "zustand/vanilla";
 import type { Vec3 } from "@contracts/api-types";
 
 export type ViewerMode = "orbit" | "walk";
-/** off = orbit · intro = flying in · ready = waiting for click · active = walking · paused = Esc · commenting = after C */
-export type WalkPhase = "off" | "intro" | "ready" | "active" | "paused" | "commenting";
+/**
+ * off = orbit · intro = flying in · free = walking with the pointer free (drag to look) · look = pointer locked
+ * (mouse look like a game) · commenting = a pin was just dropped, waiting for the note.
+ */
+export type WalkPhase = "off" | "intro" | "free" | "look" | "commenting";
 export type Quality = "high" | "balanced" | "performance";
 
 export interface BuildState {
@@ -20,21 +23,46 @@ export interface BuildState {
 
 export interface Label { title: string; subtitle?: string }
 
+export interface RouteDraw {
+  id: number;
+  /** plan-feet polylines per level id */
+  byLevel: Record<string, [number, number][]>;
+  /** room id the route leads to (highlighted on the minimap) */
+  to?: string;
+}
+
 export interface ViewerState {
   mode: ViewerMode;
   walk: WalkPhase;
   build: BuildState;
   hover: Label | null;
   target: Label | null; // what the walk crosshair points at
-  room: string | null; // "you are in"
+  room: string | null; // name of the room you are in
+  roomId: string | null;
   level: string | null; // level id under the walker
   quality: Quality;
   touch: boolean;
   draft: { position: Vec3; normal: Vec3 } | null;
   toast: { id: number; text: string } | null;
-  pointerLockSupported: boolean;
-  /** walk mode without pointer lock (embedded browsers): drag to look */
-  dragLook: boolean;
+  /** pointer lock refused (embedded browsers): drag to look instead */
+  lockRefused: boolean;
+  /** the walker has looked around by dragging (the "drag to look" prompt is no longer needed) */
+  dragged: boolean;
+  /** the one-time "how to walk" coachmark is showing */
+  hints: boolean;
+  /** the ? help card is open */
+  help: boolean;
+  /** no input for a while: the HUD steps back */
+  idle: boolean;
+  /** a room-navigator glide is under way */
+  gliding: boolean;
+  route: RouteDraw | null;
+  /** orbit: show up to this floor (setFloor); null = all */
+  orbitFloor: string | null;
+  /** minimap preview of another floor (null = follow the walker) */
+  mapLevel: string | null;
+  /** the selected comment pin */
+  selectedPin: string | null;
 }
 
 export type ViewerStore = ReturnType<typeof makeViewerStore>;
@@ -47,12 +75,21 @@ export function makeViewerStore(mode: ViewerMode, touch: boolean) {
     hover: null,
     target: null,
     room: null,
+    roomId: null,
     level: null,
     quality: "high",
     touch,
     draft: null,
     toast: null,
-    pointerLockSupported: typeof document !== "undefined" && "pointerLockElement" in document,
-    dragLook: false,
+    lockRefused: typeof document === "undefined" || !("pointerLockElement" in document),
+    dragged: false,
+    hints: false,
+    help: false,
+    idle: false,
+    gliding: false,
+    route: null,
+    orbitFloor: null,
+    mapLevel: null,
+    selectedPin: null,
   }));
 }

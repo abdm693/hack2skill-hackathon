@@ -82,12 +82,53 @@ export interface ColliderBVH {
 
 const _m = new THREE.Matrix4();
 
-export function buildColliderBVH(meshes: THREE.Mesh[]): ColliderBVH | null {
+/**
+ * World-space copy of a mesh without the triangles that sit entirely inside one of `boxes` (parked cars: they are
+ * baked into the engine's per-level collider, but must never block the walk).
+ */
+function withoutBoxes(m: THREE.Mesh, boxes: THREE.Box3[]): THREE.BufferGeometry | null {
+  const pos = m.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!pos) return null;
+  const idx = m.geometry.index;
+  const tris = idx ? idx.count / 3 : pos.count / 3;
+  const out: number[] = [];
+  const v = (i: number, t: THREE.Vector3) => t.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+  for (let t = 0; t < tris; t++) {
+    v(t * 3, _a);
+    v(t * 3 + 1, _b);
+    v(t * 3 + 2, _c);
+    if (boxes.some((b) => b.containsPoint(_a) && b.containsPoint(_b) && b.containsPoint(_c))) continue;
+    out.push(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, _c.x, _c.y, _c.z);
+  }
+  if (!out.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  const index = new Uint32Array(out.length / 3);
+  for (let i = 0; i < index.length; i++) index[i] = i;
+  g.setIndex(new THREE.BufferAttribute(index, 1));
+  return g;
+}
+
+const _mb = new THREE.Box3();
+
+export function buildColliderBVH(meshes: THREE.Mesh[], exclude: THREE.Box3[] = []): ColliderBVH | null {
   const group = new THREE.Group();
   const temp: THREE.BufferGeometry[] = [];
   for (const m of meshes) {
     if (!m?.geometry) continue;
     m.updateWorldMatrix(true, false); // REQUIRED: stale matrices collapse everything to the origin
+    if (exclude.length && !(m as unknown as THREE.InstancedMesh).isInstancedMesh) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      _mb.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld);
+      if (exclude.some((b) => b.intersectsBox(_mb))) {
+        const g = withoutBoxes(m, exclude);
+        if (g) {
+          temp.push(g);
+          group.add(new THREE.Mesh(g));
+        }
+        continue;
+      }
+    }
     if (typeof m.userData?.kind === "string" && RAMP_KIND.test(m.userData.kind) && !(m as unknown as THREE.InstancedMesh).isInstancedMesh) {
       const tops = rampTops(m); // already in world space
       if (tops) {

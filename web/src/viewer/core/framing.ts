@@ -69,3 +69,24 @@ export function heroPose(plan: BuildingPlan, camera: THREE.PerspectiveCamera, si
   return { position: pos, target };
 }
 
+/**
+ * The volume neighbours must never hide (orbit ghosting): the whole plot, from just above the ground to the top of
+ * the stair tower and water tank.
+ */
+export function ghostBox(plan: BuildingPlan): THREE.Box3 {
+  const { width_ft: W, depth_ft: D } = plan.site.plot;
+  const roofTop = Math.max(...plan.levels.map((l) => l.elevation_ft + l.height_ft), 10);
+  const tower = Math.max(plan.roof?.mumty?.height_ft ?? 0, plan.roof?.water_tank?.height_ft ?? 0);
+  return new THREE.Box3().setFromPoints([planToWorld(0, 0, 0.4), planToWorld(W, D, roofTop + tower + 1)]);
+}
+
+/** An aerial three-quarter view into one room (dollhouse cut), keeping the current compass direction. */
+export function roomPose(rect: { x: number; y: number; w: number; d: number }, floorFt: number, azimuth: number) {
+  const target = planToWorld(rect.x + rect.w / 2, rect.y + rect.d / 2, floorFt + 2.5);
+  const diag = Math.hypot(rect.w, rect.d) * 0.3048;
+  const dist = THREE.MathUtils.clamp(diag * 1.55 + 3.5, 7, 26);
+  const el = THREE.MathUtils.degToRad(52);
+  const dir = new THREE.Vector3(Math.sin(azimuth) * Math.cos(el), Math.sin(el), Math.cos(azimuth) * Math.cos(el));
+  return { position: target.clone().addScaledVector(dir, dist), target };
+}
+

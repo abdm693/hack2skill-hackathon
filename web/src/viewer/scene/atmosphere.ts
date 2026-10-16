@@ -69,8 +69,67 @@ function groundTexture(): THREE.Texture {
   return t;
 }
 
+/** Night sky: a deep blue gradient with a faint glow at the horizon and sparse stars, faded in over the day sky. */
+function nightDome(): THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uAlpha: { value: 0 } },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        vec4 p = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * p;
+        gl_Position.z = gl_Position.w; // always at the far plane
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uAlpha;
+      varying vec3 vDir;
+      float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      void main() {
+        float h = clamp(vDir.y, -1.0, 1.0);
+        vec3 zenith = vec3(0.010, 0.014, 0.032);
+        vec3 horizon = vec3(0.060, 0.078, 0.135);
+        vec3 col = mix(horizon, zenith, pow(max(h, 0.0), 0.45));
+        // the city's glow along the horizon
+        col += vec3(0.075, 0.055, 0.040) * exp(-max(h, 0.0) * 14.0);
+        if (h > 0.08) {
+          vec3 c = floor(vDir * 420.0);
+          float s = hash(c);
+          if (s > 0.9965) col += vec3(0.55, 0.58, 0.66) * (s - 0.9965) / 0.0035 * smoothstep(0.08, 0.35, h);
+        }
+        if (h < 0.0) col = horizon * 0.6;
+        gl_FragColor = vec4(col, uAlpha);
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide,
+    // drawn in the opaque list right after the day sky (renderOrder), blended by hand
+    transparent: false,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.SrcAlphaFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    depthWrite: false,
+    depthTest: false,
+    fog: false,
+  });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(2500, 48, 24), mat);
+  m.frustumCulled = false;
+  m.renderOrder = -0.5;
+  m.userData = { noPick: true, viewer: "night-sky" };
+  m.visible = false;
+  return m;
+}
+
+const MOON_DIR = new THREE.Vector3(0.45, 0.8, -0.4).normalize();
+const MOON_COLOR = new THREE.Color("#a9bcff");
+const NIGHT_FOG = new THREE.Color("#0e1322");
+const NIGHT_HEMI_SKY = new THREE.Color("#25324f");
+const NIGHT_HEMI_GROUND = new THREE.Color("#0a0b0e");
+
 export class Atmosphere {
   readonly sky = new Sky();
+  readonly night = nightDome();
+  /** 0 = day … 1 = night (from the sun's altitude or the `night` prop), as last applied. */
+  nightness = 0;
   readonly ground: THREE.Mesh;
   readonly fallbackSun = new THREE.DirectionalLight("#fff3e2", 3.0);
   readonly env: THREE.Texture;
@@ -108,7 +167,7 @@ export class Atmosphere {
     this.sky.frustumCulled = false;
     this.sky.renderOrder = -1;
     this.sky.userData = { noPick: true, viewer: "sky" };
-    scene.add(this.sky);
+    scene.add(this.sky, this.night);
 
     const groundMat = new THREE.MeshStandardMaterial({ color: "#c4c2bb", roughness: 1, metalness: 0, map: groundTexture() });
     this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 72), groundMat);
@@ -261,6 +320,54 @@ export class Atmosphere {
     }
   }
 
+  /**
+   * Night on top of whatever the day pass set (call after applySun / syncSkyToLight, every time): the sun becomes a
+   * cool moon from high behind the house, the sky goes deep blue with stars, fog and reflections darken, and every
+   * fixture and glow in the house comes on. `n` blends 0 (day) → 1 (night) so dusk on the slider is continuous.
+   */
+  applyNightMode(n: number, light: THREE.DirectionalLight | null, hemi: THREE.HemisphereLight | null, root: THREE.Object3D | null) {
+    n = Math.min(1, Math.max(0, n));
+    this.nightness = n;
+    this.night.visible = n > 0.001;
+    this.night.material.uniforms.uAlpha.value = n;
+    this.sky.visible = n < 0.999;
+    if (root) {
+      // interior lights a touch brighter at night (they were sized to read in daylight)
+      root.traverse((o) => {
+        const l = o as THREE.PointLight;
+        if (!l.isPointLight && !(o as THREE.SpotLight).isSpotLight) return;
+        l.userData.nqBase ??= l.intensity;
+        l.intensity = (l.userData.nqBase as number) * (1 + 0.45 * n);
+      });
+    }
+    if (n <= 0.001) return;
+    if (light) {
+      const tgt = light.target.position;
+      const dist = light.position.distanceTo(tgt) || 70;
+      const dir = new THREE.Vector3().subVectors(light.position, tgt).normalize();
+      // below the horizon the "sun" is the moon: swing the light to the moon's direction
+      dir.lerp(MOON_DIR, n).normalize();
+      light.position.copy(tgt).addScaledVector(dir, dist);
+      light.updateMatrixWorld();
+      const moon = 0.5 * ((light.userData.intensityScale as number) ?? 1);
+      light.intensity = light.intensity + (moon - light.intensity) * n;
+      light.color.lerp(MOON_COLOR, n);
+    }
+    if (hemi) {
+      hemi.color.lerp(NIGHT_HEMI_SKY, n);
+      hemi.groundColor.lerp(NIGHT_HEMI_GROUND, n);
+      hemi.intensity = hemi.intensity + (0.22 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
+    }
+    (this.scene.fog as THREE.Fog).color.lerp(NIGHT_FOG, n);
+    this.scene.environmentIntensity = lerp(this.scene.environmentIntensity, 0.035, n);
+    this.exposure = lerp(this.exposure, 1.2, n);
+    (this.ground.material as THREE.MeshStandardMaterial).color.lerp(new THREE.Color("#8d8f94"), n);
+    if (root) applyNight(root, Math.max(n, this.daylightNight));
+  }
+
+  /** Emissive "on" level the day pass chose (so the night pass never dims fixtures at dusk). */
+  daylightNight = 0;
+
   baseIntensity(light: THREE.DirectionalLight) {
     if (!this.engineSunBase.has(light)) this.engineSunBase.set(light, light.intensity > 0 ? light.intensity : 3);
     return this.engineSunBase.get(light)!;
@@ -274,9 +381,11 @@ export class Atmosphere {
   dispose() {
     this.probe?.rt.dispose();
     this.probe = null;
-    this.scene.remove(this.sky, this.ground, this.fallbackSun, this.fallbackSun.target);
+    this.scene.remove(this.sky, this.night, this.ground, this.fallbackSun, this.fallbackSun.target);
     this.sky.geometry.dispose();
     this.sky.material.dispose();
+    this.night.geometry.dispose();
+    this.night.material.dispose();
     this.ground.geometry.dispose();
     (this.ground.material as THREE.MeshStandardMaterial).map?.dispose();
     (this.ground.material as THREE.Material).dispose();

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { ViewerController } from "../core/controller";
+import { DRAG_SENS } from "../walk/WalkController";
 
 const R = 48; // joystick travel (px)
 
@@ -11,7 +12,10 @@ const capture = (el: Element, id: number) => {
   }
 };
 
-/** Two-zone touch controls: left = floating joystick, right = drag to look. Plus comment / finish buttons. */
+/**
+ * Phone walking (DESIGN Mobile): a floating joystick under the left thumb, drag anywhere on the right to look, and one
+ * round "pin a comment" button on the right edge. Finish, rooms and floors live in the app's dock.
+ */
 export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
   const [joy, setJoy] = useState<{ x: number; y: number; kx: number; ky: number } | null>(null);
   const joyRef = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -69,26 +73,25 @@ export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
         onPointerDown={(e) => {
           lookRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
           capture(e.currentTarget, e.pointerId);
+          ctrl.walk.lookLag = 22;
         }}
         onPointerMove={(e) => {
           const l = lookRef.current;
           if (!l || e.pointerId !== l.id) return;
-          input.look.dx += (e.clientX - l.x) * 1.7;
-          input.look.dy += (e.clientY - l.y) * 1.7;
+          input.look.dx += (e.clientX - l.x) * DRAG_SENS * 1.25;
+          input.look.dy += (e.clientY - l.y) * DRAG_SENS * 1.25;
           l.x = e.clientX;
           l.y = e.clientY;
         }}
         onPointerUp={() => (lookRef.current = null)}
         onPointerCancel={() => (lookRef.current = null)}
       />
-      <div className="nq-touch-btns" data-nq-ui="">
-        <button className="nq-btn" onClick={() => ctrl.placeComment(0, 0, true)}>
-          Comment
-        </button>
-        <button className="nq-btn ghost" onClick={() => ctrl.finishWalk()}>
-          Finish
-        </button>
-      </div>
+      <button className="nq-touch-pin nq-glass" data-nq-ui="" aria-label="Pin a comment here" onClick={() => ctrl.placeComment(0, 0, true)}>
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <path d="M9 2.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M9 5.5v4M7 7.5h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </button>
     </>
   );
 }
