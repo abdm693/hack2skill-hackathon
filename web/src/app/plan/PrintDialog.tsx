@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "motion/react";
 import { Check, Printer } from "lucide-react";
 import type { Project, Version } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
@@ -81,17 +82,18 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
   const [compliance, setCompliance] = useState(true);
   const { start, busy, portal } = usePrintJob();
   const concept = project.concepts.find((c) => c.id === project.selected_concept_id);
-  const nightUrls = useFlow((s) => s.nightUrls);
-  void nightUrls;
+  const [preview, setPreview] = useState<PrintOptions | null>(null);
   useEffect(() => setPicked(levels.map((l) => l.id)), [levels]);
 
   const scale = pickScale(version.plan, paper);
   const sheets = (cover ? 1 : 0) + picked.length + (compliance ? 1 : 0);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  const go = () => {
+  const options: PrintOptions = { paper, levels: picked, cover, compliance };
+  const go = (o: PrintOptions = options) => {
     onClose();
-    start({ project, version, conceptUrl: concept?.url, options: { paper, levels: picked, cover, compliance } });
+    setPreview(null);
+    start({ project, version, conceptUrl: concept?.url, options: o });
   };
 
   return (
@@ -106,7 +108,10 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
             <Button variant="quiet" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={go} disabled={!sheets} loading={busy}>
+            <Button variant="secondary" onClick={() => { onClose(); setPreview(options); }} disabled={!sheets}>
+              Preview
+            </Button>
+            <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => go()} disabled={!sheets} loading={busy}>
               Print {sheets} {sheets === 1 ? "sheet" : "sheets"}
             </Button>
           </>
@@ -147,7 +152,51 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
         </div>
       </Dialog>
       {portal}
+      <AnimatePresence>{preview && <PrintPreview project={project} version={version} options={preview} conceptUrl={concept?.url} onClose={() => setPreview(null)} onPrint={() => go(preview)} />}</AnimatePresence>
     </>
+  );
+}
+
+/** The sheets on screen, scaled to the window, before printing. */
+function PrintPreview({ project, version, options, conceptUrl, onClose, onPrint }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string; onClose: () => void; onPrint: () => void }) {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const on = () => setW(window.innerWidth);
+    window.addEventListener("resize", on);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  const pagePx = (PAPER[options.paper].w / 25.4) * 96;
+  const zoom = Math.min(1, (w - 48) / pagePx);
+  return createPortal(
+    <motion.div className="fixed inset-0 z-[85] flex flex-col bg-surface-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Print preview">
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-6">
+        <div>
+          <p className="text-[15px] font-semibold text-ink">Print preview</p>
+          <p className="text-[12.5px] text-ink-3">
+            {PAPER[options.paper].label} landscape · floors at 1:{pickScale(version.plan, options.paper)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="quiet" onClick={onClose}>
+            Close
+          </Button>
+          <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={onPrint}>
+            Print or save as PDF
+          </Button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto py-6 [scrollbar-width:thin]">
+        <div style={{ zoom }} className="[&_.page]:mx-auto [&_.page]:mb-6 [&_.page]:shadow-e2">
+          <PrintDocument project={project} version={version} options={options} conceptUrl={conceptUrl} />
+        </div>
+      </div>
+    </motion.div>,
+    document.body,
   );
 }
 

@@ -22,9 +22,9 @@ export const PAPER: Record<Paper, { w: number; h: number; label: string }> = {
   a3: { w: 420, h: 297, label: "A3" },
   a4: { w: 297, h: 210, label: "A4" },
 };
-const MARGIN_MM = 12;
+const MARGIN_MM = 10;
 const SIDEBAR_MM = 96;
-const HEADER_MM = 12;
+const HEADER_MM = 10;
 const SCALES = [50, 75, 100, 125, 150, 200, 250, 300, 400];
 const PX_PER_MM = 96 / 25.4;
 

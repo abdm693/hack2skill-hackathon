@@ -843,11 +843,13 @@ export function FloorPlan({
   const viewBox = `${v.cx - vw / 2} ${v.cy - vh / 2} ${vw} ${vh}`;
 
   // Labels re-fit once a zoom settles (text scales with the drawing while the gesture runs).
-  const [labelPpf, setLabelPpf] = useState(ppf);
+  const [zoomPpf, setZoomPpf] = useState(ppf);
   useEffect(() => {
-    const t = setTimeout(() => setLabelPpf(ppf), 140);
+    const t = setTimeout(() => setZoomPpf(ppf), 140);
     return () => clearTimeout(t);
   }, [ppf]);
+  // At fit, labels follow the size straight away; while zooming they re-fit once the gesture settles.
+  const labelPpf = view ? zoomPpf : ppf;
   // Fonts arriving late change measurements.
   const [fontTick, setFontTick] = useState(0);
   useEffect(() => {

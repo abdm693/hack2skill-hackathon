@@ -164,6 +164,11 @@ export function connections(plan: BuildingPlan, room: Room): { other: string; vi
   return out;
 }
 
+/** "Kitchen" → "kitchen" inside a sentence; "TV lounge" stays as it is. */
+function inline(name: string): string {
+  return /^[A-Z]{2}/.test(name) ? name : name.charAt(0).toLowerCase() + name.slice(1);
+}
+
 /** "Corridor, own bath", the "Opens to" line for a room (DESIGN.md Plan: room hover). */
 export function opensTo(plan: BuildingPlan, room: Room): string[] {
   const byId = new Map(plan.rooms.map((r) => [r.id, r]));
@@ -180,7 +185,7 @@ export function opensTo(plan: BuildingPlan, room: Room): string[] {
     if (!other) continue;
     const otherDoors = connections(plan, other).filter((x) => x.other !== "exterior");
     const own = (other.type === "bath" || other.type === "dressing") && otherDoors.length === 1 && otherDoors[0].other === room.id;
-    out.push(own ? `own ${other.type === "bath" ? "bath" : "dressing"}` : sentenceCase(other.name).replace(/^./, (ch) => (out.length ? ch.toLowerCase() : ch)));
+    out.push(own ? `own ${other.type === "bath" ? "bath" : "dressing"}` : inline(sentenceCase(other.name)));
   }
   // Exterior views: windows onto the outside are not "opens to".
   return out.map((s, i) => (i === 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s));

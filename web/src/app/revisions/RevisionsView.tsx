@@ -173,9 +173,9 @@ function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version;
           <Button variant="secondary" onClick={onPlan}>
             Open the plan
           </Button>
-          <ComplianceLine version={run.version} />
         </div>
       )}
+      {!running && run.version && <ComplianceLine version={run.version} />}
 
       <section className="mt-6 rounded-card bg-surface p-5 shadow-e1" aria-live="polite">
         <div className="flex items-baseline justify-between">
@@ -224,10 +224,10 @@ function ActivityFeed({ items, running, startedAt }: { items: Activity[]; runnin
 function ComplianceLine({ version }: { version: Version }) {
   const s = summarize(version.compliance, version.plan);
   return (
-    <span className={cn("ml-1 inline-flex items-center gap-2 text-[13.5px]", s.fails.length ? "text-fail" : "text-ink-2")}>
-      <span className={cn("size-1.5 rounded-full", s.fails.length ? "bg-fail" : "bg-pass")} />
-      {s.fails.length ? `${plural(s.fails.length, "rule")} to fix` : `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules still pass`}
-    </span>
+    <p className={cn("mt-3 flex items-start gap-2 text-[13.5px]", s.fails.length ? "text-fail" : "text-ink-2")}>
+      <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : "bg-pass")} />
+      {s.fails.length ? `${plural(s.fails.length, "rule")} to fix` : `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules pass`}
+    </p>
   );
 }
 
@@ -266,15 +266,23 @@ function VersionStory({ project, version, parent, onWalk, onPlan }: { project: P
         <Button variant="secondary" onClick={onPlan}>
           Open the plan
         </Button>
-        <ComplianceLine version={version} />
       </div>
+      <ComplianceLine version={version} />
       {first ? (
         <p className="mt-8 max-w-xl text-body-lg text-ink-2">
           Drawn from your brief and chosen concept. Walk through it and pin what you'd change; Naqsha will make version {version.n + 1} and explain each change here.
         </p>
       ) : (
         <>
-          {changes.length ? <Changes changes={changes} before={parent?.plan} after={version.plan} /> : <p className="mt-8 text-body text-ink-3">No changes were recorded for this version.</p>}
+          {changes.length ? (
+            <Changes changes={changes} before={parent?.plan} after={version.plan} />
+          ) : (
+            <p className="mt-8 max-w-xl text-body-lg text-ink-2">
+              {versionLine(summary) === "A fresh design"
+                ? `Drawn again from your brief and concept. Version ${parent?.n ?? version.n - 1} stays in your history; compare them on the plan.`
+                : "Naqsha looked at every comment and didn't need to change the plan; each answer is below."}
+            </p>
+          )}
           {comments === null ? <p className="mt-8 text-[14px] text-ink-3">Loading the comments…</p> : comments.length ? <Threads comments={comments} plan={parent?.plan} latestVersion={project.current_version_id ?? undefined} /> : null}
         </>
       )}

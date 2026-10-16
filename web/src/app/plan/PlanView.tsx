@@ -260,10 +260,15 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
               {draft && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-medium text-accent">Draft</span>}
             </div>
             <p className="mt-0.5 truncate text-[13px] text-ink-3">
-              {plan && <span className="font-mono tabular-nums">{feetInches(plan.site.plot.width_ft)} × {feetInches(plan.site.plot.depth_ft)}</span>}
-              {brief?.plot?.area_marla ? ` · ${plotLabel(brief.plot.area_marla)}` : ""}
-              {covered > 0 && <span> · <span className="font-mono tabular-nums">{num(covered)}</span> sq ft covered</span>}
-              {!running && version && <span> · Version {version.n}</span>}
+              {[
+                plan ? <span key="d" className="font-mono tabular-nums">{feetInches(plan.site.plot.width_ft)} × {feetInches(plan.site.plot.depth_ft)}</span> : null,
+                brief?.plot?.area_marla ? <span key="m">{plotLabel(brief.plot.area_marla)}</span> : null,
+                covered > 0 ? <span key="c"><span className="font-mono tabular-nums">{num(covered)}</span> sq ft covered</span> : null,
+                !running && version ? <span key="v">Version {version.n}</span> : null,
+                running ? <span key="r">Drawing a new version</span> : null,
+              ]
+                .filter(Boolean)
+                .flatMap((el, i) => (i ? [<span key={`s${i}`}> · </span>, el] : [el]))}
             </p>
             {notLatest && (
               <button type="button" onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.delete("v"); return n; })} className="mt-1 text-[13px] font-medium text-accent hover:underline">

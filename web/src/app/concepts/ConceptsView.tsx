@@ -211,7 +211,8 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
         </AnimatePresence>
 
         {/* The originals, 2 × 2 */}
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {/* 2 × 2 on wider screens; a swipe carousel on phones */}
+        <div className="-mx-4 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&>*]:w-[84%] [&>*]:shrink-0 [&>*]:snap-center md:[&>*]:w-auto">
           {roots.map((l) => (
             <Tile key={l.concept.id} l={l} light={light} nightShown={nightShown} nightFailed={!!night?.failed.includes(l.concept.id)} chosen={chosen === l.concept.id} onOpen={() => setOpenId(l.concept.id)} />
           ))}
