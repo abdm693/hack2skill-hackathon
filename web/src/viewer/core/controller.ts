@@ -219,6 +219,13 @@ export class ViewerController {
     t.gl.shadowMap.autoUpdate = false;
     t.gl.shadowMap.needsUpdate = true;
     t.gl.localClippingEnabled = false;
+    // transmission glass re-renders the opaque scene every frame; half resolution is visually identical here
+    t.gl.transmissionResolutionScale = 0.5;
+    // big, dense canvases (e.g. a 1440-wide panel on a retina laptop) start one tier down
+    if (!this.perf.locked) {
+      const px = t.gl.domElement.clientWidth * t.gl.domElement.clientHeight * Math.min(window.devicePixelRatio || 1, 1.5) ** 2;
+      if (px > 2.6e6) this.store.setState({ quality: "balanced" });
+    }
     t.camera.near = 0.08;
     t.camera.far = 3000;
     t.camera.fov = ORBIT_FOV;
@@ -530,13 +537,14 @@ export class ViewerController {
     const continuous = this.store.getState().mode === "walk" || !!this.controls?.active;
     if (!continuous) return;
     this.perf.sum += dt;
-    if (++this.perf.samples < 120) return;
+    if (++this.perf.samples < 90) return;
     const fps = this.perf.samples / this.perf.sum;
     this.perf.samples = 0;
     this.perf.sum = 0;
     const q = this.store.getState().quality;
-    if (fps < 50 && q === "high") this.setQuality("balanced");
-    else if (fps < 40 && q === "balanced") this.setQuality("performance");
+    if (q !== "performance" && fps < 30) this.setQuality("performance");
+    else if (q === "high" && fps < 50) this.setQuality("balanced");
+    else if (q === "balanced" && fps < 45) this.setQuality("performance");
   }
 
   // ───────────────────────────── orbit ─────────────────────────────

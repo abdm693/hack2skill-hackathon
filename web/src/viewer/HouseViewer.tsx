@@ -50,9 +50,11 @@ export interface HouseViewerProps {
 
 /**
  * Device-pixel-ratio range per quality tier (R3F re-applies the `dpr` prop on every render, so the tier must drive
- * the prop). Measured in the harness at 1440×900 CSS px on a laptop: DPR 2 → ~46 fps, DPR 1.6 → 60 fps with full AO.
+ * the prop). Measured walking the engine's argon-v1 house (230k tris, 12 point lights, PBR + transmission glass) at
+ * 1440×900 CSS px on a laptop: DPR 1.6 + full AO ≈ 27 fps, DPR 1.25 + half AO ≈ 47, DPR 1 without AO ≈ 58.
+ * The scene is fill-rate bound, so the tiers trade pixels first.
  */
-const DPR: Record<Quality, [number, number]> = { high: [1, 1.6], balanced: [1, 1.25], performance: [1, 1] };
+const DPR: Record<Quality, [number, number]> = { high: [1, 1.5], balanced: [1, 1.1], performance: [0.85, 1] };
 
 const GL_PROPS = {
   antialias: false,
