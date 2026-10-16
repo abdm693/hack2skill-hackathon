@@ -437,9 +437,11 @@ export class WalkController {
     if (this.bvh) {
       const steps = clamp(Math.ceil(moveLen / 0.035), 1, 10);
       for (let i = 0; i < steps; i++) {
+        const px = this.feet.x, pz = this.feet.z;
         this.feet.x += (this.vel.x * dt) / steps;
         this.feet.z += (this.vel.z * dt) / steps;
         this.resolveWalls();
+        if (this.grounded) this.guardEdge(px, pz);
       }
       this.followFloor(dt);
     } else {
@@ -482,6 +484,28 @@ export class WalkController {
       this.syncLook();
     }
     return true;
+  }
+
+  /**
+   * Safety net: never step off an edge into a drop (an unguarded stairwell, a balcony without its railing yet, the
+   * roof's edge). If the ground is gone under the new position, slide along the edge, or stay put.
+   */
+  private guardEdge(px: number, pz: number) {
+    const top = this.feet.y + STEP_UP + 0.02, bottom = this.feet.y - SNAP_DOWN - 0.05;
+    if (this.groundAt(this.feet, top, bottom) !== null) return;
+    const nx = this.feet.x, nz = this.feet.z;
+    this.feet.set(nx, this.feet.y, pz);
+    if (this.groundAt(this.feet, top, bottom) !== null) {
+      this.vel.z = 0;
+      return;
+    }
+    this.feet.set(px, this.feet.y, nz);
+    if (this.groundAt(this.feet, top, bottom) !== null) {
+      this.vel.x = 0;
+      return;
+    }
+    this.feet.set(px, this.feet.y, pz);
+    this.vel.x = this.vel.z = 0;
   }
 
   /** Horizontal capsule push-out against everything that isn't floor/ceiling-like. */

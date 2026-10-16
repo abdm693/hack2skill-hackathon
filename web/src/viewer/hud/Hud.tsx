@@ -129,7 +129,7 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
   }, [help]);
   return (
     <>
-      {(showPrompt || ((hints || (touch && phase === "free")) && phase !== "commenting")) && !help && (
+      {(showPrompt || (hints && phase !== "commenting" && phase !== "intro")) && !help && (
         <div className="nq-prompt" data-hints={hints ? "1" : "0"}>
           {showPrompt && (
             <button className="nq-prompt-main nq-glass nq-ui" data-nq-ui="" onClick={() => ctrl.requestLock()} disabled={refused}>
