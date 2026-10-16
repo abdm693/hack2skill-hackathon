@@ -937,6 +937,8 @@ export class ViewerController {
   private tickGhost(dt: number): boolean {
     const mode = this.store.getState().mode;
     this.ghostTarget = mode === "orbit" && this.props.ghostContext !== false ? 1 : 0;
+    // the buildings at the camera fade away (an eye-level street view never looks out of the house opposite)
+    if (this.camera && this.ctxfx.updateNear(this.camera, this.ghostTarget > 0)) this.invalidate();
     const g = GHOST.nqGhost;
     if (g.value === this.ghostTarget) return false;
     const step = prefersReducedMotion() ? 1 : dt / 0.42;
@@ -1259,11 +1261,22 @@ export class ViewerController {
         const h = new THREE.Vector3(fwd.x, 0, fwd.z);
         if (h.lengthSq() < 1e-6) h.set(0, 0, -1);
         h.normalize();
-        // keep your heading when it shows the street side; otherwise the usual sunny three-quarter front view
+        // keep your heading when it shows the street side (a three-quarter front view, never side-on over a
+        // neighbour's roof); otherwise the usual sunny three-quarter front view
+        const sunny = 30 * (sunState(this.props.sunHour ?? 16.5, (this.plan.site?.facing ?? "N") as Facing).dir.x >= 0 ? 1 : -1);
         let azDeg = THREE.MathUtils.radToDeg(Math.atan2(-h.x, -h.z));
-        if (Math.abs(azDeg) > 80) azDeg = 30 * (sunState(this.props.sunHour ?? 16.5, (this.plan.site?.facing ?? "N") as Facing).dir.x >= 0 ? 1 : -1);
-        else if (Math.abs(azDeg) < 18) azDeg = 18 * (azDeg < 0 ? -1 : 1);
-        const pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        if (Math.abs(azDeg) > 55) azDeg = sunny;
+        else azDeg = clamp(Math.abs(azDeg), 18, 40) * (azDeg < 0 ? -1 : 1);
+        // and never from over (or inside) a neighbouring house: try the mirror view, then the sunny one
+        const candidates = [azDeg, -azDeg, sunny, -sunny, 0];
+        let pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        for (const az of candidates) {
+          const p = heroPose(this.plan, cam, 1, az, 32);
+          if (!this.overNeighbour(p.position)) {
+            pose = p;
+            break;
+          }
+        }
         c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, !prefersReducedMotion());
       }
     }
@@ -1276,6 +1289,14 @@ export class ViewerController {
         console.warn("[viewer] onExitWalk threw", e);
       }
     }
+  }
+
+  /**
+   * Is this camera spot above or inside a house on our side of the street (its footprint grown by 2 m)? From over
+   * the row across the road the house is framed over the street, so that one doesn't count.
+   */
+  private overNeighbour(p: THREE.Vector3): boolean {
+    return this.ctxfx.buildings.some((b) => b.min.z < 0 && p.x > b.min.x - 2 && p.x < b.max.x + 2 && p.z > b.min.z - 2 && p.z < b.max.z + 2);
   }
 
   /**

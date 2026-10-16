@@ -17,18 +17,63 @@ import { partsOf, type PartRange } from "./tags";
 export const CONTEXT_KIND = /(^|:)(context|neighbou?rs?|utility_poles?|wires|streetlights?|power_lines?)($|:)/;
 export const VEHICLE_KIND = /(^|:)(vehicles?|cars?|car_sedan|car_suv|suv|sedan|motorbikes?|motorcycles?|scooters?|rickshaw)($|:)/;
 
+/** At most this many buildings near the camera fade at once (the nearest ones). */
+export const NEAR_MAX = 8;
+/** A building within this distance of the orbit camera (or containing it) fades almost away; gone by NEAR_FAR. */
+export const NEAR_IN = 4;
+export const NEAR_FAR = 6;
+/** Ghost opacity: neighbours between the camera and the house (DESIGN 15% clay), and buildings by the camera. */
+const GHOST_ALPHA = 0.15;
+const NEAR_ALPHA = 0.04;
+/** A whole neighbour ghosted at eye level is big: lighter, so it never veils the ground floor and gate. */
+const OCC_ALPHA = 0.07;
+/**
+ * Share of the house a building must hide before it ghosts whole (ramping in up to OCC_FULL). The aerial hero view
+ * sees a side neighbour hide ~25% (its yard side), so it keeps the soft window there; eye-level views (≥35%) ghost it.
+ */
+const OCC_FROM = 0.3;
+const OCC_FULL = 0.35;
+
 /** Shared uniforms: one value drives every patched material. */
 export const GHOST = {
   nqGhost: { value: 0 },
   nqBoxMin: { value: new THREE.Vector3() },
   nqBoxMax: { value: new THREE.Vector3() },
+  /** buildings close to the camera (world boxes) and how far they fade (0..1) */
+  nqNearMin: { value: Array.from({ length: NEAR_MAX }, () => new THREE.Vector3()) },
+  nqNearMax: { value: Array.from({ length: NEAR_MAX }, () => new THREE.Vector3()) },
+  nqNearW: { value: new Array<number>(NEAR_MAX).fill(0) },
+  /** how much of the same building stands between the camera and the house (it then ghosts whole, not as a hole) */
+  nqOccW: { value: new Array<number>(NEAR_MAX).fill(0) },
+  nqNearN: { value: 0 },
 };
 
 const GLSL = /* glsl */ `
 uniform float nqGhost;
 uniform vec3 nqBoxMin;
 uniform vec3 nqBoxMax;
+uniform vec3 nqNearMin[${NEAR_MAX}];
+uniform vec3 nqNearMax[${NEAR_MAX}];
+uniform float nqNearW[${NEAR_MAX}];
+uniform float nqOccW[${NEAR_MAX}];
+uniform int nqNearN;
 varying vec3 vNqW;
+// how much of this fragment belongs to a building at (or in) the camera, or sits right in front of the lens
+float nqNearF = 0.0;
+// how much of this fragment belongs to a building standing in front of the house (ghosted whole)
+float nqOccF = 0.0;
+void nqNear(vec3 p) {
+  float w = 0.0, o = 0.0;
+  for (int i = 0; i < ${NEAR_MAX}; i++) {
+    if (i >= nqNearN) break;
+    if (all(greaterThanEqual(p, nqNearMin[i])) && all(lessThanEqual(p, nqNearMax[i]))) {
+      w = max(w, nqNearW[i]);
+      o = max(o, nqOccW[i]);
+    }
+  }
+  nqNearF = max(w, 1.0 - smoothstep(1.5, 3.0, length(p - cameraPosition)));
+  nqOccF = o;
+}
 // length of the view ray's stretch inside the box that lies beyond the fragment (0 = the box isn't behind it)
 float nqChord(vec3 ro, vec3 inv, float L, vec3 bmin, vec3 bmax) {
   vec3 t0 = (bmin - ro) * inv;
@@ -39,7 +84,10 @@ float nqChord(vec3 ro, vec3 inv, float L, vec3 bmin, vec3 bmax) {
   return tf - max(tn, L);
 }
 float nqGhostAt(vec3 p) {
+  nqNearF = 0.0;
+  nqOccF = 0.0;
   if (nqGhost <= 0.0) return 0.0;
+  nqNear(p);
   vec3 d = p - cameraPosition;
   float L = length(d);
   vec3 rd = d / max(L, 1e-5);
@@ -53,7 +101,7 @@ float nqGhostAt(vec3 p) {
     vec3 grow = vec3(e.x, e.y, e.z);
     g += smoothstep(0.0, 0.35, nqChord(cameraPosition, inv, L, nqBoxMin - vec3(grow.x, 0.0, grow.z), nqBoxMax + grow));
   }
-  return nqGhost * g * 0.25;
+  return nqGhost * max(max(g * 0.25, nqOccF), nqNearF);
 }
 `;
 
@@ -78,7 +126,7 @@ function patch(mat: THREE.Material, mode: "solid" | "ghost") {
     if (mode === "ghost") {
       sh.fragmentShader = sh.fragmentShader.replace(
         "#include <dithering_fragment>",
-        "#include <dithering_fragment>\n  float nqK = smoothstep(0.02, 0.85, nqG);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(1.02, 1.0, 0.96), 0.7 * nqK);\n  gl_FragColor.a *= mix(1.0, 0.15, nqK);",
+        `#include <dithering_fragment>\n  float nqK = smoothstep(0.02, 0.85, nqG);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(1.02, 1.0, 0.96), 0.7 * nqK);\n  gl_FragColor.a *= mix(1.0, mix(mix(${GHOST_ALPHA.toFixed(3)}, ${OCC_ALPHA.toFixed(3)}, nqOccF), ${NEAR_ALPHA.toFixed(3)}, nqNearF), nqK);`,
       );
     }
   };
@@ -88,13 +136,69 @@ function patch(mat: THREE.Material, mode: "solid" | "ghost") {
 }
 
 
+/** CPU twin of the shader's per-building terms (near the camera, standing in front of the house). */
+function nearAt(p: THREE.Vector3, cam: THREE.Vector3): number {
+  let w = 0;
+  const n = GHOST.nqNearN.value;
+  for (let i = 0; i < n; i++) {
+    const mn = GHOST.nqNearMin.value[i], mx = GHOST.nqNearMax.value[i];
+    if (p.x >= mn.x && p.y >= mn.y && p.z >= mn.z && p.x <= mx.x && p.y <= mx.y && p.z <= mx.z) w = Math.max(w, GHOST.nqNearW.value[i], GHOST.nqOccW.value[i]);
+  }
+  const t = Math.min(1, Math.max(0, (p.distanceTo(cam) - 1.5) / 1.5));
+  return Math.max(w, 1 - t * t * (3 - 2 * t));
+}
+
+const _ray = new THREE.Ray();
+const _hit = new THREE.Vector3();
+const _samples: THREE.Vector3[] = [];
+const ss01 = (e0: number, e1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+
+const _corner = new THREE.Vector3();
+
+/** Share of the screen a box covers (its projected bounding rectangle, clipped); 1 when it wraps the camera. */
+function screenCover(b: THREE.Box3, camera: THREE.PerspectiveCamera): number {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let behind = 0;
+  for (let k = 0; k < 8; k++) {
+    _corner.set(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z);
+    _corner.applyMatrix4(camera.matrixWorldInverse);
+    if (_corner.z > -camera.near) {
+      behind++;
+      continue;
+    }
+    _corner.applyMatrix4(camera.projectionMatrix);
+    x0 = Math.min(x0, _corner.x);
+    x1 = Math.max(x1, _corner.x);
+    y0 = Math.min(y0, _corner.y);
+    y1 = Math.max(y1, _corner.y);
+  }
+  if (behind === 8) return 0; // wholly behind the camera
+  if (behind) return 1; // part of it behind the lens: it wraps around the view
+  const w = Math.max(0, Math.min(1, x1) - Math.max(-1, x0)), h = Math.max(0, Math.min(1, y1) - Math.max(-1, y0));
+  return (w * h) / 4;
+}
+
+/** Points spread through the house box (5 × 3 × 5), lower ones first: the ground floor and gate count most. */
+function houseSamples(box: THREE.Box3): THREE.Vector3[] {
+  _samples.length = 0;
+  const s = box.getSize(new THREE.Vector3());
+  for (const fy of [0.12, 0.4, 0.75])
+    for (const fx of [0.05, 0.27, 0.5, 0.73, 0.95])
+      for (const fz of [0.05, 0.27, 0.5, 0.73, 0.95]) _samples.push(new THREE.Vector3(box.min.x + s.x * fx, box.min.y + s.y * fy, box.min.z + s.z * fz));
+  return _samples;
+}
+
 /** CPU twin of the shader test (for picking through ghosted neighbours). */
 export function ghostAt(p: THREE.Vector3, cam: THREE.Vector3): number {
   const g = GHOST.nqGhost.value;
   if (g <= 0) return 0;
+  const near = nearAt(p, cam);
   const d = new THREE.Vector3().subVectors(p, cam);
   const L = d.length();
-  if (L < 1e-5) return 0;
+  if (L < 1e-5) return g * near;
   d.multiplyScalar(1 / L);
   const mn = GHOST.nqBoxMin.value, mx = GHOST.nqBoxMax.value;
   const ss = (x: number) => {
@@ -114,7 +218,94 @@ export function ghostAt(p: THREE.Vector3, cam: THREE.Vector3): number {
     }
     sum += ss(tf - Math.max(tn, L));
   }
-  return (g * sum) / 4;
+  return g * Math.max(sum / 4, near);
+}
+
+/**
+ * Buildings of the street context, as world boxes: the triangles of every "house-like" context mesh above gate height,
+ * joined where their boxes touch (sweep and prune + union-find), each cluster dropped to the ground. The engine merges
+ * all the neighbours into a few meshes per material, so this is how one neighbour can fade on its own.
+ */
+function buildingBoxes(meshes: THREE.Mesh[]): THREE.Box3[] {
+  const boxes: THREE.Box3[] = [];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  let base = Infinity;
+  const tris: number[] = []; // minx, miny, minz, maxx, maxy, maxz per triangle
+  for (const m of meshes) {
+    const pos = m.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || (m as THREE.InstancedMesh).isInstancedMesh) continue;
+    m.updateWorldMatrix(true, false);
+    const idx = m.geometry.index;
+    const n = idx ? idx.count : pos.count;
+    for (let i = 0; i + 2 < n; i += 3) {
+      a.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+      b.fromBufferAttribute(pos, idx ? idx.getX(i + 1) : i + 1).applyMatrix4(m.matrixWorld);
+      c.fromBufferAttribute(pos, idx ? idx.getX(i + 2) : i + 2).applyMatrix4(m.matrixWorld);
+      const y0 = Math.min(a.y, b.y, c.y);
+      base = Math.min(base, y0);
+      tris.push(Math.min(a.x, b.x, c.x), y0, Math.min(a.z, b.z, c.z), Math.max(a.x, b.x, c.x), Math.max(a.y, b.y, c.y), Math.max(a.z, b.z, c.z));
+    }
+  }
+  const n = tris.length / 6;
+  if (!n) return boxes;
+  // above the boundary walls and gates (which join a whole row together)
+  const keep: number[] = [];
+  for (let i = 0; i < n; i++) if (tris[i * 6 + 1] > base + 1.9) keep.push(i);
+  keep.sort((i, j) => tris[i * 6] - tris[j * 6]);
+  const parent = new Int32Array(n).map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) i = parent[i] = parent[parent[i]];
+    return i;
+  };
+  const tol = 0.03;
+  const active: number[] = [];
+  for (const i of keep) {
+    const x0 = tris[i * 6];
+    for (let k = active.length - 1; k >= 0; k--) {
+      const j = active[k];
+      if (tris[j * 6 + 3] < x0 - tol) {
+        active.splice(k, 1);
+        continue;
+      }
+      if (tris[j * 6 + 1] <= tris[i * 6 + 4] + tol && tris[i * 6 + 1] <= tris[j * 6 + 4] + tol && tris[j * 6 + 2] <= tris[i * 6 + 5] + tol && tris[i * 6 + 2] <= tris[j * 6 + 5] + tol) {
+        const ri = find(i), rj = find(j);
+        if (ri !== rj) parent[ri] = rj;
+      }
+    }
+    active.push(i);
+  }
+  const byRoot = new Map<number, THREE.Box3>();
+  for (const i of keep) {
+    const r = find(i);
+    let box = byRoot.get(r);
+    if (!box) byRoot.set(r, (box = new THREE.Box3()));
+    box.expandByPoint(a.set(tris[i * 6], tris[i * 6 + 1], tris[i * 6 + 2]));
+    box.expandByPoint(a.set(tris[i * 6 + 3], tris[i * 6 + 4], tris[i * 6 + 5]));
+  }
+  // windows, frames and bands that float on a facade join the building whose footprint they sit on (a building is
+  // a prism: footprints that overlap belong together; neighbours only ever touch across a gap)
+  const parts = [...byRoot.values()];
+  const footTol = 0.05;
+  const overlaps = (p: THREE.Box3, q: THREE.Box3) => p.min.x <= q.max.x + footTol && q.min.x <= p.max.x + footTol && p.min.z <= q.max.z + footTol && q.min.z <= p.max.z + footTol;
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < parts.length && !merged; i++)
+      for (let j = i + 1; j < parts.length; j++) {
+        if (!overlaps(parts[i], parts[j])) continue;
+        parts[i].union(parts[j]);
+        parts.splice(j, 1);
+        merged = true;
+        break;
+      }
+  }
+  for (const box of parts) {
+    const s = box.getSize(a);
+    if (Math.max(s.x, s.z) < 2 || s.y < 1) continue; // a lone tank or a sign, not a building
+    box.min.y = base - 0.2;
+    box.expandByScalar(0.3);
+    boxes.push(box);
+  }
+  return boxes;
 }
 
 function tagChain(o: THREE.Object3D, stop: THREE.Object3D | null) {
@@ -206,6 +397,8 @@ export class ContextFX {
   private solidClones = new Map<THREE.Material, THREE.Material>();
   /** Same material, translucent: redraws only the ghosted fragments (so the edge of the window is seamless). */
   private ghostClones = new Map<THREE.Material, THREE.Material>();
+  /** Depth-only twins of the ghost clones (the de-stacking pre-pass). */
+  private ghostDepthClones = new Map<THREE.Material, THREE.Material>();
   private owned: (THREE.Material | THREE.BufferGeometry)[] = [];
 
   /** Classify and prepare a finished build (idempotent per root). */
@@ -225,6 +418,7 @@ export class ContextFX {
       if ((o as THREE.Mesh).isMesh && !o.userData?.viewer) meshes.push(o as THREE.Mesh);
     });
     const firstTime = !this.done.has(root);
+    const contextMeshes: THREE.Mesh[] = [];
     for (const m of meshes) {
       const { kind, group } = tagChain(m, root);
       const parts = partsOf(m);
@@ -252,7 +446,13 @@ export class ContextFX {
       // ── context ──
       const ctx = group === "context" || isContextKind(kind) || (!!parts && parts.every((p) => isContextKind(p.tags.kind)));
       if (ctx && !m.userData.nqGhost) this.ghostify(m);
+      if (ctx) contextMeshes.push(m);
     }
+    // the neighbours' houses (by label when the engine gives one), clustered into one box per building
+    const HOUSE = /neighbou?r|house|building|villa|home/i;
+    const labelled = contextMeshes.filter((m) => HOUSE.test(String(m.userData?.label ?? "")) || !!partsOf(m)?.some((p) => HOUSE.test(String(p.tags.label ?? ""))));
+    this.buildings = buildingBoxes(labelled.length ? labelled : contextMeshes);
+    this.nearKey = "";
     // split meshes created on an earlier install are tagged "split": pick them up again (cached builds)
     root.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -292,26 +492,104 @@ export class ContextFX {
     });
     m.material = Array.isArray(m.material) ? next : next[0];
     if ((m as THREE.InstancedMesh).isInstancedMesh) return; // no overlay for instanced street trees etc.
+    // Ghost layers never stack: a depth-only pass of every ghosted face first (renderOrder 49), then the clay colour
+    // drawn only where it is the nearest ghosted surface (renderOrder 50, depth test ≤). Looking through two or three
+    // neighbours reads as one even 15% veil, not 30–40%.
+    const pre = mats.map((mat) => {
+      let c = this.ghostDepthClones.get(mat);
+      if (!c) {
+        c = mat.clone();
+        c.transparent = true;
+        c.colorWrite = false;
+        c.depthWrite = true;
+        patch(c, "ghost");
+        this.ghostDepthClones.set(mat, c);
+        this.owned.push(c);
+      }
+      return c;
+    });
     const ghosts = mats.map((mat) => {
       let c = this.ghostClones.get(mat);
       if (!c) {
         c = mat.clone();
         c.transparent = true;
-        // drawn last (renderOrder) and depth-written: only the nearest ghosted face shows, so the veil is one even 15%
-        c.depthWrite = true;
+        c.depthWrite = false;
+        c.depthFunc = THREE.LessEqualDepth;
         patch(c, "ghost");
         this.ghostClones.set(mat, c);
         this.owned.push(c);
       }
       return c;
     });
-    const overlay = new THREE.Mesh(m.geometry, Array.isArray(m.material) ? ghosts : ghosts[0]);
-    overlay.userData = { noPick: true, viewer: "ghost" };
-    overlay.renderOrder = 50;
-    overlay.castShadow = false;
-    overlay.receiveShadow = false;
-    overlay.frustumCulled = m.frustumCulled;
-    m.add(overlay);
+    for (const [mat, order] of [[pre, 49], [ghosts, 50]] as const) {
+      const overlay = new THREE.Mesh(m.geometry, Array.isArray(m.material) ? mat : mat[0]);
+      overlay.userData = { noPick: true, viewer: "ghost" };
+      overlay.renderOrder = order;
+      overlay.castShadow = false;
+      overlay.receiveShadow = false;
+      overlay.frustumCulled = m.frustumCulled;
+      m.add(overlay);
+    }
+  }
+
+  /** Buildings of the street (world boxes), for fading the ones at the camera. */
+  buildings: THREE.Box3[] = [];
+  private nearKey = "";
+
+  /** Last per-building weights (debugging): [index, near, in front of the house, share of the house it hides]. */
+  lastFade: [number, number, number, number][] = [];
+
+  /**
+   * Orbit, per building of the street:
+   * - at the camera: one that contains it or stands within NEAR_IN m fades to 4% (a smooth ramp out to NEAR_FAR);
+   * - in front of the house: one that hides a good share of the house (rays from the camera to points spread
+   *   through the house box) ghosts whole to 15% clay, so it never reads as a wall with a hole cut in it.
+   * At most NEAR_MAX buildings, strongest first. Returns true when anything changed (repaint).
+   */
+  updateNear(camera: THREE.PerspectiveCamera, enabled: boolean): boolean {
+    const cam = camera.position;
+    const list: { i: number; near: number; occ: number; d: number; frac: number }[] = [];
+    if (enabled && this.buildings.length) {
+      const house = new THREE.Box3(GHOST.nqBoxMin.value, GHOST.nqBoxMax.value);
+      const pts = house.isEmpty() ? [] : houseSamples(house);
+      const houseD = house.isEmpty() ? Infinity : house.distanceToPoint(cam);
+      camera.updateMatrixWorld();
+      this.buildings.forEach((b, i) => {
+        const d = b.distanceToPoint(cam);
+        const near = 1 - ss01(NEAR_IN, NEAR_FAR, d);
+        let blocked = 0;
+        if (pts.length && !b.containsPoint(cam)) {
+          for (const p of pts) {
+            _ray.origin.copy(cam);
+            _ray.direction.subVectors(p, cam);
+            const L = _ray.direction.length();
+            _ray.direction.multiplyScalar(1 / L);
+            if (_ray.intersectBox(b, _hit) && _hit.distanceTo(cam) < L - 0.3) blocked++;
+          }
+        }
+        const frac = pts.length ? blocked / pts.length : 0;
+        let occ = ss01(OCC_FROM, OCC_FULL, frac);
+        // at eye level (the camera below its roof), a neighbour nearer than the house whose facade fills more than
+        // a tenth of the frame is a wall in the way, even off to one side: it ghosts too
+        if (occ < 1 && cam.y < b.max.y + 2 && d < houseD + 1) occ = Math.max(occ, ss01(0.07, 0.1, screenCover(b, camera)));
+        if (near > 0.001 || occ > 0.001) list.push({ i, near, occ, d, frac });
+      });
+    }
+    list.sort((x, y) => Math.max(y.near, y.occ) - Math.max(x.near, x.occ) || x.d - y.d);
+    list.length = Math.min(list.length, NEAR_MAX);
+    const key = list.map((n) => `${n.i}:${n.near.toFixed(2)}:${n.occ.toFixed(2)}`).join("|");
+    if (key === this.nearKey) return false;
+    this.nearKey = key;
+    this.lastFade = list.map((n) => [n.i, +n.near.toFixed(2), +n.occ.toFixed(2), +n.frac.toFixed(2)]);
+    list.forEach((n, k) => {
+      const b = this.buildings[n.i];
+      GHOST.nqNearMin.value[k].copy(b.min);
+      GHOST.nqNearMax.value[k].copy(b.max);
+      GHOST.nqNearW.value[k] = n.near;
+      GHOST.nqOccW.value[k] = n.occ;
+    });
+    GHOST.nqNearN.value = list.length;
+    return true;
   }
 
   /** Set the house box rays are tested against (world). */
@@ -363,7 +641,7 @@ export class ContextFX {
    * clones (ghost-able context, fading cars).
    */
   syncClones() {
-    const pairs: [THREE.Material, THREE.Material][] = [...this.solidClones, ...this.ghostClones];
+    const pairs: [THREE.Material, THREE.Material][] = [...this.solidClones, ...this.ghostClones, ...this.ghostDepthClones];
     for (const v of this.vehicles) pairs.push(...v.clones);
     for (const [src, dst] of pairs) {
       const a = src as THREE.MeshStandardMaterial, b = dst as THREE.MeshStandardMaterial;
@@ -395,6 +673,8 @@ export class ContextFX {
     this.owned = [];
     this.solidClones.clear();
     this.ghostClones.clear();
+    this.ghostDepthClones.clear();
+    this.buildings = [];
     this.vehicles = [];
   }
 }
