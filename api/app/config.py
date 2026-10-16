@@ -15,6 +15,7 @@ MODEL_SETUP = os.environ.get("MODEL_SETUP", MODEL_INTAKE)           # the conver
 
 PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "4"))
 SELF_REVIEW = os.environ.get("SELF_REVIEW", "1") not in ("0", "false", "no")
+REVIEW_BUDGET_S = float(os.environ.get("REVIEW_BUDGET_S", "300"))  # the optional post-review revision never costs more
 
 # Identity Platform (email + password). The browser key is public by design (it identifies the project, not a secret),
 # but it is still never committed: it comes from the environment.

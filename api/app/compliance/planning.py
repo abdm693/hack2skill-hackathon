@@ -600,6 +600,8 @@ def _privacy(ix: PlanIndex, out: _Out) -> None:
                 bad = f"{r['name']} opens into the drawing room, where guests sit."
             elif nt == "prayer":
                 bad = f"{r['name']} opens through the prayer room. Keep the prayer room off the way into a bedroom."
+            if bad and nt in PRIVATE and f"plan.privacy.bedroom_door:{nb}:{rid}" in out.seen:
+                continue  # one finding per pair of bedrooms
             if bad:
                 out.add(f"plan.privacy.bedroom_door:{rid}:{nb}", "Bedroom privacy", "fail", bad, ids=[rid, nb],
                         fix=f"Give {r['name']} its own door onto a corridor, lobby or lounge; if it touches none, add a corridor "

@@ -503,7 +503,8 @@ def understood(brief: dict, agent: dict | None = None) -> dict:
     if env:
         sb = env["setbacks_ft"]
         side = env.get("side_space_note") or ""
-        g.append(f"LDA open spaces kept: {sb['front']:g} ft front, {sb['rear']:g} ft rear" + (f", {side.lower()}" if "no side" not in side.lower() else ""))
+        who = "LDA open spaces" if (brief.get("authority") or "LDA") in ("LDA", "OTHER") else "Open spaces"
+        g.append(f"{who} kept: {sb['front']:g} ft front, {sb['rear']:g} ft rear" + (f", {side.lower()}" if "no side" not in side.lower() else ""))
         g.append(f"Height within {env['max_height_ft']:g} ft (stair tower excluded), at most {env['max_storeys']} storeys")
         g.append(f"Ground coverage within {env['max_coverage_pct']:g}% ({env['max_ground_coverage_sqft']:,.0f} sq ft)")
     g += ["Every bedroom opens onto a corridor or lounge, never another bedroom",
@@ -716,10 +717,14 @@ def _ack(patch: dict, brief: dict) -> str:
         return "Got the rooms for each floor."
     if "style" in patch:
         return f"{brief['style']}, lovely."
+    if "bedrooms" in patch:
+        return f"{brief['bedrooms']} bedrooms and {brief.get('bathrooms') or brief['bedrooms'] + 1} baths."
     if "storeys" in patch:
         return {1: "Single storey.", 2: "Two storeys.", 3: "Three storeys."}[brief["storeys"]]
-    if "bedrooms" in patch:
-        return f"{brief['bedrooms']} bedrooms."
+    if "facing" in patch and brief.get("facing"):
+        return f"Facing {FACING_NAME.get(brief['facing'], brief['facing'])}."
+    if "authority" in patch:
+        return {"LDA": "An LDA scheme.", "DHA": "DHA Lahore, with its own bylaws.", "BAHRIA": "Bahria Town, with its own rules."}.get(brief["authority"], "Noted.")
     return "Noted."
 
 

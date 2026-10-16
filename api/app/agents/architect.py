@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -316,16 +317,27 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
         "already passes. Return the COMPLETE BuildingPlan JSON.")]
     base = _score(report)
     cand = cand_rep = None
+
+    async def ask_once(cts) -> dict:
+        obj = None
+        async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, cts, PLAN_SYSTEM, max_tokens=32768, attempts=1):
+            if kind == "result":
+                obj = val[0]
+        return obj
+
+    deadline = asyncio.get_running_loop().time() + config.REVIEW_BUDGET_S
     for round_ in (1, 2):
-        try:
-            obj = None
-            async for kind, val in _ask_plan(contents):
-                if kind == "progress":
-                    yield "progress", {"chars": val}
-                else:
-                    obj = val[0]
+        try:  # the improvement is optional: within its time budget, or we keep the checked plan
+            left = deadline - asyncio.get_running_loop().time()
+            if left < 30:
+                raise asyncio.TimeoutError
+            obj = await asyncio.wait_for(ask_once(contents), timeout=left)
             cand, _ = prepare(obj, brief)
             cand_rep = lda.check(cand, brief)
+        except asyncio.TimeoutError:
+            log.warning("review revision over its %ss budget; keeping the checked plan", config.REVIEW_BUDGET_S)
+            cand = None
+            break
         except Exception:
             log.exception("review revision failed")
             cand = None
@@ -440,14 +452,19 @@ async def write_design(project: dict, plan: dict, extra_instruction: str | None 
     cfg = types.GenerateContentConfig(system_instruction=BUILD_SYSTEM, max_output_tokens=65536)
     yield "stage", {"stage": "build", "message": "Building the 3D model…"}
     parser, total = SectionStream(), 0
-    async for chunk in await client().aio.models.generate_content_stream(model=config.MODEL_ARCHITECT, contents=contents, config=cfg):
-        if not chunk.text:
-            continue
-        total += len(chunk.text)
-        for sec in parser.feed(chunk.text):
-            yield "section", {"section": sec, "index": len(parser.done) - 1}
-        if total // 3000 != (total - len(chunk.text)) // 3000:
-            yield "progress", {"chars": total}
+    try:
+        async for chunk in llm.guarded_stream(config.MODEL_ARCHITECT, contents, cfg):
+            if not chunk.text:
+                continue
+            total += len(chunk.text)
+            for sec in parser.feed(chunk.text):
+                yield "section", {"section": sec, "index": len(parser.done) - 1}
+            if total // 3000 != (total - len(chunk.text)) // 3000:
+                yield "progress", {"chars": total}
+    except llm.Stalled:
+        if not any(s["name"] == "structure" for s in parser.done):
+            raise
+        log.warning("build stream stalled after %d sections; keeping them", len(parser.done))
     for sec in parser.flush():
         yield "section", {"section": sec, "index": len(parser.done) - 1}
     yield "_result", {"sections": parser.done}

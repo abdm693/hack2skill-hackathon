@@ -24,8 +24,9 @@ def test_1_kanal_fails_the_rules_for_every_reported_defect(plans):
     f = fails(plans["1-kanal"])
     assert "plan.opening.same_level:f_bed3_w" in f            # P-01: "terrace" slider into a roof-level room
     assert "plan.opening.same_level:f_bath3_v" in f
-    assert "plan.privacy.bedroom_door:f_bed4:f_bed3" in f     # P-05: bedrooms open into bedrooms
-    assert "plan.privacy.bedroom_door:f_bed5:f_bed3" in f
+    pair = lambda a, b: {f"plan.privacy.bedroom_door:{a}:{b}", f"plan.privacy.bedroom_door:{b}:{a}"}  # noqa: E731
+    assert len(pair("f_bed4", "f_bed3") & f) == 1             # P-05: bedrooms open into bedrooms (one finding a pair)
+    assert len(pair("f_bed5", "f_bed3") & f) == 1
     assert "plan.circulation.reach_through_private:f_bed4" in f  # P-08: reached only through Bedroom 3
     assert "plan.circulation.reach_through_private:f_bed5" in f
     assert "plan.circulation.family_route" in f               # P-10: family must cross the drawing room
