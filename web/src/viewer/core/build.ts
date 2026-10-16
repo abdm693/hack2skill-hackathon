@@ -63,14 +63,18 @@ export class BuildManager {
   }
 
   /** Called whenever `plan` / `sections` change identity. Content-identical inputs are ignored. */
-  request(plan: BuildingPlan, sections: DesignSectionSrc[]) {
+  request(plan: BuildingPlan, sectionsIn: DesignSectionSrc[]) {
+    // Version.sections (api-types DesignSection) carries `code`, the engine wants `body`: accept both
+    const sections = (sectionsIn ?? []).map((s) =>
+      typeof s.body === "string" ? s : { ...s, body: String((s as unknown as { code?: unknown }).code ?? "") },
+    );
     const planHash = fnv(JSON.stringify(plan));
     const keys = new Map<string, string>();
-    for (const s of sections ?? []) keys.set(s.name, fnv(`${planHash}\u0000${s.layer}\u0000${s.body}`));
+    for (const s of sections) keys.set(s.name, fnv(`${planHash}\u0000${s.layer}\u0000${s.body}`));
     const sig = `${planHash}|${[...keys].map(([n, k]) => `${n}:${k}`).join(",")}`;
     if (sig === this.lastSig) return;
     this.lastSig = sig;
-    void this.run(plan, sections ?? [], keys);
+    void this.run(plan, sections, keys);
   }
 
   /** Forget the content signature so the next request rebuilds even if nothing changed (StrictMode remounts). */
