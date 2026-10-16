@@ -34,22 +34,14 @@ async function grade(url: string): Promise<string> {
   sky.addColorStop(1, "rgb(150 150 170)");
   g.fillStyle = sky;
   g.fillRect(0, 0, w, h);
-  // Interior and porch light: warm pools low in the frame where the house is.
-  g.globalCompositeOperation = "screen";
-  const pools: [number, number, number][] = [
-    [0.32, 0.5, 0.07],
-    [0.5, 0.48, 0.08],
-    [0.68, 0.5, 0.07],
-    [0.42, 0.72, 0.09],
-    [0.6, 0.74, 0.08],
-  ];
-  for (const [x, y, r] of pools) {
-    const rad = g.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * w);
-    rad.addColorStop(0, "rgba(255, 184, 104, 0.55)");
-    rad.addColorStop(1, "rgba(255, 176, 92, 0)");
-    g.fillStyle = rad;
-    g.fillRect(0, 0, w, h);
-  }
+  // Light from the house and the street: a soft warm lift low in the frame.
+  g.globalCompositeOperation = "soft-light";
+  const warm = g.createLinearGradient(0, h * 0.35, 0, h);
+  warm.addColorStop(0, "rgba(255, 190, 120, 0)");
+  warm.addColorStop(0.6, "rgba(255, 190, 120, 0.55)");
+  warm.addColorStop(1, "rgba(255, 170, 100, 0.35)");
+  g.fillStyle = warm;
+  g.fillRect(0, 0, w, h);
   g.globalCompositeOperation = "source-over";
   const out = c.toDataURL("image/jpeg", 0.86);
   memo.set(url, out);

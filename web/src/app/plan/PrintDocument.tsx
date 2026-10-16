@@ -95,7 +95,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
       )}
 
       {levels.map((l, i) => (
-        <FloorSheet key={l.id} plan={plan} level={l} scale={scale} paper={options.paper} project={project} sheetNo={`A-${101 + i}`}>
+        <FloorSheet key={l.id} plan={plan} level={l} scale={scale} project={project}>
           {block(`${levelName(l)} plan`, `A-${101 + i}`)}
         </FloorSheet>
       ))}
@@ -103,7 +103,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
       {options.compliance && (
         <section className="page">
           <Header project={project} title="Compliance report" />
-          <ComplianceSheet project={project} version={version} />
+          <ComplianceSheet version={version} columns={options.paper === "a3" ? 3 : 2} />
           <div style={{ position: "absolute", right: `${MARGIN_MM}mm`, bottom: `${MARGIN_MM}mm`, width: `${SIDEBAR_MM}mm` }}>{block("Compliance report", "A-900")}</div>
         </section>
       )}
@@ -124,7 +124,7 @@ function Header({ project, title }: { project: Project; title: string }) {
   );
 }
 
-function FloorSheet({ plan, level, scale, paper, project, sheetNo, children }: { plan: BuildingPlan; level: Level; scale: number; paper: Paper; project: Project; sheetNo: string; children: React.ReactNode }) {
+function FloorSheet({ plan, level, scale, project, children }: { plan: BuildingPlan; level: Level; scale: number; project: Project; children: React.ReactNode }) {
   const B = sheetBounds(plan);
   const mmPerFt = 304.8 / scale;
   const wMm = B.w * mmPerFt;
@@ -138,8 +138,6 @@ function FloorSheet({ plan, level, scale, paper, project, sheetNo, children }: {
   }, [plan, level, ppf]);
   const keys = labels.filter((l) => l.kind === "key");
   const covered = coveredArea(plan, level.id);
-  void project;
-  void sheetNo;
   return (
     <section className="page">
       <Header project={project} title={`${levelName(level)} plan`} />
@@ -280,15 +278,14 @@ function AreaSchedule({ plan, report }: { plan: BuildingPlan; report: Version["c
   );
 }
 
-function ComplianceSheet({ project, version }: { project: Project; version: Version }) {
+function ComplianceSheet({ version, columns }: { version: Version; columns: number }) {
   const s = summarize(version.compliance, version.plan);
   const groups = [
     { title: `LDA rules · ${s.ldaPass} of ${s.lda.length} pass`, list: s.lda },
     { title: `Livable home · ${s.livablePass} of ${s.livable.length} pass`, list: s.livable },
   ].filter((g) => g.list.length);
-  void project;
   return (
-    <div style={{ columnCount: 2, columnGap: "10mm", fontSize: "2.8mm", paddingRight: `${SIDEBAR_MM + 8}mm` }}>
+    <div style={{ columnCount: columns, columnGap: "8mm", columnFill: "auto", height: "100%", fontSize: "2.7mm", paddingRight: `${SIDEBAR_MM + 8}mm` }}>
       <p style={{ fontSize: "4.4mm", fontWeight: 600, margin: "0 0 3mm" }}>
         {s.fails.length ? `${s.fails.length} rules to fix` : `Passes all ${s.lda.length} LDA checks and ${s.livable.length} livable rules`}
       </p>
@@ -296,7 +293,7 @@ function ComplianceSheet({ project, version }: { project: Project; version: Vers
         {version.compliance.authority} Building and Zoning Regulations · {version.compliance.band} · {plan2(version)}
       </p>
       {groups.map((g) => (
-        <div key={g.title} style={{ breakInside: "avoid-column" }}>
+        <div key={g.title}>
           <p style={{ fontWeight: 600, fontSize: "3.2mm", margin: "3mm 0 1.5mm" }}>{g.title}</p>
           {g.list.map((c) => (
             <div key={c.id} style={{ display: "flex", gap: "2mm", padding: "1mm 0", borderBottom: "0.2mm solid #E4E4DF", breakInside: "avoid" }}>

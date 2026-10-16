@@ -10,7 +10,7 @@ import { Segmented } from "@/app/design/kit";
 import { PlanDefs, PlanSheet, sheetBounds } from "@/app/plan/FloorPlan";
 import { areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
 
-export function PlanCompare({ before, after, changed, className }: { before?: BuildingPlan; after: BuildingPlan; changed: string[]; className?: string }) {
+export function PlanCompare({ before, after, changed, caption, className }: { before?: BuildingPlan; after: BuildingPlan; changed: string[]; caption?: string; className?: string }) {
   const levels = useMemo(() => levelsOf(after), [after]);
   const firstChanged = after.rooms.find((r) => changed.includes(r.id))?.level;
   const [level, setLevel] = useState(firstChanged ?? levels[0]?.id ?? "ground");
@@ -107,7 +107,7 @@ export function PlanCompare({ before, after, changed, className }: { before?: Bu
           </>
         )}
       </div>
-      <p className="mt-2 text-[12.5px] text-ink-3">{before ? "Drag across the plan to compare. Changed rooms are outlined." : "The first design: nothing to compare yet."}</p>
+      <p className="mt-2 text-[12.5px] text-ink-3">{caption ?? (before ? "Drag across the plan to compare. Changed rooms are outlined." : "Nothing to compare yet.")}</p>
     </div>
   );
 }

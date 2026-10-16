@@ -107,6 +107,7 @@ export function humanize(message: string, plan?: BuildingPlan): string {
   s = s.replace(/(\d+)\s+(\w+?)\(s\)/g, (_, n: string, w: string) => `${n} ${w}${n === "1" ? "" : "s"}`).replace(/\(s\)/g, "s");
   // "Retrying with the direct reviser (KeyError)…" and similar internals.
   if (/retrying with|fallback|direct reviser/i.test(s)) return "Taking another approach…";
+  if (/^resolving comment/i.test(s)) return "Writing up what changed…";
   s = s.replace(/\s*\((?:[A-Z][A-Za-z]+Error|attempt \d+)\)/g, "");
   // Remove the model's name: "Argon is laying out…" → "Laying out…", "Argon's" → "My".
   s = s.replace(/^Argon(?:,? the AI architect,?)? (?:is|will) /i, "").replace(/^Argon /i, "").replace(/\bArgon's\b/g, "my").replace(/\bArgon\b/g, "Naqsha");

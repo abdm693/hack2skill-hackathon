@@ -32,7 +32,8 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const phone = useMediaQuery("(max-width: 767px)");
-  const wide = useMediaQuery("(min-width: 1280px)");
+  // Legend and zoom sit beside the dock only when a 720px dock leaves room for them.
+  const wide = useMediaQuery("(min-width: 1600px)");
 
   const run = useFlow((s) => (s.design?.pid === project.id ? s.design : null));
   const revise = useFlow((s) => (s.revise?.pid === project.id ? s.revise : null));
@@ -172,12 +173,12 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const brief = project.brief;
   const sheetW = 380;
   const [headH, setHeadH] = useState(120);
-  const [legendH, setLegendH] = useState(0);
+  const [legend, setLegend] = useState({ w: 0, h: 0 });
   const legendObs = useRef<ResizeObserver | null>(null);
   const legendRef = useCallback((el: HTMLDivElement | null) => {
     legendObs.current?.disconnect();
-    if (!el) return setLegendH(0);
-    legendObs.current = new ResizeObserver(() => setLegendH(el.offsetHeight));
+    if (!el) return setLegend({ w: 0, h: 0 });
+    legendObs.current = new ResizeObserver(() => setLegend({ w: el.offsetWidth, h: el.offsetHeight }));
     legendObs.current.observe(el);
   }, []);
   const headObs = useRef<ResizeObserver | null>(null);
@@ -187,11 +188,12 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     headObs.current = new ResizeObserver(() => setHeadH(el.offsetHeight));
     headObs.current.observe(el);
   }, []);
+  // The drawing keeps clear of the floating pieces: the legend sits beside it on wider screens, below it on phones.
   const inset = {
     top: headH + 12,
-    left: phone ? 12 : 76,
+    left: phone ? 12 : Math.max(76, wide ? 76 : legend.w + 32),
     right: (sheet && !phone ? sheetW + 24 : 16) + (phone ? 0 : 8),
-    bottom: 100 + (wide ? 0 : legendH + 8),
+    bottom: 100 + (phone ? legend.h + 8 : 0),
   };
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName).map((it) => ({
     ...it,

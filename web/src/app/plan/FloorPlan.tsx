@@ -986,8 +986,10 @@ export function FloorPlan({
   // Keys for the legend.
   const rooms = useMemo(() => plan.rooms.filter((r) => r.level === level), [plan, level]);
   const keysRef = useRef<string>("");
+  const measured = size.w > 0 && size.h > 0;
   const labels = useMemo(() => {
     void fontTick;
+    if (!measured) return [] as Label[];
     const lv = levelsOf(plan).find((l) => l.id === level);
     const isGround = lv ? lv.index === 0 : true;
     const site = isGround ? rooms.filter((r) => SITE_TYPES.has(r.type)) : [];
@@ -1006,7 +1008,7 @@ export function FloorPlan({
     );
     const avoid: Box[] = stairs.map((d) => ({ x0: d.outline.x, y0: d.outline.y, x1: d.outline.x + d.outline.w, y1: d.outline.y + d.outline.d }));
     return layoutLabels(labelled, labelPpf || 1, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
-  }, [plan, level, rooms, labelPpf, fontTick, deltas]);
+  }, [plan, level, rooms, labelPpf, fontTick, deltas, measured]);
   useEffect(() => {
     const keys = labels.filter((l): l is Extract<Label, { kind: "key" }> => l.kind === "key").map((l) => ({ n: l.n, room: l.room }));
     const k = keys.map((x) => `${x.n}:${x.room.id}`).join("|");

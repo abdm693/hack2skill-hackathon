@@ -160,8 +160,12 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
 /** The sheets on screen, scaled to the window, before printing. */
 function PrintPreview({ project, version, options, conceptUrl, onClose, onPrint }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string; onClose: () => void; onPrint: () => void }) {
   const [w, setW] = useState(() => window.innerWidth);
+  const [h, setH] = useState(() => window.innerHeight);
   useEffect(() => {
-    const on = () => setW(window.innerWidth);
+    const on = () => {
+      setW(window.innerWidth);
+      setH(window.innerHeight);
+    };
     window.addEventListener("resize", on);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -170,8 +174,10 @@ function PrintPreview({ project, version, options, conceptUrl, onClose, onPrint 
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
-  const pagePx = (PAPER[options.paper].w / 25.4) * 96;
-  const zoom = Math.min(1, (w - 48) / pagePx);
+  // One whole sheet in view at a time.
+  const pageW = (PAPER[options.paper].w / 25.4) * 96;
+  const pageH = (PAPER[options.paper].h / 25.4) * 96;
+  const zoom = Math.min(1, (w - 48) / pageW, (h - 120) / pageH);
   return createPortal(
     <motion.div className="fixed inset-0 z-[85] flex flex-col bg-surface-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Print preview">
       <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-6">

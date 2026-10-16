@@ -234,7 +234,7 @@ export function FloorsEditor({
   const moveItem = move ? CATALOGUE.find((c) => c.id === move.id) : undefined;
 
   return (
-    <div>
+    <div className="@container">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmented
           label="Storeys"
@@ -302,9 +302,9 @@ export function FloorsEditor({
         </AnimatePresence>
       </div>
 
-      <ul className="mt-2 grid gap-x-6 sm:grid-cols-2">
+      <ul className="mt-2 grid gap-x-6 @lg:grid-cols-2">
         {items.map((c) => (
-          <li key={c.id} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-b-0 sm:[&:nth-last-child(2)]:border-b-0">
+          <li key={c.id} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-b-0 @lg:[&:nth-last-child(2)]:border-b-0">
             <span className="min-w-0">
               <span className="block truncate text-[14px] text-ink">{c.label}</span>
               {c.hint && <span className="block text-[12px] text-ink-3">{c.hint}</span>}

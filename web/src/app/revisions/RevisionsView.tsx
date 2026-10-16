@@ -94,11 +94,14 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
           {wide && (
             <aside className="hidden xl:sticky xl:top-[72px] xl:block xl:h-[calc(100dvh-200px)] xl:self-start">
               {(() => {
-                const after = showRun ? run?.version?.plan ?? run?.plan : version?.plan;
-                const before = showRun ? base?.plan : parent?.plan;
+                const revised = showRun ? run?.version?.plan ?? run?.plan : version?.plan;
+                // While a revision hasn't touched the plan yet, show the plan it starts from.
+                const after = revised ?? (showRun ? base?.plan : undefined);
+                const before = showRun ? (revised ? base?.plan : undefined) : parent?.plan;
                 const changes = showRun ? run?.version?.changes ?? run?.changes ?? [] : version?.changes ?? [];
                 const changed = changes.filter((c) => c.kind === "plan").flatMap((c) => c.targets);
-                return after ? <PlanCompare before={before} after={after} changed={changed} className="h-full" /> : <div className="h-full rounded-card bg-surface-2" />;
+                const caption = !before ? (showRun ? "The plan as it stands; changes appear here as Naqsha makes them." : "The first design: nothing to compare yet.") : undefined;
+                return after ? <PlanCompare before={before} after={after} changed={changed} caption={caption} className="h-full" /> : <div className="h-full rounded-card bg-surface-2" />;
               })()}
             </aside>
           )}
@@ -280,7 +283,9 @@ function VersionStory({ project, version, parent, onWalk, onPlan }: { project: P
             <p className="mt-8 max-w-xl text-body-lg text-ink-2">
               {versionLine(summary) === "A fresh design"
                 ? `Drawn again from your brief and concept. Version ${parent?.n ?? version.n - 1} stays in your history; compare them on the plan.`
-                : "Naqsha looked at every comment and didn't need to change the plan; each answer is below."}
+                : comments?.length
+                  ? "Naqsha looked at every comment and didn't need to change the plan; each answer is below."
+                  : "Nothing in the plan needed to change for this one."}
             </p>
           )}
           {comments === null ? <p className="mt-8 text-[14px] text-ink-3">Loading the comments…</p> : comments.length ? <Threads comments={comments} plan={parent?.plan} latestVersion={project.current_version_id ?? undefined} /> : null}
