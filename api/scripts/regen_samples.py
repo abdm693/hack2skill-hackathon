@@ -34,8 +34,8 @@ SAMPLES = {
             "plus a separate dirty kitchen, and my parents' bedroom. Upstairs, three bedrooms with attached baths. A 1-car porch "
             "and a small front lawn. A plastic water tank on the roof, and please keep the roof solar-ready so we can add "
             "panels later."),
-        "answers": {"authority": ["LDA"], "plot": ["plot:35x65", "corner:false"], "facing": ["facing:N"], "storeys": ["storeys:2"],
-                    "bedrooms": ["bedrooms:4"], "water_tank": ["tank:plastic"], "solar": ["solar:ready"],
+        "answers": {"authority": ["LDA"], "plot": ["plot:35x65", "corner:false"], "corner": ["corner:false"], "facing": ["facing:N"],
+                    "storeys": ["storeys:2"], "bedrooms": ["bedrooms:4"], "water_tank": ["tank:plastic"], "solar": ["solar:ready"],
                     "style": ["style:Modern Contemporary"],
                     "floors": ["floor:ground=drawing,tv_lounge,kitchen,dirty_kitchen,bedroom:1,bath:1",
                                "floor:first=bedroom:3,bath:3"]},
@@ -47,8 +47,8 @@ SAMPLES = {
             "bedrooms, each with an attached bath: two on the ground floor and three upstairs. Downstairs we want a drawing "
             "room, a dining room, a TV lounge, a kitchen with a dirty kitchen, a prayer room and a servant quarter. A 2-car "
             "porch and a roof terrace. A concrete water tank, and solar panels on the roof."),
-        "answers": {"authority": ["LDA"], "plot": ["plot:50x90", "corner:false"], "facing": ["facing:S"], "storeys": ["storeys:2"],
-                    "bedrooms": ["bedrooms:5"], "water_tank": ["tank:concrete"], "solar": ["solar:panels"],
+        "answers": {"authority": ["LDA"], "plot": ["plot:50x90", "corner:false"], "corner": ["corner:false"], "facing": ["facing:S"],
+                    "storeys": ["storeys:2"], "bedrooms": ["bedrooms:5"], "water_tank": ["tank:concrete"], "solar": ["solar:panels"],
                     "style": ["style:Spanish"],
                     "floors": ["floor:ground=drawing,dining,tv_lounge,kitchen,dirty_kitchen,prayer,servant_quarter,bedroom:2,bath:2",
                                "floor:first=bedroom:3,bath:3"]},
