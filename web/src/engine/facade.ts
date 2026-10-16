@@ -47,6 +47,16 @@ function region(o: Partial<FacadeRegion>): Reg {
 
 export function facadeAPI(ctx: BuildCtx) {
   const M = ctx.mats;
+  // Projections never cross a party-wall plot edge and reach at most 1.5 / 3 ft into open setbacks
+  // (StructureModel.envelope); geometry beyond that is cut off with a warning.
+  let clipped = false;
+  const fbox = (mb: MeshBuilder, s: Side, u0: number, u1: number, p0: number, p1: number, h0: number, h1: number): void => {
+    const axis = s === "front" || s === "back" ? "x" : "y";
+    const c = ctx.model.clipRunBox(axis, u0, u1, p0, p1);
+    const lo = (a: number, b: number) => Math.min(a, b), hi = (a: number, b: number) => Math.max(a, b);
+    if (!c || c[0] > lo(u0, u1) + 1e-3 || c[1] < hi(u0, u1) - 1e-3 || c[2] > lo(p0, p1) + 1e-3 || c[3] < hi(p0, p1) - 1e-3) clipped = true;
+    if (c) faceBox(mb, s, c[0], c[1], c[2], c[3], h0, h1);
+  };
   const plane = (r: Reg, withExtras = false): number => {
     const p = ctx.model.outerPlane(r.side, r.u0, r.u1, r.h0, r.h1, withExtras ? ctx.facadeSurfs : undefined);
     if (p !== null) return p;
@@ -58,6 +68,8 @@ export function facadeAPI(ctx: BuildCtx) {
     level: levelAtHeight(ctx, (h0 + h1) / 2),
   });
   const finish = (kit: Kit, kind: string, label: string, r: Reg, collide = true, shadows = true): THREE.Group => {
+    if (clipped) warn(`facade.${kind} on the ${r.side}: cut back to the plot / setback projection limit`);
+    clipped = false;
     const g = kit.build(new THREE.Group(), shadows);
     ctx.add(g, tag(kind, label, r.h0, r.h1));
     if (collide) g.traverse((o) => (o as THREE.Mesh).isMesh && ctx.collider(o as THREE.Mesh));
@@ -94,7 +106,7 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "stone_cladding");
     const kit = new Kit();
     const mb = kit.mb(mat);
-    for (const rr of g.rects((v) => v === true)) faceBox(mb, r.side, rr.x, rr.x + rr.w, p, p + sgn * depth, rr.y, rr.y + rr.d);
+    for (const rr of g.rects((v) => v === true)) fbox(mb, r.side, rr.x, rr.x + rr.w, p, p + sgn * depth, rr.y, rr.y + rr.d);
     if (kit.empty) return;
     finish(kit, "cladding", "Facade cladding", r);
     register(r, p + sgn * depth);
@@ -114,12 +126,12 @@ export function facadeAPI(ctx: BuildCtx) {
     const span = r.u1 - r.u0;
     for (let k = 0; k < n; k++) {
       const c = n === 1 ? (r.u0 + r.u1) / 2 : r.u0 + w / 2 + ((span - w) * k) / (n - 1);
-      faceBox(mb, r.side, c - w / 2, c + w / 2, p + sgn * gap, p + sgn * (gap + d), r.h0, r.h1);
+      fbox(mb, r.side, c - w / 2, c + w / 2, p + sgn * gap, p + sgn * (gap + d), r.h0, r.h1);
     }
     // slim top + bottom carrier rails behind the fins
     const rail = M.get("metal_black");
-    faceBox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h1 - 0.1, r.h1);
-    faceBox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h0, r.h0 + 0.1);
+    fbox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h1 - 0.1, r.h1);
+    fbox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h0, r.h0 + 0.1);
     finish(kit, "fins", "Vertical fins", r);
     register(r, p + sgn * (gap + d));
   }
@@ -137,10 +149,10 @@ export function facadeAPI(ctx: BuildCtx) {
     const span = r.h1 - r.h0;
     for (let k = 0; k < n; k++) {
       const hc = n === 1 ? (r.h0 + r.h1) / 2 : r.h0 + t / 2 + ((span - t) * k) / (n - 1);
-      faceBox(mb, r.side, r.u0, r.u1, p + sgn * 0.05, p + sgn * (0.05 + d), hc - t / 2, hc + t / 2);
+      fbox(mb, r.side, r.u0, r.u1, p + sgn * 0.05, p + sgn * (0.05 + d), hc - t / 2, hc + t / 2);
     }
     const post = M.get("metal_black");
-    for (const u of [r.u0, r.u1]) faceBox(kit.mb(post), r.side, u - 0.06, u + 0.06, p, p + sgn * (0.05 + d * 0.6), r.h0, r.h1);
+    for (const u of [r.u0, r.u1]) fbox(kit.mb(post), r.side, u - 0.06, u + 0.06, p, p + sgn * (0.05 + d * 0.6), r.h0, r.h1);
     finish(kit, "louvers", "Horizontal louvers", r);
     register(r, p + sgn * (0.05 + d));
   }
@@ -154,10 +166,10 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "plaster_white");
     const kit = new Kit();
     const mb = kit.mb(mat);
-    faceBox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h1 - t, r.h1);
-    faceBox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h0, r.h0 + t);
-    faceBox(mb, r.side, r.u0, r.u0 + t, p, p + sgn * d, r.h0 + t, r.h1 - t);
-    faceBox(mb, r.side, r.u1 - t, r.u1, p, p + sgn * d, r.h0 + t, r.h1 - t);
+    fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h1 - t, r.h1);
+    fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h0, r.h0 + t);
+    fbox(mb, r.side, r.u0, r.u0 + t, p, p + sgn * d, r.h0 + t, r.h1 - t);
+    fbox(mb, r.side, r.u1 - t, r.u1, p, p + sgn * d, r.h0 + t, r.h1 - t);
     finish(kit, "frame", "Projecting frame", r);
     register(r, p + sgn * d);
   }
@@ -169,6 +181,13 @@ export function facadeAPI(ctx: BuildCtx) {
     if (d < 0) { y += d; d = -d; }
     w = clamp(w, 0.3, 200);
     d = clamp(d, 0.3, 200);
+    const cr = ctx.model.clipRect({ x, y, w, d });
+    if (!cr) {
+      warn("facade.canopy lies entirely outside the plot / setback projection limit; skipped");
+      return;
+    }
+    if (cr.w < w - 1e-3 || cr.d < d - 1e-3) warn("facade.canopy: cut back to the plot / setback projection limit");
+    ({ x, y, w, d } = cr);
     const top = clamp(num(o?.h_ft, 10), 0, 80);
     const t = clamp(num(o?.thickness_ft, 0.5), 0.08, 4);
     const mat = M.get(o?.material, "plaster_white");
@@ -225,25 +244,33 @@ export function facadeAPI(ctx: BuildCtx) {
     const kit = new Kit();
     const mb = kit.mb(mat);
     const off = 0.35;
-    faceBox(mb, r.side, r.u0, r.u1, p + sgn * off, p + sgn * (off + 0.06), r.h0, r.h1);
+    fbox(mb, r.side, r.u0, r.u1, p + sgn * off, p + sgn * (off + 0.06), r.h0, r.h1);
     // frame around the screen
     const fm = M.get("metal_black");
     const fb = kit.mb(fm);
-    faceBox(fb, r.side, r.u0 - 0.1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h1, r.h1 + 0.12);
-    faceBox(fb, r.side, r.u0 - 0.1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h0 - 0.12, r.h0);
-    faceBox(fb, r.side, r.u0 - 0.1, r.u0, p, p + sgn * (off + 0.1), r.h0, r.h1);
-    faceBox(fb, r.side, r.u1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h0, r.h1);
+    fbox(fb, r.side, r.u0 - 0.1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h1, r.h1 + 0.12);
+    fbox(fb, r.side, r.u0 - 0.1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h0 - 0.12, r.h0);
+    fbox(fb, r.side, r.u0 - 0.1, r.u0, p, p + sgn * (off + 0.1), r.h0, r.h1);
+    fbox(fb, r.side, r.u1, r.u1 + 0.1, p, p + sgn * (off + 0.1), r.h0, r.h1);
     finish(kit, "screen", "Jaali screen", r, false);
     register(r, p + sgn * (off + 0.06));
   }
 
   function column(o: { at: Pt; from_h_ft: number; to_h_ft: number; size_ft?: number; round?: boolean; material: MaterialSpec }): void {
     const at = Array.isArray(o?.at) ? o.at : [0, 0];
-    const x = num(at[0], 0), y = num(at[1], 0);
+    let x = num(at[0], 0), y = num(at[1], 0);
     let h0 = num(o?.from_h_ft, 0), h1 = num(o?.to_h_ft, h0 + 10);
     if (h1 < h0) [h0, h1] = [h1, h0];
     if (h1 - h0 < 0.2) h1 = h0 + 0.2;
     const s = clamp(num(o?.size_ft, 1), 0.2, 8);
+    {
+      // keep the column inside the projection envelope
+      const e = ctx.model.envelope;
+      const cx = clamp(x, e.x0 + s / 2, e.x1 - s / 2), cy = clamp(y, e.y0 + s / 2, e.y1 - s / 2);
+      if (Math.abs(cx - x) > 1e-3 || Math.abs(cy - y) > 1e-3) warn("facade.column: moved inside the plot / setback projection limit");
+      x = cx;
+      y = cy;
+    }
     const mat = M.get(o?.material, "plaster_white");
     const kit = new Kit();
     if (o?.round) kit.cyl(mat, x * FT, ((h0 + h1) / 2) * FT, y * FT, (s / 2) * FT, (h1 - h0) * FT, 32);
@@ -269,10 +296,10 @@ export function facadeAPI(ctx: BuildCtx) {
     const kit = new Kit();
     const body = M.get("metal_black");
     const mb = kit.mb(body);
-    faceBox(mb, s, u - 0.13, u + 0.13, p, p + sgn * 0.32, h - 0.32, h + 0.32);
+    fbox(mb, s, u - 0.13, u + 0.13, p, p + sgn * 0.32, h - 0.32, h + 0.32);
     const lamp = M.emissive(hex, 3.5 * k);
-    faceBox(kit.mb(lamp, false), s, u - 0.09, u + 0.09, p + sgn * 0.08, p + sgn * 0.26, h + 0.32, h + 0.335);
-    faceBox(kit.mb(lamp, false), s, u - 0.09, u + 0.09, p + sgn * 0.08, p + sgn * 0.26, h - 0.335, h - 0.32);
+    fbox(kit.mb(lamp, false), s, u - 0.09, u + 0.09, p + sgn * 0.08, p + sgn * 0.26, h + 0.32, h + 0.335);
+    fbox(kit.mb(lamp, false), s, u - 0.09, u + 0.09, p + sgn * 0.08, p + sgn * 0.26, h - 0.335, h - 0.32);
     finish(kit, "wall_light", "Wall washer", r, false);
     // up/down light cones washing the wall
     const glow = new MeshBuilder();
@@ -299,7 +326,7 @@ export function facadeAPI(ctx: BuildCtx) {
     const p = plane(r, true);
     const sgn = outSign(s);
     const kit = new Kit();
-    faceBox(kit.mb(M.emissive(hex, 4), false), s, u0, u1, p + sgn * 0.01, p + sgn * 0.07, h - 0.04, h + 0.04);
+    fbox(kit.mb(M.emissive(hex, 4), false), s, u0, u1, p + sgn * 0.01, p + sgn * 0.07, h - 0.04, h + 0.04);
     finish(kit, "led_strip", "LED strip", r, false, false);
     const glow = new MeshBuilder();
     glowQuad(glow, s, (u0 + u1) / 2, p + sgn * 0.02, h, u1 - u0 + 0.4, 2.2, true);

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { Kit, mat4, unitBox, unitCyl } from "../core/shapes";
 import { FT } from "../core/util";
 import type { BuildCtx } from "../core/ctx";
-import type { PlacedOpening, WallRun } from "./model";
+import type { PlacedOpening, StructureModel, WallRun } from "./model";
 
 export interface OpeningMats {
   frame: THREE.Material;
@@ -20,6 +20,9 @@ export interface OpeningMats {
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** The structure model of the build in progress: sills, hoods and frames are clipped to its projection envelope. */
+let MODEL: StructureModel | null = null;
+
 /** Axis helpers for a run. */
 function frame(run: WallRun) {
   const U = run.axis === "x" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
@@ -27,6 +30,11 @@ function frame(run: WallRun) {
   const P = (u: number, w: number, h: number) => (run.axis === "x" ? new THREE.Vector3(u * FT, h * FT, w * FT) : new THREE.Vector3(w * FT, h * FT, u * FT));
   /** axis-aligned box in run space (ft) */
   const box = (kit: Kit, mat: THREE.Material, u0: number, u1: number, w0: number, w1: number, h0: number, h1: number) => {
+    if (MODEL) {
+      const c = MODEL.clipRunBox(run.axis, u0, u1, w0, w1);
+      if (!c) return;
+      [u0, u1, w0, w1] = c;
+    }
     const a = P(Math.min(u0, u1), Math.min(w0, w1), Math.min(h0, h1));
     const b = P(Math.max(u0, u1), Math.max(w0, w1), Math.max(h0, h1));
     if (Math.abs(b.x - a.x) < 1e-5 || Math.abs(b.y - a.y) < 1e-5 || Math.abs(b.z - a.z) < 1e-5) return;
@@ -37,6 +45,7 @@ function frame(run: WallRun) {
 
 export function buildOpenings(ctx: BuildCtx, m: OpeningMats): void {
   const plan = ctx.plan;
+  MODEL = ctx.model;
   for (const po of ctx.model.openings) {
     const kit = new Kit();
     const glassKit = new Kit();

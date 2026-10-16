@@ -292,7 +292,8 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   if (type === "kitchen_counter" && wallInfo) {
     // openings on the wall behind, in item-local x (m)
     const walls = ctx.model.roomWalls(room, against!);
-    const sgn = against === "front" || against === "right" ? -1 : 1; // item-local +x direction along the plan axis
+    // item-local +x along the wall's plan axis (world z = -y, built geometry mirrored in local z)
+    const sgn = against === "front" || against === "right" ? 1 : -1;
     const centerU = wallInfo.axis === "x" ? cx : cy;
     extra.wallOpenings = walls.flatMap((wl) =>
       wl.run.openings
@@ -409,6 +410,11 @@ function addOutdoorUnit(ctx: BuildCtx, room: RoomM, side: Side, cx: number, cy: 
   const run = wl.run;
   if (run.axis === "x" && run.out < 0) return; // keep the street facade clean
   const outer = run.c + (run.out * run.t) / 2;
+  // never hang it over a party wall / past the plot's projection envelope (the unit is ~1.1 ft deep)
+  const face0: Side = run.axis === "x" ? (run.out < 0 ? "front" : "back") : run.out < 0 ? "left" : "right";
+  const env = ctx.model.envelope;
+  const reach = outer + run.out * 1.15;
+  if (env.party[face0] || (run.axis === "x" ? reach < env.y0 || reach > env.y1 : reach < env.x0 || reach > env.x1)) return;
   // skip if a facade element or an opening sits there
   if (run.openings.some((op) => u > op.u0 - 1.6 && u < op.u1 + 1.6)) return;
   const h = Math.max(room.floorH + 1, base - 1.6);
