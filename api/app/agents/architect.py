@@ -161,9 +161,21 @@ def _score(report: dict) -> tuple[int, int]:
     return c["fail"], c["warn"]
 
 
-def _feedback(report: dict) -> str:
-    return ("The plan checker found these problems. Fix every FAIL (and the WARNs where it's easy); keep everything else "
-            "unchanged.\n" + lda.violations_text(report) + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
+MAX_FEEDBACK = 10
+
+
+def _feedback(report: dict, worse: int | None = None) -> str:
+    """The checker's findings for the next round: the most important FAILs first (at most MAX_FEEDBACK), WARNs only once the
+    FAILs are few, so the planner fixes what matters without rewriting everything."""
+    fails = [c for c in report["checks"] if c["status"] == "fail"]
+    focus = {**report, "checks": sorted(fails, key=lambda c: lda._group(c["id"]))[:MAX_FEEDBACK]
+             + ([c for c in report["checks"] if c["status"] == "warn"][:4] if len(fails) <= 3 else [])}
+    more = f"\n(and {len(fails) - MAX_FEEDBACK} smaller problems you can leave for the next round)" if len(fails) > MAX_FEEDBACK else ""
+    note = (f"Your last attempt made things worse ({worse} problems), so start again from THIS plan and change only what these "
+            f"problems need.\n" if worse else "")
+    return (note + "The plan checker found these problems. Fix every FAIL listed; change only the rooms and openings they "
+            "involve, keep rooms tiling exactly (no overlaps, no gaps) and keep everything else unchanged.\n"
+            + lda.violations_text(focus) + more + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
 
 
 async def _ask_plan(contents: list) -> AsyncIterator[tuple[str, object]]:
@@ -216,12 +228,13 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
         history.append({"attempt": attempt, "pass": sum(1 for c in report["checks"] if c["status"] == "pass"), "warn": warns,
                         "fail": fails, "failed": [c["id"] for c in report["checks"] if c["status"] == "fail"], "repairs": repairs})
         yield "compliance", {"report": report, "attempt": attempt}
+        worse = fails if best is not None and fails > best[0][0] else None
         if best is None or (fails, warns) < best[0]:
             best = ((fails, warns), plan, report, attempt)
         if report["ok"]:
             break
-        # continue from the best plan so far, with its specific failures and fix hints
-        contents = [first, _model_turn(best[1]), _user_turn(_feedback(best[2]))]
+        # continue from the best plan so far, with its most important failures and fix hints
+        contents = [first, _model_turn(best[1]), _user_turn(_feedback(best[2], worse))]
     (_, plan, report, at) = best
     if at != history[-1]["attempt"]:  # the last attempt was worse: show the one we keep
         yield "plan", {"plan": plan, "attempt": at}
@@ -311,10 +324,15 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
     yield "stage", {"stage": "review", "message": f"Improving the plan: {crit['summary'] or majors[0]['problem']}"}
     asks = "\n".join(f"- [{i.get('severity', 'minor').upper()}] {i['problem']} Fix: {i.get('fix', '')}"
                      + (f" (rooms: {', '.join(i.get('rooms') or [])})" if i.get("rooms") else "") for i in crit["issues"])
+    still = ""
+    if not report["ok"]:  # the checker's failures go with the critique: the architect often names their root cause
+        fails = sorted([c for c in report["checks"] if c["status"] == "fail"], key=lambda c: lda._group(c["id"]))[:MAX_FEEDBACK]
+        still = "\nThe plan checker also still reports these problems; fix them too:\n" + lda.violations_text(
+            {**report, "checks": fails}, warns=False)
     contents = [first, _model_turn(plan), _user_turn(
-        "A senior architect reviewed your drawings and asks for these improvements:\n" + asks +
+        "A senior architect reviewed your drawings and asks for these improvements:\n" + asks + still +
         "\nMake the MAJOR ones (and the minor ones where easy) while keeping everything that already works and every rule that "
-        "already passes. Return the COMPLETE BuildingPlan JSON.")]
+        "already passes; keep rooms tiling exactly. Return the COMPLETE BuildingPlan JSON.")]
     base = _score(report)
     cand = cand_rep = None
 
