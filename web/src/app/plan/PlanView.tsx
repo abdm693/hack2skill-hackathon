@@ -11,8 +11,8 @@ import type { ComplianceCheck, Room } from "@contracts/plan";
 import type { Project } from "@contracts/api-types";
 import { cn, feetInches, num, relativeTime } from "@/app/lib/utils";
 import { plotLabel } from "@/api/domain";
-import { useAskContext } from "@/app/design/ask";
-import { flow, fixLoopOf, useFlow, useFlowBinding } from "@/app/design/flow";
+import { useAskContext } from "@/app/shell/ask";
+import { flow, fixLoopOf, useFlow } from "@/app/design/flow";
 import { FloorStack, stackItems } from "@/app/design/FloorStack";
 import { Button, Dialog, EASE_OUT, EASE_SHEET, IconButton, useHotkeys, useMediaQuery } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
@@ -26,7 +26,6 @@ import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, coveredArea, hueColor
 import { PrintDialog } from "./PrintDialog";
 
 export function PlanView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
-  useFlowBinding(project, onProjectChange);
   const goTo = useViewNav();
   const navigate = useNavigate();
   const location = useLocation();
@@ -147,6 +146,22 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     return () => window.removeEventListener("keydown", onKey);
   }, [version, running]);
   useHotkeys({ Escape: () => { setCheck(null); setPinSel(null); } });
+
+  // The shell's commands: ?dialog=print ("Print plan…") and ?compare=1 ("Compare versions").
+  const dialogParam = params.get("dialog");
+  const compareParam = params.get("compare");
+  useEffect(() => {
+    if (dialogParam !== "print" || !version || running) return;
+    setPrinting(true);
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("dialog"); return n; }, { replace: true });
+  }, [dialogParam, version, running, setParams]);
+  useEffect(() => {
+    if (compareParam !== "1" || !version || running) return;
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("compare"); return n; }, { replace: true });
+    if (changedIds.length && version.parent_id) setShowChanges(true);
+    else goTo("revisions", version.id === project.current_version_id ? undefined : { search: `v=${version.id}` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareParam, version, running]);
 
   const designAgain = () => {
     setConfirmAgain(false);

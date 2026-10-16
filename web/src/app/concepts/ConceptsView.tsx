@@ -12,8 +12,8 @@ import type { Concept, Project } from "@contracts/api-types";
 import { api, assetUrl } from "@/api/client";
 import { FACING_LABEL } from "@/api/domain";
 import { cn } from "@/app/lib/utils";
-import { useAskContext } from "@/app/design/ask";
-import { flow, useFlow, useFlowBinding, withNight, type ConceptSlot } from "@/app/design/flow";
+import { useAskContext } from "@/app/shell/ask";
+import { flow, useFlow, withNight, type ConceptSlot } from "@/app/design/flow";
 import { BreathingDot, Button, Chip, Dialog, EASE_OUT, IconButton, Segmented, Shimmer, notify, useGuardedClick, useHotkeys } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
 import { labelConcepts, nextRootLetter, type Labelled } from "./names";
@@ -23,7 +23,6 @@ const REMIX_IDEAS = ["Darker glass", "More timber", "Add a jaali screen", "Brick
 type Light = "day" | "night";
 
 export function ConceptsView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
-  useFlowBinding(project, onProjectChange);
   const goTo = useViewNav();
   const location = useLocation();
   const navigate = useNavigate();

@@ -13,7 +13,10 @@ import { isTyping, usePhone } from "@/app/lib/hooks";
 import { useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
 import { CommentsSheet } from "@/app/comments/CommentsSheet";
-import { FloorPlan } from "@/app/plan/FloorPlan";
+import { FloorPlan, type PlanPin } from "@/app/plan/FloorPlan";
+import { anchorLevel, anchorPlanXY, authorHue, levelKey, levelName, levelsOf } from "@/app/plan/model";
+import { FloorStack, stackItems } from "@/app/design/FloorStack";
+import { pinNumbers } from "@/app/comments/model";
 import { Dock } from "@/app/shell/Dock";
 import { useAsk } from "@/app/shell/ask";
 import { useShell } from "@/app/shell/state";
@@ -179,6 +182,29 @@ function ClientShell({ token }: { token: string }) {
   );
 
   const open = comments.filter((c) => c.status === "open").length;
+
+  // Plan: one floor at a time (?floor=), with the same numbered pins as the house.
+  const plan = version?.plan;
+  const levels = useMemo(() => (plan ? levelsOf(plan) : []), [plan]);
+  const floorParam = params.get("floor");
+  const level = levels.find((l) => l.id === floorParam)?.id ?? levels.find((l) => l.index === 0)?.id ?? levels[0]?.id ?? "ground";
+  const setLevel = useCallback(
+    (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("floor", id); return n; }, { replace: true }),
+    [setParams],
+  );
+  const floorItems = useMemo(() => stackItems(levels, (l) => levelKey(l, levels), levelName), [levels]);
+  const pins = useMemo<PlanPin[]>(() => {
+    if (!plan || !version) return [];
+    const mine = comments.filter((c) => c.version_id === version.id);
+    const numbers = pinNumbers(mine);
+    return mine
+      .filter((c) => anchorLevel(plan, c) === level && c.anchor.kind !== "view")
+      .map((c) => {
+        const [x, y] = anchorPlanXY(c);
+        return { id: c.id, n: numbers.get(c.id) ?? 0, x, y, hue: authorHue(c), text: c.text, selected: focusComment === c.id };
+      })
+      .filter((p) => p.x > -2 && p.y > -2 && p.x < plan.site.plot.width_ft + 2 && p.y < plan.site.plot.depth_ft + 2);
+  }, [plan, version, comments, level, focusComment]);
   const shellVars = {
     "--chrome-top": phone ? "128px" : "calc(var(--chrome) * 2 + 48px)",
     "--sheet-top": phone ? "0px" : "calc(var(--chrome) * 2 + 48px)",
@@ -197,8 +223,22 @@ function ClientShell({ token }: { token: string }) {
         {!version || tab === "house" ? null : (
           <div className="absolute inset-0" style={{ paddingTop: "var(--chrome-top)", paddingBottom: "calc(var(--dock-h) + var(--chrome))" }}>
             <div className="mx-auto h-full max-w-[1100px] px-3 sm:px-6" style={{ paddingRight: sheetRight ? "calc(380px + var(--chrome) * 2)" : undefined }}>
-              <div className="h-full overflow-hidden rounded-panel bg-surface p-3 shadow-e1 sm:p-6">
-                <FloorPlan plan={version.plan} />
+              <div className="relative h-full overflow-hidden rounded-panel bg-surface shadow-e1">
+                <FloorPlan
+                  plan={version.plan}
+                  level={level}
+                  pins={pins}
+                  onPin={(id) => openComments({ focus: id })}
+                  setbacks={version.compliance?.envelope?.setbacks_ft}
+                  resetKey={version.id}
+                  fit={phone ? "plot" : "sheet"}
+                  inset={{ top: phone && levels.length > 1 ? 64 : 16, right: 16, bottom: 16, left: !phone && levels.length > 1 ? 72 : 16 }}
+                />
+                {levels.length > 1 && (
+                  <div className={cn("absolute z-10", phone ? "inset-x-3 top-3" : "left-3 top-1/2 -translate-y-1/2")}>
+                    <FloorStack items={floorItems} value={level} onChange={setLevel} orientation={phone ? "horizontal" : "vertical"} />
+                  </div>
+                )}
               </div>
             </div>
           </div>

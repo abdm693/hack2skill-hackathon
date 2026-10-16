@@ -74,6 +74,9 @@ export interface Run {
   startedAt?: number;
   resumed?: boolean;
   baseVersionId?: string;
+  /** Revise: what was typed into Ask, and which comments were picked. */
+  instruction?: string;
+  commentIds?: string[];
 }
 
 const idleRun = (): Run => ({ status: "idle", items: [], sections: [], chars: 0, failures: [] });
@@ -135,6 +138,8 @@ interface ProjectState {
 
   /** Apply comments (all open ones by default) and/or a typed instruction ("make the kitchen bigger"). */
   runRevise(versionId: string, commentIds?: string[], instruction?: string): Promise<void>;
+  /** Forget a finished design or revise run (its outcome has been seen). */
+  clearRun(key: RunKey): void;
 }
 
 const controllers = new Map<string, AbortController>();
@@ -212,6 +217,12 @@ export const useProject = create<ProjectState>((set, get) => {
 
   /** Handlers shared by POST /design, POST /revise and GET /run. */
   const runHandlers = (pid: string, key: () => RunKey): SSEHandlers => ({
+    // First event of every design/revise stream (fresh or re-attached): the timer runs from when the server started.
+    run: ({ started_at }) => {
+      if (!live(pid)) return;
+      const t = Date.parse(started_at);
+      if (Number.isFinite(t)) patchRun(key(), { startedAt: t });
+    },
     stage: ({ stage, message }) => {
       if (!live(pid)) return;
       // Each writing pass (plan, fix, build) counts its own characters.
@@ -258,9 +269,11 @@ export const useProject = create<ProjectState>((set, get) => {
       patchRun(k, k === "design" ? { version, plan: version.plan, compliance: version.compliance, sections: version.sections } : { version });
       pushItem(k, { kind: "version", version });
       const p = get().project;
-      if (p && !p.versions.some((v) => v.id === version.id)) {
+      if (p) {
         get().patchProject({
-          versions: [...p.versions, { id: version.id, n: version.n, created_at: version.created_at, status: version.status }],
+          versions: p.versions.some((v) => v.id === version.id)
+            ? p.versions
+            : [...p.versions, { id: version.id, n: version.n, created_at: version.created_at, status: version.status }],
           current_version_id: version.id,
           stage: "ready",
         });
@@ -447,7 +460,7 @@ export const useProject = create<ProjectState>((set, get) => {
       const isRetry = get().intakeFailed === body;
       if (body.action !== "start" && !isRetry) {
         const text =
-          display ?? (body.action === "skip_question" ? "Skip this one" : body.action === "skip_all" ? "Skip setup — design it for me" : body.message ?? "");
+          display ?? (body.action === "skip_question" ? "Decide for me" : body.action === "skip_all" ? "Decide everything for me" : body.message ?? "");
         set({ messages: [...get().messages, { id: nid("local"), role: "user", text, created_at: new Date().toISOString() }] });
       }
       set({ intakeBusy: true, draft: "", intakeFailed: null });
@@ -540,7 +553,11 @@ export const useProject = create<ProjectState>((set, get) => {
               if (!live(pid)) return;
               const p = get().project;
               if (p && !p.concepts.some((x) => x.id === concept.id)) {
-                get().patchProject({ concepts: [...p.concepts, concept], thumbnail_url: p.thumbnail_url ?? concept.url });
+                get().patchProject({
+                  concepts: [...p.concepts, concept],
+                  thumbnail_url: p.thumbnail_url ?? concept.url,
+                  stage: p.stage === "setup" ? "concepts" : p.stage,
+                });
               }
               updateSlot(index, { status: "done", conceptId: concept.id });
             },
@@ -590,16 +607,24 @@ export const useProject = create<ProjectState>((set, get) => {
       let key: RunKey = p.stage === "revising" ? "revise" : "design";
       let decided = false;
       set({ [key]: { ...idleRun(), status: "running", startedAt: Date.now(), resumed: true } } as Partial<ProjectState>);
+      const switchTo = (actual: RunKey) => {
+        if (actual === key) return;
+        set({ [key]: idleRun(), [actual]: { ...get()[key], status: "running" } } as Partial<ProjectState>);
+        key = actual;
+      };
       const handlers = (h: SSEHandlers): SSEHandlers => ({
         ...h,
+        run: (data) => {
+          if (!decided && (data.kind === "design" || data.kind === "revise")) {
+            decided = true;
+            switchTo(data.kind);
+          }
+          h.run?.(data);
+        },
         stage: (data) => {
           if (!decided) {
             decided = true;
-            const actual: RunKey = data.stage === "changes" ? "revise" : data.stage === "plan" || data.stage === "fix" ? "design" : key;
-            if (actual !== key) {
-              set({ [key]: idleRun(), [actual]: { ...get()[key], status: "running" } } as Partial<ProjectState>);
-              key = actual;
-            }
+            switchTo(data.stage === "changes" ? "revise" : data.stage === "plan" || data.stage === "fix" ? "design" : key);
           }
           h.stage?.(data);
         },
@@ -744,7 +769,7 @@ export const useProject = create<ProjectState>((set, get) => {
     async runRevise(versionId, commentIds, instruction) {
       const pid = get().pid;
       if (!pid || get().shareToken || get().revise.status === "running") return;
-      set({ revise: { ...idleRun(), status: "running", startedAt: Date.now(), baseVersionId: versionId } });
+      set({ revise: { ...idleRun(), status: "running", startedAt: Date.now(), baseVersionId: versionId, instruction, commentIds } });
       get().patchProject({ stage: "revising" });
       await drive(
         pid,
@@ -752,6 +777,10 @@ export const useProject = create<ProjectState>((set, get) => {
         (h, o) => api.revise(pid, { version_id: versionId, comment_ids: commentIds, instruction }, h, o),
         () => void get().runRevise(versionId, commentIds, instruction),
       );
+    },
+
+    clearRun(key) {
+      if (get()[key].status !== "running") set({ [key]: idleRun() } as Partial<ProjectState>);
     },
   };
 });

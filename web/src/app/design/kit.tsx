@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { useEscape as useShellEscape } from "@/app/lib/hooks";
 import { toast } from "@/app/store/toast";
 
 export const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
@@ -283,18 +284,9 @@ export function Shimmer({ className, dark }: { className?: string; dark?: boolea
 
 // ── Overlay plumbing ────────────────────────────────────────────────────────────────────────────────
 
+/** Escape closes the top-most layer only (the shell's layer stack; it preventDefaults, so the viewer keeps walking). */
 function useEscape(open: boolean, onClose: () => void) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
+  useShellEscape(open, onClose);
 }
 
 export function useMediaQuery(q: string): boolean {

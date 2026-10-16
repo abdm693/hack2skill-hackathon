@@ -88,24 +88,29 @@ function signature(c: AskContext): string {
   ]);
 }
 
-/** Register what Ask, the suggestions and the Next pill mean in this view, while it is mounted. */
-export function useAskContext(ctx: AskContext): void {
+/**
+ * Register what Ask, the suggestions and the Next pill mean in this view, while it is mounted.
+ * Pass null to register nothing (the dock then uses the shell's defaults for the view).
+ */
+export function useAskContext(ctx: AskContext | null): void {
   const id = useId();
-  const sig = signature(ctx);
+  const active = !!ctx;
+  const sig = ctx ? signature(ctx) : "";
   // Keep the latest callbacks without re-rendering the dock.
   useLayoutEffect(() => {
-    contexts.set(id, ctx);
+    if (ctx) contexts.set(id, ctx);
   });
   useLayoutEffect(() => {
+    if (!active) return;
     useAskStore.setState((s) => ({ stack: [...s.stack.filter((x) => x !== id), id] }));
     return () => {
       contexts.delete(id);
       useAskStore.setState((s) => ({ stack: s.stack.filter((x) => x !== id), version: s.version + 1 }));
     };
-  }, [id]);
+  }, [id, active]);
   useLayoutEffect(() => {
-    useAskStore.setState((s) => ({ version: s.version + 1 }));
-  }, [sig]);
+    if (active) useAskStore.setState((s) => ({ version: s.version + 1 }));
+  }, [sig, active]);
 }
 
 /** The context the dock should use now (the top of the stack), merged over nothing. */

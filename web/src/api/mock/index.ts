@@ -11,7 +11,6 @@ import { ApiError } from "../errors";
 import { userId } from "../mode";
 import { clone, db, latency, now, save, sleep, touch, uid } from "./db";
 import { RENDER_IMAGE } from "./fixtures";
-import { intakeScript } from "./intake";
 import { envelopeFor, recheck } from "./lda";
 import { nightOf } from "./night";
 import { conceptsScript, designScript } from "./scripts";
@@ -269,8 +268,10 @@ export const mockApi: Api = {
     return clone(db().messages[pid] ?? []);
   },
 
-  intake(pid, body, handlers, opts) {
-    return play(intakeScript(pid, body), handlers, opts?.signal);
+  async intake(pid, body, handlers, opts) {
+    // The overhaul's conversational setup agent ("Here's what I understood", floors, roof, style).
+    const { mockIntake } = await import("@/app/setup/mock-agent");
+    return mockIntake(pid, body, handlers, opts);
   },
 
   async getEnvelope(q) {
@@ -288,7 +289,7 @@ export const mockApi: Api = {
     return play(conceptsScript(pid, body), handlers, opts?.signal);
   },
 
-  nightConcepts(pid, body, handlers, opts) {
+  conceptsNight(pid, body, handlers, opts) {
     async function* script(): AsyncGenerator<Step> {
       const p = editable(pid);
       const list = p.concepts.filter((c) => (body.ids?.length ? body.ids.includes(c.id) : true));

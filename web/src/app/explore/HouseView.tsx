@@ -15,8 +15,9 @@ import { HouseViewer, type ViewerHandle } from "@/viewer/HouseViewer";
 import type { DesignSectionSrc, SectionResult } from "@/engine";
 import { api, errorMessage } from "@/api/client";
 import { cn, feetInches, hourLabel, relativeTime } from "@/app/lib/utils";
-import { useAskContext } from "@/app/design/ask";
-import { flow, useFlow, useFlowBinding } from "@/app/design/flow";
+import { useAskContext } from "@/app/shell/ask";
+import { useShell } from "@/app/shell/state";
+import { flow, useFlow } from "@/app/design/flow";
 import { FloorStack, stackItems } from "@/app/design/FloorStack";
 import { Button, Dialog, EASE_OUT, IconButton, Kbd, Popover, Segmented, notify, useHotkeys, useMediaQuery } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
@@ -40,7 +41,6 @@ type Light = "day" | "dusk" | "night";
 const ALL_LAYERS: Record<Layer, boolean> = { structure: true, facade: true, interior: true, furniture: true, landscape: true, lighting: true, custom: true };
 
 export function HouseView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
-  useFlowBinding(project, onProjectChange);
   const goTo = useViewNav();
   const [params, setParams] = useSearchParams();
   // Beside the dock only when there is room for both clusters and a 720px dock between them.
@@ -78,16 +78,17 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 
   // ── Viewer state ──
   const viewer = useRef<ViewerHandle>(null);
-  const [mode, setModeState] = useState<"orbit" | "walk">(params.get("mode") === "walk" ? "walk" : "orbit");
+  const ready = useRef(false);
+  // The query string holds the state the shell's commands can set: ?mode=walk, ?floor, ?room, ?light, ?comment, ?v.
+  const mode: "orbit" | "walk" = params.get("mode") === "walk" ? "walk" : "orbit";
   const setMode = useCallback(
     (m: "orbit" | "walk") => {
-      setModeState(m);
       setParams((p) => { const n = new URLSearchParams(p); if (m === "walk") n.set("mode", "walk"); else n.delete("mode"); return n; }, { replace: true });
     },
     [setParams],
   );
   const levels = useMemo(() => (plan ? levelsOf(plan) : []), [plan]);
-  const [floor, setFloorState] = useState<string>("all");
+  const [floor, setFloorState] = useState<string>(() => params.get("floor") ?? "all");
   const visibleLevels = useMemo(() => {
     if (mode === "walk" || floor === "all" || !levels.length) return undefined;
     const i = levels.findIndex((l) => l.id === floor);
@@ -95,13 +96,14 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   }, [floor, levels, mode]);
   const [layers, setLayers] = useState<Record<Layer, boolean>>(ALL_LAYERS);
   const [cutFt, setCutFt] = useState<number | null>(null);
-  const [light, setLightState] = useState<Light>((params.get("light") as Light) || "day");
+  const lightParam = params.get("light");
+  const light: Light = lightParam === "night" || lightParam === "dusk" ? lightParam : "day";
   const setLight = (l: Light) => {
-    setLightState(l);
     setParams((p) => { const n = new URLSearchParams(p); if (l === "day") n.delete("light"); else n.set("light", l); return n; }, { replace: true });
   };
   const [hour, setHour] = useState(13);
-  const sunHour = light === "night" ? 19 : light === "dusk" ? 18.4 : hour;
+  // Night: the viewer's own night lighting (night prop) with the sun set; dusk is just after sunset.
+  const sunHour = light === "night" ? 19.5 : light === "dusk" ? 18.9 : hour;
   const [ghost, setGhost] = useState(true);
   const [cars, setCars] = useState<"auto" | "show" | "hide">("auto");
   const [commentMode, setCommentMode] = useState(false);
@@ -111,18 +113,28 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const initialRoom = useRef<string | null>(params.get("room"));
   const [render, setRender] = useState<{ before: string; after?: string; error?: string } | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [finishWalk, setFinishWalk] = useState(false);
   const [failed, setFailed] = useState<SectionResult[]>([]);
   const [asBuilt, setAsBuilt] = useState<ComplianceReport | null>(null);
   const topFt = useMemo(() => (plan ? Math.max(...plan.levels.map((l) => l.elevation_ft + l.height_ft)) + 2 : 30), [plan]);
 
-  const setFloor = (id: string) => {
-    if (mode === "orbit" && id === floor && id !== "all") {
-      setFloorState("all"); // tap the active floor again to see the whole house
-      return;
-    }
+  const applyFloor = useCallback((id: string) => {
     setFloorState(id);
-    if (id !== "all") viewer.current?.setFloor(id);
+    viewer.current?.setFloor(id);
+  }, []);
+  const setFloor = (id: string) => {
+    // Tap the active floor again (orbit) to see the whole house.
+    const next = mode === "orbit" && id === floor && id !== "all" ? "all" : id;
+    applyFloor(next);
+    setParams((p) => { const n = new URLSearchParams(p); if (next === "all") n.delete("floor"); else n.set("floor", next); return n; }, { replace: true });
   };
+  // ?floor= set from outside (the command bar).
+  const floorParam = params.get("floor");
+  useEffect(() => {
+    if (!floorParam || floorParam === floor || !levels.some((l) => l.id === floorParam)) return;
+    applyFloor(floorParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorParam, levels]);
 
   const goToRoom = (id: string) => {
     const r = plan?.rooms.find((x) => x.id === id);
@@ -148,11 +160,15 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const onReady = useCallback(
     async (result: { summary: Parameters<typeof api.asBuilt>[2]; sections: SectionResult[] }) => {
       setFailed(result.sections.filter((s) => !s.ok));
-      // A deep link to a room (?room=f_bed2) goes there once the house is built.
+      const first = !ready.current;
+      ready.current = true;
+      // A deep link to a room (?room=f_bed2) goes there once the house is built; a floor (?floor=) shows that floor.
       const linked = initialRoom.current;
       if (linked && shown?.plan.rooms.some((r) => r.id === linked)) {
         initialRoom.current = null;
         viewer.current?.goToRoom(linked);
+      } else if (first && floor !== "all" && shown?.plan.levels.some((l) => l.id === floor)) {
+        viewer.current?.setFloor(floor);
       }
       if (!shown) return;
       const key = `naqsha.thumb.${shown.id}`;
@@ -176,6 +192,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
         setAsBuilt(null);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [shown, project, onProjectChange],
   );
 
@@ -215,6 +232,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   };
 
   const openComments = useMemo(() => (comments ?? []).filter((c) => c.status === "open"), [comments]);
+  // Pins are numbered by when they were made, the same numbers as Plan and the comments sheet (pinNumbers).
   const ordered = useMemo(() => [...(comments ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)), [comments]);
   const selectedComment = comments?.find((c) => c.id === selected);
 
@@ -224,6 +242,32 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
     setMode("orbit");
     void flow.revise(project.id, { version_id: latestVid, comment_ids: ids.length ? ids : undefined, instruction });
   };
+
+  // ?room= set from outside (the command bar's rooms) while the house is open.
+  const roomParam = params.get("room");
+  useEffect(() => {
+    if (!roomParam || roomParam === room.id) return;
+    if (!ready.current) {
+      initialRoom.current = roomParam;
+      return;
+    }
+    const r = plan?.rooms.find((x) => x.id === roomParam);
+    if (!r) return;
+    setRoom({ id: r.id, level: r.level });
+    viewer.current?.goToRoom(r.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomParam]);
+
+  // ?comment=<id> ("Show where" in the comments sheet): fly to the pin once it is loaded, then forget the param.
+  const commentParam = params.get("comment");
+  useEffect(() => {
+    if (!commentParam || !comments) return;
+    const c = comments.find((x) => x.id === commentParam);
+    if (!c) return;
+    setSelected(c.id);
+    viewer.current?.flyTo(c);
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("comment"); return n; }, { replace: true });
+  }, [commentParam, comments, setParams]);
 
   // When a revision lands, follow the new version (the camera stays where it is).
   const lastRevised = useRef<string | null>(null);
@@ -297,20 +341,20 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
           ghostContext={ghost}
           hideVehicles={cars === "auto" ? undefined : cars === "hide"}
           preserveCamera
-          comments={comments ?? []}
+          comments={ordered}
           commentMode={commentMode && isLatest}
           onAddComment={(d) => isLatest && setDraft(d)}
           onSelectComment={(id) => setSelected(id)}
           onReady={(res) => void onReady(res)}
           onRoomChange={(id, level) => setRoom({ id, level })}
           onExitWalk={(reason) => {
-            setModeState("orbit");
-            setParams((p) => { const n = new URLSearchParams(p); n.delete("mode"); return n; }, { replace: true });
+            // F ("finish"): the viewer stays in walk with the pointer free until the person confirms.
             if (reason === "finish") {
-              if (!isLatest) return;
-              if (openComments.length) setFinishOpen(true);
-              else notify.info("Nothing to revise yet", "Press C while walking to pin a comment where you stand.");
+              if (isLatest && openComments.length) setFinishOpen(true);
+              else setFinishWalk(true);
+              return;
             }
+            setMode("orbit");
           }}
         />
       </div>
@@ -395,7 +439,13 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
             transition={{ duration: 0.2, ease: EASE_OUT }}
             className="glass-hud absolute right-3 top-[104px] z-30 md:top-[72px] w-[min(360px,calc(100vw-24px))] rounded-card p-4 sm:right-4"
           >
-            <PinCard c={selectedComment} n={ordered.findIndex((c) => c.id === selectedComment.id) + 1} onFly={() => viewer.current?.flyTo(selectedComment)} onClose={() => setSelected(null)} />
+            <PinCard
+              c={selectedComment}
+              n={ordered.findIndex((c) => c.id === selectedComment.id) + 1}
+              onFly={() => viewer.current?.flyTo(selectedComment)}
+              onThread={() => useShell.getState().openComments({ focus: selectedComment.id })}
+              onClose={() => setSelected(null)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -454,6 +504,28 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
         />
       </Popover>
 
+      <Dialog
+        open={finishWalk}
+        onClose={() => setFinishWalk(false)}
+        title="Finish the walk-through?"
+        description={isLatest ? "You haven't pinned anything yet. Press C while walking to pin a comment where you stand; Naqsha turns your comments into the next version." : "This is an earlier version. Switch to the latest to pin comments and revise."}
+        actions={
+          <>
+            <Button variant="quiet" onClick={() => setFinishWalk(false)}>
+              Keep walking
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setFinishWalk(false);
+                setMode("orbit");
+              }}
+            >
+              Back to orbit
+            </Button>
+          </>
+        }
+      />
       <FinishDialog
         open={finishOpen}
         comments={openComments}
@@ -673,7 +745,7 @@ function RoomNavigator({ plan, current, onGo }: { plan: BuildingPlan; current: s
   );
 }
 
-function PinCard({ c, n, onFly, onClose }: { c: Comment; n: number; onFly: () => void; onClose: () => void }) {
+function PinCard({ c, n, onFly, onThread, onClose }: { c: Comment; n: number; onFly: () => void; onThread: () => void; onClose: () => void }) {
   return (
     <div>
       <div className="flex items-start gap-3">
@@ -691,7 +763,10 @@ function PinCard({ c, n, onFly, onClose }: { c: Comment; n: number; onFly: () =>
           <X className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       </div>
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="hud" size="sm" onClick={onThread}>
+          {c.replies?.length ? `${c.replies.length} ${c.replies.length === 1 ? "reply" : "replies"}` : "Reply"}
+        </Button>
         <Button variant="hud" size="sm" onClick={onFly}>
           Look at it
         </Button>

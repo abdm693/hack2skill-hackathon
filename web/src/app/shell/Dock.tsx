@@ -20,7 +20,8 @@ import { Tooltip } from "@/app/ui/Tooltip";
 import { ease, spring } from "@/app/ui/motion";
 import { activeAskContext, useActiveAskContext, useAskStore, type Command, type NextMove } from "./ask";
 import { matchCommands } from "./commands";
-import { useNarration, type Narration } from "./narration";
+import { useNaqshaActivity } from "@/app/design/flow";
+import type { Narration } from "./narration";
 import { useShell } from "./state";
 
 export interface DockProps {
@@ -41,7 +42,8 @@ export interface DockProps {
 export function Dock(props: DockProps) {
   const { tone, defaultNext, defaultLine, defaultPlaceholder, defaultSuggestions, defaultSubmit, commands } = props;
   const ctx = useActiveAskContext();
-  const narration = useNarration();
+  // What Naqsha is doing right now (setup, concepts, night, design, revise), from the one project store.
+  const activity = useNaqshaActivity();
   const phone = usePhone();
   const draft = useAskStore((s) => s.draft);
   const focusTick = useAskStore((s) => s.focusTick);
@@ -58,7 +60,12 @@ export function Dock(props: DockProps) {
   const line = ctx.line !== undefined ? ctx.line : defaultLine;
   const suggestions = (ctx.suggestions ?? defaultSuggestions).slice(0, 3);
   const placeholder = ctx.placeholder ?? defaultPlaceholder;
-  const working: Narration | null = narration ?? (ctx.busy ? { kind: "design", text: "Working…" } : null);
+  const working: Narration | null =
+    activity.busy && activity.line
+      ? { kind: activity.kind ?? "design", text: activity.line, progress: activity.progress }
+      : ctx.busy
+        ? { kind: "design", text: "Working…" }
+        : null;
 
   const setDraft = (v: string) => useAskStore.setState({ draft: v });
 

@@ -11,8 +11,7 @@ import type { Brief, ChatMessage, Project } from "@contracts/api-types";
 import { api } from "@/api/client";
 import { plotLabel } from "@/api/domain";
 import { cn } from "@/app/lib/utils";
-import { useAskContext } from "@/app/design/ask";
-import { useFlowBinding } from "@/app/design/flow";
+import { useAskContext } from "@/app/shell/ask";
 import { Button, EASE_SHEET, IconButton, notify, useMediaQuery } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
 import { BriefSheet } from "./BriefSheet";
@@ -23,7 +22,6 @@ import { PlotCanvas } from "./PlotCanvas";
 const NO_MESSAGES: ChatMessage[] = [];
 
 export function BriefView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
-  useFlowBinding(project, onProjectChange);
   const goTo = useViewNav();
   const phone = useMediaQuery("(max-width: 1023px)");
   const messages = useChat((s) => (s.pid === project.id ? s.messages : NO_MESSAGES));

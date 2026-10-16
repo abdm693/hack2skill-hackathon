@@ -11,8 +11,8 @@ import type { Change, Comment, Project, Version } from "@contracts/api-types";
 import type { BuildingPlan } from "@contracts/plan";
 import { api, assetUrl } from "@/api/client";
 import { cn, feetInches, num, relativeTime } from "@/app/lib/utils";
-import { useAskContext } from "@/app/design/ask";
-import { flow, useFlow, useFlowBinding, type Activity, type Run } from "@/app/design/flow";
+import { useAskContext } from "@/app/shell/ask";
+import { flow, useFlow, type Activity, type Run } from "@/app/design/flow";
 import { BreathingDot, Button, EASE_OUT, useMediaQuery } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
 import { useNow } from "@/app/design/RunProgress";
@@ -24,7 +24,6 @@ import { NaqshaMark } from "@/app/setup/Conversation";
 import { PlanCompare } from "./PlanCompare";
 
 export function RevisionsView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
-  useFlowBinding(project, onProjectChange);
   const goTo = useViewNav();
   const [params, setParams] = useSearchParams();
   const wide = useMediaQuery("(min-width: 1280px)");
