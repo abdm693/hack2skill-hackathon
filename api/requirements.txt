@@ -121,6 +121,8 @@ opentelemetry-semantic-conventions==0.63b1
     # via opentelemetry-sdk
 packaging==26.3
     # via google-adk
+pillow==12.3.0
+    # via naqsha-api
 proto-plus==1.29.0
     # via
     #   google-api-core

@@ -10,7 +10,17 @@ MODEL_ARCHITECT = os.environ.get("MODEL_ARCHITECT", "gemini-4-argon")
 MODEL_IMAGE = os.environ.get("MODEL_IMAGE", "gemini-3.1-flash-image")
 MODEL_IMAGE_HERO = os.environ.get("MODEL_IMAGE_HERO", "gemini-3-pro-image")
 
-PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "3"))
+MODEL_REVIEW = os.environ.get("MODEL_REVIEW", MODEL_ARCHITECT)      # the architect's self-review of the drawn plan
+MODEL_SETUP = os.environ.get("MODEL_SETUP", MODEL_INTAKE)           # the conversational setup agent (ADK)
+
+PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "4"))
+SELF_REVIEW = os.environ.get("SELF_REVIEW", "1") not in ("0", "false", "no")
+REVIEW_BUDGET_S = float(os.environ.get("REVIEW_BUDGET_S", "300"))  # the optional post-review revision never costs more
+
+# Identity Platform (email + password). The browser key is public by design (it identifies the project, not a secret),
+# but it is still never committed: it comes from the environment.
+AUTH_API_KEY = os.environ.get("NAQSHA_AUTH_API_KEY", "")
+AUTH_PROJECT = os.environ.get("NAQSHA_AUTH_PROJECT", PROJECT)
 
 # ADK builds its own google-genai client from the environment; make local runs match Cloud Run.
 os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")

@@ -64,11 +64,18 @@ export interface ChatMessage {
   allow_skip?: boolean;
 }
 
-export interface Concept { id: string; url: string; night_url?: string; prompt: string; model: string; created_at: string; parent_id?: string; instruction?: string }
+export interface Concept {
+  id: string; url: string; night_url?: string; prompt: string; model: string; created_at: string; parent_id?: string; instruction?: string;
+  /** The design take's name ("Stone and teak") and one-line direction (massing and materials), for captions. */
+  title?: string;
+  summary?: string;
+}
 
 export interface DesignSection { name: string; layer: Layer; code: string }
 
-export interface Change { id: string; summary: string; kind: "plan" | "section"; targets: string[]; comment_ids: string[] }
+export interface Change { id: string; summary: string; kind: "plan" | "section"; targets: string[]; comment_ids: string[];
+  /** Made for the typed request (revise {instruction}) rather than a pinned comment. */
+  from_request?: boolean }
 
 export interface Version {
   id: string;
@@ -81,6 +88,15 @@ export interface Version {
   changes?: Change[];
   status: "building" | "ready" | "failed";
   thumbnail_url?: string;
+  /** The architect's self-review of the drawn floors (design runs). applied = the plan was revised after it. */
+  review?: { verdict: "approve" | "revise" | "skipped"; summary: string; applied?: boolean;
+             issues: { severity: "major" | "minor"; rooms?: string[]; problem: string; fix?: string }[] };
+  /** The floor drawings the review looked at, one PNG per level. */
+  plan_images?: { level: string; name: string; url: string }[];
+  /** Plan rounds: fails/warns per attempt and the deterministic repairs applied. */
+  fix_history?: { attempt: number; fail: number; warn: number; failed: string[]; repairs?: string[]; review?: boolean }[];
+  /** What a revision was made from. */
+  source?: { comment_ids: string[]; instruction?: string | null };
 }
 
 export interface VersionSummary { id: string; n: number; created_at: string; status: Version["status"]; summary?: string }
@@ -96,6 +112,10 @@ export interface Project {
   /** The caller's role on this project. */
   role?: Role;
   members_count?: number;
+  /** The brief changed after the current version was designed (offer "Revise" or "Design again"; the stage never regresses). */
+  brief_changed?: boolean;
+  /** The sample (or project) this one was copied from. */
+  cloned_from?: string;
   name: string;
   created_at: string;
   updated_at: string;
@@ -152,7 +172,12 @@ export interface SSEEvents {
   "concept.started": { index: number; prompt: string };
   concept: { index: number; concept: Concept };
   "concept.failed": { index: number; message: string };
-  stage: { stage: "plan" | "compliance" | "fix" | "build" | "save" | "changes"; message: string };
+  /** busy: a model back-off wait ("Busy right now, retrying in 20 s…"); stage "review" = the architect's self-review;
+   *  stage "wait" = a back-off inside a non-run stream (concepts, setup). */
+  stage: { stage: "plan" | "compliance" | "fix" | "review" | "build" | "save" | "changes" | "wait"; message: string;
+           busy?: boolean; retry_in?: number | null };
+  /** First event of every design/revise stream (fresh or re-attached): reset the view, keep the timer from started_at. */
+  run: { kind: "design" | "revise"; started_at: string; elapsed_s: number };
   plan: { plan: BuildingPlan; attempt: number };
   compliance: { report: ComplianceReport; attempt: number };
   section: { section: DesignSection; index: number };

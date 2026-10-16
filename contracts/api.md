@@ -220,3 +220,31 @@ interface AsBuiltSummary {
 - `ChatMessage.suggestions?` holds what's-next prompt chips.
 - `input: "floors"` opens the per-floor program editor. It sends chips such as `floor:ground=drawing,kitchen,dirty_kitchen,bedroom:1,bath:2` and `floor:first=bedroom:3,bath:3,lounge`.
 - Tank and solar answers use chips: `tank:plastic` or `tank:concrete`, and `solar:none`, `solar:ready` or `solar:panels`.
+
+### Backend notes (added by the backend track, all additive)
+- **Chips the setup parses without a model** (instant replies): `plot:WxD`, `corner:true|false`, `facing:N` (or `N`…`NW`), `storeys:n`,
+  `bedrooms:n`, `bathrooms:n`, `basement:true`, `coords:lat,lng`, `floor:<level>=<rooms>`, `floors:auto` ("decide for me"),
+  `tank:…`, `solar:…`, `style:<name>` (or a style name), `budget:<tier>`, an authority (`LDA`, `DHA`…), space ids and `car_porch:n`.
+  Send the chip values in `chips` and the label in `message`. Anything else goes to the conversational agent.
+- **Setup greeting**: `action: "start"` on an empty chat returns "Tell me about the plot and who will live there…" with `suggestions`
+  (example first messages). The agent asks at most: location, plot, facing, storeys, rooms, `floors`, `water_tank`, `solar`, style.
+- **`intake.complete`** is sent once, when the brief first becomes complete. Later edits send `brief` + `message` only; if a version
+  exists the stage never regresses and `Project.brief_changed` becomes true (cleared by the next design or revision).
+- **Compliance checks** carry `category`, `unit` (`"ft"`, `"sq ft"`, `"%"`, `"sides"`…) and, when failing, `fix`. Livable rules
+  include named summary passes (`plan.rule.independence`, `.circulation`, `.stairs`, `.roof_door`, `.openings`, `.brief`).
+  `POST /api/lda/check` also takes an optional `brief` (enables the brief-adherence rules).
+- **Design stream**: starts with `run {kind, started_at, elapsed_s}` (also on re-attach); stage `review` is the architect's
+  self-review of the drawn floors; a `stage` with `busy: true` reports a model back-off ("Busy right now, retrying in 20 s…").
+  `Version` gains `review`, `plan_images` (one PNG per level), `fix_history` and, for revisions, `source`.
+- **Concepts** gain `title` and `summary` (the design take). `POST /concepts/night` without `ids` does the latest four.
+- **Sharing**: `GET /api/share/{token}/versions/{vid}` and `GET /api/share/{token}/comments` (polling) also exist. Share comments
+  take an optional `version_id` (default: the current version). `GET /members` also returns the caller's `role`; the share
+  `token`/`url` are only returned to the owner and team.
+- **Comments**: `POST /comments` and `/replies` accept `author_name` (shown for guests). Naqsha's revision replies carry
+  `author {id: "naqsha", role: "agent"}` plus `status` and `version_id`. Clients may edit or delete only their own comments.
+- **Revise**: changes made for the typed `instruction` carry `from_request: true` (their `comment_ids` list only real comments);
+  the resolution of the request is also sent as a final `stage` message. Plan edits may not add any LDA or livable failure the
+  version didn't already have; failures that were already there stay visible in the new version's report.
+- **Clone**: `{fresh: true}` forces a new copy of a sample.
+- **Errors**: an invalid or expired Bearer token returns **401** ("Your sign-in has expired…"); refresh the token and retry.
+  A role that may not do something gets **403**; a project you can't see is **404**.

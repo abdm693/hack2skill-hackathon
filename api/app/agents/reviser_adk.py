@@ -1,9 +1,11 @@
-"""Revision agent on Google ADK: a tool-using Argon agent that turns walkthrough comments into a new version.
+"""Revision agent on Google ADK: a tool-using architect that turns walkthrough comments (or a typed request such as "make the
+kitchen bigger") into a new version.
 
-Rather than receiving the whole design in one prompt, the agent works the way an architect would. It looks up the
-rooms the comments point at, reads only the code sections it needs, dry-runs layout edits against the LDA engine until
-they comply, writes the replacement sections, and records a resolution for every comment. Each tool call is streamed
-to the browser as a progress event. If ADK fails, the caller falls back to the single-shot reviser.
+The agent starts lean (the comments, the room list and the LDA envelope) and reads only what it needs: the rooms the comments
+point at, the code sections it may change, and the SDK reference only when it writes code. Layout edits are dry-run against
+the LDA engine AND Naqsha's planning rules; an edit that adds any failure the version didn't already have is refused, so a
+revision can't reintroduce a bedroom opening into a bedroom or a roof door away from the stair. Tool calls stream to the
+browser as plain-language progress. If ADK fails, the caller falls back to the single-shot reviser.
 """
 from __future__ import annotations
 
@@ -19,27 +21,27 @@ from google.genai import types
 from .. import config
 from ..compliance import lda
 from ..gemini import RETRY
-from ..store import blobs, db
-from .architect import BUILD_SYSTEM, CONTRACTS, _read
-from .reviser import apply_ops, merge_sections
+from ..store import db
+from .architect import BUILD_SYSTEM, CONTRACTS, _read, prepare
+from .reviser import apply_ops, comment_brief, finalize, merge_sections, new_failures, snapshot_parts
 
 APP = "naqsha-reviser"
 
-INSTRUCTION = """You are Naqsha's architect revising a house after the family's 3D walkthrough. Every comment is pinned to a
-spot in the model (room, element, level) and has a snapshot of what they saw.
+INSTRUCTION = """You are Naqsha's architect revising a house the family has walked through. Comments are pinned to a spot in
+the model (room, element, level) and may come with a snapshot; a REQUEST is a change they typed without a pin
+(comment_id "request").
 
-Work like this:
-1. For each comment, call get_room for the room it points at (and read_section for the sections you may change).
-2. Layout changes (room sizes or positions, adding or moving doors and windows, new rooms) go through check_plan_ops first. That
-   is a dry run against the LDA Building & Zoning Regulations. Iterate until it reports ok, then call apply_plan_ops.
-   If no compliant version exists, do not change the layout: resolve the comment as "rejected" or "partial", cite the rule and
-   offer an alternative.
-3. Visual changes (materials, colours, furniture, facade details, lighting) are made with write_section, which takes the
-   FULL new code of that section. If a room changed size, rewrite its furnish_<room_id> section too.
-4. Call resolve_comment exactly once per comment, with a friendly one- or two-sentence resolution.
-5. Finish by calling finish with the list of changes.
-Make the smallest change that satisfies each comment and keep everything else identical. The `structure` section rebuilds walls,
-openings, stairs and slabs from the plan automatically. Only rewrite it to change structural materials.
+Work quickly and in as few steps as possible, calling independent tools together in ONE step:
+1. Look first: get_rooms for every room the notes point at, and read_sections for the sections you may change, together.
+2. Layout changes (room sizes or positions, doors, windows, new rooms) go through check_plan_ops: a dry run against the LDA
+   regulations and the livability rules (bedrooms open onto circulation, one door per bath, stairs with landings to the roof).
+   Iterate until it reports ok, then apply_plan_ops. If no rule-abiding version exists, don't change the layout: resolve it as
+   "rejected" or "partial", say which rule in plain words, and offer an alternative.
+3. Visual changes (materials, colours, furniture, facade, lighting) use write_section with the FULL new code; call
+   sdk_reference once before writing code. If a room changed size, rewrite its furnish_<room_id> section too.
+4. Finish with ONE finish call: the list of changes and one friendly resolution (one or two sentences) per comment.
+Make the smallest change that satisfies each note and keep everything else identical. The `structure` section rebuilds walls,
+openings, stairs and slabs from the plan automatically; only rewrite it to change structural materials.
 
 design.js section rules (for write_section): """ + BUILD_SYSTEM.split("Rules:")[-1]
 
@@ -47,57 +49,87 @@ design.js section rules (for write_section): """ + BUILD_SYSTEM.split("Rules:")[
 class Workspace:
     """Mutable working copy of the version that the agent's tools operate on."""
 
-    def __init__(self, version: dict, comments: list[dict]):
+    def __init__(self, version: dict, comments: list[dict], brief: dict):
+        self.brief = brief
         self.plan = copy.deepcopy(version["plan"])
         self.sections = copy.deepcopy(version["sections"])
-        self.report = version.get("compliance")
+        self.base_report = lda.check(self.plan, brief)  # today's rules, so old versions are judged fairly
+        self.report = self.base_report
         self.comments = {c["id"]: c for c in comments}
         self.resolutions: dict[str, dict] = {}
-        self.written: list[dict] = []
-        self.removed: list[str] = []
         self.changes: list[dict] = []
         self.plan_changed = False
+        self.finished = False
         self.events: list[tuple[str, dict]] = []  # SSE events produced by tools, drained by the runner loop
+
+    def room_name(self, rid: str) -> str:
+        return next((r.get("name") for r in self.plan.get("rooms", []) if r["id"] == rid), rid)
+
+    def section_label(self, name: str) -> str:
+        if name.startswith("furnish_"):
+            return f"the furniture in {self.room_name(name[len('furnish_'):])}"
+        if name.startswith("facade"):
+            return "the facade"
+        if name.startswith("interior"):
+            return "the interiors"
+        return {"landscape": "the garden", "lighting": "the lighting", "structure": "the structure"}.get(name, "the design")
+
+    def _check(self, ops: list[dict]) -> tuple[dict, dict, list[dict]]:
+        cand, _ = prepare(apply_ops(self.plan, ops), self.brief)
+        rep = lda.check(cand, self.brief)
+        return cand, rep, new_failures(self.base_report, rep)
 
     def tools(self):
         ws = self
 
+        def get_rooms(room_ids: list[str]) -> dict:
+            """Rooms from the plan (feet), each with the openings on its walls and its level.
+
+            Args:
+              room_ids: Room ids, e.g. ["f_master", "g_lounge"].
+            """
+            out = {}
+            for rid in room_ids or []:
+                r = next((r for r in ws.plan["rooms"] if r["id"] == rid), None)
+                if not r:
+                    out[rid] = {"error": "no such room"}
+                    continue
+                out[rid] = {"room": r, "openings": [o for o in ws.plan["openings"] if rid in o.get("between", [])]}
+            names = ", ".join(ws.room_name(r) for r in room_ids or [])
+            ws.events.append(("stage", {"stage": "changes", "message": f"Looking at {names}…" if names else "Looking at the plan…"}))
+            return {"rooms": out, "all_room_ids": [r["id"] for r in ws.plan["rooms"]]}
+
         def list_sections() -> list[dict]:
-            """List the design.js sections of the current design (name, layer, number of lines)."""
+            """List the design.js sections (name, layer, number of lines)."""
             return [{"name": s["name"], "layer": s["layer"], "lines": s["code"].count("\n")} for s in ws.sections]
 
-        def read_section(name: str) -> dict:
-            """Read the full code of one design.js section.
+        def read_sections(names: list[str]) -> dict:
+            """Read the full code of design.js sections.
 
             Args:
-              name: Section name, e.g. "furnish_f_master" or "facade_front".
+              names: Section names, e.g. ["furnish_f_master", "facade_front"].
             """
-            s = next((s for s in ws.sections if s["name"] == name), None)
-            ws.events.append(("stage", {"stage": "changes", "message": f"Reading {name}…"}))
-            return {"name": name, "layer": s["layer"], "code": s["code"]} if s else {"error": f"no section {name}"}
+            out = {}
+            for n in names or []:
+                s = next((s for s in ws.sections if s["name"] == n), None)
+                out[n] = {"layer": s["layer"], "code": s["code"]} if s else {"error": "no such section"}
+            return out
 
-        def get_room(room_id: str) -> dict:
-            """Get a room from the plan (feet), with the openings on its edges and its neighbours.
-
-            Args:
-              room_id: Room id, e.g. "f_master".
-            """
-            r = next((r for r in ws.plan["rooms"] if r["id"] == room_id), None)
-            if not r:
-                return {"error": f"no room {room_id}", "rooms": [x["id"] for x in ws.plan["rooms"]]}
-            ops = [o for o in ws.plan["openings"] if room_id in o.get("between", [])]
-            return {"room": r, "openings": ops, "level": next((lv for lv in ws.plan["levels"] if lv["id"] == r["level"]), None)}
+        def sdk_reference() -> dict:
+            """The House SDK reference and engine notes. Read it once before writing any code."""
+            return {"sdk": _read(CONTRACTS / "house-sdk.d.ts"), "engine_notes": _read(CONTRACTS / "engine-notes.md")}
 
         def check_plan_ops(ops: list[dict]) -> dict:
-            """Dry-run plan edits against the LDA compliance engine without applying them.
+            """Dry-run plan edits against the LDA regulations and the livability rules, without applying them.
 
             Args:
-              ops: List of operations. Each is {"op": "upsert", "collection": "rooms"|"openings"|"stairs"|"levels", "item": {...full object with id}},
+              ops: Operations: {"op": "upsert", "collection": "rooms"|"openings"|"stairs"|"levels", "item": {...full object with id}},
                    {"op": "remove", "collection": ..., "id": "..."} or {"op": "set", "path": "roof.parapet_ft", "value": ...}.
             """
-            ws.events.append(("stage", {"stage": "compliance", "message": "Checking proposed layout changes against LDA rules…"}))
-            rep = lda.check(apply_ops(ws.plan, ops))
-            return {"ok": rep["ok"], "problems": [f"[{c['status']}] {c['title']}: {c['message']}" for c in rep["checks"] if c["status"] != "pass"]}
+            ws.events.append(("stage", {"stage": "compliance", "message": "Checking the change against the LDA and livability rules…"}))
+            _, rep, broken = ws._check(ops)
+            return {"ok": not broken, "new_problems": [f"{c['message']} Fix: {c.get('fix', '')}" for c in broken],
+                    "already_there_before": len([c for c in rep["checks"] if c["status"] == "fail"]) - len(broken)}
 
         def apply_plan_ops(ops: list[dict]) -> dict:
             """Apply plan edits (only after check_plan_ops says ok). Same format as check_plan_ops.
@@ -105,10 +137,9 @@ class Workspace:
             Args:
               ops: The operations to apply.
             """
-            cand = apply_ops(ws.plan, ops)
-            rep = lda.check(cand)
-            if not rep["ok"]:
-                return {"applied": False, "problems": [c["message"] for c in rep["checks"] if c["status"] == "fail"]}
+            cand, rep, broken = ws._check(ops)
+            if broken:
+                return {"applied": False, "new_problems": [c["message"] for c in broken]}
             ws.plan, ws.report, ws.plan_changed = cand, rep, True
             ws.events += [("plan", {"plan": cand, "attempt": 1}), ("compliance", {"report": rep, "attempt": 1})]
             return {"applied": True}
@@ -123,9 +154,9 @@ class Workspace:
             """
             sec = {"name": name, "layer": layer, "code": code if code.endswith("\n") else code + "\n"}
             ws.sections = merge_sections(ws.sections, [sec], [])
-            ws.written.append(sec)
             idx = next(i for i, s in enumerate(ws.sections) if s["name"] == name)
-            ws.events.append(("section", {"section": sec, "index": idx}))
+            ws.events += [("stage", {"stage": "changes", "message": f"Updating {ws.section_label(name)}…"}),
+                          ("section", {"section": sec, "index": idx})]
             return {"ok": True}
 
         def remove_section(name: str) -> dict:
@@ -135,87 +166,71 @@ class Workspace:
               name: Section name.
             """
             ws.sections = [s for s in ws.sections if s["name"] != name]
-            ws.removed.append(name)
             return {"ok": True}
 
-        def resolve_comment(comment_id: str, status: str, resolution: str) -> dict:
-            """Record how a walkthrough comment was handled.
-
-            Args:
-              comment_id: The comment id.
-              status: "resolved", "partial" or "rejected".
-              resolution: One or two friendly sentences for the family (what changed, or why not plus the alternative).
-            """
-            ws.resolutions[comment_id] = {"status": status if status in ("resolved", "partial", "rejected") else "partial",
-                                          "resolution": resolution}
-            return {"ok": True, "remaining": [c for c in ws.comments if c not in ws.resolutions]}
-
-        def finish(changes: list[dict]) -> dict:
-            """Finish the revision.
+        def finish(changes: list[dict], resolutions: list[dict]) -> dict:
+            """Finish the revision: the changes made and one resolution per comment (and for the request).
 
             Args:
               changes: [{"summary": "Enlarged the master bedroom window to 10 ft", "kind": "plan"|"section",
                          "targets": ["f_master_w1"], "comment_ids": ["..."]}]
+              resolutions: [{"comment_id": "...", "status": "resolved"|"partial"|"rejected",
+                             "resolution": "One or two friendly sentences for the family."}]
             """
-            ws.changes = [{"id": f"ch{i + 1}", **c} for i, c in enumerate(changes or [])]
+            ws.changes = [{"id": f"ch{i + 1}", "summary": c.get("summary", ""), "kind": c.get("kind", "section"),
+                           "targets": c.get("targets") or [], "comment_ids": c.get("comment_ids") or []}
+                          for i, c in enumerate(changes or [])]
+            for r in resolutions or []:
+                if r.get("comment_id"):
+                    ws.resolutions[r["comment_id"]] = {"status": r.get("status") if r.get("status") in ("resolved", "partial", "rejected")
+                                                       else "partial", "resolution": r.get("resolution") or ""}
+            missing = [c for c in ws.comments if c not in ws.resolutions]
+            if missing:
+                return {"ok": False, "resolve_these_too": missing}
+            ws.finished = True
             return {"ok": True}
 
-        return [list_sections, read_section, get_room, check_plan_ops, apply_plan_ops, write_section, remove_section,
-                resolve_comment, finish]
+        return [get_rooms, list_sections, read_sections, sdk_reference, check_plan_ops, apply_plan_ops, write_section,
+                remove_section, finish]
 
 
-async def revise(project: dict, version: dict, comments: list[dict]) -> AsyncIterator[tuple[str, dict]]:
+async def revise(project: dict, version: dict, comments: list[dict], instruction: str | None = None) -> AsyncIterator[tuple[str, dict]]:
     pid = project["id"]
+    brief = project.get("brief") or {}
     await db.update_project(pid, stage="revising")
-    yield "stage", {"stage": "changes", "message": f"Argon is reviewing your {len(comments)} comment(s)…"}
-    ws = Workspace(version, comments)
-    agent = Agent(name="reviser", model=Gemini(model=config.MODEL_ARCHITECT, retry_options=RETRY), instruction=INSTRUCTION, tools=ws.tools(),
-                  generate_content_config=types.GenerateContentConfig(max_output_tokens=32768))
+    n = len(comments)
+    notes = f"your {n} note{'s' if n != 1 else ''}" if n else ""
+    what = " and ".join(x for x in (notes, "your request" if instruction else "") if x)
+    yield "stage", {"stage": "changes", "message": f"Reading {what}…"}
+    targets = list(comments) + ([{"id": "request", "text": instruction, "anchor": {}}] if instruction else [])
+    ws = Workspace(version, targets, brief)
+    agent = Agent(name="reviser", model=Gemini(model=config.MODEL_ARCHITECT, retry_options=RETRY), instruction=INSTRUCTION,
+                  tools=ws.tools(), generate_content_config=types.GenerateContentConfig(max_output_tokens=32768))
     sessions = InMemorySessionService()
     runner = Runner(app_name=APP, agent=agent, session_service=sessions)
     session = await sessions.create_session(app_name=APP, user_id=pid)
 
-    parts: list = []
-    for c in comments[:8]:
-        if c.get("snapshot_url"):
-            got = await blobs.get(c["snapshot_url"].removeprefix("/api/assets/"))
-            if got:
-                parts += [types.Part.from_text(text=f"Snapshot for comment {c['id']}:"), types.Part.from_bytes(data=got[0], mime_type=got[1])]
-    brief = project.get("brief") or {}
+    parts = await snapshot_parts(comments)
     env = lda.envelope(brief["plot"]["width_ft"], brief["plot"]["depth_ft"], brief.get("authority") or "LDA") if brief.get("plot") else {}
     env.pop("_band", None)
-    cm = [{"id": c["id"], "text": c["text"], "where": {k: c["anchor"].get(k) for k in ("level", "room", "element_id", "kind", "label")}}
-          for c in comments]
-    text = (f"HOUSE SDK REFERENCE:\n{_read(CONTRACTS / 'house-sdk.d.ts')}\n\nENGINE NOTES:\n{_read(CONTRACTS / 'engine-notes.md')}\n\n"
-            f"LDA ENVELOPE: {json.dumps(env)}\n\n"
-            f"ROOMS: {json.dumps([{k: r[k] for k in ('id', 'name', 'type', 'level', 'rect')} for r in ws.plan['rooms']])}\n\n"
-            f"WALKTHROUGH COMMENTS:\n{json.dumps(cm, indent=1)}\n\nRevise the design now.")
+    text = (f"LDA ENVELOPE: {json.dumps({k: env.get(k) for k in ('setbacks_ft', 'max_coverage_pct', 'max_height_ft', 'max_storeys', 'buildable_rect')})}\n"
+            f"BRIEF: {json.dumps({k: brief.get(k) for k in ('storeys', 'bedrooms', 'floors', 'preferences', 'style', 'water_tank', 'solar') if brief.get(k)})}\n"
+            f"ROOMS: {json.dumps([{k: r[k] for k in ('id', 'name', 'type', 'level', 'rect')} for r in ws.plan['rooms']], separators=(',', ':'))}\n"
+            f"SECTIONS: {', '.join(s['name'] for s in ws.sections)}\n\n"
+            + (f"WALKTHROUGH COMMENTS:\n{json.dumps(comment_brief(comments), indent=1)}\n\n" if comments else "")
+            + (f"REQUEST (comment_id \"request\"): {instruction}\n\n" if instruction else "")
+            + "Revise the design now.")
     msg = types.Content(role="user", parts=parts + [types.Part.from_text(text=text)])
 
     async for event in runner.run_async(user_id=pid, session_id=session.id, new_message=msg):
-        for call in event.get_function_calls() or []:
-            label = {"get_room": "Looking at", "check_plan_ops": "Testing a layout change", "apply_plan_ops": "Applying layout change",
-                     "write_section": "Rewriting", "resolve_comment": "Resolving comment"}.get(call.name)
-            arg = (call.args or {}).get("room_id") or (call.args or {}).get("name") or ""
-            if label:
-                yield "stage", {"stage": "changes", "message": f"{label} {arg}".strip() + "…"}
         while ws.events:
             yield ws.events.pop(0)
-
-    yield "changes", {"changes": ws.changes}
-    yield "stage", {"stage": "save", "message": "Saving the revised version…"}
-    fresh = await db.get_project(pid)
-    n = len(fresh.get("versions") or []) + 1
-    new_v = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": version["id"], "plan": ws.plan,
-             "sections": ws.sections, "compliance": ws.report, "changes": ws.changes, "status": "ready", "agent": "adk"}
-    await db.save_version(pid, new_v)
-    for c in comments:
-        r = ws.resolutions.get(c["id"]) or {"status": "partial", "resolution": "Reviewed; no specific change was needed."}
-        upd = await db.update_comment(pid, c["id"], status=r["status"], resolution=r["resolution"], resolved_in_version=new_v["id"])
-        if upd:
-            yield "comment", {"comment": upd}
-    summary = "; ".join(ch.get("summary", "") for ch in ws.changes)[:200] or "Revision"
-    await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": new_v["id"], "n": n, "created_at": new_v["created_at"],
-                                                                           "status": "ready", "summary": summary}],
-                            current_version_id=new_v["id"], stage="ready")
-    yield "version", {"version": new_v}
+        if ws.finished:
+            break
+    while ws.events:
+        yield ws.events.pop(0)
+    if not ws.finished and not ws.changes and not ws.resolutions:
+        raise RuntimeError("the revision agent stopped without finishing")
+    report = ws.report if ws.plan_changed else ws.base_report
+    async for ev in finalize(project, version, ws.plan, ws.sections, report, ws.changes, ws.resolutions, comments, instruction, "adk"):
+        yield ev

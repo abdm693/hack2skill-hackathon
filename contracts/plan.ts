@@ -191,5 +191,7 @@ export interface ComplianceCheck {
   limit?: number | string;
   rule_ref?: string; // e.g. "LDA B&ZR 2019 (v2026) §2.7.1(a)"
   category?: "lda" | "livable"; // regulation vs Naqsha livability rules (room independence, stairs, guards, doors)
+  unit?: string; // unit of value/limit: "ft", "sq ft", "%", "sides", "storeys", "bedrooms", ... (show "10 ft (min 10 ft)")
+  fix?: string; // how to fix a failing check (fed to the planner; the UI may show it as a hint)
   element_ids?: string[]; // room/opening ids, used to highlight in 2D/3D
 }
