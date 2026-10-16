@@ -295,6 +295,16 @@ def test_sample_clone_is_deduplicated(api):
     assert client.post("/api/projects/p_s/clone", json={}, headers=H(GUEST_B)).json()["id"] not in (a["id"], c["id"])
 
 
+def test_old_versions_are_rechecked_on_read(plans):
+    from app import main
+    old = {"id": "v1", "plan": plans["1-kanal"], "compliance": {"ok": True, "checks": [{"id": "coverage", "status": "pass"}]}}
+    v = main.fresh_version(old, None)
+    cats = {c["category"] for c in v["compliance"]["checks"]}
+    assert cats == {"lda", "livable"} and not v["compliance"]["ok"]   # the villa's bedrooms open into bedrooms
+    new = {"id": "v2", "plan": plans["example"], "compliance": {"ok": True, "checks": [{"id": "x", "status": "pass", "category": "lda"}]}}
+    assert main.fresh_version(new, None)["compliance"]["checks"] == [{"id": "x", "status": "pass", "category": "lda"}]
+
+
 def test_brief_edit_after_design_keeps_the_stage(api):
     client, fake = api
     pid = client.post("/api/projects", json={}, headers=H(GUEST_A)).json()["id"]

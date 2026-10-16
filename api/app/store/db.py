@@ -72,6 +72,13 @@ async def update_project(pid: str, **fields: Any) -> dict:
     return await get_project(pid)  # type: ignore[return-value]
 
 
+async def patch_project(pid: str, **fields: Any) -> dict:
+    """Update without reading the document back (the caller merges the fields itself). Returns the written fields."""
+    fields["updated_at"] = now()
+    await _p(pid).update(fields)
+    return fields
+
+
 async def delete_project(pid: str) -> None:
     for sub in ("messages", "versions", "comments"):
         async for d in _p(pid).collection(sub).stream():
@@ -140,11 +147,18 @@ async def claim_projects(guest_id: str, owner_key: str, uid: str) -> int:
 
 
 # --- messages ---------------------------------------------------------------------------------------
-async def add_message(pid: str, msg: dict) -> dict:
+def make_message(msg: dict) -> dict:
     msg = {"id": new_id("m_"), "created_at": now(), "seq": time.time_ns(), **msg}
-    msg = {k: v for k, v in msg.items() if v is not None}
+    return {k: v for k, v in msg.items() if v is not None}
+
+
+async def put_message(pid: str, msg: dict) -> dict:
     await _p(pid).collection("messages").document(msg["id"]).set(msg)
     return msg
+
+
+async def add_message(pid: str, msg: dict) -> dict:
+    return await put_message(pid, make_message(msg))
 
 
 async def list_messages(pid: str) -> list[dict]:

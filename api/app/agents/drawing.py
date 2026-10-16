@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ..compliance.planning import CIRC, DOORS, HINGED, OPEN, PRIVATE, SERVICE, WET, PlanIndex, rect_of, sides
+from ..compliance.planning import CIRC, DOORS, HINGED, OPEN, PRIVATE, SERVICE, WET, PlanIndex, rect_of, roof_free_area, sides
 
 INK = (29, 29, 31)
 INK2 = (90, 90, 96)
@@ -116,32 +116,38 @@ def render_level(plan: dict, level_id: str, px_per_ft: float | None = None) -> b
         dr.line([p0, p1], fill=FILL["living"], width=max(3, int(s * 0.35)))
         _dashed_line(dr, p0, p1, INK3 if res["valid"] else ACCENT, 4, 4, 1)
 
+    # roof: the slab outline and the stair tower go under the stair drawing
+    if is_roof:
+        if ix.top:
+            for r in ix.level_rooms(ix.top):
+                if r.get("type") not in OPEN:
+                    dr.rectangle(box(ix.R[r["id"]]), outline=(200, 200, 206), width=1)
+        if ix.mumty:
+            dr.rectangle(box(ix.mumty), fill=(236, 232, 224), outline=WALL, width=max(2, int(s * 0.28)))
+
     # stairs
     departing = [st for st in ix.stairs if st.get("from_level") == level_id]
     for st in departing or [st for st in ix.stairs if st.get("to_level") == level_id][:1]:
         _draw_stair(dr, P, s, ix.stair_geo(st), up=bool(departing), font=f_small)
 
-    # roof furniture
     if is_roof:
+        t = ix.roof.get("water_tank")
+        if t and t.get("rect"):
+            tr = rect_of(t)
+            dr.rectangle(box(tr), outline=GLASS, width=2)
+            _label(dr, P((tr[0] + tr[2]) / 2, (tr[1] + tr[3]) / 2), [f"Tank ({t.get('material') or 'tank'})"], f_small, GLASS)
         if ix.mumty:
-            dr.rectangle(box(ix.mumty), fill=(236, 232, 224), outline=WALL, width=max(2, int(s * 0.28)))
             ds = (ix.roof.get("mumty") or {}).get("door_side")
             if ds:
                 axis, c, lo, hi, n = sides(ix.mumty)[ds]
                 mid = (lo + hi) / 2
                 p0, p1 = (P(mid - 1.5, c), P(mid + 1.5, c)) if axis == "x" else (P(c, mid - 1.5), P(c, mid + 1.5))
                 dr.line([p0, p1], fill=ACCENT, width=max(4, int(s * 0.4)))
-            cx, cy = (ix.mumty[0] + ix.mumty[2]) / 2, (ix.mumty[1] + ix.mumty[3]) / 2
-            _label(dr, P(cx, cy), ["Stair tower", f"door: {ds or '?'}"], f_small, INK)
-        t = ix.roof.get("water_tank")
-        if t and t.get("rect"):
-            tr = rect_of(t)
-            dr.rectangle(box(tr), outline=GLASS, width=2)
-            _label(dr, P((tr[0] + tr[2]) / 2, (tr[1] + tr[3]) / 2), [f"Tank ({t.get('material') or 'tank'})"], f_small, GLASS)
-        if ix.top:
-            for r in ix.level_rooms(ix.top):
-                if r.get("type") not in OPEN:
-                    dr.rectangle(box(ix.R[r["id"]]), outline=(200, 200, 206), width=1)
+                lx, ly = (mid, c + n[1] * 1.6) if axis == "x" else (c + n[0] * 3.2, mid)  # just outside the door
+                _label(dr, P(lx, ly), ["Roof door"], f_small, ACCENT)
+        free, fp = roof_free_area(ix)
+        if fp:
+            dr.text((m, 48), f"About {free:,.0f} sq ft of roof kept clear ({100 * free / fp:.0f}%)", fill=INK2, font=f_small)
 
     # openings
     for o in ix.openings:

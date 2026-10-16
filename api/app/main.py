@@ -64,6 +64,17 @@ async def access(pid: str, me: Identity, need: str = "view") -> tuple[dict, str]
     return p, role
 
 
+def fresh_version(v: dict | None, brief: dict | None) -> dict | None:
+    """Versions saved before the planning rules existed carry LDA-only reports with no categories: re-check them on read so
+    every version shows its LDA and livable status honestly (cheap, deterministic, nothing is written)."""
+    if v and v.get("plan") and any("category" not in c for c in (v.get("compliance") or {}).get("checks", [{}])):
+        try:
+            v["compliance"] = lda.check(v["plan"], brief)
+        except Exception:
+            logging.exception("re-check failed for %s", v.get("id"))
+    return v
+
+
 def author_of(me: Identity, role: str, name: str | None = None) -> dict:
     fallback = {"owner": "Owner", "team": "Team member", "client": "Client"}.get(role, "Guest")
     return {"id": me.author_id, "name": (name or "").strip()[:60] or me.display_name(fallback), "role": role}
@@ -291,7 +302,7 @@ async def _shared(token: str) -> dict:
 async def share_view(token: str):
     p = await _shared(token)
     v = await db.get_version(p["id"], p["current_version_id"]) if p.get("current_version_id") else None
-    return {"project": public(p, "client"), "version": v, "comments": await db.list_comments(p["id"]), "role": "client"}
+    return {"project": public(p, "client"), "version": fresh_version(v, p.get("brief")), "comments": await db.list_comments(p["id"]), "role": "client"}
 
 
 @app.get("/api/share/{token}/versions/{vid}")
@@ -300,7 +311,7 @@ async def share_version(token: str, vid: str):
     v = await db.get_version(p["id"], vid)
     if not v:
         raise HTTPException(404, "version not found")
-    return v
+    return fresh_version(v, p.get("brief"))
 
 
 @app.get("/api/share/{token}/comments")
@@ -465,11 +476,11 @@ async def attach_run(pid: str, me: Identity = Depends(auth.identity)):
 
 @app.get("/api/projects/{pid}/versions/{vid}")
 async def get_version(pid: str, vid: str, me: Identity = Depends(auth.identity)):
-    await access(pid, me, "view")
+    p, _ = await access(pid, me, "view")
     v = await db.get_version(pid, vid)
     if not v:
         raise HTTPException(404, "version not found")
-    return v
+    return fresh_version(v, p.get("brief"))
 
 
 class RepairBody(BaseModel):

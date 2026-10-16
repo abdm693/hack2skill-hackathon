@@ -11,6 +11,7 @@ History is replayed from the project's messages collection on every turn, so any
 from __future__ import annotations
 
 import json
+import re
 import logging
 import time
 from typing import AsyncIterator, Optional
@@ -29,6 +30,7 @@ from . import intake
 
 log = logging.getLogger("naqsha.setup")
 APP = "naqsha-setup"
+KNOWN_FIELDS = set(intake.ASK_ORDER) | {"budget", "bathrooms", "spaces", "rooms"}
 
 INSTRUCTION = """You are Naqsha, a calm, experienced Lahore architect setting up a new home with a family in Punjab, Pakistan.
 You speak like a warm professional: brief, second person, in marla and feet. One to three short sentences. Never say Argon,
@@ -45,10 +47,12 @@ Every turn:
    "Attached baths" means one bath per bedroom: set bathrooms accordingly (plus a powder room if they mention one).
 2. If they asked a question, answer it first, using ONLY the LDA FACTS you are given (never other numbers). Push back gently on
    choices with a real trade-off (a double-height lounge costs first-floor area; a fourth storey isn't allowed).
-3. Then call ask() for the first field in STILL MISSING (update_brief's result tells you), or complete_setup() when nothing is
-   missing. Put your whole reply (acknowledgement, answer and question) in that call's text; write nothing else.
-   After a long first message that filled several fields, also call present_understanding() with the family's wishes
-   (preferences) and the choices you made yourself (assumptions)."""
+3. In the SAME step, reply with ask() for the first field in STILL MISSING that they haven't just answered, or with
+   complete_setup() when nothing will be missing after your update. Never ask about the budget. Put your whole reply
+   (a short acknowledgement or answer, then the question) in that call's text; write nothing else.
+   The app shows the family a card of everything you recorded, so don't repeat the brief back. Call present_understanding()
+   only to list assumptions you made yourself (e.g. a plot size you inferred).
+Call update_brief together with ask or complete_setup in ONE step."""
 
 
 class Turn:
@@ -184,12 +188,10 @@ class Turn:
               message: Your reply: one sentence that reads the brief back and says concepts come next.
               suggestions: Optional follow-up prompts.
             """
-            gaps = intake.to_ask(t.brief)
-            if intake.missing(t.brief) or gaps:
-                return {"ok": False, "still_missing": gaps or intake.missing(t.brief), "hint": "Ask for the first one instead."}
+            # update_brief may run after this in the same step, so the app decides after the turn whether anything is missing
             t.complete = True
             t.reply = {"text": message, "field": None, "chips": [], "input": None, "multi": False, "allow_skip": False,
-                       "suggestions": suggestions or []}
+                       "suggestions": suggestions or [], "complete": True}
             tool_context.actions.skip_summarization = True
             return {"ok": True}
 
@@ -249,7 +251,17 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
         log.exception("setup agent failed; falling back to the question bank")
     brief = turn.brief
     gaps = intake.to_ask(brief)
-    complete = turn.complete or (not gaps and not intake.missing(brief) and turn.reply is None)
+    done = not gaps and not intake.missing(brief)
+    asked = (turn.reply or {}).get("field")
+    # complete when the agent says so and nothing is missing, or when it asks about a brief field nothing needs any more
+    complete = done and (turn.complete or turn.reply is None or (asked in KNOWN_FIELDS and asked not in gaps))
+    if turn.complete and not done:  # it wrapped up too early: ask the first real gap instead
+        q = intake.question(gaps[0] if gaps else intake.missing(brief)[0], brief)
+        turn.reply = {"text": "Noted. " + q["text"], "suggestions": [], "multi": False, **{k: q[k] for k in ("field", "chips", "input", "allow_skip")}}
+    elif complete and turn.reply and not turn.reply.get("complete"):  # keep its answer, drop the needless question
+        kept = _strip_question(turn.reply.get("text", ""))
+        turn.reply = {"text": (kept + " " + intake._complete_text(project, brief)).strip(), "complete": True,
+                      "suggestions": turn.reply.get("suggestions") or []}
     if complete and not brief.get("spaces"):
         brief = intake.merge_brief(brief, {"spaces": intake.defaults_for(brief)[0]["spaces"]}, ["spaces"])
     brief, env, newly = await intake._save(project, brief, complete, before)
@@ -262,7 +274,7 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
         # the app owns the widgets and canonical chips for known fields; a stale question becomes the next real one
         if field in intake.ASK_ORDER and field not in gaps and gaps:
             q = intake.question(gaps[0], brief)
-            reply = {**reply, "text": (_first_sentence(reply["text"]) + " " + q["text"]).strip(), **{k: q[k] for k in ("field", "chips", "input", "allow_skip")}}
+            reply = {**reply, "text": (_strip_question(reply["text"]) + " " + q["text"]).strip(), **{k: q[k] for k in ("field", "chips", "input", "allow_skip")}}
         elif field in intake.ASK_ORDER:
             q = intake.question(field, brief)
             reply = {**reply, "chips": q["chips"], "input": q["input"] or reply.get("input"), "allow_skip": True}
@@ -285,16 +297,15 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
         out["understood"] = intake.understood(brief, turn.understood)
     if reply.get("suggestions"):
         out["suggestions"] = [str(s) for s in reply["suggestions"]][:3]
-    out["latency_ms"] = round((time.monotonic() - t0) * 1000)
     yield "message", await db.add_message(pid, out)
-    if complete and (newly or project.get("stage") == "concepts"):
+    if complete and newly:
         yield "intake.complete", {"brief": brief, "envelope": env}
     log.info("setup turn %s: %.1fs, %d steps, fields %s", pid, time.monotonic() - t0, steps, sorted(turn.patch_fields))
 
 
-def _first_sentence(text: str) -> str:
-    text = (text or "").strip()
-    for sep in (". ", "? ", "! "):
-        if sep in text:
-            return text.split(sep, 1)[0] + "."
-    return "" if text.endswith("?") else text
+def _strip_question(text: str) -> str:
+    parts = re.split(r"(?<=[.!?])\s+", (text or "").strip())
+    while parts and parts[-1].endswith("?"):
+        parts.pop()
+    return " ".join(parts)
+

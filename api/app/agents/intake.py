@@ -7,6 +7,7 @@ bank, so one-tap answers never wait for a model. The LDA envelope is computed de
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import AsyncIterator
@@ -527,10 +528,12 @@ def understood(brief: dict, agent: dict | None = None) -> dict:
         (assumed if "bathrooms" in auto else prefs).append(f"{brief['bathrooms']} baths")
     for f in brief.get("floors") or []:
         prefs.append(_floor_line(f))
+    on_floors = {FLOOR_SPACE.get(str(t).split(":")[0]) for f in brief.get("floors") or [] for t in f.get("rooms") or []}
     sp = [SPACE_LABEL.get(s.split(":")[0], s.replace("_", " ")) if not s.startswith("car_porch") else
-          f"{s.split(':')[1] if ':' in s else 1}-car porch" for s in brief.get("spaces") or []]
+          f"{s.split(':')[1] if ':' in s else 1}-car porch" for s in brief.get("spaces") or [] if s not in on_floors]
     if sp:
-        (assumed if "spaces" in auto else prefs).append(", ".join(sp).capitalize())
+        line = ", ".join(sp)
+        (assumed if "spaces" in auto else prefs).append(line[:1].upper() + line[1:])
     if brief.get("water_tank"):
         (assumed if "water_tank" in auto else prefs).append(TANK_LABEL[brief["water_tank"]])
     if brief.get("solar"):
@@ -542,8 +545,7 @@ def understood(brief: dict, agent: dict | None = None) -> dict:
     prefs += [str(x)[:1].upper() + str(x)[1:] for x in brief.get("preferences") or []]
     if "floors" in auto:
         assumed.append("I'll place the rooms on each floor")
-    if agent:
-        prefs = _append_unique(prefs, [x for x in agent.get("preferences") or [] if not re.search(r"\d+\s*(ft|%|sq)", str(x))])
+    if agent:  # the family's own words are already in brief.preferences; the agent adds only its own assumptions
         assumed = _append_unique(assumed, agent.get("assumptions") or [])
     return {"guaranteed": g, "preferences": _append_unique([], prefs), "assumptions": _append_unique([], assumed)}
 
@@ -599,8 +601,7 @@ async def _save(project: dict, brief: dict, complete: bool, before: dict | None)
         fields["brief_changed"] = True
     if (name := auto_name(project, brief)):
         fields["name"] = name
-    updated = await db.update_project(pid, **fields)
-    project.update(updated or {})
+    project.update(await db.patch_project(pid, **fields))
     return brief, env, complete and not was_complete
 
 
@@ -610,6 +611,17 @@ def _design_fields(b: dict) -> dict:
 
 
 async def run_turn(project: dict, message: str | None, action: str | None, chips: list[str] | None) -> AsyncIterator[tuple[str, dict]]:
+    pending: list[asyncio.Task] = []
+    try:
+        async for ev in _turn(project, message, action, chips, pending):
+            yield ev
+    finally:
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def _turn(project: dict, message: str | None, action: str | None, chips: list[str] | None,
+                pending: list) -> AsyncIterator[tuple[str, dict]]:
     pid = project["id"]
     brief = project.get("brief") or empty_brief()
     before = dict(brief)
@@ -627,8 +639,10 @@ async def run_turn(project: dict, message: str | None, action: str | None, chips
         user_text = "You decide."
     elif action == "skip_all":
         user_text = "Skip setup and design it for me."
-    if user_text:
-        yield "message", await db.add_message(pid, {"role": "user", "text": user_text})
+    if user_text:  # shown at once; written while the turn runs
+        um = db.make_message({"role": "user", "text": user_text})
+        pending.append(asyncio.create_task(db.put_message(pid, um)))
+        yield "message", um
 
     if action == "skip_all":
         brief, _ = defaults_for(brief)
@@ -660,7 +674,7 @@ async def run_turn(project: dict, message: str | None, action: str | None, chips
             msg = {"role": "assistant", "text": _complete_text(project, brief), "chips": [], "input": None,
                    "understood": understood(brief), "suggestions": _complete_suggestions(project)}
             yield "message", await db.add_message(pid, msg)
-            if newly or project.get("stage") == "concepts":
+            if newly:
                 yield "intake.complete", {"brief": brief, "envelope": env}
         else:
             q = question(nxt[0], brief)
