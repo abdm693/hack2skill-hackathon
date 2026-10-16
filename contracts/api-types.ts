@@ -22,6 +22,13 @@ export interface Brief {
   budget?: "economy" | "standard" | "premium" | "luxury";
   notes?: string;
   auto_filled: string[];
+  /** Per-floor program, e.g. [{level:"ground", rooms:["drawing","kitchen","bedroom:1","bath:2"]}]. */
+  floors?: { level: string; rooms: string[] }[];
+  water_tank?: "plastic" | "concrete";
+  /** "ready" = keep the roof clear for panels later; "panels" = include panels now. */
+  solar?: "none" | "ready" | "panels";
+  /** Soft wishes captured verbatim from the conversation. */
+  preferences?: string[];
 }
 
 export interface Envelope {
@@ -47,12 +54,17 @@ export interface ChatMessage {
   created_at: string;
   chips?: Chip[];
   multi?: boolean;
-  input?: "text" | "number" | "plot" | "map" | "style" | "rooms" | null;
+  input?: "text" | "number" | "plot" | "map" | "style" | "rooms" | "floors" | null;
+  /** "Here's what I understood" card: guaranteed = hard rules we will meet (LDA + livable), preferences = wishes we will
+   *  try to honour, assumptions = things the agent decided itself (editable). Sent after a rich message and at completion. */
+  understood?: { guaranteed: string[]; preferences: string[]; assumptions: string[] };
+  /** Suggested next prompts shown as chips under the message ("What's next"). */
+  suggestions?: string[];
   field?: string;
   allow_skip?: boolean;
 }
 
-export interface Concept { id: string; url: string; prompt: string; model: string; created_at: string; parent_id?: string; instruction?: string }
+export interface Concept { id: string; url: string; night_url?: string; prompt: string; model: string; created_at: string; parent_id?: string; instruction?: string }
 
 export interface DesignSection { name: string; layer: Layer; code: string }
 
@@ -73,8 +85,17 @@ export interface Version {
 
 export interface VersionSummary { id: string; n: number; created_at: string; status: Version["status"]; summary?: string }
 
+export type Role = "owner" | "team" | "client";
+
+export interface Author { id: string; name: string; role: Role | "agent" | "guest" }
+
+export interface Member { uid?: string; email: string; name?: string; role: Role; status: "active" | "invited" }
+
 export interface Project {
   id: string;
+  /** The caller's role on this project. */
+  role?: Role;
+  members_count?: number;
   name: string;
   created_at: string;
   updated_at: string;
@@ -111,7 +132,11 @@ export interface Comment {
   status: "open" | "resolved" | "partial" | "rejected";
   resolution?: string;
   resolved_in_version?: string;
+  author?: Author;
+  replies?: { id: string; author: Author; text: string; created_at: string }[];
 }
+
+export interface Me { uid: string; email: string; name?: string }
 
 export interface AsBuiltSummary {
   objects: { id: string; layer: Layer; kind?: string; level?: string; room?: string; bbox_ft: { min: Vec3; max: Vec3 } }[];
