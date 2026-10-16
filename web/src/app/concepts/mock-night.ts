@@ -37,13 +37,15 @@ async function grade(url: string): Promise<string> {
   // Interior and porch light: warm pools low in the frame where the house is.
   g.globalCompositeOperation = "screen";
   const pools: [number, number, number][] = [
-    [0.38, 0.62, 0.22],
-    [0.62, 0.58, 0.18],
-    [0.5, 0.78, 0.26],
+    [0.32, 0.5, 0.07],
+    [0.5, 0.48, 0.08],
+    [0.68, 0.5, 0.07],
+    [0.42, 0.72, 0.09],
+    [0.6, 0.74, 0.08],
   ];
   for (const [x, y, r] of pools) {
     const rad = g.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * w);
-    rad.addColorStop(0, "rgba(255, 176, 92, 0.42)");
+    rad.addColorStop(0, "rgba(255, 184, 104, 0.55)");
     rad.addColorStop(1, "rgba(255, 176, 92, 0)");
     g.fillStyle = rad;
     g.fillRect(0, 0, w, h);

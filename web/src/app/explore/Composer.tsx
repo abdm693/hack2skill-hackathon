@@ -1,10 +1,10 @@
+/** A comment pinned in the 3D view: where it is, a snapshot, a few quick starts and the note. */
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { MapPin, X } from "lucide-react";
 import type { BuildingPlan } from "@contracts/plan";
 import type { Comment, CommentAnchor } from "@contracts/api-types";
-import { Button } from "@/app/ui/Button";
-import { Chip } from "@/app/ui/primitives";
+import { Button, Chip, EASE_OUT, IconButton } from "@/app/design/kit";
 import { anchorLabel } from "./snapshot";
 
 export interface CommentDraft {
@@ -13,39 +13,47 @@ export interface CommentDraft {
   snapshot: string;
 }
 
-const QUICK = ["Make this bigger", "Change material", "Move this", "Remove this", "More light here", "Add storage"];
+/** Quick starts that name what was clicked ("Make the kitchen bigger"), with the caret left where you type next. */
+function quickStarts(anchor: CommentAnchor, plan?: BuildingPlan): string[] {
+  const room = anchor.room ? plan?.rooms.find((r) => r.id === anchor.room)?.name : undefined;
+  const r = room ? (/\d/.test(room) ? room : `the ${room.toLowerCase()}`) : undefined;
+  const label = anchor.label && anchor.label !== room && !/^(wall|floor|ceiling|slab)$/i.test(anchor.label) ? anchor.label.toLowerCase() : undefined;
+  const out: string[] = [];
+  if (r) out.push(`Make ${r} bigger`, `More light in ${r}`);
+  if (label) out.push(`Move the ${label} `, `Change the ${label} to `);
+  else if (r) out.push(`Change the finishes in ${r} to `);
+  if (!out.length) out.push("Make this bigger", "More light here", "Change this to ");
+  return out.slice(0, 4);
+}
 
-/** Small popover to write a comment pinned at a point in the 3D view. */
-export function Composer({
-  draft,
-  plan,
-  onCancel,
-  onSave,
-}: {
-  draft: CommentDraft;
-  plan?: BuildingPlan;
-  onCancel: () => void;
-  onSave: (text: string) => Promise<boolean>;
-}) {
+export function Composer({ draft, plan, onCancel, onSave }: { draft: CommentDraft; plan?: BuildingPlan; onCancel: () => void; onSave: (text: string) => Promise<boolean> }) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => ref.current?.focus(), []);
+  const where = anchorLabel(draft.anchor, plan);
   const save = async () => {
     if (!text.trim() || saving) return;
     setSaving(true);
-    const ok = await onSave(text.trim());
+    await onSave(text.trim());
     setSaving(false);
-    if (!ok) return;
   };
-  const where = anchorLabel(draft.anchor, plan);
+  const start = (q: string) => {
+    setText(q);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(q.length, q.length);
+    });
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.98 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-[22px] bg-sheet shadow-float ring-1 ring-ink/10"
+      transition={{ duration: 0.32, ease: EASE_OUT }}
+      className="w-[min(400px,calc(100vw-24px))] overflow-hidden rounded-panel bg-surface text-ink shadow-e3"
       role="dialog"
       aria-label="New comment"
       onKeyDown={(e) => {
@@ -54,20 +62,20 @@ export function Composer({
       }}
     >
       <div className="relative">
-        {draft.snapshot ? <img src={draft.snapshot} alt="" className="aspect-[16/8] w-full object-cover" /> : <div className="aspect-[16/8] w-full bg-night" />}
-        <span className="absolute left-3 top-3 inline-flex max-w-[80%] items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[12px] font-medium text-sheet backdrop-blur">
-          <MapPin className="size-3.5 shrink-0 text-[#e7a58f]" strokeWidth={2} />
+        {draft.snapshot ? <img src={draft.snapshot} alt="" className="aspect-[16/8] w-full object-cover" /> : <div className="aspect-[16/8] w-full bg-hud" />}
+        <span className="glass-hud absolute left-3 top-3 inline-flex max-w-[80%] items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px]">
+          <MapPin className="size-3.5 shrink-0" strokeWidth={2} />
           <span className="truncate">{where}</span>
         </span>
-        <button onClick={onCancel} aria-label="Cancel" className="absolute right-2.5 top-2.5 grid size-7 place-items-center rounded-full bg-ink/70 text-sheet hover:bg-ink">
-          <X className="size-3.5" />
-        </button>
+        <IconButton label="Cancel" variant="hud" size={32} onClick={onCancel} className="absolute right-2.5 top-2.5">
+          <X className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
       </div>
       <div className="p-4">
         <div className="flex flex-wrap gap-1.5">
-          {QUICK.map((q) => (
-            <Chip key={q} size="sm" onClick={() => { setText(q); ref.current?.focus(); }}>
-              {q}
+          {quickStarts(draft.anchor, plan).map((q) => (
+            <Chip key={q} size="sm" onClick={() => start(q)}>
+              {q.trim()}
             </Chip>
           ))}
         </div>
@@ -76,19 +84,19 @@ export function Composer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void save();
             }
           }}
           rows={3}
           placeholder="What would you change here?"
-          className="mt-3 w-full resize-none rounded-xl bg-wash px-3 py-2.5 text-[14px] text-ink outline-none ring-brick placeholder:text-pencil focus:ring-1"
+          className="mt-3 w-full resize-none rounded-control bg-surface-2 px-3 py-2.5 text-body text-ink outline-none placeholder:text-ink-4 focus:shadow-focus"
         />
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-[11.5px] text-pencil">Argon reads every comment when you finish the walkthrough.</span>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-[12.5px] text-ink-3">Naqsha reads every comment when you revise.</span>
           <Button variant="primary" size="sm" disabled={!text.trim()} loading={saving} onClick={() => void save()}>
-            Save
+            Pin it
           </Button>
         </div>
       </div>

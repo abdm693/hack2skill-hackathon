@@ -1,7 +1,7 @@
-/** Pre-overhaul route (/p/:id/revisions). Delete at integration (see design/compat.tsx). */
+/** Pre-overhaul route (/p/:id/revisions) → RevisionsView. Delete at integration (see design/compat.tsx). */
 import { CompatView } from "@/app/design/compat";
-import { PlanView } from "@/app/plan/PlanView";
+import { RevisionsView } from "./RevisionsView";
 
 export function RevisionsStep() {
-  return <CompatView view={PlanView} />;
+  return <CompatView view={RevisionsView} />;
 }

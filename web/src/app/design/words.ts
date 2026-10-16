@@ -128,3 +128,13 @@ export function fixLoopLine(fails: number[]): string | null {
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+/** "Revised: bedroom 2 deeper, lounge window wider" from a version summary, without ids or "v2:" prefixes. */
+export function versionLine(summary?: string): string {
+  if (!summary) return "A revision";
+  const s = summary.replace(/^v\d+:\s*/i, "").replace(/\.\s*;\s*/g, "; ").trim();
+  if (/^\d+ spaces?, \d+ code sections?$/i.test(s)) return "A fresh design";
+  const first = s.split(";")[0].replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim().replace(/[.,]$/, "");
+  return first.length > 60 ? `${first.slice(0, 58).replace(/[\s,;:]+\S*$/, "")}…` : first;
+}
+

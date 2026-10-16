@@ -22,7 +22,7 @@ import { PlotCanvas } from "@/app/setup/PlotCanvas";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { CompliancePanel, ComplianceChip } from "./CompliancePanel";
 import { FloorPlan, type PlanPin } from "./FloorPlan";
-import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, coveredArea, levelKey, levelName, levelsOf } from "./model";
+import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, coveredArea, hueColor, levelKey, levelName, levelsOf } from "./model";
 import { PrintDialog } from "./PrintDialog";
 
 export function PlanView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
@@ -390,7 +390,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
             className={cn("absolute left-1/2 z-30 w-[min(420px,calc(100vw-24px))] -translate-x-1/2 rounded-card bg-surface p-4 shadow-e2", wide ? "bottom-6" : "bottom-[104px]")}
           >
             <div className="flex items-start gap-3">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white ring-2 ring-white" style={{ background: `var(--color-author-${authorHue(selectedPin)})` }}>
+              <span className="grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white ring-2 ring-white" style={{ background: hueColor(selectedPin) }}>
                 {pins.find((p) => p.id === selectedPin.id)?.n}
               </span>
               <div className="min-w-0 flex-1">

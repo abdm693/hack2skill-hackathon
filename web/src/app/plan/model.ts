@@ -229,6 +229,10 @@ export function areaDeltas(before: BuildingPlan | undefined, after: BuildingPlan
   return out;
 }
 
+/** DESIGN.md author hues (literal, so they work in SVG, print and inline styles). */
+export const AUTHOR_HUES = ["#0D7C72", "#6A4FD6", "#C23F78", "#A8641A", "#4F6378", "#2F7A3A"];
+export const hueColor = (c: Comment) => AUTHOR_HUES[(authorHue(c) - 1) % 6];
+
 /** Stable author hue (1..6) for pins and avatars. */
 export function authorHue(c: Comment): number {
   const key = c.author?.id || c.author?.name || "";

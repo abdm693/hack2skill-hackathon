@@ -69,9 +69,12 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const [nightShown, setNightShown] = useState(false);
   useEffect(() => {
     if (light !== "night") { setNightShown(false); return; }
-    if (!night?.running) { setNightShown(true); return; }
-    const t = setTimeout(() => setNightShown(true), 30_000);
-    return () => clearTimeout(t);
+    if (night?.running) {
+      setNightShown(false);
+      const t = setTimeout(() => setNightShown(true), 30_000);
+      return () => clearTimeout(t);
+    }
+    setNightShown(true);
   }, [light, night?.running]);
   const waitingNight = light === "night" && !nightShown;
 
@@ -137,7 +140,6 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
     open
       ? {
           placeholder: `Describe a change to ${open.label}, like darker glass`,
-          suggestions: REMIX_IDEAS.slice(0, 3),
           busy: !!run?.running,
           onSubmit: (text) => remix(open, text),
         }
@@ -162,7 +164,8 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const chosen = project.selected_concept_id;
 
   return (
-    <div className="relative h-full overflow-y-auto bg-canvas [scrollbar-width:thin]">
+    <div className="relative h-full overflow-hidden bg-canvas">
+      <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
       <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[72px] sm:px-6">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -251,6 +254,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
             })}
           </section>
         )}
+      </div>
       </div>
 
       <AnimatePresence>
@@ -450,7 +454,7 @@ function Lightbox({
   }, [onClose, onStep]);
   return (
     <motion.div
-      className="fixed inset-0 z-[70] flex flex-col bg-canvas/96 backdrop-blur-md"
+      className="absolute inset-0 z-30 flex flex-col bg-canvas pb-[96px] pt-[64px]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -500,7 +504,7 @@ function Lightbox({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[13px] text-ink-3">Remix it:</span>
           {REMIX_IDEAS.map((idea) => (
