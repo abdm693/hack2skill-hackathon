@@ -101,6 +101,8 @@ interface Comment {
 | Method | Path | Body / query | Response |
 |---|---|---|---|
 | GET | `/api/health` | | `{ok, models}` |
+| GET | `/api/samples` | | `{projects: Project[]}`: finished example homes, shown in the workspace as "Explore a sample home" |
+| POST | `/api/projects/{pid}/clone` | `{name?}` | `Project`: copies a sample (or your own project) into your workspace, including versions and comments |
 | GET | `/api/projects` | | `{projects: Project[]}` (newest first) |
 | POST | `/api/projects` | `{name?}` | `Project` |
 | GET | `/api/projects/{pid}` | | `Project` |

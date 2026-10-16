@@ -91,6 +91,20 @@ async def delete_project(pid: str, x_naqsha_user: str = Header("anon")):
     return {"ok": True}
 
 
+@app.get("/api/samples")
+async def samples():
+    """Finished example homes anyone can open (cloned into their workspace on demand)."""
+    return {"projects": [public(p) for p in await db.list_projects(db.SAMPLES_OWNER)]}
+
+
+@app.post("/api/projects/{pid}/clone")
+async def clone(pid: str, body: NewProject, x_naqsha_user: str = Header("anon")):
+    src = await db.get_project(pid)
+    if not src or src.get("owner") not in (x_naqsha_user, db.SAMPLES_OWNER):
+        raise HTTPException(404, "project not found")
+    return public(await db.clone_project(pid, x_naqsha_user, body.name))
+
+
 # --- setup agent -------------------------------------------------------------------------------------------
 class IntakeBody(BaseModel):
     message: str | None = None

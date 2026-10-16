@@ -106,3 +106,22 @@ async def update_comment(pid: str, cid: str, **fields: Any) -> dict | None:
 
 async def delete_comment(pid: str, cid: str) -> None:
     await _p(pid).collection("comments").document(cid).delete()
+
+
+# --- samples & cloning ------------------------------------------------------------------------------
+SAMPLES_OWNER = "samples"
+
+
+async def clone_project(src_pid: str, owner: str, name: str | None = None) -> dict:
+    """Copy a project (and its messages, versions, comments) into another workspace. Assets stay shared (read-only)."""
+    src = await get_project(src_pid)
+    if not src:
+        raise KeyError(src_pid)
+    pid = new_id("p_")
+    doc = {**src, "id": pid, "owner": owner, "name": name or src["name"], "created_at": now(), "updated_at": now(),
+           "cloned_from": src_pid}
+    await _p(pid).set(doc)
+    for sub in ("messages", "versions", "comments"):
+        async for d in _p(src_pid).collection(sub).stream():
+            await _p(pid).collection(sub).document(d.id).set(d.to_dict())
+    return doc
