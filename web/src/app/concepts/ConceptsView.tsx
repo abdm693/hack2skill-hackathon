@@ -170,7 +170,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   return (
     <div className="relative h-full overflow-hidden bg-canvas">
       <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
-      <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[72px] sm:px-6">
+      <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[104px] sm:px-6 md:pt-[72px]">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
@@ -459,7 +459,7 @@ function Lightbox({
   }, [onClose, onStep]);
   return (
     <motion.div
-      className="absolute inset-0 z-30 flex flex-col bg-canvas pb-[96px] pt-[64px]"
+      className="absolute inset-0 z-30 flex flex-col bg-canvas pb-[96px] pt-[100px] md:pt-[64px]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

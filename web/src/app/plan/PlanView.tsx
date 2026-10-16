@@ -262,7 +262,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
       </div>
 
       {/* Top: floor title and actions, then (phones) the floor chips, then run progress */}
-      <div ref={headRef} className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-3 px-3 pt-[72px] sm:px-4">
+      <div ref={headRef} className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-3 px-3 pt-[104px] sm:px-4 md:pt-[72px]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="pointer-events-auto min-w-0 md:pl-[60px]">
             <div className="flex items-baseline gap-2">

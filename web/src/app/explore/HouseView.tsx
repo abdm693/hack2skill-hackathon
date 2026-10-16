@@ -108,6 +108,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const [draft, setDraft] = useState<CommentDraft | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [room, setRoom] = useState<{ id: string | null; level: string | null }>({ id: params.get("room"), level: null });
+  const initialRoom = useRef<string | null>(params.get("room"));
   const [render, setRender] = useState<{ before: string; after?: string; error?: string } | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
   const [failed, setFailed] = useState<SectionResult[]>([]);
@@ -147,6 +148,12 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const onReady = useCallback(
     async (result: { summary: Parameters<typeof api.asBuilt>[2]; sections: SectionResult[] }) => {
       setFailed(result.sections.filter((s) => !s.ok));
+      // A deep link to a room (?room=f_bed2) goes there once the house is built.
+      const linked = initialRoom.current;
+      if (linked && shown?.plan.rooms.some((r) => r.id === linked)) {
+        initialRoom.current = null;
+        viewer.current?.goToRoom(linked);
+      }
       if (!shown) return;
       const key = `naqsha.thumb.${shown.id}`;
       let done = false;
@@ -316,7 +323,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       )}
 
       {/* Top centre: a revision in progress */}
-      <div className="pointer-events-none absolute inset-x-0 top-[72px] z-20 flex justify-center px-3">
+      <div className="pointer-events-none absolute inset-x-0 top-[104px] z-20 flex justify-center px-3 md:top-[72px]">
         <AnimatePresence>
           {revise && (
             <div className="pointer-events-auto">
@@ -386,7 +393,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2, ease: EASE_OUT }}
-            className="glass-hud absolute right-3 top-[72px] z-30 w-[min(360px,calc(100vw-24px))] rounded-card p-4 sm:right-4"
+            className="glass-hud absolute right-3 top-[104px] z-30 md:top-[72px] w-[min(360px,calc(100vw-24px))] rounded-card p-4 sm:right-4"
           >
             <PinCard c={selectedComment} n={ordered.findIndex((c) => c.id === selectedComment.id) + 1} onFly={() => viewer.current?.flyTo(selectedComment)} onClose={() => setSelected(null)} />
           </motion.div>

@@ -124,7 +124,7 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
         aria-label="Conversation"
         className={cn(
           "absolute z-10 flex flex-col overflow-hidden bg-surface",
-          phone ? "inset-x-0 bottom-[132px] top-[64px]" : "bottom-[132px] left-3 top-[72px] w-[420px] rounded-panel shadow-e2",
+          phone ? "inset-x-0 bottom-[132px] top-[104px]" : "bottom-[132px] left-3 top-[72px] w-[420px] rounded-panel shadow-e2",
         )}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
