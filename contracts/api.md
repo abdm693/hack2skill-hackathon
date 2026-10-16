@@ -242,6 +242,9 @@ interface AsBuiltSummary {
   `token`/`url` are only returned to the owner and team.
 - **Comments**: `POST /comments` and `/replies` accept `author_name` (shown for guests). Naqsha's revision replies carry
   `author {id: "naqsha", role: "agent"}` plus `status` and `version_id`. Clients may edit or delete only their own comments.
+- **Revise**: changes made for the typed `instruction` carry `from_request: true` (their `comment_ids` list only real comments);
+  the resolution of the request is also sent as a final `stage` message. Plan edits may not add any LDA or livable failure the
+  version didn't already have; failures that were already there stay visible in the new version's report.
 - **Clone**: `{fresh: true}` forces a new copy of a sample.
 - **Errors**: an invalid or expired Bearer token returns **401** ("Your sign-in has expired…"); refresh the token and retry.
   A role that may not do something gets **403**; a project you can't see is **404**.
