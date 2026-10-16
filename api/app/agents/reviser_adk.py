@@ -184,7 +184,8 @@ async def revise(project: dict, version: dict, comments: list[dict]) -> AsyncIte
     env.pop("_band", None)
     cm = [{"id": c["id"], "text": c["text"], "where": {k: c["anchor"].get(k) for k in ("level", "room", "element_id", "kind", "label")}}
           for c in comments]
-    text = (f"HOUSE SDK REFERENCE:\n{_read(CONTRACTS / 'house-sdk.d.ts')}\n\nLDA ENVELOPE: {json.dumps(env)}\n\n"
+    text = (f"HOUSE SDK REFERENCE:\n{_read(CONTRACTS / 'house-sdk.d.ts')}\n\nENGINE NOTES:\n{_read(CONTRACTS / 'engine-notes.md')}\n\n"
+            f"LDA ENVELOPE: {json.dumps(env)}\n\n"
             f"ROOMS: {json.dumps([{k: r[k] for k in ('id', 'name', 'type', 'level', 'rect')} for r in ws.plan['rooms']])}\n\n"
             f"WALKTHROUGH COMMENTS:\n{json.dumps(cm, indent=1)}\n\nRevise the design now.")
     msg = types.Content(role="user", parts=parts + [types.Part.from_text(text=text)])

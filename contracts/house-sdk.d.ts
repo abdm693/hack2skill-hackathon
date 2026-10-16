@@ -171,9 +171,10 @@ export interface HouseSDK {
     fins(o: FacadeRegion & { count: number; width_ft?: number; depth_ft?: number }): void;
     /** Horizontal louvers across a region. */
     louvers(o: FacadeRegion & { count: number; depth_ft?: number; thickness_ft?: number }): void;
-    /** Projecting box frame (picture frame) around a region, e.g. framing first-floor windows. */
+    /** Projecting box frame (picture frame); the region is the frame's OUTER bounds. Same projection limits as canopy. */
     frame(o: FacadeRegion & { thickness_ft?: number; depth_ft?: number }): void;
-    /** Flat projecting slab (canopy/chajja/cantilever) at height h_ft over a plan rect (may overhang setbacks ≤ allowed). */
+    /** Flat projecting slab (canopy/chajja/cantilever) over a plan rect; h_ft = height of its TOP surface. LDA: never past a
+     *  zero-setback (party-wall) edge; into an open setback at most 1.5 ft (space < 10 ft) or 3 ft (space ≥ 10 ft). */
     canopy(o: { rect: Rect; h_ft: number; thickness_ft?: number; material: MaterialSpec; downlights?: boolean }): void;
     /** Decorative perforated screen (jaali) or slat screen over a region. */
     screen(o: FacadeRegion & { pattern: "jaali_geometric" | "jaali_star" | "perforated" | "slats" }): void;

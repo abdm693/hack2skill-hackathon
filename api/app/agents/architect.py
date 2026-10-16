@@ -235,7 +235,7 @@ user, so add a brief comment at the top of each section saying what it builds.""
 
 def _build_prompt(plan: dict, brief: dict) -> str:
     example = _read(CONTRACTS / "fixtures" / "design-10-marla.js")
-    engine_notes = _read(ROOT / "web" / "src" / "engine" / "README.md")
+    engine_notes = _read(CONTRACTS / "engine-notes.md")
     return (
         f"HOUSE SDK REFERENCE (TypeScript declarations; the API you can call):\n{_read(CONTRACTS / 'house-sdk.d.ts')}\n\n"
         + (f"ENGINE NOTES (behaviour details and gotchas):\n{engine_notes}\n\n" if engine_notes else "")
