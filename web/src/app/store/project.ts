@@ -151,6 +151,8 @@ export const useProject = create<ProjectState>((set, get) => {
   const runHandlers = (pid: string, key: () => RunKey): SSEHandlers => ({
     stage: ({ stage, message }) => {
       if (!live(pid)) return;
+      // Each writing pass (plan, fix, build) counts its own characters.
+      if (stage === "plan" || stage === "fix" || stage === "build") patchRun(key(), { chars: 0 });
       pushItem(key(), { kind: "stage", stage, message });
       if (key() === "design" && stage === "build") get().patchProject({ stage: "building" });
     },

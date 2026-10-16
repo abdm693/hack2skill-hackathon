@@ -106,12 +106,13 @@ export async function* designScript(pid: string): AsyncGenerator<Step> {
 
   let plan: BuildingPlan = clonePlan();
   let report: ComplianceReport = ARGON_REPORT;
-  const plans = [0, 17_400, 31_900, 44_800];
+  // Like the live API, each attempt streams its own character count (a full plan is ~17k characters).
+  const sizes = [17_400, 16_800, 17_100];
   for (let attempt = 1; attempt <= 3; attempt++) {
     yield ev("stage", attempt === 1
       ? { stage: "plan", message: "Argon is laying out the floors…" }
       : { stage: "fix", message: `Argon is fixing the plan (attempt ${attempt})…` });
-    yield* progressTicks(plans[attempt - 1], plans[attempt], attempt === 1 ? 7 : 4, attempt === 1 ? 1150 : 1000);
+    yield* progressTicks(0, sizes[attempt - 1], attempt === 1 ? 7 : 4, attempt === 1 ? 1150 : 1000);
     yield 500;
     plan = attemptPlan(pid, attempt);
     yield ev("plan", { plan, attempt });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight, Box, CodeXml, Play, RefreshCw, Ruler, ShieldCheck } from "lucide-react";
@@ -67,6 +67,18 @@ export function DesignStep() {
 
   // A newer plan replaces any attempt the user was inspecting.
   useEffect(() => setOverride(null), [run.planAttempt]);
+
+  // Follow the newest timeline step while the run streams, unless the reader scrolled up.
+  const timelineRef = useRef<HTMLElement>(null);
+  const followTimeline = useRef(true);
+  const onTimelineScroll = () => {
+    const el = timelineRef.current;
+    if (el) followTimeline.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+  };
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (el && run.status === "running" && followTimeline.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [run.items.length, run.status]);
 
   const running = run.status === "running";
   const plan = override?.plan ?? run.plan ?? version?.plan;
@@ -152,6 +164,8 @@ export function DesignStep() {
       <div className="flex min-h-0 flex-1">
         {/* Timeline */}
         <section
+          ref={timelineRef}
+          onScroll={onTimelineScroll}
           className={cn(
             "scrollbar-thin min-h-0 w-full flex-col overflow-y-auto border-line px-4 py-5 sm:px-5 lg:w-[350px] lg:shrink-0 lg:border-r xl:w-[370px]",
             mobileTab === "progress" ? "flex" : "hidden",
