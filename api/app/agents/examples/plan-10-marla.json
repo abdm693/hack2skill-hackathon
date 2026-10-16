@@ -240,9 +240,9 @@
    "name": "Front Balcony",
    "type": "balcony",
    "rect": {
-    "x": 12,
+    "x": 14,
     "y": 10,
-    "w": 18,
+    "w": 16,
     "d": 4
    },
    "floor_finish": "porcelain_tile"
@@ -253,9 +253,9 @@
    "name": "Bedroom 2",
    "type": "bedroom",
    "rect": {
-    "x": 0,
+    "x": 5,
     "y": 10,
-    "w": 12,
+    "w": 9,
     "d": 13
    },
    "floor_finish": "wood"
@@ -267,11 +267,23 @@
    "type": "bath",
    "rect": {
     "x": 0,
-    "y": 23,
-    "w": 7,
-    "d": 5
+    "y": 10,
+    "w": 5,
+    "d": 8
    },
    "floor_finish": "ceramic_tile"
+  },
+  {
+   "id": "f_bed2_dress",
+   "level": "first",
+   "name": "Dressing 2",
+   "type": "dressing",
+   "rect": {
+    "x": 0,
+    "y": 18,
+    "w": 5,
+    "d": 10
+   }
   },
   {
    "id": "f_corr",
@@ -279,9 +291,9 @@
    "name": "Passage",
    "type": "corridor",
    "rect": {
-    "x": 7,
+    "x": 5,
     "y": 23,
-    "w": 5,
+    "w": 9,
     "d": 5
    },
    "floor_finish": "marble"
@@ -292,9 +304,9 @@
    "name": "Master Bedroom",
    "type": "master_bedroom",
    "rect": {
-    "x": 12,
+    "x": 14,
     "y": 14,
-    "w": 12,
+    "w": 10,
     "d": 14
    },
    "floor_finish": "wood"
@@ -648,10 +660,10 @@
    "level": "first",
    "type": "window",
    "at": [
-    6,
+    9.5,
     10
    ],
-   "width_ft": 6,
+   "width_ft": 5,
    "height_ft": 4.5,
    "sill_ft": 3,
    "between": [
@@ -664,7 +676,7 @@
    "level": "first",
    "type": "door",
    "at": [
-    9.5,
+    12,
     23
    ],
    "width_ft": 3,
@@ -679,13 +691,44 @@
    "level": "first",
    "type": "door",
    "at": [
-    3.5,
-    23
+    5,
+    16.25
    ],
    "width_ft": 2.5,
    "height_ft": 7,
    "between": [
     "f_bath2",
+    "f_bed2"
+   ]
+  },
+  {
+   "id": "f_bath2_v",
+   "level": "first",
+   "type": "ventilator",
+   "at": [
+    2.5,
+    10
+   ],
+   "width_ft": 2,
+   "height_ft": 1.5,
+   "sill_ft": 6,
+   "between": [
+    "f_bath2",
+    "exterior"
+   ]
+  },
+  {
+   "id": "f_dress2_arch",
+   "level": "first",
+   "type": "arch",
+   "at": [
+    5,
+    20.5
+   ],
+   "width_ft": 2.5,
+   "height_ft": 7,
+   "between": [
+    "f_bed2_dress",
     "f_bed2"
    ]
   },
@@ -709,10 +752,10 @@
    "level": "first",
    "type": "sliding_door",
    "at": [
-    18,
+    19,
     14
    ],
-   "width_ft": 8,
+   "width_ft": 7,
    "height_ft": 7.5,
    "sill_ft": 0,
    "between": [
@@ -1001,10 +1044,10 @@
   ]
  },
  "notes": [
-  "The 8 \u00d7 14.75 ft stair hall leaves a 3.5 ft landing at the foot and top of the dog-leg on both floors; the stair tower on the roof covers the same hall and its door opens beside the top landing.",
+  "The 8 × 14.75 ft stair hall leaves a 3.5 ft landing at the foot and top of the dog-leg on both floors; the stair tower on the roof covers the same hall and its door opens beside the top landing.",
   "Guests enter the drawing room straight from the porch; the family enters the TV lounge through the main door.",
   "Every bedroom opens off the lounge or the passage and has its own bath; the master bath opens only into the master bedroom.",
-  "Daylight comes from each room's own outside wall: the 5 ft side space lights the lounge, drawing room and baths.",
+  "Daylight comes from each room's own outside wall: the 5 ft side space lights the lounge, drawing room and baths, and every bath (Bath 2 too) has a ventilator on its own outside wall.",
   "The roof is kept clear for solar; the blue plastic tank sits on the stair tower."
  ]
 }

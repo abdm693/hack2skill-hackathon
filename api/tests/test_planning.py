@@ -4,6 +4,7 @@ The three audited plans must fail the rules that describe the defects the user r
 must pass every rule; and the deterministic repairs must clear what they claim to clear.
 """
 import copy
+import re
 
 import pytest
 
@@ -196,3 +197,119 @@ def test_brief_floor_tokens():
 def test_malformed_plan_does_not_crash():
     out = planning.check({"rooms": [{"id": "x"}], "openings": [{"id": "o", "at": None}], "levels": []})
     assert isinstance(out, list)
+
+
+# --- round 1 review fixes (architect-e2e p_cc0da837ae56 v1 and the villa sample v2) ------------------------------------------
+def checks(plan, brief=None):
+    return {c["id"]: c for c in lda.check(plan, brief)["checks"]}
+
+
+def test_floor_program_counts_master_with_bedrooms():
+    """BE-01: first=[master_bedroom:1, bedroom:2] is three bedrooms; a plan with a master and two bedrooms there passes."""
+    plan = load("plan-e2e-10-marla-v1.json")
+    brief = load("brief-e2e-10-marla.json")
+    by = checks(plan, brief)
+    assert "plan.program.floor:first" not in by
+    assert by["plan.rule.brief"]["status"] == "pass"
+    f = fails(plan, {"floors": [{"level": "first", "rooms": ["master_bedroom:1", "bedroom:2"]}]})
+    assert not any_fail(f, "plan.program.floor")
+    # a real mismatch is still caught: two masters asked for, or a fourth bedroom
+    assert "plan.program.floor:first" in fails(plan, {"floors": [{"level": "first", "rooms": ["master_bedroom:2", "bedroom:1"]}]})
+    assert "plan.program.floor:first" in fails(plan, {"floors": [{"level": "first", "rooms": ["master_bedroom:1", "bedroom:3"]}]})
+
+
+def test_landlocked_bath_fails_and_small_vent_warns(plans):
+    """BE-02: 0 sq ft of opening is a fail; under 2 sq ft a warning."""
+    rep = lda.check(load("plan-e2e-10-marla-v1.json"))
+    c = next(c for c in rep["checks"] if c["id"] == "room.vent:f_bath2")
+    assert c["status"] == "fail" and "ventilator" in c["message"] and "ventilator" in c["fix"]
+    assert "room.vent:f_bath2" in lda.violations_text(rep)
+    p = copy.deepcopy(plans["example"])
+    v = next(o for o in p["openings"] if o["id"] == "f_bath2_v")
+    v["width_ft"], v["height_ft"] = 1.0, 1.0
+    assert checks(p)["room.vent:f_bath2"]["status"] == "warn"
+
+
+def test_door_under_the_mid_landing_fails():
+    """BE-03: the powder-room door sits under the dog-leg's mid-landing (5.5 ft headroom)."""
+    by = checks(load("plan-e2e-10-marla-v1.json"))
+    c = by["plan.stair.door_under_flight:g_powder_door"]
+    assert c["status"] == "fail" and "g_powder_door" in c["element_ids"]
+    assert "plan.rule.stairs" not in by   # the stair family no longer shows as a pass
+
+
+def test_door_on_the_foot_landing_is_fine(plans):
+    p = copy.deepcopy(plans["example"])
+    # a door from the stair hall's foot landing (y 28 to 31.5) into the lounge is how you reach the stair
+    p["openings"].append({"id": "g_hall_door", "level": "ground", "type": "door", "at": [8, 30], "width_ft": 3, "height_ft": 7,
+                          "between": ["g_stair", "g_lounge"]})
+    assert not any_fail(fails(p), "plan.stair.door_under_flight")
+    # the same door further along, beside the flights, opens under the stair
+    p["openings"][-1]["at"] = [8, 38]
+    assert "plan.stair.door_under_flight:g_hall_door" in fails(p)
+
+
+def test_openings_too_close_on_one_wall():
+    """BE-04: the main door 0.2 ft from the lounge window on the porch wall (the engine skipped the door)."""
+    c = checks(load("plan-e2e-10-marla-v1.json"))["plan.opening.clash:g_main_door"]
+    assert c["status"] == "fail" and set(c["element_ids"]) == {"g_main_door", "g_lounge_w"}
+
+
+def test_two_windows_too_close_only_warn(plans):
+    p = copy.deepcopy(plans["example"])
+    w = next(o for o in p["openings"] if o["id"] == "g_drawing_w1")
+    p["openings"].append({**w, "id": "g_drawing_w3", "at": [w["at"][0] + 4.6, w["at"][1]], "width_ft": 0.5})
+    assert checks(p)["plan.opening.clash:g_drawing_w3"]["status"] == "warn"
+
+
+def test_porch_sized_for_the_briefed_cars():
+    """BE-05: a 16 x 18 ft porch parks one of the two briefed cars; an 18 x 18 porch leaves no walkway past two cars."""
+    by = checks(load("plan-e2e-10-marla-v1.json"), load("brief-e2e-10-marla.json"))
+    assert by["plan.circulation.porch:g_porch"]["status"] == "fail" and by["plan.circulation.porch:g_porch"]["value"] == 1
+    v = checks(load("plan-villa-v2.json"), load("brief-villa.json"))
+    assert v["plan.circulation.porch_walkway:g_porch"]["status"] == "fail"
+    assert "plan.circulation.porch:g_porch" not in v
+    assert planning.bays(12, 12) == 0 and planning.bays(18, 18) == 2 and planning.bays(9, 36) == 2
+    assert planning.brief_cars({"spaces": ["drawing", "car_porch:2"]}) == 2
+
+
+def test_villa_dressing_off_the_lounge_and_joined_balconies():
+    """BE-06: the master dressing opens only to the upper lounge; three front decks touch and join Bedroom 3 to the master."""
+    f = fails(load("plan-villa-v2.json"), load("brief-villa.json"))
+    assert "plan.privacy.dressing:f_master_dress" in f
+    assert any_fail(f, "plan.circulation.balcony_links_bedrooms")
+
+
+def test_covered_patio_gives_no_daylight():
+    """BE-07: the Kitchen Patio sits under the first-floor Roof Terrace, so the kitchen gets no daylight from it."""
+    by = checks(load("plan-villa-v2.json"), load("brief-villa.json"))
+    assert by["plan.open_space.covered:g_patio"]["status"] == "fail"
+    assert by["room.light:g_kitchen"]["status"] == "fail"
+    # open the patio to the sky (cut the terrace back, leave a void over the patio) and the kitchen is lit again
+    p = load("plan-villa-v2.json")
+    t = next(r for r in p["rooms"] if r["id"] == "f_roof_terrace")
+    t["rect"] = {"x": 17, "y": 44, "w": 7, "d": 30}
+    p["rooms"].append({"id": "f_void", "level": "first", "name": "Patio Void", "type": "open_space",
+                       "rect": {"x": 0, "y": 44, "w": 17, "d": 30}})
+    by2 = checks(p, load("brief-villa.json"))
+    assert "plan.open_space.covered:g_patio" not in by2 and by2["room.light:g_kitchen"]["status"] == "pass"
+
+
+def test_messages_carry_names_not_ids():
+    """BE-23: no check title or message shows a raw element id; stair checks are named by their floors."""
+    idre = re.compile(r"\b[gfrs]_[a-z0-9_]+")
+    for name, brief in (("plan-e2e-10-marla-v1.json", "brief-e2e-10-marla.json"), ("plan-villa-v2.json", "brief-villa.json"),
+                        ("plan-1-kanal.json", None), ("plan-audit-v1.json", None), ("argon-v1-plan.json", None)):
+        rep = lda.check(load(name), load(brief) if brief else None)
+        for c in rep["checks"]:
+            assert not idre.search(c["title"] + " " + c["message"]), (name, c["id"], c["title"], c["message"])
+    by = checks(load("plan-e2e-10-marla-v1.json"), load("brief-e2e-10-marla.json"))
+    assert by["stair:stair_g_f"]["title"] == "Ground → first stair"
+    assert by["stair:stair_f_r"]["title"] == "First → roof stair"
+    assert by["stair:stair_g_f"]["message"].startswith("19 risers of 6.95 in, 3′6″ wide")
+    solar = by["plan.roof.solar"]
+    assert solar["unit"] == "%" and "% kept clear (min 55%)" in solar["message"]
+
+
+def test_wet_over_dry_ignores_the_kitchen_and_baths(plans):
+    assert "plan.structure.wet_over_dry:f_bath3" not in checks(copy.deepcopy(plans["example"]))

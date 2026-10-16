@@ -298,12 +298,17 @@ def check(plan: dict, brief: dict | None = None) -> dict:
                 fix=f"Give {r['name']} windows on its OWN outside wall on the same floor (or onto a same-floor porch, balcony, "
                     f"terrace or open space): at least {need:.0f} sq ft. A window onto another room or another floor doesn't count.")
         if t in WETS:
+            # No opening at all is a fail (a landlocked bath can't be aired); a small one is a warning.
             g = glazing(r["id"])
             add(f"room.vent:{r['id']}", f"{r['name']} ventilation", g + EPS >= 2,
                 f"Has {g:.1f} sq ft of opening to the outside (min 2 sq ft)." if g + EPS >= 2 else
-                f"{r['name']} has no opening to the outside; LDA asks for at least 2 sq ft (a ventilator or a duct).",
-                round(g, 1), 2, ids=[r["id"]], warn=True, unit="sq ft",
-                fix=f"Put a ventilator on an outside wall of {r['name']}.")
+                f"{r['name']} has only {g:.1f} sq ft open to the outside; LDA asks for at least 2 sq ft." if g > EPS else
+                f"{r['name']} has no opening to the outside: it needs a ventilator on an outside wall, or a duct (LDA: at least "
+                f"2 sq ft).",
+                round(g, 1), 2, ids=[r["id"]], warn=g > EPS, unit="sq ft",
+                fix=f"Give {r['id']} a 'ventilator' opening (about 2 × 1.5 ft, between [\"{r['id']}\", \"exterior\"]) on its OWN "
+                    f"outside wall, or onto a same-floor open space or terrace that is open to the sky. If {r['name']} has no "
+                    f"outside wall, move it (or swap it with a neighbour) so it touches one.")
 
     # --- Stairs -----------------------------------------------------------------------------------
     for st in plan.get("stairs", []):
@@ -313,11 +318,15 @@ def check(plan: dict, brief: dict | None = None) -> dict:
         n_risers = math.ceil(rise_ft * 12 / riser - 1e-6) if riser else 0
         flights = 2 if st.get("kind") in ("dogleg", "l_shape") else 1
         per_flight = math.ceil(n_risers / flights) if flights else n_risers
-        ok = st.get("width_ft", 0) + EPS >= 3.5 and riser <= 7.5 + EPS and st.get("tread_in", 0) + EPS >= 10 and per_flight <= 15
-        add(f"stair:{st['id']}", "Staircase", ok,
-            f"{flights} flight{'s' if flights > 1 else ''}, {n_risers} risers of {riser:g} in ({per_flight} per flight), treads "
-            f"{st.get('tread_in', 0):g} in, width {_fmt_ft(st.get('width_ft', 0))} (LDA: width at least 3′6″, risers at most 7½ in, "
-            f"treads at least 10 in, at most 15 risers per flight).", per_flight, 15, ids=[st["id"]], unit="risers per flight",
+        width, tread = float(st.get("width_ft", 0) or 0), float(st.get("tread_in", 0) or 0)
+        ok = width + EPS >= 3.5 and riser <= 7.5 + EPS and tread + EPS >= 10 and per_flight <= 15
+        actual = rise_ft * 12 / n_risers if n_risers else riser
+        wrong = [w for w, bad in (("width at least 3′6″", width + EPS < 3.5), ("risers at most 7½ in", riser > 7.5 + EPS),
+                                  ("treads at least 10 in", tread + EPS < 10), ("at most 15 risers per flight", per_flight > 15)) if bad]
+        add(f"stair:{st['id']}", ix.sname(st), ok,
+            f"{n_risers} risers of {actual:.2f} in, {_fmt_ft(width)} wide, {tread:g} in treads, {flights} flight{'s' if flights > 1 else ''}"
+            + (f" of up to {per_flight} risers." if flights > 1 else ".") + (f" LDA needs {', '.join(wrong)}." if wrong else ""),
+            per_flight, 15, ids=[st["id"]], unit="risers per flight",
             fix="Flights 3.5 ft wide, risers 6.95 in, treads 10 in, a dog-leg with a mid-landing.")
 
     # --- Services ---------------------------------------------------------------------------------
@@ -343,7 +352,7 @@ GROUPS = [  # fix-loop order: life safety first, then privacy and circulation, t
     ("SAFETY (stairs, roof, openings)", ("plan.stair", "plan.roof.mumty", "plan.opening.door_to_drop")),
     ("PRIVACY & CIRCULATION", ("plan.privacy", "plan.circulation", "plan.open_to", "plan.opening", "plan.overlap")),
     ("LDA REGULATIONS", ("setback", "coverage", "far", "height", "storeys", "mumty", "parapet", "boundary_wall", "stair:")),
-    ("ROOMS", ("room.", "plan.room", "plan.structure", "services")),
+    ("ROOMS", ("room.", "plan.room", "plan.structure", "plan.open_space", "services")),
     ("THE FAMILY'S BRIEF", ("plan.program", "plan.roof")),
 ]
 
