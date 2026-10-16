@@ -78,6 +78,15 @@ def test_audit_v2_honours_the_brief(plans):
     assert "plan.program.floor:first" in f2                      # 4 bedrooms upstairs instead of 3
 
 
+def test_live_run_attached_baths_from_floor_program_and_bath_size():
+    """A real Argon plan that passed every earlier rule; the architect's review flagged a 6×4 ft master bath and Bedroom 2
+    without its own bath ("three bedrooms with attached baths upstairs" became first=bedroom:3,bath:3)."""
+    f = fails(load("plan-live-run.json"), load("brief-live-run.json"))
+    assert "plan.room.bath_size:f_master_bath" in f
+    assert "plan.program.attached_bath:f_bed2" in f
+    assert "plan.program.attached_bath:f_bed3" not in f
+
+
 # --- the corrected example passes everything ------------------------------------------------------------------------------
 def test_example_plan_is_clean(plans):
     rep = lda.check(plans["example"], {"bedrooms": 4, "bathrooms": 4, "solar": "ready", "water_tank": "plastic",

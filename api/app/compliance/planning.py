@@ -520,7 +520,7 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
         out.add("plan.malformed", "Plan structure", "fail", f"The plan could not be read ({type(e).__name__}).")
         return out.checks
     for rule in (_openings, _open_to, _privacy, _baths, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
-                 _solid_walls, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
+                 _solid_walls, _bath_sizes, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
         try:
             if rule in (_roof_services, _program):
                 rule(ix, out, brief or {})
@@ -1422,6 +1422,17 @@ def _program(ix: PlanIndex, out: _Out, brief: dict) -> None:
                     fix=f"Follow brief.floors for the {ix.lname(lid)} exactly.", ref=f"{REF} P-25")
     prefs = " ".join([str(p) for p in brief.get("preferences") or []] + [str(brief.get("notes") or "")]).lower()
     attached_asked = bool(re.search(r"attach|en.?suite", prefs))
+    # one bath per bedroom (or more) means attached baths: across the brief, or on a floor of the per-floor program
+    beds_n, baths_n = int(brief.get("bedrooms") or 0), int(brief.get("bathrooms") or 0)
+    attached_levels: set[str] = set()
+    if beds_n and baths_n >= beds_n + 1:
+        attached_asked = True
+    for fl in brief.get("floors") or []:
+        prog = parse_program(fl.get("rooms") or [])
+        b = sum(n for k, n in prog.items() if k in ("bedroom", "bed", "bedrooms", "master_bedroom", "guest_bedroom"))
+        w = sum(n for k, n in prog.items() if k in ("bath", "bathroom", "baths"))
+        if b and w >= b and (lid := _level_for(ix, fl.get("level", ""))):
+            attached_levels.add(lid)
     for r in ix.rooms:
         if r.get("type") not in BEDROOMS:
             continue
@@ -1432,7 +1443,7 @@ def _program(ix: PlanIndex, out: _Out, brief: dict) -> None:
             if r.get("type") == "master_bedroom":
                 out.add(f"plan.program.attached_bath:{r['id']}", "Master en-suite", "fail", f"{r['name']} has no bath of its own.",
                         ids=[r["id"]], fix="Give the master bedroom an attached bath whose only door opens into it.", ref=f"{REF} P-25")
-            elif attached_asked:
+            elif attached_asked or r.get("level") in attached_levels:
                 out.add(f"plan.program.attached_bath:{r['id']}", "Attached bath", "fail",
                         f"The brief asks for attached baths; {r['name']} has none.", ids=[r["id"]],
                         fix=f"Give {r['name']} its own bath whose only door opens into it.", ref=f"{REF} P-25")
@@ -1454,6 +1465,35 @@ def _program(ix: PlanIndex, out: _Out, brief: dict) -> None:
             out.add("plan.program.parents_ground", "Bedroom downstairs", "fail",
                     "The family asked for a bedroom on the ground floor (for the parents); the plan has none.",
                     fix="Put a bedroom with an attached bath on the ground floor.", ref=f"{REF} P-25")
+
+
+# P-28 (Naqsha): baths you can actually use -------------------------------------------------------------------------------------
+BATH_MIN = {"bath": (30.0, 4.5), "powder": (15.0, 3.0)}  # sq ft, clear width (WC + basin; a bath adds a shower)
+
+
+def _bath_sizes(ix: PlanIndex, out: _Out) -> None:
+    for r in ix.rooms:
+        t = r.get("type")
+        if t not in BATH_MIN:
+            continue
+        x0, y0, x1, y1 = ix.R[r["id"]]
+        w, d = x1 - x0, y1 - y0
+        a, narrow = w * d, min(w, d)
+        need_a, need_w = BATH_MIN[t]
+        if "master" in (r["id"] + r.get("name", "")).lower() and t == "bath":
+            need_a = 40.0
+        if a + 1e-6 < need_a or narrow + 1e-6 < need_w:
+            what = f"{fmt(narrow)} wide" if narrow + 1e-6 < need_w else f"{a:.0f} sq ft"
+            out.add(f"plan.room.bath_size:{r['id']}", "Bath size", "fail",
+                    f"{r['name']} is only {what} ({fmt(w)} × {fmt(d)}); a usable {('master ' if need_a > 30 else '')}"
+                    f"{'bath' if t == 'bath' else 'powder room'} needs {need_a:g} sq ft and {fmt(need_w)} width.", ids=[r["id"]],
+                    fix=f"Make {r['name']} at least {need_a:g} sq ft and {need_w:g} ft wide, e.g. 5 × 8 ft (master 6 × 8 ft).",
+                    ref=f"{REF} P-28", value=round(a), limit=need_a, unit="sq ft")
+        elif t == "bath" and max(w, d) / max(narrow, 0.1) > 2.4:
+            out.add(f"plan.room.bath_shape:{r['id']}", "Bath shape", "warn",
+                    f"{r['name']} is a long, narrow {fmt(w)} × {fmt(d)}; part of it is wasted corridor.", ids=[r["id"]],
+                    fix="Keep baths roughly 5 × 8 to 6 × 10 ft and give the spare length to a wardrobe or the bedroom.",
+                    ref=f"{REF} P-28")
 
 
 # P-26 ----------------------------------------------------------------------------------------------------------------

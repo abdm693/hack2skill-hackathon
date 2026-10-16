@@ -355,8 +355,12 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
         yield "stage", {"stage": "review", "message": f"Improved after review: {crit['summary'] or majors[0]['problem']}"}
         yield "_result", {"plan": cand, "report": cand_rep, "review": {**crit, "applied": True}}
     else:
-        yield "stage", {"stage": "review", "message": "Kept the checked plan; the suggested changes would have broken a rule."}
-        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False}}
+        broke = [c["id"] for c in (cand_rep or {}).get("checks", []) if c["status"] == "fail"] if cand is not None else []
+        log.info("review revision kept out: %s", broke or "timed out or failed")
+        msg = ("Kept the checked plan; the suggested changes would have broken a rule." if broke else
+               "Kept the checked plan; the improvement took too long.")
+        yield "stage", {"stage": "review", "message": msg}
+        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False, "rejected_because": broke or ["time"]}}
 
 
 # --- Step 3: design.js --------------------------------------------------------------------------------
