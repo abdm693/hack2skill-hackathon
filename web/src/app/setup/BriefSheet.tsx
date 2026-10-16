@@ -1,0 +1,388 @@
+/**
+ * The live brief: every captured requirement, visible and directly editable (tap a row to change it; the brief is
+ * saved straight away and the LDA envelope recomputed). Assumed values read in ink-3 with a dotted underline.
+ */
+import { useEffect, useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { ChevronRight, Plus, X } from "lucide-react";
+import type { Brief, Envelope } from "@contracts/api-types";
+import { BUDGET_LABEL, FACING_LABEL, plotLabel, toMarla } from "@/api/domain";
+import { cn, feetInches, num } from "@/app/lib/utils";
+import { Button, Dialog, EASE_OUT, Segmented } from "@/app/design/kit";
+import { LEVEL_LABEL, defaultProgram, levelsFor, roomsLine, toFloors, bedroomsIn, bathsIn, type Program } from "./catalogue";
+import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate } from "./widgets";
+
+export type SaveBrief = (patch: Partial<Brief>, decided: string[]) => void;
+
+type Editing = "plot" | "location" | "facing" | "floors" | "roof" | "style" | "budget" | null;
+
+export function BriefSheet({ brief, envelope, save, className }: { brief: Brief | null; envelope: Envelope | null; save: SaveBrief; className?: string }) {
+  const [editing, setEditing] = useState<Editing>(null);
+  const auto = new Set(brief?.auto_filled ?? []);
+  const b = brief;
+  const plot = b?.plot;
+  const hasPlot = !!plot?.width_ft;
+  const program: Program | null = b ? (b.floors?.length ? defaultProgram(b, envelope) : null) : null;
+  const levels = levelsFor(b?.storeys || 2);
+  const porch = b?.spaces?.find((s) => s.startsWith("car_porch"));
+
+  return (
+    <div className={className}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-heading text-ink">Your brief</h2>
+        <span className="text-[12.5px] text-ink-3">Tap anything to change it</span>
+      </div>
+      <dl className="mt-3 divide-y divide-line border-y border-line">
+        <Row label="Plot" empty={!hasPlot} assumed={auto.has("plot")} onEdit={() => setEditing("plot")}>
+          {hasPlot && (
+            <>
+              <span>{plotLabel(plot!.area_marla || toMarla(plot!.width_ft, plot!.depth_ft))}</span>
+              <span className="font-mono text-[13px] tabular-nums text-ink-2">
+                {feetInches(plot!.width_ft)} × {feetInches(plot!.depth_ft)}
+              </span>
+              <span className={cn(auto.has("corner") && "text-ink-3 underline decoration-dotted decoration-ink-4 underline-offset-4")}>{plot!.corner ? "Corner" : "Mid-row"}</span>
+            </>
+          )}
+        </Row>
+        <Row label="Location" empty={!b?.scheme && !b?.city} assumed={auto.has("scheme")} onEdit={() => setEditing("location")}>
+          <span>{[b?.scheme, b?.city].filter(Boolean).join(", ")}</span>
+          {b?.authority && <span className="text-[12.5px] text-ink-3">{b.authority === "LDA" ? "LDA rules" : `${b.authority}: its own bylaws`}</span>}
+        </Row>
+        <Row label="Facing" empty={!b?.facing} assumed={auto.has("facing")} onEdit={() => setEditing("facing")}>
+          {b?.facing && <span>The front faces {FACING_LABEL[b.facing]?.toLowerCase()}</span>}
+        </Row>
+        <Row label="Floors" empty={!b?.storeys} assumed={auto.has("floors") || auto.has("storeys")} onEdit={() => setEditing("floors")} block>
+          {!!b?.storeys && (
+            <div className="space-y-0.5">
+              <p>
+                {b.storeys} {b.storeys === 1 ? "storey" : "storeys"}
+                {b.bedrooms ? `, ${b.bedrooms} bedrooms` : ""}
+                {b.basement ? ", basement" : ""}
+                {porch ? `, ${porch.split(":")[1] ?? 1}-car porch` : ""}
+              </p>
+              {program &&
+                levels
+                  .filter((l) => roomsLine(program[l]))
+                  .map((l) => (
+                    <p key={l} className="text-[13px] leading-snug text-ink-2">
+                      <span className="text-ink-3">{LEVEL_LABEL[l]}</span> {roomsLine(program[l])}
+                    </p>
+                  ))}
+            </div>
+          )}
+        </Row>
+        <Row label="Roof" empty={!b?.water_tank && !b?.solar} assumed={auto.has("water_tank") || auto.has("solar")} onEdit={() => setEditing("roof")}>
+          {b?.water_tank && <span>{b.water_tank === "plastic" ? "Plastic tank" : "Concrete tank in the stair tower"}</span>}
+          {b?.solar && <span className="text-ink-2">{b.solar === "ready" ? "Clear for solar" : b.solar === "panels" ? "Solar frame" : "No solar"}</span>}
+        </Row>
+        <Row label="Style" empty={!b?.style} assumed={auto.has("style")} onEdit={() => setEditing("style")}>
+          {b?.style && <span>{b.style}</span>}
+        </Row>
+        <Row label="Finishes" empty={!b?.budget} assumed={auto.has("budget")} onEdit={() => setEditing("budget")}>
+          {b?.budget && <span>{BUDGET_LABEL[b.budget]}</span>}
+        </Row>
+        <Wishes prefs={b?.preferences ?? []} onChange={(preferences) => save({ preferences }, [])} />
+        {b?.notes && (
+          <div className="grid grid-cols-[88px_1fr] gap-3 py-2.5">
+            <dt className="text-[13px] text-ink-3">Notes</dt>
+            <dd className="whitespace-pre-line text-[13.5px] leading-snug text-ink-2">{b.notes}</dd>
+          </div>
+        )}
+      </dl>
+
+      <EnvelopeFacts envelope={envelope} corner={!!plot?.corner} />
+
+      {/* Editors */}
+      <Dialog open={editing === "plot"} onClose={() => setEditing(null)} title="Plot" description="Pick a standard size or enter the exact width and depth." width={560}>
+        <PlotEditor
+          brief={b}
+          doneLabel={() => "Save"}
+          onDone={(w, d, corner) => {
+            save({ plot: { width_ft: w, depth_ft: d, area_marla: Math.round(toMarla(w, d) * 10) / 10, corner } }, ["plot", "corner"]);
+            setEditing(null);
+          }}
+        />
+      </Dialog>
+      <LocationDialog open={editing === "location"} brief={b} onClose={() => setEditing(null)} save={save} />
+      <Dialog open={editing === "facing"} onClose={() => setEditing(null)} title="Which way does the front face?" description="The road side of the plot. It sets where the sun falls.">
+        <FacingPicker
+          value={b?.facing}
+          onChange={(facing) => {
+            save({ facing }, ["facing"]);
+            setEditing(null);
+          }}
+        />
+      </Dialog>
+      {b && <FloorsDialog open={editing === "floors"} brief={b} envelope={envelope} onClose={() => setEditing(null)} save={save} />}
+      {b && <RoofDialog open={editing === "roof"} brief={b} envelope={envelope} onClose={() => setEditing(null)} save={save} />}
+      <Dialog open={editing === "style"} onClose={() => setEditing(null)} title="Style" width={620}>
+        <StyleEditor
+          current={b?.style}
+          onPick={(style) => {
+            save({ style }, ["style"]);
+            setEditing(null);
+          }}
+        />
+      </Dialog>
+      <Dialog open={editing === "budget"} onClose={() => setEditing(null)} title="Finishes" description="It changes materials, not the layout.">
+        <div className="grid gap-2">
+          {(["economy", "standard", "premium", "luxury"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => {
+                save({ budget: k }, ["budget"]);
+                setEditing(null);
+              }}
+              className={cn(
+                "flex items-center justify-between rounded-control px-4 py-3 text-left outline-none transition-colors focus-visible:shadow-focus",
+                b?.budget === k ? "bg-accent-soft text-accent shadow-[inset_0_0_0_1px_var(--color-accent-line)]" : "bg-surface-2 text-ink hover:bg-surface-3",
+              )}
+            >
+              <span className="text-[15px] font-medium">{BUDGET_LABEL[k]}</span>
+              <span className="text-[13px] text-ink-3">
+                {k === "economy" ? "Simple, durable finishes" : k === "standard" ? "Porcelain floors, local fittings" : k === "premium" ? "Marble, wood, imported fittings" : "Bespoke throughout"}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+function Row({ label, children, empty, assumed, onEdit, block }: { label: string; children?: ReactNode; empty?: boolean; assumed?: boolean; onEdit: () => void; block?: boolean }) {
+  return (
+    <button type="button" onClick={onEdit} className="group grid w-full grid-cols-[88px_1fr_16px] items-start gap-3 py-2.5 text-left outline-none focus-visible:bg-surface-2">
+      <dt className="pt-px text-[13px] text-ink-3">{label}</dt>
+      <dd className={cn("min-w-0 text-[14px] leading-snug", assumed ? "text-ink-3" : "text-ink")}>
+        {empty ? (
+          <span className="text-ink-4">Not yet</span>
+        ) : (
+          <motion.span initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE_OUT }} className={cn(block ? "block" : "flex flex-wrap items-baseline gap-x-2 gap-y-0.5", assumed && !block && "[&>span:first-child]:underline [&>span:first-child]:decoration-dotted [&>span:first-child]:decoration-ink-4 [&>span:first-child]:underline-offset-4")}>
+            {children}
+          </motion.span>
+        )}
+      </dd>
+      <ChevronRight className="mt-0.5 size-4 text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100" strokeWidth={1.75} />
+    </button>
+  );
+}
+
+function Wishes({ prefs, onChange }: { prefs: string[]; onChange: (p: string[]) => void }) {
+  const [text, setText] = useState("");
+  const [adding, setAdding] = useState(false);
+  const commit = () => {
+    const t = text.trim();
+    if (t) onChange([...prefs, t]);
+    setText("");
+    setAdding(false);
+  };
+  return (
+    <div className="grid grid-cols-[88px_1fr_16px] items-start gap-3 py-2.5">
+      <dt className="pt-1.5 text-[13px] text-ink-3">Wishes</dt>
+      <dd className="flex min-w-0 flex-wrap gap-1.5">
+        <AnimatePresence initial={false}>
+          {prefs.map((p) => (
+            <motion.span key={p} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="inline-flex min-h-8 max-w-full items-center gap-0.5 rounded-chip bg-surface-2 py-1 pl-2.5 text-[13px] leading-snug text-ink">
+              {p}
+              <button type="button" aria-label={`Remove ${p}`} onClick={() => onChange(prefs.filter((x) => x !== p))} className="grid size-6 shrink-0 place-items-center rounded-full text-ink-4 hover:bg-surface-3 hover:text-ink">
+                <X className="size-3" strokeWidth={2} />
+              </button>
+            </motion.span>
+          ))}
+        </AnimatePresence>
+        {adding ? (
+          <input
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") { setText(""); setAdding(false); }
+              e.stopPropagation();
+            }}
+            placeholder="e.g. open kitchen"
+            className="h-8 w-44 rounded-chip bg-surface px-2.5 text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--color-accent)] outline-none placeholder:text-ink-4"
+          />
+        ) : (
+          <button type="button" onClick={() => setAdding(true)} className="inline-flex h-8 items-center gap-1 rounded-chip px-2 text-[13px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink">
+            <Plus className="size-3.5" strokeWidth={2} /> {prefs.length ? "Add" : "Add a wish"}
+          </button>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function EnvelopeFacts({ envelope, corner }: { envelope: Envelope | null; corner: boolean }) {
+  if (!envelope) return null;
+  const r = envelope.buildable_rect;
+  const perFloor = Math.min(r.w * r.d, envelope.max_ground_coverage_sqft);
+  // The corner-plot note matters most on a corner plot; never drop it (it used to be the fifth and hidden).
+  const notes = [...envelope.notes].sort((a, b) => Number(/corner|splay/i.test(b) && corner) - Number(/corner|splay/i.test(a) && corner));
+  return (
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="mt-6">
+      <h3 className="text-[15px] font-semibold text-ink">What LDA lets you build</h3>
+      <p className="mt-1 text-body text-ink-2">
+        Up to <span className="font-mono tabular-nums text-ink">{num(perFloor)}</span> sq ft a floor, {envelope.max_storeys} storeys, {feetInches(envelope.max_height_ft)} to the parapet.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+        <Fact label="Ground coverage" value={`${num(envelope.max_coverage_pct)}% max`} />
+        <Fact label="Floor area ratio" value={`1:${envelope.max_far}`} />
+        <Fact label="Front · rear" value={`${feetInches(envelope.setbacks_ft.front)} · ${feetInches(envelope.setbacks_ft.rear)}`} />
+        <Fact label="Sides" value={envelope.setbacks_ft.left || envelope.setbacks_ft.right ? `${feetInches(envelope.setbacks_ft.left)} · ${feetInches(envelope.setbacks_ft.right)}` : "None needed"} />
+      </div>
+      {notes.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {notes.map((n) => (
+            <li key={n} className="flex gap-2 text-[13px] leading-snug text-ink-2">
+              <span className="mt-[7px] size-1 shrink-0 rounded-full bg-accent" />
+              {n}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[12px] text-ink-3">{envelope.authority} Building and Zoning Regulations · {envelope.band}</p>
+    </motion.div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-ink-3">{label}</p>
+      <p className="font-mono tabular-nums text-ink">{value}</p>
+    </div>
+  );
+}
+
+function LocationDialog({ open, brief, onClose, save }: { open: boolean; brief: Brief | null; onClose: () => void; save: SaveBrief }) {
+  const [scheme, setScheme] = useState(brief?.scheme ?? "");
+  const [authority, setAuthority] = useState<Brief["authority"]>(brief?.authority ?? "LDA");
+  useEffect(() => {
+    if (!open) return;
+    setScheme(brief?.scheme ?? "");
+    setAuthority(brief?.authority ?? "LDA");
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Where is the plot?"
+      description="The scheme decides whose rules apply. DHA and Bahria have their own bylaws; I design to LDA rules and flag where they differ."
+      actions={
+        <>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              save({ scheme: scheme.trim() || undefined, authority, city: brief?.city || "Lahore" }, ["scheme"]);
+              onClose();
+            }}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <input
+          value={scheme}
+          onChange={(e) => setScheme(e.target.value)}
+          placeholder="Scheme, e.g. Johar Town"
+          aria-label="Scheme"
+          className="h-11 w-full rounded-control bg-surface px-3.5 text-body text-ink shadow-[inset_0_0_0_1px_var(--color-line-strong)] outline-none placeholder:text-ink-4 focus:shadow-[inset_0_0_0_1px_var(--color-accent),var(--shadow-focus)]"
+        />
+        <Segmented
+          label="Authority"
+          value={authority}
+          onChange={setAuthority}
+          options={[
+            { value: "LDA", label: "LDA" },
+            { value: "DHA", label: "DHA" },
+            { value: "BAHRIA", label: "Bahria" },
+            { value: "OTHER", label: "Other" },
+          ]}
+        />
+      </div>
+    </Dialog>
+  );
+}
+
+function FloorsDialog({ open, brief, envelope, onClose, save }: { open: boolean; brief: Brief; envelope: Envelope | null; onClose: () => void; save: SaveBrief }) {
+  const [program, setProgram] = useState<Program>(() => defaultProgram(brief, envelope));
+  const [storeys, setStoreys] = useState(Math.max(1, Math.min(3, brief.storeys || 2)));
+  useEffect(() => {
+    if (!open) return;
+    setProgram(defaultProgram(brief, envelope));
+    setStoreys(Math.max(1, Math.min(3, brief.storeys || 2)));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Rooms on each floor"
+      width={640}
+      actions={
+        <>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              const levels = levelsFor(storeys);
+              const beds = bedroomsIn(program);
+              save({ floors: toFloors(program, levels), storeys, bedrooms: beds || brief.bedrooms, bathrooms: bathsIn(program) || brief.bathrooms }, ["floors", "storeys", "bedrooms"]);
+              onClose();
+            }}
+          >
+            Save floors
+          </Button>
+        </>
+      }
+    >
+      <FloorsEditor brief={brief} envelope={envelope} program={program} storeys={storeys} onChange={(p, s) => { setProgram(p); setStoreys(s); }} />
+    </Dialog>
+  );
+}
+
+function RoofDialog({ open, brief, envelope, onClose, save }: { open: boolean; brief: Brief; envelope: Envelope | null; onClose: () => void; save: SaveBrief }) {
+  const [tank, setTank] = useState<"plastic" | "concrete">(brief.water_tank ?? "concrete");
+  const [solar, setSolar] = useState<"none" | "ready" | "panels">(brief.solar ?? "ready");
+  useEffect(() => {
+    if (!open) return;
+    setTank(brief.water_tank ?? "concrete");
+    setSolar(brief.solar ?? "ready");
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="The roof"
+      width={600}
+      actions={
+        <>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              save({ water_tank: tank, solar }, ["water_tank", "solar"]);
+              onClose();
+            }}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <RoofEditor tank={tank} solar={solar} panels={solarEstimate(envelope, brief)} onChange={(t, s) => { setTank(t); setSolar(s); }} />
+    </Dialog>
+  );
+}
