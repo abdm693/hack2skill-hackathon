@@ -67,6 +67,7 @@
   --ease-exit: cubic-bezier(.4, 0, 1, 1);
 
   --animate-breathe: breathe 1.6s ease-in-out infinite;
+  --animate-caret: caret 1s steps(2, start) infinite;
   --animate-shimmer: shimmer 1.8s var(--ease-sheet) infinite;
 }
 
@@ -150,35 +151,6 @@
 
 /* A blinking caret for streamed text. */
 @keyframes caret { to { visibility: hidden; } }
-
-/*
- * Legacy token names (before the overhaul). They point at the new tokens so code that has not moved to the
- * new names yet still renders in the new palette. Remove this block once nothing in web/src uses them.
- */
-@theme {
-  --color-paper: var(--color-canvas);
-  --color-sheet: var(--color-surface);
-  --color-plaster: var(--color-surface);
-  --color-wash: var(--color-surface-2);
-  --color-wash-2: var(--color-surface-3);
-  --color-graphite: var(--color-ink-2);
-  --color-pencil: var(--color-ink-3);
-  --color-brick: var(--color-accent);
-  --color-brick-deep: var(--color-accent-press);
-  --color-brick-soft: var(--color-accent-soft);
-  --color-brick-tint: var(--color-accent-line);
-  --color-night: var(--color-hud);
-  --shadow-hair: 0 0 0 1px rgb(17 17 19 / .06);
-  --shadow-lift: var(--shadow-e2);
-  --shadow-float: var(--shadow-e3);
-  --ease-out-quint: var(--ease-out);
-  --ease-drawer: var(--ease-sheet);
-  --ease-press: cubic-bezier(.2, 0, 0, 1);
-  --animate-pulse-soft: breathe 1.6s ease-in-out infinite;
-  --animate-caret: caret 1s steps(2, start) infinite;
-}
-@utility font-display-tight { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.03em; }
-@utility font-display-text { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.01em; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

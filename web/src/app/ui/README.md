@@ -8,9 +8,8 @@ import { Button, IconButton, Chip, Input, Sheet, Dialog, toast, Segmented, Avata
 ```
 
 `@/app/ui/primitives` and `@/app/ui/Button` still export the old names (`Pill`, `Menu`, `Dialog`, `Segmented`, `Chip`,
-`Spinner`, `StatusIcon`, `Toaster`), so older screens keep compiling. Old token class names (`bg-paper`, `text-graphite`,
-`bg-brick`, `text-pencil`, `bg-plaster`, `bg-wash`, `bg-night`…) are aliased to the new tokens at the bottom of `index.css`;
-please write new code with the new names.
+`Spinner`, `StatusIcon`, `Toaster`), so older screens keep compiling. The pre-overhaul token class names (`bg-paper`, `text-graphite`,
+`bg-brick`…) are gone: use the tokens above.
 
 ## Tokens in one breath
 
