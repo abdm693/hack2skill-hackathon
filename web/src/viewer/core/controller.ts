@@ -32,6 +32,15 @@ type ModeSource = "props" | "handle" | "user" | "flyTo";
 
 const ORBIT_FOV = 50;
 const WALK_FOV = 70;
+/**
+ * Walking field of view: 70° vertical on landscape screens; on a portrait phone that would be a 38° slit, so widen
+ * the vertical angle until about 56° of the room shows side to side (capped before it distorts).
+ */
+function walkFov(aspect: number) {
+  if (!Number.isFinite(aspect) || aspect <= 0) return WALK_FOV;
+  const v = (2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(56) / 2) / aspect) * 180) / Math.PI;
+  return clamp(v, WALK_FOV, 92);
+}
 const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
 const OUTDOOR = new Set(["porch", "balcony", "terrace", "lawn", "driveway", "courtyard", "open_space", "garage"]);
 const IDLE_MS = 2500;
@@ -405,6 +414,13 @@ export class ViewerController {
 
   private walkFrame(dt: number, now: number, cam: THREE.PerspectiveCamera) {
     const wasIntro = !!this.walk.transition;
+    // follow the screen's shape (rotating a phone, resizing a panel)
+    const fov = walkFov(cam.aspect);
+    if (Math.abs(fov - this.walk.fov) > 0.5) this.walk.fov = fov;
+    if (!this.walk.transition && Math.abs(cam.fov - this.walk.fov) > 0.05) {
+      cam.fov = this.walk.fov;
+      cam.updateProjectionMatrix();
+    }
     this.walk.update(dt, cam);
     if (wasIntro && !this.walk.transition) this.onIntroDone();
     if (this.minimapMarker) {
@@ -1042,7 +1058,7 @@ export class ViewerController {
       c.suspended = true;
       c.enabled = false;
     }
-    this.walk.fov = WALK_FOV;
+    this.walk.fov = walkFov(cam.aspect);
     this.walk.enabled = false;
     this.walk.beginTransition(cam, initial || prefersReducedMotion() ? 0.01 : 1.15);
     this.perf.settleUntil = performance.now() + 2500;
@@ -1476,6 +1492,8 @@ export class ViewerController {
         break;
       case "Enter":
       case "Space":
+        // a focused button (the app's Next, a sheet) keeps its own Enter/Space
+        if ((e.target as Element | null)?.closest?.("button, a[href], [role='button'], summary")) break;
         if (s.walk === "free" || s.walk === "commenting") {
           consume();
           this.requestLock();
