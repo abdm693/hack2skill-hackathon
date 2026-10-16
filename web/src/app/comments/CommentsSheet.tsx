@@ -3,18 +3,15 @@
  * "Apply N open comments" lets the owner or team pick which notes feed the next revision.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import { MessageSquarePlus } from "lucide-react";
 import type { Comment, Project } from "@contracts/api-types";
 import { userId } from "@/api/client";
-import { cn } from "@/app/lib/utils";
 import { canEdit } from "@/app/lib/views";
 import { useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
 import { Button } from "@/app/ui/Button";
 import { Chip } from "@/app/ui/Chip";
 import { Sheet } from "@/app/ui/Sheet";
-import { ease } from "@/app/ui/motion";
 import { CommentItem } from "./CommentItem";
 import { FILTERS, groupComments, matches, pinNumbers, type CommentFilter } from "./model";
 
@@ -149,47 +146,38 @@ export function CommentsSheet({
       ) : shown.length === 0 ? (
         <p className="px-1 py-10 text-center text-[13px] text-ink-3">Nothing here with this filter.</p>
       ) : (
+        // Filters apply instantly: no exit animations to wait for.
         <div className="flex flex-col gap-1">
-          <AnimatePresence initial={false}>
-            {groups.map((g) => {
-              const items = applyMode && canApply ? g.items.filter((c) => c.status === "open") : g.items;
-              if (!items.length) return null;
-              return (
-                <motion.section
-                  key={g.key}
-                  layout="position"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: ease.out }}
-                  className="pt-2"
-                >
-                  <h3 className="sticky top-0 z-[1] -mx-5 bg-surface/95 px-5 py-1.5 text-[12px] font-medium text-ink-3 backdrop-blur-sm">{g.label}</h3>
-                  <div className={cn("flex flex-col divide-y divide-line")}>
-                    {items.map((c) => (
-                      <CommentItem
-                        key={c.id}
-                        ref={(el) => {
-                          if (el) refs.current.set(c.id, el);
-                          else refs.current.delete(c.id);
-                        }}
-                        comment={c}
-                        number={numbers.get(c.id)}
-                        me={me}
-                        moderator={moderator}
-                        clientView={clientView}
-                        highlight={focusId === c.id}
-                        onShow={onShow}
-                        selectable={applyMode && canApply}
-                        selected={picked.has(c.id)}
-                        onToggle={() => toggle(c.id)}
-                      />
-                    ))}
-                  </div>
-                </motion.section>
-              );
-            })}
-          </AnimatePresence>
+          {groups.map((g) => {
+            const items = applyMode && canApply ? g.items.filter((c) => c.status === "open") : g.items;
+            if (!items.length) return null;
+            return (
+              <section key={g.key} className="pt-2">
+                <h3 className="sticky top-0 z-[1] -mx-5 bg-surface/95 px-5 py-1.5 text-[12px] font-medium text-ink-3 backdrop-blur-sm">{g.label}</h3>
+                <div className="flex flex-col divide-y divide-line">
+                  {items.map((c) => (
+                    <CommentItem
+                      key={c.id}
+                      ref={(el) => {
+                        if (el) refs.current.set(c.id, el);
+                        else refs.current.delete(c.id);
+                      }}
+                      comment={c}
+                      number={numbers.get(c.id)}
+                      me={me}
+                      moderator={moderator}
+                      clientView={clientView}
+                      highlight={focusId === c.id}
+                      onShow={onShow}
+                      selectable={applyMode && canApply}
+                      selected={picked.has(c.id)}
+                      onToggle={() => toggle(c.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </Sheet>

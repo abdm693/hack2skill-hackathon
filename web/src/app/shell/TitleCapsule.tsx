@@ -4,10 +4,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronDown, History, Info, LayoutGrid, Pencil, Printer, Share2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, CloudUpload, History, Info, LayoutGrid, Pencil, Printer, Share2 } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
 import { canEdit, roleOf, viewAvailable } from "@/app/lib/views";
+import { requireAccount, useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
 import { Menu, type MenuItem } from "@/app/ui/Menu";
 import { Tooltip } from "@/app/ui/Tooltip";
@@ -45,6 +46,7 @@ export function TitleCapsule({
 }) {
   const navigate = useNavigate();
   const rename = useProject((s) => s.rename);
+  const signedIn = useAuth((s) => !!s.user);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(project.name);
   const input = useRef<HTMLInputElement>(null);
@@ -72,6 +74,7 @@ export function TitleCapsule({
   if (editable) items.push({ label: "Rename", icon: <Pencil />, onSelect: () => setEditing(true) });
   items.push({ label: "Details", icon: <Info />, onSelect: onDetails });
   items.push({ separator: true });
+  if (!signedIn) items.push({ label: "Save your work…", icon: <CloudUpload />, onSelect: () => void requireAccount("save") });
   items.push({ label: "All homes", icon: <LayoutGrid />, onSelect: () => navigate("/app") });
 
   return (
