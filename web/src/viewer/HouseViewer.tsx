@@ -78,7 +78,10 @@ export interface HouseViewerProps {
   onExitWalk?: (reason?: "exit" | "flyTo" | "finish") => void;
   /** Make neighbours/context between the camera and the house translucent (default true). */
   ghostContext?: boolean;
-  /** Hide cars and motorbikes (default: hidden in walk, shown in orbit). When shown in walk they fade within 2 m. */
+  /**
+   * Hide cars and motorbikes (default: hidden in walk, shown in orbit). Shown in walk they are solid like furniture
+   * and thin out to 40% within 2 m; hidden they never block the way.
+   */
   hideVehicles?: boolean;
   /** Night lighting: dark sky, interior and facade lights on. */
   night?: boolean;

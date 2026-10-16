@@ -18,6 +18,8 @@ export const RADIUS = 0.28; // capsule radius (m): 2.5 ft doors (~0.66 m clear i
 export const EYE = 1.6; // eye height (m)
 export const HEAD = 1.78; // top of the capsule
 export const STEP_UP = 0.36; // highest step climbed without a ramp (plinth/threshold/stair riser)
+/** Solids (furniture, fixtures, roof equipment, shown cars) block from just above the floor. */
+const SOLID_FROM = 0.03;
 const SNAP_DOWN = 0.5; // follow floors/ramps downward up to this much per frame while grounded
 const WALK = 1.5; // m/s
 const RUN = 3.0; // m/s
@@ -118,6 +120,8 @@ export class WalkController {
   grounded = false;
   camY = 0;
   bvh: MeshBVH | null = null;
+  /** furniture, fixtures, roof equipment, shown cars: obstacles from the floor up, never ground */
+  solid: MeshBVH | null = null;
   spawn = { feet: new THREE.Vector3(), yaw: 0, pitch: 0 };
   transition: WalkTransition | null = null;
   glide: Glide | null = null;
@@ -127,8 +131,24 @@ export class WalkController {
   enabled = false;
   private hasPose = false;
 
-  setCollider(bvh: MeshBVH | null) {
+  /**
+   * `bvh`: floors, stairs, ramps, thresholds and walls (the feet follow only this). `solid`: furniture, fixtures,
+   * roof equipment and shown cars, solid from the floor up and never walked on.
+   */
+  setCollider(bvh: MeshBVH | null, solid: MeshBVH | null = null) {
     this.bvh = bvh;
+    this.solid = solid;
+  }
+
+  /** First hit along a ray in either collider (distance), or null. */
+  raycastAny(ray: THREE.Ray, near: number, far: number): number | null {
+    let best: number | null = null;
+    for (const b of [this.bvh, this.solid]) {
+      if (!b) continue;
+      const hit = b.raycastFirst(ray, THREE.DoubleSide, near, far);
+      if (hit && (best === null || hit.distance < best)) best = hit.distance;
+    }
+    return best;
   }
 
   /** Snap the look goal to the current view (after scripted moves). */
@@ -171,20 +191,24 @@ export class WalkController {
     if (!this.bvh) return max;
     _ray.origin.copy(from);
     _ray.direction.set(dir.x, 0, dir.z).normalize();
-    const hit = this.bvh.raycastFirst(_ray, THREE.DoubleSide, 0, max);
-    return hit ? hit.distance : max;
+    return this.raycastAny(_ray, 0, max) ?? max;
   }
 
   /** Would a capsule (radius `r`) standing at `feet` overlap walls or furniture? */
   overlaps(feet: THREE.Vector3, r = RADIUS): boolean {
     if (!this.bvh) return false;
-    _seg.start.set(feet.x, feet.y + STEP_UP + r, feet.z);
+    // walls etc. from step height up (steps and thresholds are walked over); solids from the floor up
+    return this.capsuleHits(this.bvh, feet, STEP_UP, r) || (!!this.solid && this.capsuleHits(this.solid, feet, SOLID_FROM, r));
+  }
+
+  private capsuleHits(bvh: MeshBVH, feet: THREE.Vector3, from: number, r: number): boolean {
+    _seg.start.set(feet.x, feet.y + from + r, feet.z);
     _seg.end.set(feet.x, feet.y + HEAD - r, feet.z);
     _box.makeEmpty().expandByPoint(_seg.start).expandByPoint(_seg.end);
     _box.min.addScalar(-r + 0.02);
     _box.max.addScalar(r - 0.02);
     let hit = false;
-    this.bvh.shapecast({
+    bvh.shapecast({
       intersectsBounds: (box) => box.intersectsBox(_box),
       intersectsTriangle: (tri) => {
         if (tri.closestPointToSegment(_seg, _v, _v2) < r - 0.02) {
@@ -508,10 +532,17 @@ export class WalkController {
     this.vel.x = this.vel.z = 0;
   }
 
-  /** Horizontal capsule push-out against everything that isn't floor/ceiling-like. */
+  /**
+   * Horizontal capsule push-out against everything that isn't floor/ceiling-like: walls from step height up (so
+   * stair risers and thresholds are stepped over), solids (furniture, roof equipment, shown cars) from the floor up.
+   */
   private resolveWalls() {
-    const bvh = this.bvh!;
-    _seg.start.set(this.feet.x, this.feet.y + STEP_UP + RADIUS, this.feet.z);
+    this.pushOut(this.bvh!, STEP_UP);
+    if (this.solid) this.pushOut(this.solid, SOLID_FROM);
+  }
+
+  private pushOut(bvh: MeshBVH, from: number) {
+    _seg.start.set(this.feet.x, this.feet.y + from + RADIUS, this.feet.z);
     _seg.end.set(this.feet.x, this.feet.y + HEAD - RADIUS, this.feet.z);
     for (let iter = 0; iter < 3; iter++) {
       _box.makeEmpty().expandByPoint(_seg.start).expandByPoint(_seg.end);

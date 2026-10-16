@@ -239,8 +239,7 @@ export class Navigator {
 
   /** Does the path pass through anything solid at eye height? */
   private crossesAtEye(pts: THREE.Vector3[]): boolean {
-    const bvh = this.walk.bvh;
-    if (!bvh) return false;
+    if (!this.walk.bvh) return false;
     const ray = new THREE.Ray();
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i];
@@ -249,7 +248,7 @@ export class Navigator {
       const len = ray.direction.length();
       if (len < 1e-4) continue;
       ray.direction.multiplyScalar(1 / len);
-      if (bvh.raycastFirst(ray, THREE.DoubleSide, 0, len)) return true;
+      if (this.walk.raycastAny(ray, 0, len) !== null) return true;
     }
     return false;
   }

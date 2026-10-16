@@ -103,6 +103,14 @@ function roomFrame(rect: { x: number; y: number; w: number; d: number }, floorFt
   return m;
 }
 
+/** An element that is solid from the floor up while walking (furniture, fixtures, roof equipment). */
+interface SolidBox {
+  box: THREE.Box3;
+  id: string;
+  layer: string;
+  level?: string;
+}
+
 export interface ThreeBits {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -918,6 +926,9 @@ export class ViewerController {
   /** ghostContext / hideVehicles changed. */
   syncContext() {
     this.applyVehicleTargets(false);
+    // shown cars are solid while walking, hidden ones are not
+    this.colliderDirty = true;
+    this.colliderTimer = performance.now() + 150;
     this.invalidate();
   }
 
@@ -954,8 +965,8 @@ export class ViewerController {
     const eye = mode === "walk" ? this.walk.eyePosition(new THREE.Vector3()) : null;
     for (const v of vs) {
       let target = base;
-      // shown while walking: fade away when you get close (DESIGN: "fade within 2 m")
-      if (eye && target > 0) target = smoothstep(0.6, 2.0, v.box.distanceToPoint(eye));
+      // shown while walking: they are solid, so they only thin out when you get close (never an invisible wall)
+      if (eye && target > 0) target = 0.4 + 0.6 * smoothstep(0.6, 2.0, v.box.distanceToPoint(eye));
       if (Math.abs(target - v.opacity) < 0.002) {
         if (v.opacity !== target) this.ctxfx.setVehicleOpacity(v, target, (o, hidden) => this.vis.suppress(o, hidden));
         continue;
@@ -1946,15 +1957,147 @@ export class ViewerController {
     this.builds.finishAnims();
     this.lift.finish();
     const root = this.currentRoot();
-    const list = [...(res.colliders ?? []), ...this.extraSolids(res)].filter((m) => m && this.vis.colliderEnabled(m, root));
-    // parked cars never block the way in (they are hidden or fade while you walk)
-    const next = buildColliderBVH(list, this.ctxfx.exclusionBoxes());
+    const list = (res.colliders ?? []).filter((m) => m && this.vis.colliderEnabled(m, root));
+    const extra = this.extraSolids(res).filter((m) => this.vis.colliderEnabled(m, root));
+    // Furniture, fixtures and roof equipment are obstacles from the floor up and never ground (no climbing an
+    // armchair or the solar panels). Parked cars: hidden while walking (the default) they never block the way in;
+    // shown (the Cars toggle) they are solid like furniture.
+    const carsShown = this.vehicleTarget("walk") > 0;
+    const solid = this.solidBoxes(res).filter((s) => !this.vis.hiddenByTags({ userData: { layer: s.layer, level: s.level } } as unknown as THREE.Object3D));
+    const boxes = solid.map((s) => s.box.clone());
+    if (carsShown) boxes.push(...this.ctxfx.exclusionBoxes());
+    // furniture the engine left out of the colliders (coffee tables, plants, outdoor chairs): its own triangles
+    const fill = (i: number) => (i < solid.length ? this.elementSolid(res, solid[i].id) : null);
+    const next = buildColliderBVH(list, carsShown ? [] : this.ctxfx.exclusionBoxes(), { boxes, meshes: extra, fill, clear: this.doorways() });
     disposeCollider(this.collider);
     this.collider = next;
-    this.walk.setCollider(next?.bvh ?? null);
+    this.walk.setCollider(next?.bvh ?? null, next?.solid?.bvh ?? null);
     this.nav.reset(this.plan, list);
     this.navWarm = false;
     this.colliderDirty = false;
+  }
+
+  private solidBoxCache = new WeakMap<BuildResult, SolidBox[]>();
+
+  /**
+   * World boxes of the elements that are solid from the floor up: furniture and fixtures (not rugs and mats), roof
+   * equipment (water tank, solar), garden planters, trees and swings. Each box is lifted 3 cm off its bottom so the
+   * slab it stands on stays walkable; whole-street aggregates (context) and implausibly big boxes are skipped.
+   */
+  private solidBoxes(res: BuildResult): SolidBox[] {
+    const hit = this.solidBoxCache.get(res);
+    if (hit) return hit;
+    const out: SolidBox[] = [];
+    const FLAT = /(^|:)(rug|carpet|prayer_mat|mat|doormat)$/;
+    const EQUIPMENT = /(^|:)(water_tank|tank|solar\w*|ac_outdoor|generator|planter|tree|swing|bench|fountain|bbq|kiosk)$/;
+    for (const o of res.summary?.objects ?? []) {
+      const kind = o.kind ?? "";
+      if (/(^|:)(context|vehicle)($|:)/.test(kind) || !o.bbox_ft) continue;
+      const furniture = o.layer === "furniture" && !FLAT.test(kind);
+      if (!furniture && !EQUIPMENT.test(kind)) continue;
+      const [x0, y0, z0] = o.bbox_ft.min, [x1, y1, z1] = o.bbox_ft.max;
+      // plan feet [x, y, up] → world metres (z = −y)
+      const b = new THREE.Box3(new THREE.Vector3(x0 * FT, z0 * FT, -y1 * FT), new THREE.Vector3(x1 * FT, z1 * FT, -y0 * FT));
+      const size = b.getSize(new THREE.Vector3());
+      if (b.isEmpty() || size.x > 9 || size.z > 9 || size.y < 0.08) continue;
+      b.min.y += 0.03;
+      b.expandByVector(new THREE.Vector3(0.02, 0, 0.02));
+      b.max.y += 0.02;
+      out.push({ box: b, id: o.id, layer: o.layer, level: o.level });
+    }
+    this.solidBoxCache.set(res, out);
+    return out;
+  }
+
+  /**
+   * The walking zone through every door (its width, 0.6 m each side of the wall, floor to 2.2 m): furniture never
+   * seals a doorway even when a plan leaves a chair or a tall unit standing in one.
+   */
+  private doorways(): THREE.Box3[] {
+    const out: THREE.Box3[] = [];
+    const DOOR = /^(main_door|door|double_door|sliding_door|arch|garage_door|opening)$/;
+    for (const o of this.plan.openings ?? []) {
+      if (!DOOR.test(o.type)) continue;
+      const lvl = this.plan.levels.find((l) => l.id === o.level);
+      if (!lvl) continue;
+      const host = o.between.map((id) => this.plan.rooms.find((r) => r.id === id)).find((r) => !!r);
+      const [ax, ay] = o.at;
+      // the wall the door sits in: the host rect edge nearest the door point
+      let horizontal = true;
+      if (host) {
+        const r = host.rect;
+        const dy = Math.min(Math.abs(ay - r.y), Math.abs(ay - (r.y + r.d)));
+        const dx = Math.min(Math.abs(ax - r.x), Math.abs(ax - (r.x + r.w)));
+        horizontal = dy <= dx;
+      }
+      const half = o.width_ft / 2, depth = 0.6 / FT;
+      const [x0, x1, y0, y1] = horizontal ? [ax - half, ax + half, ay - depth, ay + depth] : [ax - depth, ax + depth, ay - half, ay + half];
+      const floor = lvl.elevation_ft * FT;
+      out.push(new THREE.Box3(new THREE.Vector3(x0 * FT, floor - 0.2, -y1 * FT), new THREE.Vector3(x1 * FT, floor + 2.2, -y0 * FT)));
+    }
+    return out;
+  }
+
+  private partIndex = new WeakMap<BuildResult, Map<string, { mesh: THREE.Mesh; ranges: { start: number; count: number }[] }[]>>();
+  private elementSolidCache = new WeakMap<BuildResult, Map<string, THREE.Mesh | null>>();
+
+  /** One element's visible triangles, baked to world space (cached per build). */
+  private elementSolid(res: BuildResult, id: string): THREE.Mesh | null {
+    let cache = this.elementSolidCache.get(res);
+    if (!cache) this.elementSolidCache.set(res, (cache = new Map()));
+    if (cache.has(id)) return cache.get(id)!;
+    let index = this.partIndex.get(res);
+    if (!index) {
+      index = new Map();
+      const idx = index;
+      res.root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || o.userData?.viewer || (m as THREE.InstancedMesh).isInstancedMesh) return;
+        const parts = o.userData?.parts as PartRange[] | undefined;
+        if (parts?.length) {
+          for (const p of parts) {
+            const pid = String(p.tags.id ?? "");
+            if (!pid) continue;
+            const list = idx.get(pid) ?? idx.set(pid, []).get(pid)!;
+            const last = list[list.length - 1];
+            if (last?.mesh === m) last.ranges.push(p);
+            else list.push({ mesh: m, ranges: [p] });
+          }
+        } else if (typeof o.userData?.id === "string") {
+          const g = m.geometry, n = (g.index ? g.index.count : g.getAttribute("position")?.count ?? 0) / 3;
+          const list = idx.get(o.userData.id) ?? idx.set(o.userData.id, []).get(o.userData.id)!;
+          list.push({ mesh: m, ranges: [{ start: 0, count: n }] });
+        }
+      });
+      this.partIndex.set(res, index);
+    }
+    const srcs = index.get(id);
+    let out: THREE.Mesh | null = null;
+    if (srcs?.length) {
+      res.root.updateMatrixWorld(true);
+      const arr: number[] = [];
+      const v = new THREE.Vector3();
+      for (const { mesh, ranges } of srcs) {
+        const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+        if (!pos) continue;
+        const ix = mesh.geometry.index;
+        for (const r of ranges)
+          for (let t = r.start; t < r.start + r.count; t++)
+            for (let k = 0; k < 3; k++) {
+              const i = t * 3 + k;
+              v.fromBufferAttribute(pos, ix ? ix.getX(i) : i).applyMatrix4(mesh.matrixWorld);
+              arr.push(v.x, v.y, v.z);
+            }
+      }
+      if (arr.length) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+        out = new THREE.Mesh(g);
+        out.userData = { kind: "collider:solid", viewer: "solid" };
+      }
+    }
+    cache.set(id, out);
+    return out;
   }
 
   private solidsCache = new WeakMap<BuildResult, THREE.Mesh[]>();
