@@ -94,6 +94,7 @@ export function buildDeckRailings(ctx: BuildCtx, type: RailType, m: RailMats): v
   }
 }
 
+/** @deprecated kept for reference; the roof module (roof-geo.ts) builds the tank in the brief's material. */
 export function buildWaterTank(ctx: BuildCtx, mats: { plastic: THREE.Material; concrete: THREE.Material; pipe: THREE.Material }): void {
   const plan = ctx.plan;
   const wt = plan.plan.roof?.water_tank;

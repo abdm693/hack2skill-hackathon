@@ -16,6 +16,7 @@ import { floorBelow } from "./facade";
 import { ensurePaths } from "./furniture/paths";
 import { parking } from "./furniture/parking";
 import { ITEMS } from "./furniture/items";
+import { solarRect } from "./furniture/zones";
 
 const LAYERS: Layer[] = ["structure", "facade", "interior", "furniture", "landscape", "lighting", "custom"];
 
@@ -174,6 +175,7 @@ export async function buildHouseImpl(
   }));
 
   const spawn = computeSpawn(ctx);
+  if (ctx.structureBuilt) roofChecks(ctx, cons.summary);
   const summary: AsBuiltSummary = {
     objects: cons.summary,
     section_errors: results.filter((r) => !r.ok).map((r) => ({ section: r.name, error: r.error ?? "error" })),
@@ -297,6 +299,28 @@ export function setTimeOfDay(root: THREE.Object3D, plan: Pick<BuildingPlan, "sit
       }
     }
   });
+}
+
+/**
+ * B.8 as-built roof checks: anything standing in the area kept clear for solar (a cupola, a pergola, a chhatri,
+ * terrace furniture) and decorative roof structures in general are reported, so Argon can be asked to remove them.
+ */
+function roofChecks(ctx: BuildCtx, objects: AsBuiltSummary["objects"]): void {
+  const plan = ctx.plan;
+  const roof = plan.roof;
+  const sol = solarRect(ctx);
+  const deco = /dome|cupola|minaret|chhatri|chattri|pergola|gazebo|turret|spire|finial/i;
+  for (const o of objects) {
+    if (o.layer !== "facade" && o.layer !== "custom") continue;
+    const [x0, y0, h0] = o.bbox_ft.min, [x1, y1, h1] = o.bbox_ft.max;
+    if (h1 < roof.elev + 1 || h0 < roof.elev - 1.5) continue; // not a rooftop object
+    const name = `${o.kind ?? ""} ${o.id}`;
+    const inSolar = !!sol && x0 < sol.x + sol.w && x1 > sol.x && y0 < sol.y + sol.d && y1 > sol.y;
+    if (inSolar)
+      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${(o.kind ?? o.id).split(":").pop()!.replace(/_/g, " ")} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
+    else if (deco.test(name))
+      ctx.notes.add({ id: `asbuilt.roof_decoration:${o.id}`, title: "Decorative roof structure", status: "warn", message: `A decorative ${(name.match(deco)?.[0] ?? "structure").toLowerCase()} stands on the roof; keep the roof clear unless the brief asks for it.`, element_ids: [o.id] });
+  }
 }
 
 /** Does the segment (x0,y0)-(x1,y1) cross the box? (slab test) */

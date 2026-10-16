@@ -9,6 +9,7 @@ import { findRoom, innerRect } from "../interior";
 import { acOutdoor, chairsForTable, ITEMS, type ItemDef } from "./items";
 import { makeMats, type ItemBuild } from "./parts";
 import { keepOut, solidIntervals, type Zone } from "./zones";
+import { ceilingSpot } from "../lights";
 import { onWalkwayRect, parking } from "./parking";
 import { subtract } from "../structure/cover";
 
@@ -510,6 +511,9 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
     return fc ?? room.ceilH;
   };
   if (def.cls === "ceiling") {
+    // pendants, chandeliers and fans never hang in a stairwell
+    [cx, cy] = ceilingSpot(ctx, room, cx, cy);
+    fp = footprint(cx, cy, w, d, rot);
     extra.ceiling = (ceilingAtPoint() - room.floorH) * FT;
   } else if (def.cls === "wall") {
     let mount = def.mount ?? 4;

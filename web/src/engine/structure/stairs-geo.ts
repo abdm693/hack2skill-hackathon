@@ -148,7 +148,8 @@ export function buildStairs(ctx: BuildCtx, m: StairMats): void {
       const dir = e.key === "+" ? 1 : -1; // the floor is on this side of the line
       // guards of other stairs' holes on the same line count too, but not this stair's own (built below)
       const spans = unguarded(ctx, upper.id, e.axis, e.c, e.a, e.b, 0.6, 0.2);
-      const keep = subtract(spans, openingsOnEdge(ctx, upper.id, e.axis, e.c), 0.2);
+      // (a gap under 4 in needs no guard: IBC 1015.4)
+      const keep = subtract(spans, openingsOnEdge(ctx, upper.id, e.axis, e.c), 0.34);
       const c = e.c + dir * 0.12;
       for (const [p, q] of keep) {
         // reach into the walls / neighbouring guards at the ends, but not into an opening left for walking

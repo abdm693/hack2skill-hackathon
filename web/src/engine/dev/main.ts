@@ -72,6 +72,19 @@ const designs: Record<string, () => { plan: BuildingPlan; sections: DesignSectio
   "argon-default": () => ({ plan: planArgon as unknown as BuildingPlan, sections: defaultDesign(planArgon as unknown as BuildingPlan) }),
   kanal: () => ({ plan: planKanal as unknown as BuildingPlan, sections: parseDesign(designKanal) }),
   "kanal-default": () => ({ plan: planKanal as unknown as BuildingPlan, sections: defaultDesign(planKanal as unknown as BuildingPlan) }),
+  // the same house with the overhaul's roof choices: solar panels and an RCC tank
+  "kanal-solar": () => {
+    const p = JSON.parse(JSON.stringify(planKanal)) as BuildingPlan;
+    p.roof.solar = { mode: "panels" };
+    if (p.roof.water_tank) p.roof.water_tank.material = "concrete";
+    return { plan: p, sections: parseDesign(designKanal) };
+  },
+  "argon-solar": () => {
+    const p = JSON.parse(JSON.stringify(planArgon)) as BuildingPlan;
+    p.roof.solar = { mode: "panels" };
+    if (p.roof.water_tank) p.roof.water_tank.material = "plastic";
+    return { plan: p, sections: parseDesign(designArgon) };
+  },
 };
 
 let current: BuildResult | null = null;

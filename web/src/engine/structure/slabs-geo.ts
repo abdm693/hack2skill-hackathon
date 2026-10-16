@@ -111,7 +111,9 @@ export function buildSlabs(ctx: BuildCtx, m: SlabMats): void {
         if (e.axis === "x") mb.faceZ(e.c * FT, e.a * FT, e.b * FT, hb * FT, h1 * FT, dir);
         else mb.faceX(e.c * FT, hb * FT, h1 * FT, e.a * FT, e.b * FT, dir);
       }
-      add(mb, m.floorOf(room), { kind: "floor", level: lv.id, room: room.id, id: `floor_${room.id}`, label: `${room.name} floor` }, true, false);
+      // B.9: an open space above the ground floor is a light court (floored, open to the sky)
+      const label = room.type === "open_space" && lv.i > 0 ? `${room.name} (light court)` : `${room.name} floor`;
+      add(mb, m.floorOf(room), { kind: "floor", level: lv.id, room: room.id, id: `floor_${room.id}`, label }, true, false);
     }
   }
 
