@@ -49,9 +49,11 @@ const g = levels[0], f1 = levels[1];
 const roofTop = front.top_h_ft;
 // Full-height stone pier at the right end of the front elevation, rising a little above the parapet.
 const pierW = 3;
-s.facade.cladding({ side: "front", from_x_ft: front.to_ft - pierW, to_x_ft: front.to_ft, from_h_ft: front.bottom_h_ft,
+// (EN3-02: over a car porch the pier starts above the porch opening, out of the way of the car)
+const overPorch = P.rooms.some((r) => r.level === g.id && ["porch", "garage"].includes(r.type) && r.rect.x < front.to_ft && r.rect.x + r.rect.w > front.to_ft - pierW && r.rect.y < front.plane_ft + 1);
+s.facade.cladding({ side: "front", from_x_ft: front.to_ft - pierW, to_x_ft: front.to_ft, from_h_ft: overPorch && f1 ? f1.elevation_ft - 0.6 : front.bottom_h_ft,
   to_h_ft: roofTop + 1.5, depth_ft: 0.9, material: { preset: "stone_cladding", color: "${stone}" } });
-s.facade.wall_light({ side: "front", x_ft: front.to_ft - pierW / 2, h_ft: g.elevation_ft + 7.5, color: "#ffd9a8" });
+if (!overPorch) s.facade.wall_light({ side: "front", x_ft: front.to_ft - pierW / 2, h_ft: g.elevation_ft + 7.5, color: "#ffd9a8" });
 if (f1) s.facade.wall_light({ side: "front", x_ft: front.to_ft - pierW / 2, h_ft: f1.elevation_ft + 7.5, color: "#ffd9a8" });
 // First-floor front rooms: a picture frame around the left volume, teak fins over a front window.
 if (f1) {

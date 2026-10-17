@@ -337,6 +337,38 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
   return { bays, path, onWalkway, door, approach, doorCentre };
 }
 
+/**
+ * EN3-02: the way each car drives in: its bay less 1 ft on each side (the car's doors and mirrors stay inside), from
+ * the plot edge the car comes in from to the bay's far end (plan ft boxes). Nothing low may stand in it.
+ */
+export function carWays(p: Parking, plotW: number, plotD: number): { x0: number; x1: number; y0: number; y1: number }[] {
+  return p.bays.map(({ rect: r, rot }) => {
+    if (rot === 0) return { x0: r.x + 1, x1: r.x + r.w - 1, y0: 0, y1: r.y + r.d };
+    if (rot === 180) return { x0: r.x + 1, x1: r.x + r.w - 1, y0: r.y, y1: plotD };
+    if (rot === -90) return { x0: 0, x1: r.x + r.w, y0: r.y + 1, y1: r.y + r.d - 1 };
+    return { x0: r.x, x1: plotW, y0: r.y + 1, y1: r.y + r.d - 1 };
+  });
+}
+
+/**
+ * EN3-02: the points of a footprint (sampled every 0.25 ft) that stand out in the open, more than 1 ft from every
+ * enclosed ground-floor room (half a wall and a skin on it): cladding or fins on the house wall are not something
+ * people or cars run into, a frame post, a sill or a louvre post standing in front of the house is.
+ */
+export function openPoints(ctx: BuildCtx, f: { x0: number; x1: number; y0: number; y1: number }): [number, number][] {
+  const g = ctx.plan.levels[0];
+  const walls = ctx.plan.roomsOn(g.id).filter((r) => r.cat === "enclosed").map((r) => r.rect);
+  const axis = (a: number, b: number) => {
+    const out = [a, b, (a + b) / 2];
+    for (let v = a + 0.25; v < b - 0.05; v += 0.25) out.push(v);
+    return out;
+  };
+  const out: [number, number][] = [];
+  for (const x of axis(f.x0, f.x1))
+    for (const y of axis(f.y0, f.y1)) if (!walls.some((r) => x > r.x - 1 && x < r.x + r.w + 1 && y > r.y - 1 && y < r.y + r.d + 1)) out.push([x, y]);
+  return out;
+}
+
 /** Does a footprint touch the walkway? (sampled every 0.5 ft) */
 export function onWalkwayRect(p: Parking, f: { x0: number; x1: number; y0: number; y1: number }): boolean {
   for (let x = f.x0 + 0.1; x < f.x1; x += 0.5) for (let y = f.y0 + 0.1; y < f.y1; y += 0.5) if (p.onWalkway(x, y)) return true;

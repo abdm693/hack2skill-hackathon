@@ -9,7 +9,8 @@
 
 ## Geometry semantics
 - `facade.canopy({ h_ft })`: `h_ft` is the height of the canopy's **top surface** above the road crown.
-- `facade.frame(region)`: the region is the frame's **outer** bounds.
+- `facade.frame(region)`: the region is the frame's **outer** bounds. A frame standing on the ground (bottom within 1 ft of the ground or plinth) is built as a **U**: posts down to the ground, no bottom member.
+- **Nothing low in the way in front of the house**: no frame member, fin rail, louvre slat or post lower than 7 ft may cross a porch's car way (the bay and the way its car drives in from the gate), a door or gate opening, or the walkway from the gate to the main door. The engine leaves such a member off, or slides a post in along the frame. Keep frames around a porch opening as a portal whose posts stand beside the car, not across it.
 - `RoomHandle.ceiling_h_ft` is **absolute** (above the road crown). `interior.accent_wall` heights (`from_h_ft`/`to_h_ft`) are **relative to the room's floor**.
 - Custom geometry on the boundary wall should use a kind starting with `boundary_`, so it isn't counted as a building projection.
 
@@ -37,10 +38,12 @@
 - **Windows stay clear.** In a bedroom, lounge, drawing, dining, study or prayer room no tall piece (wardrobe, bookshelf, a TV unit with its TV) stands across the room's only window: the engine tries every wall and narrower sizes (a wardrobe down to 60 %, then 1.6 ft deep) first; with two or more windows only the smallest may be covered; otherwise the piece is left out with a note ("the wardrobe was left out to keep the window clear"). Put wardrobes on solid walls.
 - **Curtains** always hang centred on a window or sliding door: on the wall you name, the one nearest `along_ft`; with none on that wall, the room's largest. They never hang over a door, and a room without a window gets none.
 - Optional furniture that does not fit (a sideboard, a coffee table, a dresser on the walkway) is left out quietly; notes are kept for the pieces a room needs, cars, windows and walkways under 3 ft.
-- TV: the `tv_unit` keeps 1.5 ft from every door and arch frame, never on the wall the room is entered through (a lounge's main-door wall), and in a bedroom only on the wall the bed faces. Put the `tv` at the same `against`/`along_ft` as its `tv_unit` (the engine lines them up anyway).
+- TV: the `tv_unit` keeps 1.5 ft from every door and arch frame, never on the wall the room is entered through (the main door's wall, or the wall with the door from the lobby, porch or corridor you come in by), and in a bedroom only on the wall the bed faces. Put the `tv` at the same `against`/`along_ft` as its `tv_unit` (the engine lines them up anyway).
 - Nightstands (`side_table`) stand on the two sides of the bed (the engine puts them there; leave 1.5 ft each side of the bed); `table_lamp`s stand on them. Hob, sink and microwave stand on a kitchen counter.
-- Wall items only on solid wall: never a TV, painting, mirror, AC or towel rail over a door or window, or on an open-plan side.
-- Every door and stair landing keeps a 3 ft path: leave walking room between pieces (sofa to coffee table at least 1.5 ft, 2.5 ft beside beds).
+- Wall items only on solid wall: never a TV, painting, mirror, AC or towel rail over a door or window, or on an open-plan side (a picture whose piece moves is re-centred on solid wall, or taken down).
+- **Every room stays usable** (checked after every section): each door (entry, attached bath, dressing, balcony) and stair landing joins every other by a 3 ft path; a long side of every bed and the approach to every window can be reached. Leave walking room between pieces (sofa to coffee table at least 1.5 ft, 2.5 ft beside beds).
+- When the pieces as asked do not allow that, the engine 1. moves them, 2. uses a smaller version (a queen becomes a single bed, a wardrobe narrower, then 1.6 ft deep), 3. leaves out the least-needed piece with a note ("the wardrobe was left out to keep the way to the bath clear"). A bed whose only spot runs its long side along a window becomes a smaller bed clear of it. A door that still cannot be reached at all is a **fail** ("door unreachable").
+- Small bedrooms with an attached bath: in a 10 × 10 ft room whose entry and bath doors sit on opposite walls, keep a 3 ft strip joining the two doors, put the headboard on a wall that leaves that strip (a single bed, not a queen, when the room is that small), keep the window wall clear, and put the wardrobe where it does not close the strip (or in a dressing).
 - A tiny WC or bath (under 36 sq ft) gets an outward-opening door so the WC and basin stay clear.
 
 ## Parking and the way in

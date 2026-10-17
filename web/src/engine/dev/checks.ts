@@ -6,14 +6,18 @@
  *  2. a stair chain reaches the roof, the roof door is at roof level on the top landing, and a walker climbs from
  *     the ground-floor foot of the stair to the roof outside that door;
  *  3. no furniture in a door's swing or doorway, on a stair or its landings; no wall item over a door or window;
- *  4. the walkway from the gate to the main door is clear of cars, and the walk starts on it with the door in view;
+ *  4. the walkway from the gate to the main door is clear of cars and of facade members lower than 7 ft (EN3-02: frames,
+ *     fin rails, louvre posts out in the open; also none in a parking bay or the way its car drives in), a walker gets
+ *     from the main door's step along it to the gate, and the walk starts on it with the door in view;
  *  5. 3 ft walking paths join every door and stair landing of each room cluster;
  *  6. openings cut only into the wall between the rooms they name;
  *  7. stairs at code (treads, landings, foot strip) and the stair tower covers the top flight;
  *  8. headroom: every cell inside a stair's footprint a walker can stand in has 6′8″ clear to the soffit above
  *     (anything lower is boxed in as under-stair storage);
  *  9. windows: every curtain pair hangs centred on a window or sliding door (never over a door), and no tall piece
- *     (wardrobe, bookshelf, fridge, TV unit) stands in front of a window in a habitable room (zones.HABITABLE).
+ *     (wardrobe, bookshelf, fridge, TV unit) stands in front of a window in a habitable room (zones.HABITABLE);
+ * 10. door reach (EN3-01): in every room, BFS on the furnished masks from its doors: every door reaches every other
+ *     (3 ft, else at least a 1.8 ft squeeze), and a long side of every bed and the approach to every window are reached.
  */
 import * as THREE from "three";
 import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
@@ -24,8 +28,9 @@ import { rectContains } from "../core/grid";
 import { subtract } from "../structure/cover";
 import { HEADROOM, openingsOnEdge } from "../structure/stairs-geo";
 import { blocksWindow, doorClearance, HABITABLE, intrudes, isTall, keepOut, solidIntervals } from "../furniture/zones";
-import { parking, onWalkwayRect } from "../furniture/parking";
-import { pathReport } from "../furniture/paths";
+import { carWays, openPoints, parking, onWalkwayRect } from "../furniture/parking";
+import { floorBelow } from "../facade";
+import { pathReport, reachReport } from "../furniture/paths";
 import { ITEMS } from "../furniture/items";
 import { colliderMesh, walk } from "./walktest";
 
@@ -50,8 +55,9 @@ export function runChecks(res: BuildResult): Check[] {
   out.push(checkFalls(ctx, col));
   out.push(checkRoof(ctx, res, col));
   out.push(...checkFurniture(ctx));
-  out.push(checkWalkway(ctx, res));
+  out.push(checkWalkway(ctx, res, col));
   out.push(checkPaths(ctx));
+  out.push(checkDoorReach(ctx));
   out.push(checkOpenings(ctx));
   out.push(checkStairs(ctx));
   out.push(checkHeadroom(ctx, res, col));
@@ -304,7 +310,7 @@ function checkFurniture(ctx: BuildCtx): Check[] {
 }
 
 // ── 4. walkway and spawn ───────────────────────────────────────────────────────────────────────────────────
-function checkWalkway(ctx: BuildCtx, res: BuildResult): Check {
+function checkWalkway(ctx: BuildCtx, res: BuildResult, col: THREE.Mesh): Check {
   const P = parking(ctx);
   if (!P.door || !P.approach) return { id: "walkway", title: "Gate-to-door walkway clear", status: "warn", detail: "no main door found" };
   const cars = ctx.items.filter((it) => it.type.startsWith("car_") || it.type === "motorbike");
@@ -315,12 +321,30 @@ function checkWalkway(ctx: BuildCtx, res: BuildResult): Check {
   const onWalk = P.onWalkway(sx, sy);
   const [dx, dy] = P.approach;
   const blocks = ctx.items.filter((it) => it.cls === "floor" && it.h1 - it.h0 > 2.5 && ITEMS[it.type as keyof typeof ITEMS]?.collide && ctx.plan.room(it.room)?.cat !== "enclosed").filter((it) => segBox(sx, sy, dx, dy, it));
-  const ok = reaches && !onPath.length && onWalk && !blocks.length;
+  // EN3-02: facade members (frames, fin rails, louvre posts...) lower than 7 ft count as obstacles: none on the walkway
+  // and none in a parking bay or the way its car drives in
+  // (only the part of a member out in the open counts: a skin on the house wall is not in anyone's way)
+  const low = ctx.facadeBlocks.filter((b) => b.h0 < floorBelow(ctx, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, b.h0 + 0.5) + 7).map((b) => ({ ...b, pts: openPoints(ctx, b) }));
+  const ways = carWays(P, ctx.plan.plotW, ctx.plan.plotD);
+  const facWalk = low.filter((b) => b.pts.some(([x, y]) => P.onWalkway(x, y)));
+  const facBay = low.filter((b) => b.pts.some(([x, y]) => ways.some((w) => x > w.x0 + 0.02 && x < w.x1 - 0.02 && y > w.y0 + 0.02 && y < w.y1 - 0.02)));
+  // and a walker gets from the main door's step along the walkway to the gate
+  const g0 = ctx.plan.levels[0];
+  const at = (x: number, y: number) => new THREE.Vector3(x * FT, floorBelow(ctx, x, y, g0.elev + 0.6) * FT + 0.05, -y * FT);
+  const back = [...P.path].reverse();
+  const wps = back.filter((_, k) => k % 3 === 2 || k === back.length - 1).map(([x, y]) => at(x, y));
+  const r = walk(col, at(dx, dy), wps, 90);
+  const out = -r.feet.z / FT;
+  const gotOut = back.length > 1 && Math.hypot(r.feet.x / FT - back[back.length - 1][0], out - back[back.length - 1][1]) < 1.6;
+  const ok = reaches && !onPath.length && onWalk && !blocks.length && !facWalk.length && !facBay.length && gotOut;
+  const spots: Check["spots"] = [...facWalk, ...facBay].slice(0, 6).map((b) => ({ level: g0.id, x: +((b.x0 + b.x1) / 2).toFixed(1), y: +((b.y0 + b.y1) / 2).toFixed(1), note: `${b.kind} ${b.h0.toFixed(1)}-${b.h1.toFixed(1)} ft ${facWalk.includes(b) ? "on the walkway" : "in a car's way"}` }));
+  if (!gotOut) spots.push({ level: g0.id, x: +(r.feet.x / FT).toFixed(1), y: +out.toFixed(1), note: `walker from the door stopped (${r.reached}/${wps.length})` });
   return {
     id: "walkway",
     title: "Gate-to-door walkway clear",
     status: ok ? "pass" : "fail",
-    detail: `${P.bays.filter((b) => b.used).length} car(s) in ${P.bays.length} bay(s); walkway ${reaches ? `${pathLen(P.path).toFixed(0)} ft from the gate to the main door` : "does not reach the door"}${onPath.length ? `, BLOCKED by ${onPath.map((c) => c.type).join(", ")}` : ", clear"}; walk starts ${onWalk ? "on it" : "off it"} at (${sx.toFixed(1)}, ${sy.toFixed(1)})${blocks.length ? `, view blocked by ${blocks.map((b) => b.type).join(", ")}` : " with the door in view"}`,
+    detail: `${P.bays.filter((b) => b.used).length} car(s) in ${P.bays.length} bay(s); walkway ${reaches ? `${pathLen(P.path).toFixed(0)} ft from the gate to the main door` : "does not reach the door"}${onPath.length ? `, BLOCKED by ${onPath.map((c) => c.type).join(", ")}` : ", clear"}${facWalk.length ? `, facade member on it (${[...new Set(facWalk.map((b) => b.kind))].join(", ")})` : ""}${facBay.length ? `; a facade member below 7 ft stands in a car's way (${[...new Set(facBay.map((b) => b.kind))].join(", ")})` : ""}; walker ${gotOut ? "walked from the door out to the gate" : "could NOT walk from the door to the gate"}; walk starts ${onWalk ? "on it" : "off it"} at (${sx.toFixed(1)}, ${sy.toFixed(1)})${blocks.length ? `, view blocked by ${blocks.map((b) => b.type).join(", ")}` : " with the door in view"}`,
+    spots,
   };
 }
 
@@ -345,6 +369,25 @@ function checkPaths(ctx: BuildCtx): Check {
     detail:
       (bad.length ? `${bad.length} of ${rep.length} room groups have a door or landing furniture leaves under 3 ft: ${bad.slice(0, 5).map((b) => `${b.rooms.join("+")} → ${b.unreached.join(", ")}`).join("; ")}` : `${rep.length} room groups: furniture leaves a 3 ft path to every door and stair landing`) +
       (split.length ? `. Plan: ${split.map((b) => b.rooms.join("+")).join("; ")} are open-plan on paper but walls part them (no shared edge)` : ""),
+  };
+}
+
+// ── 10. door reach ─────────────────────────────────────────────────────────────────────────────────────────
+function checkDoorReach(ctx: BuildCtx): Check {
+  const rep = reachReport(ctx);
+  const lost = rep.filter((r) => r.lost.length), wins = rep.filter((r) => r.windows.length), beds = rep.filter((r) => r.beds.length), tight = rep.filter((r) => r.tight.length);
+  const bad = [
+    ...lost.map((r) => `${r.rooms.join("+")}: no way to ${r.lost.join(", ")}`),
+    ...wins.map((r) => `${r.rooms.join("+")}: window ${r.windows.join(", ")} out of reach`),
+    ...beds.map((r) => `${r.rooms.join("+")}: no side of the bed reached`),
+  ];
+  return {
+    id: "door_reach",
+    title: "Every door, window and bed side reached",
+    status: bad.length ? "fail" : tight.length ? "warn" : "pass",
+    detail: bad.length
+      ? `${bad.length} problems: ${bad.slice(0, 6).join("; ")}`
+      : `${rep.length} rooms with doors: each door reaches the others, every window's approach and a side of every bed are reached${tight.length ? `; under 3 ft (a squeeze) in ${tight.map((r) => `${r.rooms.join("+")} → ${r.tight.join(", ")}`).join("; ")}` : ""}`,
   };
 }
 

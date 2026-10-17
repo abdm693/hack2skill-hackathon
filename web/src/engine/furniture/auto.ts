@@ -5,6 +5,7 @@ import { warn } from "../core/util";
 import type { RoomM } from "../plan/model";
 import { findRoom, innerRect } from "../interior";
 import { doorZones, furnishImpl, qiblaRot } from "./place";
+import { wayCost } from "./paths";
 
 type Style = "modern" | "classic" | "minimal" | "traditional";
 const SIDES: Side[] = ["front", "back", "left", "right"];
@@ -199,7 +200,8 @@ class Layout {
     let type: FurnitureType = isMaster ? "bed_king" : small ? "bed_single" : "bed_queen";
     const bw = type === "bed_king" ? 6.8 : type === "bed_queen" ? 5.6 : 3.6;
     const bl = type === "bed_single" ? 6.9 : 7.1;
-    // choose the bed wall
+    // choose the bed wall (EN3-01: a headboard wall where the bed would cut the way between the room's doors, or to a
+    // window, loses to one that keeps them open)
     let best: { s: Side; span: [number, number]; score: number } | null = null;
     for (const s of SIDES) {
       if (this.depthFrom(s) < bl + 2.2) continue;
@@ -207,7 +209,8 @@ class Layout {
         const len = span[1] - span[0];
         if (len < bw + 0.3) continue;
         const win = this.sides[s].windows.some((w) => w.u1 > span[0] && w.u0 < span[1] && w.sill < 4);
-        const score = len * 0.3 + (this.entry && s === OPP[this.entry] ? 5 : 0) + (s === this.entry ? -4 : 0) + (win ? -3 : 0) + (len >= bw + 3.6 ? 3 : 0);
+        const cost = wayCost(this.ctx, this.room.id, type, this.bedBox(s, this.bedU(s, span, bw / 2), bw, bl), s);
+        const score = len * 0.3 + (this.entry && s === OPP[this.entry] ? 5 : 0) + (s === this.entry ? -4 : 0) + (win ? -3 : 0) + (len >= bw + 3.6 ? 3 : 0) - cost / 40;
         if (!best || score > best.score) best = { s, span, score };
       }
     }
@@ -223,9 +226,8 @@ class Layout {
     }
     const s = best.s;
     const [a, b] = best.span;
-    const wallMid = (this.sides[s].lo + this.sides[s].hi) / 2;
     const half = (type === "bed_king" ? 6.8 : type === "bed_queen" ? 5.6 : 3.6) / 2;
-    const u = Math.min(Math.max(wallMid, a + half + (b - a > 2 * half + 3.4 ? 1.7 : 0.1)), b - half - (b - a > 2 * half + 3.4 ? 1.7 : 0.1));
+    const u = this.bedU(s, best.span, half);
     this.against(type, s, u, { variant: "upholstered headboard" });
     for (const side of [-1, 1]) {
       const nu = u + side * (half + 0.95);
@@ -269,6 +271,25 @@ class Layout {
     this.fanAndAc(s);
     this.curtainsOnWindows();
     this.plantInCorner(1);
+  }
+
+  /** where along a free span of wall `s` the bed's centre goes (the wall's middle, kept 1.7 ft off the span's ends
+   *  when it is long enough for nightstands) */
+  private bedU(s: Side, [a, b]: [number, number], half: number): number {
+    const wallMid = (this.sides[s].lo + this.sides[s].hi) / 2;
+    const m = b - a > 2 * half + 3.4 ? 1.7 : 0.1;
+    return Math.min(Math.max(wallMid, a + half + m), b - half - m);
+  }
+
+  /** a bed's footprint with its headboard on wall `s` at along-coordinate u (plan ft) */
+  private bedBox(s: Side, u: number, w: number, l: number): { x0: number; x1: number; y0: number; y1: number } {
+    const I = this.inner;
+    switch (s) {
+      case "front": return { x0: u - w / 2, x1: u + w / 2, y0: I.y0, y1: I.y0 + l };
+      case "back": return { x0: u - w / 2, x1: u + w / 2, y0: I.y1 - l, y1: I.y1 };
+      case "left": return { x0: I.x0, x1: I.x0 + l, y0: u - w / 2, y1: u + w / 2 };
+      default: return { x0: I.x1 - l, x1: I.x1, y0: u - w / 2, y1: u + w / 2 };
+    }
   }
 
   /** a free-ish corner on the side opposite `s` */
