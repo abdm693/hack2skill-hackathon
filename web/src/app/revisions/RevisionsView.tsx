@@ -100,9 +100,9 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
           <main className="min-w-0">
             {showRun && run ? (
-              <LiveRevision run={run} base={base} compare={inlineCompare} onWalk={() => goTo("house")} onPlan={() => goTo("plan")} />
+              <LiveRevision run={run} base={base} compare={inlineCompare} onPlan={() => goTo("plan")} />
             ) : version ? (
-              <VersionStory project={project} version={version} parent={parent} run={finishedRun} compare={inlineCompare} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
+              <VersionStory project={project} version={version} parent={parent} run={finishedRun} compare={inlineCompare} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
             ) : (
               <p className="text-[15px] text-ink-3">Opening the version…</p>
             )}
@@ -175,7 +175,7 @@ function clock(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function LiveRevision({ run, base, compare, onWalk, onPlan }: { run: Run; base?: Version; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
+function LiveRevision({ run, base, compare, onPlan }: { run: Run; base?: Version; compare?: ReactNode; onPlan: () => void }) {
   const running = run.status === "running";
   const now = useNow(running);
   const asked = run.instruction ? clip(run.instruction, 44) : run.commentIds?.length ? plural(run.commentIds.length, "comment") : "your changes";
@@ -280,7 +280,7 @@ function ComplianceLine({ version }: { version: Version }) {
 
 // ── A finished version ──────────────────────────────────────────────────────────────────────────────
 
-function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
+function VersionStory({ project, version, parent, run, compare, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; compare?: ReactNode; onPlan: () => void }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -301,7 +301,6 @@ function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }
   const summary = project.versions.find((v) => v.id === version.id)?.summary;
   const first = !version.parent_id;
   const source = version.source as (Version["source"] & { answer?: string | null }) | undefined;
-  void onWalk;
   return (
     <div>
       <p className="text-label text-ink-3">
