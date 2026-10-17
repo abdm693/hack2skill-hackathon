@@ -11,7 +11,8 @@
 | 3 | Working deployed link | Live | https://naqsha-242926648187.us-central1.run.app |
 | 4 | Accessible GitHub repository | Public | https://github.com/abdm693/hack2skill-hackathon |
 | 5 | Brief description, covering Firebase, Firestore, Cloud Run and Gemini | Done | [description.md](description.md) |
-| 6 | Track named, and the industry whose work we disrupt | Done | Deck slides 1, 2 and 14; description.md |
+| 6 | Track named, and the industry whose work we disrupt | Done | Deck slides 1, 2 and 15; description.md |
+| 7 | How judges can test it | Done | Deck slide 14; [JUDGES.md](../JUDGES.md) with screenshots |
 
 ## Before pressing Submit
 - [ ] Paste the 1,010-character form text (the code block at the top of [description.md](description.md)) into "Brief Description of Your Solution".

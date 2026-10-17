@@ -43,6 +43,7 @@ Take the bar artwork from the template itself (`ppt/media/image2.png` is the hea
 | `walk/walk-lounge-39.jpg` (walk mode, the furnished TV lounge and dining room with the open door through to the bedroom, from `video/footage/f_walk_like_a_game.mp4` at 39.0 s, top app bar cropped; the build crops away the floor switcher, mini-map, hint and bottom bar) | 1920 × 1008 | 3 |
 | `walk/walk-lounge-41.jpg` (walk mode, TV lounge and dining, at 41.5 s, full frame; spare) | 1920 × 1080 | spare |
 | `personas.png` (roles today and with Naqsha) | 1280 × 290 | 15 |
+| `../docs/judges/02, 04, 06, 09, 10-*.png` (the `JUDGES.md` screenshots; the build crops one region of each) | 1440 × 900 and smaller | 14b |
 
 A 1600 × 720 diagram placed across the content width (1808 px) is 814 px tall and fits the 830 px content area exactly. Diagram sources are in `assets/src/*.html`; edit the text there and run `assets/src/render.sh` to re-render.
 
@@ -349,6 +350,38 @@ Keep the template's three bullets and fill them:
 **Repo guide (muted, 18 px):** README (run and deploy) · `docs/ARCHITECTURE.md` · `contracts/` (plan schema, House SDK, API) · `api/tests` (123 tests)
 
 **Right side:** `assets/qr-live.png` at about 240 × 240 px, captioned "Scan to open the live app".
+
+---
+
+## Slide 14b · How to test the prototype (added after Links)
+
+An added slide, page 14 of the final 16-page deck, right after Links, so Track and industry impact and Thank you move to pages 15 and 16. It is a copy of the template's blank content slide (slide 15), with a heading added in the same position and style as the other slide headings. The steps come from the verified walkthrough in `JUDGES.md` (screenshots in `docs/judges/`).
+
+**Heading:** How to test the prototype
+
+**Chip (right of the heading, grey):** `Best in desktop Chrome`
+
+**Three light cards, each with an ink icon circle and a title:**
+
+1. **Open it.** `assets/qr-live.png` in a white frame (links to the live app), then the live URL as a cobalt link on two lines (naqsha-242926648187. / us-central1.run.app), then a green tick and **No account needed**, then "Samples and your own homes work as a guest, saved in this browser."
+
+2. **2-minute tour** (muted: no waiting). Five steps, each with a small crop of a `docs/judges/` screenshot and a cobalt step number on its corner:
+   1. **Explore a sample home** on the landing page. Your own copy opens in 3D in about 3 s. (crop of `02-house-orbit.png`)
+   2. **View**: **Night**, **Cut away**, **Render this view** for a photoreal image in about 10 s. (crop of `04-night-cutaway.png`, the night half)
+   3. **Walk** (or press V). W A S D to move, **M** to go to any room. (crop of `06-walk.png`)
+   4. Press **C**, click the house, type a note and click **Pin it**. (crop of `09-comment.png`)
+   5. Open **Plan** and click **37/37 LDA** to see every bylaw check. (crop of the Compliance panel in `10-plan.png`)
+
+3. **Design your own** (muted: about 10 min). Five numbered steps:
+   1. Click **Start your home** (or **Portal**, top right).
+   2. Paste this brief and press Enter: then the brief in a small white quote box, 8.5 pt: "10 marla plot in Johar Town, Lahore, facing north, mid-row. Two storeys, 4 bedrooms with attached baths, drawing room, TV lounge, open kitchen plus a dirty kitchen, car porch for 2 cars. Blue plastic water tank, roof ready for solar. Modern contemporary style."
+   3. Click **Use these floors**, then **Show me concepts**: four looks in about 20 s.
+   4. Open one and click **Plan this one**. Naqsha plans, checks the bylaws, fixes and builds it in 3D in about 5–6 min. You can close the tab.
+   5. Click **House** to walk it. Ask for a change in **Tell Naqsha what to change…** (1–5 min).
+
+UI labels are bold, with no-break spaces so a label never splits across two lines.
+
+**Footer (clickable):** Step-by-step guide with screenshots: github.com/abdm693/hack2skill-hackathon/blob/main/JUDGES.md (links to https://github.com/abdm693/hack2skill-hackathon/blob/main/JUDGES.md), beside a small GitHub mark.
 
 ---
 

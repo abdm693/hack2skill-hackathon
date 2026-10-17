@@ -4,6 +4,8 @@
 
 Live: https://naqsha-242926648187.us-central1.run.app (Cloud Run revision `naqsha-00009`). Open a sample home to walk one in a minute, no account needed.
 
+> **Judges: test it in 2 minutes → [JUDGES.md](JUDGES.md)**, a step-by-step guide with screenshots. No account needed.
+
 Families in Lahore usually start building a house with a sketch on paper, a contractor's guess, and months of back-and-forth with an architect. Naqsha takes them from one message, *"10 marla in Johar Town, 4 bedrooms, modern"*, to:
 
 - four photoreal concepts, by day and by night;
