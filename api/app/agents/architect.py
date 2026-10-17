@@ -483,7 +483,7 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
         why = [c["id"] for c in cand_rep["checks"] if c["status"] == "fail"] if worse else ["no major issue addressed"]
         if round_ == 2:
             break
-        yield "stage", {"stage": "fix", "message": "Re-checking the improved plan…"}
+        yield "stage", {"stage": "review", "message": "Re-checking the improved plan…"}
         ask = _feedback(cand_rep) if worse else ""
         if not hit:
             ask += ("\nThat version didn't change the rooms the architect named. Make these improvements:\n"

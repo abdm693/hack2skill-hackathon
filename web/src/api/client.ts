@@ -299,10 +299,12 @@ const realApi: Api = {
 export const api: Api = mockEnabled() ? mockApi : realApi;
 
 /** Resolve an asset URL from the API (absolute, data:, /api/assets/... or /mock/...). */
-export function assetUrl(url: string | null | undefined): string | undefined {
+export function assetUrl(url: string | null | undefined, opts?: { w?: 320 | 640 | 960 | 1600 }): string | undefined {
   if (!url) return undefined;
-  if (/^(https?:|data:|blob:|\/)/.test(url)) return url;
-  return `${BASE}/assets/${url}`;
+  const full = /^(https?:|data:|blob:|\/)/.test(url) ? url : `${BASE}/assets/${url}`;
+  // ?w= asks the API for a WebP that wide (made once and cached): only for its own stored images.
+  if (opts?.w && full.startsWith(`${BASE}/assets/`) && !full.includes("?") && !full.includes("/assets/thumbs/")) return `${full}?w=${opts.w}`;
+  return full;
 }
 
 /** The public link for a share token (the server's `url` wins when it sends one). */

@@ -133,7 +133,14 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 /** "Revised: bedroom 2 deeper, lounge window wider" from a version summary, without ids or "v2:" prefixes. */
 export function versionLine(summary?: string): string {
   if (!summary) return "A revision";
-  const s = summary.replace(/^v\d+:\s*/i, "").replace(/\.\s*;\s*/g, "; ").trim();
+  // No status suffix ("· 36/36 LDA · 8/8 livable") and no quotes around a typed request: words, not data.
+  const s = summary
+    .replace(/^v\d+:\s*/i, "")
+    .replace(/\.\s*;\s*/g, "; ")
+    .replace(/(^|\s*·\s*)\d+\/\d+ (LDA|livable)\b.*$/i, "")
+    .replace(/[“”"]/g, "")
+    .trim();
+  if (!s) return "A revision";
   if (/^\d+ spaces?, \d+ code sections?$/i.test(s)) return "A fresh design";
   const first = s.split(";")[0].replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim().replace(/[.,]$/, "");
   return first.length > 60 ? `${first.slice(0, 58).replace(/[\s,;:]+\S*$/, "")}…` : first;

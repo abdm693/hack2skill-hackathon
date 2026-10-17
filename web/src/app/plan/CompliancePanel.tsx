@@ -2,20 +2,21 @@
  * The compliance sheet: "LDA rules" and "Livable home", with units and 2px meters. Clicking a rule highlights
  * its rooms on the plan (and moves to their floor).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Ref } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown, X as XIcon, TriangleAlert } from "lucide-react";
 import type { BuildingPlan, ComplianceCheck, ComplianceReport } from "@contracts/plan";
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { EASE_OUT, Meter } from "@/app/design/kit";
-import { LDA_SECTIONS, ldaSection, summarize, tallyLine, valueLine, type Tally } from "./compliance";
+import { LDA_SECTIONS, ldaSection, notesLine, summarize, tallyLine, valueLine, type Tally } from "./compliance";
 
-export function ComplianceChip({ report, plan, asBuilt, onClick, active }: { report: ComplianceReport; plan?: BuildingPlan; asBuilt?: ComplianceReport | null; onClick: () => void; active?: boolean }) {
+export function ComplianceChip({ ref, report, plan, asBuilt, onClick, active }: { ref?: Ref<HTMLButtonElement>; report: ComplianceReport; plan?: BuildingPlan; asBuilt?: ComplianceReport | null; onClick: () => void; active?: boolean }) {
   const s = useMemo(() => summarize(report, plan, asBuilt), [report, plan, asBuilt]);
   const tone = s.fails.length ? "bg-fail" : s.warns.length ? "bg-warn" : "bg-pass";
   const check = s.warns.length;
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-pressed={active}
@@ -43,6 +44,7 @@ export function ComplianceChip({ report, plan, asBuilt, onClick, active }: { rep
           · {s.fails.length ? `${s.fails.length} to fix` : `${check} to check`}
         </span>
       )}
+      {s.notes > 0 && <span className={cn("max-lg:hidden", active ? "text-white/70" : "text-ink-3")}>· {notesLine(s.notes)}</span>}
     </button>
   );
 }
@@ -97,7 +99,7 @@ export function CompliancePanel({
           : "I'm building this version in 3D. Ask me to fix these once it's ready."
       : "Ask me to fix it, or change the plan yourself."
     : s.approvalReady
-      ? `Passes all ${s.ldaTally.total} LDA checks${s.livableTally.total ? (s.livableIssues ? `. ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check.` : ` and ${s.livableTally.total} livable rules.`) : "."}`
+      ? `Passes all ${s.ldaTally.total} LDA checks${s.livableTally.total ? (s.livableIssues ? `. ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check.` : ` and ${s.livableTally.total} livable rules.`) : "."}${s.notes ? ` ${notesLine(s.notes)}.` : ""}`
       : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass. Look at the ${checks === 1 ? "one" : checks} marked below before you submit.`;
   const setbackChecks = s.lda.filter((c) => c.id.startsWith("setback.") && c.id !== "setback.envelope" && c.id !== "setback.side");
 
@@ -196,8 +198,8 @@ export function CompliancePanel({
       {/* As built: what the 3D build found */}
       {s.asBuilt.length > 0 && (
         <section className="mt-6">
-          <GroupHeading title="As built" t={s.asBuiltTally} />
-          <p className="px-5 pt-0.5 text-[12.5px] text-ink-3">What I found while building the house in 3D.</p>
+          <GroupHeading title="As built" t={s.asBuiltTally} line={notesLine(s.notes)} />
+          <p className="px-5 pt-0.5 text-[12.5px] text-ink-3">What I found while building the house in 3D. These aren't counted in the LDA or livable checks above.</p>
           <ul className="px-3 pt-1">
             {s.asBuilt.map((c) => (
               <Row key={c.id} c={c} selected={selectedId === c.id} onSelect={onSelect} onFix={!running ? onFix : undefined} always />
@@ -209,11 +211,11 @@ export function CompliancePanel({
   );
 }
 
-function GroupHeading({ title, t }: { title: string; t: Tally }) {
+function GroupHeading({ title, t, line }: { title: string; t: Tally; line?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 px-5">
       <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
-      <span className={cn("text-[12.5px] tabular-nums", t.fail ? "text-fail" : t.warn ? "text-warn" : "text-pass")}>{tallyLine(t)}</span>
+      <span className={cn("text-[12.5px] tabular-nums", t.fail ? "text-fail" : t.warn ? "text-warn" : "text-pass")}>{line ?? tallyLine(t)}</span>
     </div>
   );
 }

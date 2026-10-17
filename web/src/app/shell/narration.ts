@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import type { Project, Version } from "@contracts/api-types";
 import type { ComplianceReport } from "@contracts/plan";
-import { summarize, type Summary } from "@/app/plan/compliance";
+import { notesLine, summarize, type Summary } from "@/app/plan/compliance";
 import { useProject, type Run } from "@/app/store/project";
 
 export interface Narration {
@@ -52,7 +52,7 @@ export function plain(text: string): string {
     .replace(/\binterior_([a-z0-9_]+)/g, (_, id: string) => `the ${roomWords(id)} interiors`)
     .replace(/\b(structure|landscape|lighting)\b(?= *[….]|$)/g, (m) => `the ${m}`)
     .replace(/\b[gfrb]_[a-z0-9_]+\b/g, (id) => room(id))
-    .replace(/\b(\d+) (code )?sections\b/g, "$1 parts")
+    .replace(/\b(\d+) (code )?sections?\b/g, (_, n: string) => `${n} ${n === "1" ? "part" : "parts"}`)
     .replace(/\bthe the\b/g, "the")
     .replace(/\s{2,}/g, " ")
     .replace(/^\s*[a-z]/, (c) => c.toUpperCase())
@@ -66,7 +66,7 @@ function runLine(run: Run, kind: "design" | "revise"): Narration | null {
   const done = run.sections.length;
   const total = run.version?.sections.length ?? 0;
   if (building && done > 0) {
-    return { kind, text: total ? `Building your home in 3D, ${done} of ${total}` : `Building your home in 3D, ${done} parts so far`, progress: total ? done / total : undefined };
+    return { kind, text: total ? `Building your home in 3D, ${done} of ${total}` : `Building your home in 3D, ${done} ${done === 1 ? "part" : "parts"} so far`, progress: total ? done / total : undefined };
   }
   if (last?.kind === "stage") return { kind, text: plain(last.message) || "Working…" };
   return { kind, text: kind === "design" ? "Reading the brief…" : "Reading your notes…" };
@@ -116,7 +116,7 @@ export function complianceCounts(
   return summarize(v.compliance, v.plan, id ? asBuilt?.[id] : undefined);
 }
 
-/** "35/36 LDA · 10/11 livable · 2 to check" for the title capsule. */
+/** "35/36 LDA · 10/11 livable · 2 to check · 3 notes from the 3D model" for the title capsule. */
 export function countsLine(s: Summary): string {
   const bits = [`${s.ldaTally.pass}/${s.ldaTally.total} LDA`];
   if (s.livableTally.total) bits.push(`${s.livableTally.pass}/${s.livableTally.total} livable`);
@@ -124,5 +124,6 @@ export function countsLine(s: Summary): string {
   const check = s.warns.length;
   if (fix) bits.push(`${fix} to fix`);
   if (check) bits.push(`${check} to check`);
+  if (s.notes) bits.push(notesLine(s.notes));
   return bits.join(" · ");
 }

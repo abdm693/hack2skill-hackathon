@@ -107,6 +107,15 @@ export function sentenceCase(name: string): string {
 }
 
 /**
+ * A name inside a sentence: "Master Bedroom" → "master bedroom", "TV Lounge" → "TV lounge". The first letter is
+ * lowered only when the second isn't a capital (so "TV" stays).
+ */
+export function inSentence(name: string): string {
+  const s = sentenceCase(name);
+  return /^.[A-Z]/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
+}
+
+/**
  * Name forms for a room label, longest first. Every form still names the room: "Powder room" → "Powder",
  * "Bedroom 3" → "Bed 3", "Dirty Kitchen" → "Dirty kitchen" → "D. kitchen"; a bare "Room" never appears.
  */

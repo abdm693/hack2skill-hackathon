@@ -40,6 +40,10 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
 
   const complete = project.stage !== "setup";
   const brief = project.brief;
+  // The Ask example only offers another storey where the rules allow one.
+  const storeys = brief?.storeys ?? 0;
+  const maxStoreys = project.envelope?.max_storeys ?? 0;
+  const moreExample = storeys && maxStoreys > storeys && storeys < 3 ? `a ${["", "second", "third"][storeys]} storey` : "a bigger kitchen";
   const send = useCallback((body: Parameters<typeof chat.send>[1], display?: string) => void chat.send(project.id, body, display), [project.id]);
 
   // "Decide everything for me": once the brief is complete, carry on to concepts (which choose and plan).
@@ -73,7 +77,7 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
   useAskContext({
     // The conversation is on screen here: the dock doesn't repeat Naqsha's line (it would cover the question).
     line: null,
-    placeholder: complete ? "Anything to add or change? A prayer room, a third storey…" : "Tell me about the plot and who will live there",
+    placeholder: complete ? `Anything to add or change? A prayer room, ${moreExample}…` : "Tell me about the plot and who will live there",
     // The conversation already shows Naqsha's suggestions under its last turn; the dock keeps to the one shortcut.
     suggestions: complete ? [] : ["Decide everything for me"],
     busy,

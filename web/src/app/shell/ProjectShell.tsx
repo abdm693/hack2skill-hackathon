@@ -27,7 +27,7 @@ import { ConversationSheet } from "./ConversationSheet";
 import { DetailsDialog } from "./DetailsDialog";
 import { Dock } from "./Dock";
 import { complianceCounts, setRoomNames, useLastLine } from "./narration";
-import type { Summary } from "@/app/plan/compliance";
+import { notesLine, type Summary } from "@/app/plan/compliance";
 import { markVersionSeen, startShare, useDefaultNext } from "./next";
 import { People } from "./People";
 import { useShell } from "./state";
@@ -204,7 +204,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         if (!editor) return null;
         const shownId = resolveVersion(project, params.get("v")).id;
         if (shownId && shownId !== current) return "This is an earlier version. Switch to the latest to pin notes.";
-        if (openCount) return `${openCount} ${openCount === 1 ? "note" : "notes"} so far. I'll turn them into the next version.`;
+        if (openCount) return openCount === 1 ? "1 note so far. I'll turn it into the next version." : `${openCount} notes so far. I'll turn them into the next version.`;
         return phone ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
       }
       case "revisions":
@@ -319,7 +319,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
       {phone ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 px-3 pt-3">
           <div className="flex h-12 items-center justify-between gap-2">
-            <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} compact />
+            <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} compact view={view} />
             <People project={project} tone={tone} compact />
           </div>
           <ViewSwitch project={project} view={view} tone={tone} fill />
@@ -329,7 +329,10 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           <div className="flex min-w-0 justify-start">
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} />
           </div>
-          <ViewSwitch project={project} view={view} tone={tone} />
+          {/* Always a centre cell, even when the switch has nothing to show, so People keeps the right column. */}
+          <div className="flex justify-center">
+            <ViewSwitch project={project} view={view} tone={tone} />
+          </div>
           <div className="flex min-w-0 justify-end">
             <People project={project} tone={tone} />
           </div>
@@ -387,11 +390,12 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
 function planLine(s: Summary): string {
   const ldaN = s.ldaTally.total;
   const others = s.livableIssues;
-  const rest = others ? ` ${others} livable ${others === 1 ? "point needs" : "points need"} a look.` : "";
+  const notes = s.notes ? ` ${notesLine(s.notes)}.` : "";
+  const rest = (others ? ` ${others} livable ${others === 1 ? "point needs" : "points need"} a look.` : "") + notes;
   if (s.ldaFails) return `${s.ldaFails} LDA ${s.ldaFails === 1 ? "check needs" : "checks need"} fixing.${rest}`;
   if (s.ldaWarns) return `${s.ldaTally.pass} of ${ldaN} LDA checks pass; ${s.ldaWarns} ${s.ldaWarns === 1 ? "needs" : "need"} a look before you submit.${rest}`;
   if (others) return `Your home passes all ${ldaN} LDA checks.${rest} Want to walk through it?`;
-  return `Your home passes all ${ldaN} LDA checks and every livable rule. Want to walk through it?`;
+  return `Your home passes all ${ldaN} LDA checks and every livable rule.${notes} Want to walk through it?`;
 }
 
 /** Leaving a project clears what was typed into Ask. */

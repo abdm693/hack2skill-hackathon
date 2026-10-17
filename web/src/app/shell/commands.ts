@@ -6,6 +6,7 @@
 import type { Project, Version } from "@contracts/api-types";
 import type { RoomType } from "@contracts/plan";
 import { canEdit, roleOf, viewAvailable, VIEWS, type ViewId } from "@/app/lib/views";
+import { levelName, sentenceCase } from "@/app/plan/model";
 import type { Command } from "./ask";
 
 const SITE: Set<RoomType> = new Set(["lawn", "driveway", "courtyard", "open_space"] as RoomType[]);
@@ -26,7 +27,6 @@ export interface CommandEnv {
   signOut: () => void;
 }
 
-const floorName = (name: string) => name.replace(/\bFloor\b/, "floor");
 
 export function buildCommands(env: CommandEnv): Command[] {
   const { project, version, view } = env;
@@ -49,19 +49,19 @@ export function buildCommands(env: CommandEnv): Command[] {
       out.push({
         id: `floor-${l.id}`,
         group: "go",
-        label: floorName(l.name),
+        label: levelName(l),
         keywords: "floor level storey",
         run: () => (view === floorView ? env.setParams({ floor: l.id }) : env.go(`${base}/${floorView}?floor=${encodeURIComponent(l.id)}`)),
       });
     }
-    const levelName = new Map(plan.levels.map((l) => [l.id, floorName(l.name)]));
+    const levelNames = new Map(plan.levels.map((l) => [l.id, levelName(l)]));
     for (const r of plan.rooms) {
       if (SITE.has(r.type)) continue;
       out.push({
         id: `room-${r.id}`,
         group: "go",
-        label: r.name,
-        hint: levelName.get(r.level),
+        label: sentenceCase(r.name),
+        hint: levelNames.get(r.level),
         keywords: `room ${r.type}`,
         run: () => env.go(`${base}/house?mode=walk&room=${encodeURIComponent(r.id)}`),
       });

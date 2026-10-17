@@ -24,6 +24,15 @@ import { userId } from "@/api/mode";
 import { saveFixLoop } from "@/app/lib/fixloop";
 import { toast } from "./toast";
 
+/**
+ * What the 3D build found, as the server stored it with the version (POST …/asbuilt), so Plan counts the same notes
+ * after a reload; a report this session made after building the house wins.
+ */
+function seedAsBuilt(asBuilt: Record<string, ComplianceReport>, v: Version): Record<string, ComplianceReport> {
+  const stored = (v as Version & { as_built?: ComplianceReport | null }).as_built;
+  return stored?.checks && !asBuilt[v.id] ? { ...asBuilt, [v.id]: stored } : asBuilt;
+}
+
 export interface ConceptSlot {
   key: string;
   index: number;
@@ -420,6 +429,7 @@ export const useProject = create<ProjectState>((set, get) => {
           pid: project.id,
           project,
           versions: { [shared.version.id]: shared.version },
+          asBuilt: seedAsBuilt({}, shared.version),
           comments: shared.comments,
           commentsFor: shared.version.id,
           sharedBy: shared.shared_by ?? null,
@@ -669,7 +679,7 @@ export const useProject = create<ProjectState>((set, get) => {
       if (!pid) return null;
       try {
         const v = await api.getVersion(pid, vid);
-        if (live(pid)) set({ versions: { ...get().versions, [vid]: v } });
+        if (live(pid)) set({ versions: { ...get().versions, [vid]: v }, asBuilt: seedAsBuilt(get().asBuilt, v) });
         return v;
       } catch (e) {
         toast.error("Couldn't load that version", e);
@@ -678,7 +688,7 @@ export const useProject = create<ProjectState>((set, get) => {
     },
 
     cacheVersion(v) {
-      set({ versions: { ...get().versions, [v.id]: v } });
+      set({ versions: { ...get().versions, [v.id]: v }, asBuilt: seedAsBuilt(get().asBuilt, v) });
     },
 
     setAsBuilt(vid, report) {

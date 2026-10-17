@@ -183,7 +183,8 @@ export function Segmented<T extends string>({
   options: { value: T; label: ReactNode; title?: string; disabled?: boolean; /** Accessible name when the label is short ("3" → "3 storeys"). */ aria?: string }[];
   onChange: (v: T) => void;
   tone?: "light" | "hud";
-  size?: "sm" | "md";
+  /** lg: 44px, the phone HUD's touch size. */
+  size?: "sm" | "md" | "lg";
   label: string;
   className?: string;
 }) {
@@ -194,7 +195,7 @@ export function Segmented<T extends string>({
       aria-label={label}
       className={cn(
         "relative inline-flex shrink-0 items-center rounded-full p-[3px]",
-        size === "md" ? "h-9" : "h-8",
+        size === "lg" ? "h-11" : size === "md" ? "h-9" : "h-8",
         tone === "light" ? "bg-surface-2" : "glass-hud",
         className,
       )}
@@ -213,7 +214,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               "hit-44 relative z-0 inline-flex h-full items-center gap-1.5 rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus disabled:opacity-40",
-              size === "md" ? "px-3.5 text-[13px]" : "px-3 text-[12px]",
+              size === "sm" ? "px-3 text-[12px]" : "px-3.5 text-[13px]",
               tone === "light" ? (active ? "text-ink" : "text-ink-3 hover:text-ink") : active ? "text-ink" : "text-hud-ink-2 hover:text-hud-ink",
             )}
           >
@@ -346,7 +347,8 @@ export function Dialog({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6"
+          // Top-anchored on wider screens, so a taller body (another floor's tab, a field error) never moves it.
+          className="fixed inset-0 z-[80] flex items-end justify-center sm:items-start sm:p-6 sm:pt-[min(12vh,96px)]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
@@ -364,10 +366,10 @@ export function Dialog({
             transition={{ duration: 0.32, ease: EASE_SHEET }}
             className={cn(
               "relative w-full overflow-hidden shadow-e3",
-              phone ? "max-h-[92dvh] rounded-t-panel pb-[env(safe-area-inset-bottom)]" : "rounded-panel",
+              phone ? "max-h-[92dvh] rounded-t-panel pb-[env(safe-area-inset-bottom)]" : "max-h-[calc(100dvh-min(12vh,96px)-24px)] rounded-panel",
               tone === "light" ? "bg-surface text-ink" : "glass-hud",
             )}
-            style={{ maxWidth: phone ? undefined : width }}
+            style={{ maxWidth: phone ? undefined : width, transformOrigin: phone ? undefined : "50% 0" }}
           >
             <div className="max-h-[inherit] overflow-y-auto px-6 pb-6 pt-6 [scrollbar-width:thin]">
               {phone && <span aria-hidden className="mx-auto -mt-2 mb-4 block h-1 w-9 rounded-full bg-line-strong" />}

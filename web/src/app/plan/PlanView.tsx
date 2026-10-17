@@ -116,6 +116,23 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     useShell.getState().setViewSheet(sheet ? 380 : 0);
   }, [sheet]);
   useEffect(() => () => useShell.getState().setViewSheet(0), []);
+  // Opening the sheet moves focus to its heading; closing it gives focus back to the compliance chip.
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const sheetHeading = useRef<HTMLHeadingElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const sheetWasOpen = useRef(false);
+  useEffect(() => {
+    if (sheet) {
+      sheetWasOpen.current = true;
+      const t = requestAnimationFrame(() => sheetHeading.current?.focus({ preventScroll: true }));
+      return () => cancelAnimationFrame(t);
+    }
+    if (!sheetWasOpen.current) return;
+    sheetWasOpen.current = false;
+    const a = document.activeElement;
+    // Only when focus was in the sheet (leaving with it) or nowhere: never steal it from what the person moved to.
+    if (!a || a === document.body || !document.contains(a) || sheetRef.current?.contains(a)) chipRef.current?.focus({ preventScroll: true });
+  }, [sheet]);
   const selectCheck = (c: ComplianceCheck | null) => {
     setCheck(c);
     const id = c?.element_ids?.[0];
@@ -169,7 +186,15 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [version, running]);
-  useHotkeys({ Escape: () => { setCheck(null); setPinSel(null); } });
+  // Esc steps back one thing at a time: a selected check or pin first, then the compliance sheet.
+  useHotkeys({
+    Escape: () => {
+      if (check || pinSel) {
+        setCheck(null);
+        setPinSel(null);
+      } else if (sheet) setSheet(false);
+    },
+  });
 
   // The shell's commands: ?dialog=print ("Print plan…") and ?compare=1 ("Compare versions").
   const dialogParam = params.get("dialog");
@@ -350,7 +375,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
                 Changes since v{parent.n}
               </button>
             )}
-            {report && plan && <ComplianceChip report={report} plan={plan} asBuilt={running ? null : asBuilt} onClick={() => setSheet((s) => !s)} active={sheet} />}
+            {report && plan && <ComplianceChip ref={chipRef} report={report} plan={plan} asBuilt={running ? null : asBuilt} onClick={() => setSheet((s) => !s)} active={sheet} />}
             {version && !running && (
               <>
                 <Button variant="secondary" size="sm" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => setPrinting(true)} className="h-9" aria-label="Print or save as PDF">
@@ -476,6 +501,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
       <AnimatePresence>
         {sheet && report && plan && (
           <motion.aside
+            ref={sheetRef}
             initial={phone ? { y: "100%" } : { x: 24, opacity: 0 }}
             animate={phone ? { y: 0 } : { x: 0, opacity: 1 }}
             exit={phone ? { y: "100%" } : { x: 24, opacity: 0 }}
@@ -488,8 +514,10 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
             aria-label="Compliance"
           >
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
-              <p className="text-[15px] font-semibold text-ink">Compliance</p>
-              <IconButton label="Close" size={32} onClick={() => setSheet(false)}>
+              <h2 ref={sheetHeading} tabIndex={-1} className="rounded-[6px] text-[15px] font-semibold text-ink outline-none focus-visible:shadow-focus">
+                Compliance
+              </h2>
+              <IconButton label="Close compliance" size={32} onClick={() => setSheet(false)}>
                 <X className="size-4" strokeWidth={1.75} />
               </IconButton>
             </div>

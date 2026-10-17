@@ -3,7 +3,7 @@
  * steppers and a capacity meter), roof (tank and solar), style, the map pin and plain chips. Every widget has
  * "Decide for me".
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Minus, Plus } from "lucide-react";
 import type { Brief, Chip as ChipT, Envelope } from "@contracts/api-types";
@@ -240,7 +240,7 @@ export function FloorsEditor({
   const maxStoreys = Math.max(1, Math.min(3, envelope?.max_storeys || 3));
   const storeyOptions = Array.from({ length: Math.max(maxStoreys, Math.min(3, storeys)) }, (_, i) => i + 1).map((n) => ({
     value: String(n),
-    label: n === 1 ? "1 storey" : String(n),
+    label: n === 1 ? "1 storey" : `${n} storeys`,
     aria: n === 1 ? "1 storey" : `${n} storeys`,
     title: n === maxStoreys ? `${authority} allows up to ${maxStoreys === 1 ? "one storey" : `${maxStoreys} storeys`} here` : undefined,
     disabled: n > maxStoreys,
@@ -468,6 +468,23 @@ export function SolarArt({ mode, className }: { mode: "ready" | "panels" | "none
   );
 }
 
+const TANKS = ["plastic", "concrete"] as const;
+const SOLARS = ["ready", "panels", "none"] as const;
+
+/** Arrow keys move a single-choice group's selection and focus with it (role="radiogroup", roving tabindex). */
+function useRadioKeys<T>(values: readonly T[], pick: (v: T) => void) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const onKeyDown = (e: KeyboardEvent, i: number) => {
+    const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const j = (i + dir + values.length) % values.length;
+    pick(values[j]);
+    refs.current[j]?.focus();
+  };
+  return { refs, onKeyDown };
+}
+
 export function RoofEditor({
   tank,
   solar,
@@ -481,6 +498,9 @@ export function RoofEditor({
 }) {
   const t = tank ?? "concrete";
   const s = solar ?? "ready";
+  const uid = useId();
+  const tankKeys = useRadioKeys(TANKS, (k) => onChange(k, s));
+  const solarKeys = useRadioKeys(SOLARS, (k) => onChange(t, k));
   const card = (active: boolean) =>
     cn(
       "group relative flex flex-col rounded-card p-3 text-left outline-none transition-[background-color,box-shadow] duration-(--dur-fast) focus-visible:shadow-focus",
@@ -489,24 +509,46 @@ export function RoofEditor({
   return (
     <div className="@container space-y-4">
       <div>
-        <p className="mb-2 text-label text-ink-2">Water tank</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(["plastic", "concrete"] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={t === k} onClick={() => onChange(k, s)} className={card(t === k)}>
+        <p id={`${uid}-tank`} className="mb-2 text-label text-ink-2">Water tank</p>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby={`${uid}-tank`}>
+          {TANKS.map((k, i) => (
+            <button
+              key={k}
+              ref={(el) => { tankKeys.refs.current[i] = el; }}
+              type="button"
+              role="radio"
+              aria-checked={t === k}
+              aria-label={k === "plastic" ? "Blue plastic tank: cheaper, visible from the street" : "Concrete tank in the stair tower: hidden, and lasts decades. Recommended"}
+              tabIndex={t === k ? 0 : -1}
+              onKeyDown={(e) => tankKeys.onKeyDown(e, i)}
+              onClick={() => onChange(k, s)}
+              className={card(t === k)}
+            >
               <TankArt kind={k} className="h-auto w-full" />
               <span className="mt-2 text-[14px] font-medium text-ink">{k === "plastic" ? "Blue plastic tank" : "Concrete tank in the stair tower"}</span>
               <span className="text-[12.5px] text-ink-3">{k === "plastic" ? "Cheaper, visible from the street" : "Hidden, and lasts decades"}</span>
               {k === "concrete" && <span className="mt-1 text-[12px] font-medium text-pass">Recommended</span>}
-              {t === k && <Check className="absolute right-2.5 top-2.5 size-4 text-accent" strokeWidth={2.5} />}
+              {t === k && <Check className="absolute right-2.5 top-2.5 size-4 text-accent" strokeWidth={2.5} aria-hidden />}
             </button>
           ))}
         </div>
       </div>
       <div>
-        <p className="mb-2 text-label text-ink-2">Rooftop solar</p>
-        <div className="grid gap-2 @lg:grid-cols-3">
-          {(["ready", "panels", "none"] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={s === k} onClick={() => onChange(t, k)} className={cn(card(s === k), "flex-row items-center gap-3 @lg:flex-col @lg:items-stretch @lg:gap-0")}>
+        <p id={`${uid}-solar`} className="mb-2 text-label text-ink-2">Rooftop solar</p>
+        <div className="grid gap-2 @lg:grid-cols-3" role="radiogroup" aria-labelledby={`${uid}-solar`}>
+          {SOLARS.map((k, i) => (
+            <button
+              key={k}
+              ref={(el) => { solarKeys.refs.current[i] = el; }}
+              type="button"
+              role="radio"
+              aria-checked={s === k}
+              aria-label={k === "ready" ? `Keep the roof clear for solar: about ${panels.count} panels, around ${panels.kw} kilowatts` : k === "panels" ? "Raised solar frame: panels on a frame you can sit under" : "Not now: use the roof as a terrace"}
+              tabIndex={s === k ? 0 : -1}
+              onKeyDown={(e) => solarKeys.onKeyDown(e, i)}
+              onClick={() => onChange(t, k)}
+              className={cn(card(s === k), "flex-row items-center gap-3 @lg:flex-col @lg:items-stretch @lg:gap-0")}
+            >
               <SolarArt mode={k} className="h-auto w-24 shrink-0 @lg:w-full" />
               <span className="min-w-0">
                 <span className="block text-[13.5px] font-medium leading-snug text-ink @lg:mt-1.5">{k === "ready" ? "Keep the roof clear for solar" : k === "panels" ? "Raised solar frame" : "Not now"}</span>
@@ -625,6 +667,8 @@ const DIR_NAME: Record<string, string> = { N: "North", NE: "North-east", E: "Eas
 
 /** An 8-way compass: which way the front of the plot (the road side) faces. */
 export function FacingPicker({ value, onChange }: { value?: string; onChange: (f: NonNullable<Brief["facing"]>) => void }) {
+  const keys = useRadioKeys(DIRS, onChange);
+  const stop = Math.max(0, DIRS.findIndex((d) => d === value));
   return (
     <div className="flex items-center gap-4">
       <div className="relative size-[132px] shrink-0 rounded-full bg-surface-2" role="radiogroup" aria-label="The front faces">
@@ -640,6 +684,9 @@ export function FacingPicker({ value, onChange }: { value?: string; onChange: (f
               role="radio"
               aria-checked={active}
               aria-label={DIR_NAME[d]}
+              ref={(el) => { keys.refs.current[i] = el; }}
+              tabIndex={i === stop ? 0 : -1}
+              onKeyDown={(e) => keys.onKeyDown(e, i)}
               onClick={() => onChange(d)}
               className={cn(
                 "absolute grid size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[12px] font-medium outline-none transition-colors focus-visible:shadow-focus",

@@ -646,11 +646,19 @@ class AsBuiltBody(BaseModel):
 
 @app.post("/api/projects/{pid}/versions/{vid}/asbuilt")
 async def asbuilt(pid: str, vid: str, body: AsBuiltBody, me: Identity = Depends(auth.identity)):
-    await access(pid, me, "view")
+    """Check the house as the 3D engine built it. The report is stored on the version (as_built) when the caller can edit, so
+    Plan counts the same notes from the 3D model after a reload; viewers get the report without writing anything."""
+    _, role = await access(pid, me, "view")
     v = await db.get_version(pid, vid)
     if not v:
         raise HTTPException(404, "version not found")
-    return lda.check_asbuilt(v["plan"], body.summary)
+    report = lda.check_asbuilt(v["plan"], body.summary)
+    if RANK[role] >= NEED["edit"] and v.get("as_built") != report:
+        try:
+            await db.patch_version(pid, vid, as_built=report)
+        except Exception:
+            logging.exception("storing the as-built report failed for %s/%s", pid, vid)
+    return report
 
 
 # --- comments ------------------------------------------------------------------------------------------------------------
@@ -775,9 +783,10 @@ async def render(pid: str, body: RenderBody, me: Identity = Depends(auth.identit
 # --- assets (GCS proxy) ----------------------------------------------------------------------------------------------------
 @app.get("/api/assets/{path:path}")
 async def asset(path: str, w: int | None = None):
-    """A stored image. ?w=320|640|960 serves a WebP that wide (made on first request and kept, for workspace cards)."""
+    """A stored image. ?w=320|640|960|1600 serves a WebP that wide (made on first request and kept): workspace cards,
+    concept tiles (960) and the concept lightbox (1600)."""
     if w is not None:
-        if w not in (320, 640, 960) or path.startswith("thumbs/"):
+        if w not in (320, 640, 960, 1600) or path.startswith("thumbs/"):
             raise HTTPException(400, "unsupported size")
         got = await blobs.thumb(path, w)
     else:

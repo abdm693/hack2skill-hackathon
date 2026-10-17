@@ -31,7 +31,7 @@ const T = {
 };
 
 const CAPTIONS: [number, string][] = [
-  [T.ground, "Plot 35′ × 65′ · mid-row"],
+  [T.ground, "Plot 35′ × 65′ · mid‑row"],
   [T.plinth, "Structure, floor by floor"],
   [T.roof, "Stair to the roof · clear for solar"],
   [T.wipe, "The same home, rendered"],
@@ -45,7 +45,7 @@ function a(kind: Anim, delay: number, dur = 0.5, ease = "cubic-bezier(.22,1,.36,
   return { animation: `nqc-${kind} ${dur}s ${ease} ${delay}s both` };
 }
 
-export function Construction({ className }: { className?: string }) {
+export function Construction({ className, counts }: { className?: string; /** The 10 marla sample's own check counts. */ counts?: { lda: number; livable: number } | null }) {
   const reduced = useReducedMotion();
   const phone = usePhone();
   const root = useRef<HTMLDivElement>(null);
@@ -100,9 +100,9 @@ export function Construction({ className }: { className?: string }) {
   const eased = 1 - Math.pow(1 - k, 3);
   const dims = `${Math.round(35 * eased)}′ × ${Math.round(65 * eased)}′`;
 
-  // Phone: crop to the house (x 150–870) so it stays big; the photo is cropped identically.
-  const vx = phone ? 150 : 0;
-  const vw = phone ? 720 : W;
+  // Phone: crop to the house and its level marks (x 96–870) so it stays big; the photo is cropped identically.
+  const vx = phone ? 96 : 0;
+  const vw = phone ? 774 : W;
   const imgStyle: CSSProperties = { width: `${(W / vw) * 100}%`, left: `${(-vx / vw) * 100}%` };
 
   return (
@@ -117,7 +117,7 @@ export function Construction({ className }: { className?: string }) {
       ) : (
         <div key={run} className={cn("absolute inset-0", run ? "nqc-play" : "nqc-wait")}>
           <svg viewBox={`${vx} 0 ${vw} ${H}`} className="absolute inset-0 size-full" role="img" aria-label="A house being drawn: plot, structure, walls, roof and garden">
-            <Drawing />
+            <Drawing phone={phone} />
           </svg>
           <img src="/landing/home-day.jpg" alt="" aria-hidden className="nqc-photo absolute top-0 h-full max-w-none" style={{ ...imgStyle, ...a("fill", T.wipe, 1.0, "cubic-bezier(.65,0,.35,1)") }} />
           <img
@@ -128,11 +128,22 @@ export function Construction({ className }: { className?: string }) {
           />
         </div>
       )}
+      {/* Before it plays: a pencil poster of the plot and the elevation, so the frame is never blank. It fades as the
+          ink draws over it. */}
+      {!reduced && (
+        <svg
+          viewBox={`${vx} 0 ${vw} ${H}`}
+          className={cn("pointer-events-none absolute inset-0 size-full transition-opacity duration-[1400ms] ease-out", run ? "opacity-0" : "opacity-100")}
+          aria-hidden
+        >
+          <Poster />
+        </svg>
+      )}
 
       {/* Captions */}
       <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 sm:bottom-5 sm:left-5">
         <Chip dark={time >= T.wipe}>
-          <span className="tabular">{time < T.plinth ? `Plot ${dims} · mid-row` : caption}</span>
+          <span className="tabular">{time < T.plinth ? `Plot ${run || reduced ? dims : "35′ × 65′"} · mid‑row` : caption}</span>
         </Chip>
       </div>
       <div
@@ -141,7 +152,7 @@ export function Construction({ className }: { className?: string }) {
       >
         <Chip dark={time >= T.wipe}>
           <span className="size-1.5 rounded-full bg-pass" aria-hidden />
-          <span className="tabular">36 LDA checks · 8 livable</span>
+          <span className="tabular">{counts ? `${counts.lda} LDA checks · ${counts.livable} livable` : "Every LDA check · livable rules"}</span>
         </Chip>
       </div>
 
@@ -233,8 +244,42 @@ function Window({ r, mullions, t }: { r: Rect; mullions: number[]; t: number }) 
   );
 }
 
-function Drawing() {
+/** The poster: the ground, the plot and its envelope, and the elevation in outline. Fades as the ink takes over. */
+const POSTER_RECTS: Rect[] = [
+  [174, 404, 827, 412], // plinth
+  [174, 104, 182, 404], [364, 104, 372, 404], [521, 104, 529, 404], [723, 104, 731, 404], [786, 263, 796, 404], // columns
+  [174, 242, 731, 260], [520, 262, 827, 280], // slabs
+  [182, 262, 521, 330], [529, 288, 576, 330], // ground floor
+  [174, 104, 731, 129], [200, 129, 705, 242], // roof frame, first floor
+  [198, 77, 371, 104], [371, 96, 703, 104], [547, 50, 670, 96], [532, 37, 686, 50], // parapet, mumty
+  [260, 150, 326, 237], [398, 150, 502, 237], [580, 150, 666, 237], [261, 283, 325, 330], [398, 283, 501, 330], // windows
+  [70, 330, 517, 410], [517, 326, 541, 410], [822, 326, 850, 410], [541, 334, 822, 404], // boundary, piers, gate
+];
+function Poster() {
+  return (
+    <g fill="none">
+      <line x1="0" y1={GROUND} x2={W} y2={GROUND} stroke="rgb(17 17 19 / .55)" strokeWidth={1.2} />
+      <g stroke="rgb(17 17 19 / .4)" strokeWidth={0.8}>
+        <line x1="172" y1="404" x2="172" y2="428" />
+        <line x1="852" y1="404" x2="852" y2="428" />
+        <line x1="172" y1="424" x2="852" y2="424" strokeWidth={0.6} />
+      </g>
+      <path d="M172 412V24H852V412" stroke={ACCENT} strokeOpacity={0.45} strokeWidth={1.2} strokeDasharray="6 5" />
+      <g stroke="rgb(17 17 19 / .32)" strokeWidth={0.8}>
+        {POSTER_RECTS.map(([x0, y0, x1, y1], i) => (
+          <rect key={i} x={x0} y={y0} width={x1 - x0} height={y1 - y0} />
+        ))}
+        <path d="M560 404L660 333L560 262L660 183L560 104" strokeDasharray="4 3" />
+      </g>
+    </g>
+  );
+}
+
+/** Level marks and the envelope label: twice the size on phones (the frame is ~half scale there) and inside the frame. */
+function Drawing({ phone }: { phone?: boolean }) {
   const plants = useMemo(() => [32, 98, 150, 212, 378, 440, 488], []);
+  const levelFont = phone ? 25 : 10;
+  const levelX = phone ? 100 : 138;
   return (
     <>
       <defs>
@@ -274,7 +319,7 @@ function Drawing() {
       {/* LDA envelope */}
       <g style={a("fade", T.envelope, 0.2)}>
         <path d="M172 412V24H852V412" fill="none" stroke={ACCENT} strokeWidth={1.2} strokeDasharray="6 5" pathLength={1} style={a("draw", T.envelope, 0.6)} />
-        <text x="182" y="40" fill={ACCENT} fontSize="11" fontWeight="500" fontFamily="Geist Mono, ui-monospace, monospace" style={a("fade", T.envelope + 0.3, 0.3)}>
+        <text x="182" y={phone ? 50 : 40} fill={ACCENT} fontSize={phone ? 25 : 11} fontWeight="500" fontFamily="Geist Mono, ui-monospace, monospace" style={a("fade", T.envelope + 0.3, 0.3)}>
           LDA envelope · 45′ max
         </text>
       </g>
@@ -289,15 +334,15 @@ function Drawing() {
         ))}
         <rect x="786" y="263" width="10" height="141" className="nqc-origin-b" style={a("rise", T.columns + 0.4, 0.7)} />
       </g>
-      <g fill="rgb(17 17 19 / .55)" fontSize="10" fontFamily="Geist Mono, ui-monospace, monospace" fontWeight="500">
+      <g fill="rgb(17 17 19 / .62)" fontSize={levelFont} fontFamily="Geist Mono, ui-monospace, monospace" fontWeight="500">
         {[
           [404, "+0′", 2.1],
           [260, "+11′", 2.5],
           [104, "+21′", 2.9],
         ].map(([y, label, t]) => (
           <g key={label as string} style={a("fade", t as number, 0.3)}>
-            <line x1="138" y1={y as number} x2="166" y2={y as number} stroke="rgb(17 17 19 / .45)" strokeWidth={0.6} />
-            <text x="138" y={(y as number) - 4}>{label}</text>
+            <line x1={levelX} y1={y as number} x2="166" y2={y as number} stroke="rgb(17 17 19 / .45)" strokeWidth={phone ? 1 : 0.6} />
+            <text x={levelX} y={(y as number) - (phone ? 6 : 4)}>{label}</text>
           </g>
         ))}
       </g>

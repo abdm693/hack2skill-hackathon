@@ -107,10 +107,18 @@ export function AuthForm({
     e.preventDefault();
     if (busy) return;
     const em = email.trim();
-    if (mode === "signup" && !name.trim()) return fail("Tell us your name. Clients will see it on what you share.", "name");
-    if (!EMAIL.test(em)) return fail("Enter your email address, like name@example.com.", "email");
-    if (mode !== "reset" && !password) return fail("Enter your password.", "password");
-    if (mode === "signup" && password.length < 6) return fail("Use at least 6 characters for your password.", "password");
+    // Every field that needs fixing is marked at once, each with its own message; focus goes to the first.
+    const found: Partial<Record<Field, string>> = {};
+    if (mode === "signup" && !name.trim()) found.name = "Tell us your name. Clients will see it on what you share.";
+    if (!EMAIL.test(em)) found.email = "Enter your email address, like name@example.com.";
+    if (mode !== "reset" && !password) found.password = "Enter your password.";
+    else if (mode === "signup" && password.length < 6) found.password = "Use at least 6 characters for your password.";
+    if (Object.keys(found).length) {
+      setErrors(found);
+      setError(null);
+      setFocusTick((n) => n + 1);
+      return;
+    }
     setBusy(true);
     setError(null);
     setErrors({});

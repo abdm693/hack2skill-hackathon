@@ -1,6 +1,6 @@
 /**
  * The comments sheet (right): All · Mine · Team · Client · Open · Resolved, grouped by floor and room, with threads.
- * "Apply N open comments" lets the owner or team pick which notes feed the next revision.
+ * "Revise with N comments" lets the owner or team pick which notes feed the next revision.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
@@ -118,12 +118,12 @@ export function CommentsSheet({
         disabled={!count || reviseRunning}
         onClick={() => onApply?.([...picked])}
       >
-        {count ? `Apply ${count} ${count === 1 ? "comment" : "comments"}` : "Pick at least one"}
+        {count ? `Revise with ${count} ${count === 1 ? "comment" : "comments"}` : "Pick at least one"}
       </Button>
     </div>
   ) : canApply ? (
     <Button variant="secondary" size="md" className="w-full" onClick={() => onApplyModeChange?.(true)} disabled={reviseRunning}>
-      Apply {openList.length} open {openList.length === 1 ? "comment" : "comments"}…
+      Revise with {openList.length} {openList.length === 1 ? "comment" : "comments"}…
     </Button>
   ) : undefined;
 
