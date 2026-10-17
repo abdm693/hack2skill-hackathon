@@ -37,9 +37,12 @@ function BuildOverlay({ ctrl }: { ctrl: ViewerController }) {
     );
   }
   const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
+  // Nothing on screen yet: the card is up from the viewer's first frame ("idle" lasts until the build effect runs),
+  // fully opaque (its entrance only moves it), so a House load never opens on an empty sky.
+  const card = b.first && (b.phase === "building" || b.phase === "idle");
   return (
     <>
-      {b.phase === "building" && b.first && (
+      {card && (
         <div className="nq-build-card nq-glass" role="status" aria-live="polite">
           <h3>Assembling your home</h3>
           <p>{b.done === 0 ? "Laying out the plan" : sectionStage(b.current, ctrl.plan)}</p>
@@ -47,7 +50,7 @@ function BuildOverlay({ ctrl }: { ctrl: ViewerController }) {
             <i style={{ width: `${Math.max(4, pct)}%` }} />
           </div>
           <div className="nq-build-meta">
-            <span>{b.total ? `${b.done} of ${b.total} layers` : `${b.done} layers`}</span>
+            <span>{b.total ? `${b.done} of ${b.total} layers` : b.done ? `${b.done} layers` : "Getting started"}</span>
             <span>{pct}%</span>
           </div>
         </div>

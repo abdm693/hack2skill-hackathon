@@ -85,13 +85,17 @@
 }
 
 /* ── build progress ───────────────────────────── */
+/*
+ * Opaque from its first frame: the entrance only moves it (translate/scale, which compose with the centring
+ * transform), so a stalled or unstarted animation still shows a legible card, never a ghost over an empty sky.
+ */
 .nq-build-card {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(340px, calc(100% - 32px)); padding: 18px 20px 16px; border-radius: 20px;
-  animation: nq-card-in 420ms var(--nq-ease) both;
+  width: min(340px, calc(100% - 32px)); box-sizing: border-box; padding: 18px 20px 16px; border-radius: 20px;
+  animation: nq-card-in 420ms var(--nq-ease);
 }
 .nq-build-card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.nq-build-card p { margin: 0; font-size: 13px; color: var(--nq-ink-2); min-height: 18px; }
+.nq-build-card p { margin: 0; font-size: 13px; line-height: 18px; color: var(--nq-ink-2); min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nq-bar { margin-top: 14px; height: 4px; border-radius: 99px; background: rgb(255 255 255 / 0.12); overflow: hidden; }
 .nq-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--nq-hud-accent); transition: width 380ms var(--nq-ease); }
 .nq-build-meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--nq-ink-2); font-variant-numeric: tabular-nums; }
@@ -297,7 +301,7 @@
 .nq-pin:hover .nq-pin-tip, .nq-pin:focus-visible .nq-pin-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
 .nq-viewer[data-walk="look"] .nq-pin-tip { display: none; }
 
-@keyframes nq-card-in { from { opacity: 0; transform: translate(-50%, -46%) scale(0.98); } }
+@keyframes nq-card-in { from { translate: 0 10px; scale: 0.98; } }
 @keyframes nq-fadein { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes nq-drop { from { opacity: 0; transform: translateY(-6px); } }
 @keyframes nq-rise { from { opacity: 0; transform: translate(-50%, 8px); } }
@@ -326,4 +330,12 @@
   .nq-layer { --nq-top: 116px; }
   .nq-mini, .nq-help { display: none; }
   .nq-touch-pin { right: 12px; }
+  /*
+   * Build / error cards: under the top chrome (--chrome-top, published by the app's shell) and the status pill that
+   * sits there, centred between 64 px gutters so they clear the app's floor stack (12 px in, 44 px wide) on the left.
+   */
+  .nq-build-card, .nq-error {
+    top: calc(var(--chrome-top, var(--nq-top)) + 72px); left: 64px; right: 64px;
+    width: auto; max-width: 340px; margin-inline: auto; transform: none;
+  }
 }
