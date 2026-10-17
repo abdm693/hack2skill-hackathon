@@ -4,7 +4,9 @@
    the stair tower over the stair) run on every attempt; the LDA engine and Naqsha's planning rules check it and their
    failures, with fix hints, go back to Argon (up to PLAN_MAX_ATTEMPTS). The best attempt wins, not the last.
 2. Self-review: each floor is drawn as an image (Pillow) and Argon critiques it like a senior architect, with a room table,
-   the adjacency list and the brief. Real problems get one revision pass, kept only if it breaks no rule.
+   the adjacency list and the brief. Real problems get a revision pass (plus one fix round), kept only if it breaks no rule and
+   changes what a major issue is about; issues left open become livable warnings in the report. The review is skipped when
+   planning already took long; the 3D build of the checked plan starts while it runs.
 3. Build: Argon writes design.js, sections of code against the House SDK, streamed one section at a time.
 """
 from __future__ import annotations
@@ -45,10 +47,18 @@ Output ONE BuildingPlan JSON. Follow the conventions in the TypeScript reference
   balconies included. Add outdoor rooms for the open spaces: driveway and lawn in front, open_space for side and rear spaces.
 - Openings: `at` is a point ON the wall the two rooms share (or on the room's own outside wall for "exterior"), on the same
   level. Windows go on outside walls or onto a same-level porch, balcony, terrace or open_space; never on a party wall (a
-  plot edge with zero setback).
+  plot edge with zero setback). Two openings on the same wall keep at least 0.5 ft of wall between them (a window beside the
+  main door included), or the later one can't be built.
 - LDA minimums: habitable rooms ≥ 100 sq ft and ≥ 8 ft wide; kitchen ≥ 50 sq ft and ≥ 6 ft wide; clear height ≥ 9.5 ft (11 ft
-  floor-to-floor, 0.5 ft slab); windows ≥ 8% of the floor area for habitable rooms and kitchens; baths ≥ 2 sq ft open to the
-  outside; parapet 3.5 ft; mumty ≤ 9.5 ft; boundary walls ≤ 7 ft; height, storeys and ground coverage within the envelope.
+  floor-to-floor, 0.5 ft slab); windows ≥ 8% of the floor area for habitable rooms and kitchens; parapet 3.5 ft; mumty ≤ 9.5 ft;
+  boundary walls ≤ 7 ft; height, storeys and ground coverage within the envelope.
+- Every bath and powder room touches an outside wall (or a same-floor open_space or terrace) and gets a "ventilator" opening
+  (about 2 × 1.5 ft, between [bath, "exterior"]) on that wall. A bath with no outside wall fails; never wedge one between rooms
+  against a party wall.
+- An open_space or courtyard that lights rooms stays open to the sky: nothing on any floor above covers it (no room, terrace or
+  balcony; leave an open_space void with a railing over it).
+- Car porch: a 9 × 18 ft bay per car in brief.spaces car_porch:N, plus a 3 ft 6 in walkway past the cars to the main door
+  (2 cars side by side: at least 21.5 ft wide × 18 ft deep, or 18 ft wide × 21.5 ft deep).
 - Levels: ground (index 0, elevation = plinth 1.5), first, second as needed, then a final "roof" level whose height_ft equals
   the parapet height.
 
@@ -56,7 +66,9 @@ STAIRS (objective geometry, checked):
 - For 11 ft floor-to-floor: 19 risers of 6.95 in, 10 in treads, 3.5 ft flights, so a dog-leg rect of 7.5 ft × 11 ft along `start`.
 - A dog-leg STARTS and ARRIVES at its start edge (min-y edge for "+y", max-y for "-y", min-x for "+x", max-x for "-x"). On every
   floor the stair hall = the stair rect + 3.5 ft clear at that edge, across its full breadth (≥ 8 × 14.5 ft). That strip is the
-  landing at the foot and at the top: connect it to the floor and keep door swings out of it.
+  landing at the foot and at the top: connect it to the floor and keep door swings out of it. On the floor below a flight, no
+  door opens under the flights or the mid-landing (there is no headroom there): doors into the stair hall sit on the landing
+  strip.
 - One stair per level transition INCLUDING the top storey to the roof, all stacked (same rect, kind and start).
 - roof.mumty.rect = the top-floor stair hall; roof.mumty.door_side = the start-end side (front for "+y", back for "-y", left
   for "+x", right for "-x"). If that side is a party wall, use a long side and make the hall ≥ 3.6 ft longer than the stair there.
@@ -64,10 +76,12 @@ STAIRS (objective geometry, checked):
 ARCHITECT'S COMMON SENSE: plan the way a thoughtful Lahore architect would. Every room has its own way in from circulation: a
 bedroom opens onto a corridor, lobby, stair hall or the family lounge (plus its own bath, dressing or balcony), never through
 another bedroom, a bath, the kitchen or the drawing room; a bath has exactly one door, and the master bath opens into the master
-bedroom. Guests reach the drawing room from the porch or lobby without seeing the family's rooms; the family reaches the lounge
-without crossing the drawing room. Doors sit near room corners on walls the two rooms share; each bedroom keeps a solid wall for
-the bed and each lounge one for the TV. Rooms take daylight from their own outside wall on their own floor. Stack baths over
-baths. Proportions stay livable; passages are at least 4 ft wide.
+bedroom. A dressing opens only into its own bedroom (or that bedroom's bath), never onto a lounge. Two bedrooms never share a
+balcony or terrace, and their balconies never touch (keep a room or a gap between them). Guests reach the drawing room from the
+porch or lobby without seeing the family's rooms; the family reaches the lounge without crossing the drawing room. Doors sit near
+room corners on walls the two rooms share; each bedroom keeps a solid wall for the bed and each lounge one for the TV. Rooms take
+daylight from their own outside wall on their own floor. Stack baths over baths, the kitchen, stores or the porch; never over a
+bedroom, the drawing room or the prayer room. Proportions stay livable; passages are at least 4 ft wide.
 
 THE BRIEF: honour the per-floor program (brief.floors) and the family's preferences (brief.preferences, brief.notes) exactly:
 the bedroom count, the rooms on each floor, attached baths, an open kitchen, parents downstairs. They are promises.
@@ -123,9 +137,16 @@ def _clean_plan(plan: dict, brief: dict) -> dict:
     for o in plan.get("openings", []):
         if isinstance(o.get("at"), list) and len(o["at"]) == 2:
             o["at"] = [snap(o["at"][0]), snap(o["at"][1])]
-    p = plan.setdefault("site", {}).setdefault("plot", {})
+    site = plan.setdefault("site", {})
+    p = site.setdefault("plot", {})
     if brief.get("plot"):
         p.update({k: brief["plot"][k] for k in ("width_ft", "depth_ft", "area_marla", "corner") if k in brief["plot"]})
+    # where the house is comes from the brief, never from the model ("DHA / Johar Town")
+    site["scheme"] = str(brief.get("scheme") or "").strip()
+    site["authority"] = brief.get("authority") or site.get("authority") or "LDA"
+    site["city"] = brief.get("city") or site.get("city") or "Lahore"
+    if brief.get("facing"):
+        site["facing"] = brief["facing"]
     if brief.get("coordinates"):
         plan["site"]["coordinates"] = brief["coordinates"]
     roof = plan.setdefault("roof", {"parapet_ft": 3.5})
@@ -147,6 +168,8 @@ def prepare(plan: dict, brief: dict) -> tuple[dict, list[str]]:
     try:
         if (moved := planning.normalize(plan)):
             repairs.append(f"aligned {len(moved)} door{'s' if len(moved) > 1 else ''} and window{'s' if len(moved) > 1 else ''} with their walls")
+        if (gone := planning.drop_open_edge_openings(plan)):
+            repairs.append(f"removed {len(gone)} door{'s' if len(gone) > 1 else ''} on open-plan edges, which have no wall")
         if planning.repair_stairs(plan):
             repairs.append("fitted the stairs to code inside the stair hall")
         if planning.repair_mumty(plan):
@@ -164,22 +187,38 @@ def _score(report: dict) -> tuple[int, int]:
 MAX_FEEDBACK = 10
 
 
-def _feedback(report: dict, worse: int | None = None) -> str:
+WET_OVER_DRY = "plan.structure.wet_over_dry"
+
+
+def _if_you_can(report: dict) -> str:
+    """Warnings worth fixing when it breaks nothing: a bath stacked over a bedroom, the drawing room or the prayer room."""
+    soft = [c for c in report["checks"] if c["status"] == "warn" and c["id"].startswith(WET_OVER_DRY)]
+    if not soft:
+        return ""
+    return ("\nFix these too if you can without breaking any rule (stack each bath over a bath, the kitchen, a store or the "
+            "porch below):\n" + lda.violations_text({**report, "checks": soft}, warns=True))
+
+
+def _feedback(report: dict, worse: int | None = None, first_round: bool = False) -> str:
     """The checker's findings for the next round: the most important FAILs first (at most MAX_FEEDBACK), WARNs only once the
-    FAILs are few, so the planner fixes what matters without rewriting everything."""
+    FAILs are few, so the planner fixes what matters without rewriting everything. The first round also asks, softly, for
+    baths stacked over wet rooms."""
     fails = [c for c in report["checks"] if c["status"] == "fail"]
+    warns = [c for c in report["checks"] if c["status"] == "warn" and not (first_round and c["id"].startswith(WET_OVER_DRY))]
     focus = {**report, "checks": sorted(fails, key=lambda c: lda._group(c["id"]))[:MAX_FEEDBACK]
-             + ([c for c in report["checks"] if c["status"] == "warn"][:4] if len(fails) <= 3 else [])}
+             + (warns[:4] if len(fails) <= 3 else [])}
     more = f"\n(and {len(fails) - MAX_FEEDBACK} smaller problems you can leave for the next round)" if len(fails) > MAX_FEEDBACK else ""
     note = (f"Your last attempt made things worse ({worse} problems), so start again from THIS plan and change only what these "
             f"problems need.\n" if worse else "")
     return (note + "The plan checker found these problems. Fix every FAIL listed; change only the rooms and openings they "
             "involve, keep rooms tiling exactly (no overlaps, no gaps) and keep everything else unchanged.\n"
-            + lda.violations_text(focus) + more + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
+            + lda.violations_text(focus) + more + (_if_you_can(report) if first_round else "")
+            + "\nReturn the corrected COMPLETE BuildingPlan JSON.")
 
 
-async def _ask_plan(contents: list) -> AsyncIterator[tuple[str, object]]:
-    async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768):
+async def _ask_plan(contents: list, thinking: str | None = None, attempts: int = 2) -> AsyncIterator[tuple[str, object]]:
+    async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, contents, PLAN_SYSTEM, max_tokens=32768, thinking=thinking,
+                                           attempts=attempts):
         yield kind, val
 
 
@@ -213,11 +252,20 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
             k = best[0][0]
             yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt} of {config.PLAN_MAX_ATTEMPTS})…"}
         obj = None
-        async for kind, val in _ask_plan(contents):
-            if kind == "progress":
-                yield "progress", {"chars": val}
-            else:
-                obj = val[0]
+        try:
+            # a fix round edits a plan we already have: one try, and if the model stalls we keep the best plan so far
+            async for kind, val in _ask_plan(contents, thinking=config.FIX_THINKING if attempt > 1 else None,
+                                             attempts=2 if attempt == 1 else 1):
+                if kind == "progress":
+                    yield "progress", {"chars": val}
+                else:
+                    obj = val[0]
+        except Exception as e:
+            if best is None:
+                raise
+            log.warning("plan round %d failed (%s); keeping the best plan so far", attempt, e)
+            yield "stage", {"stage": "fix", "message": "Keeping the best plan so far."}
+            break
         plan, repairs = prepare(obj, brief)
         yield "plan", {"plan": plan, "attempt": attempt}
         report = lda.check(plan, brief)
@@ -234,7 +282,7 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
         if report["ok"]:
             break
         # continue from the best plan so far, with its most important failures and fix hints
-        contents = [first, _model_turn(best[1]), _user_turn(_feedback(best[2], worse))]
+        contents = [first, _model_turn(best[1]), _user_turn(_feedback(best[2], worse, first_round=attempt == 1))]
     (_, plan, report, at) = best
     if at != history[-1]["attempt"]:  # the last attempt was worse: show the one we keep
         yield "plan", {"plan": plan, "attempt": at}
@@ -304,8 +352,66 @@ async def _plan_images(pid: str, run_id: str, plan: dict) -> list[dict]:
     return out
 
 
+def changed_rooms(a: dict, b: dict) -> set[str]:
+    """Rooms that differ between two plans: moved or resized, added or removed, or with an opening changed on their walls."""
+    ra = {r.get("id"): r.get("rect") for r in a.get("rooms") or []}
+    rb = {r.get("id"): r.get("rect") for r in b.get("rooms") or []}
+    out = {k for k in set(ra) | set(rb) if k and ra.get(k) != rb.get(k)}
+    oa = {o.get("id"): o for o in a.get("openings") or []}
+    ob = {o.get("id"): o for o in b.get("openings") or []}
+
+    def key(o: dict) -> tuple:
+        return o.get("type"), tuple(o.get("at") or ()), o.get("width_ft"), tuple(o.get("between") or ())
+    for k in set(oa) | set(ob):
+        x, y = oa.get(k), ob.get(k)
+        if x is None or y is None or key(x) != key(y):
+            out |= {r for o in (x, y) if o for r in o.get("between") or [] if r != "exterior"}
+    if json.dumps(a.get("stairs"), sort_keys=True) != json.dumps(b.get("stairs"), sort_keys=True):
+        out |= {r.get("id") for r in b.get("rooms") or [] if r.get("type") == "stair"}
+    return out
+
+
+def addresses(issue: dict, changed: set[str]) -> bool:
+    """Whether a revision touched what a review issue is about (its rooms; any change when it names none)."""
+    rooms = [r for r in issue.get("rooms") or [] if isinstance(r, str)]
+    return bool(changed) and (not rooms or any(r in changed for r in rooms))
+
+
+def review_checks(issues: list[dict], plan: dict) -> list[dict]:
+    """Open review issues as livable warnings for the compliance sheet and the dock, in plain words (no element ids)."""
+    ix = planning.PlanIndex(plan)
+    names = {r["id"]: r.get("name") or r["id"] for r in ix.rooms}
+    names |= {o["id"]: ix.oname(o) for o in ix.openings} | {s["id"]: ix.sname(s).lower() for s in ix.stairs}
+
+    def plain(text: str) -> str:
+        text = re.sub(r"\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b", lambda m: names.get(m.group(0), m.group(0).replace("_", " ")), str(text or ""))
+        return re.sub(r"\s+", " ", text).strip()
+    out = []
+    for n, i in enumerate(issues, 1):
+        problem, fix = plain(i.get("problem")), plain(i.get("fix"))
+        if not problem:
+            continue
+        major = i.get("severity") == "major"
+        c = {"id": f"review.{n}", "title": "Architect's review" + (": needs a change" if major else ""), "status": "warn",
+             "category": "livable", "message": problem[:1].upper() + problem[1:] + (f" Suggested: {fix}" if fix else ""),
+             "rule_ref": "Naqsha architect's review of the drawings", "severity": "major" if major else "minor",
+             "element_ids": [r for r in i.get("rooms") or [] if r in ix.by_id]}
+        if fix:
+            c["fix"] = fix
+        out.append(c)
+    return out
+
+
+def with_review(report: dict, issues: list[dict], plan: dict) -> dict:
+    """The report plus the review's open issues (as warnings), replacing any earlier review notes."""
+    keep = [c for c in report.get("checks", []) if not str(c.get("id", "")).startswith("review.")]
+    return {**report, "checks": keep + review_checks(issues, plan)}
+
+
 async def self_review(project: dict, plan: dict, report: dict, first: types.Content, history: list) -> AsyncIterator[tuple[str, dict]]:
-    """Critique the drawn plan; if there are real problems, revise once and keep the revision only if it breaks no rule."""
+    """Critique the drawn plan; if there are real problems, revise (with one fix round when the revision breaks a rule) and
+    keep the revision only if it breaks no rule and changes what a major issue is about. Whatever stays open is added to the
+    report as livable warnings, so nothing the review found is silently dropped."""
     brief = project["brief"]
     yield "stage", {"stage": "review", "message": "Reviewing the drawings like an architect…"}
     try:
@@ -315,38 +421,47 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
         yield "_result", {"plan": plan, "report": report, "review": {"verdict": "skipped", "summary": "", "issues": [],
                                                                        "error": type(e).__name__}}
         return
-    majors = [i for i in crit["issues"] if i.get("severity") == "major"]
+    issues = crit["issues"]
+    majors = [i for i in issues if i.get("severity") == "major"]
     if crit["verdict"] != "revise" or not majors:
-        msg = crit["summary"] or "The circulation, privacy and daylight read well."
-        yield "stage", {"stage": "review", "message": f"Reviewed the drawings. {msg}"}
-        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False}}
+        n = len(issues)
+        msg = (f"Reviewed the drawings: {n} smaller point{'s' if n != 1 else ''} to look at, listed with the checks." if n else
+               f"Reviewed the drawings. {crit['summary'] or 'The circulation, privacy and daylight read well.'}")
+        yield "stage", {"stage": "review", "message": msg}
+        yield "_result", {"plan": plan, "report": with_review(report, issues, plan),
+                          "review": {**crit, "applied": False, "open_issues": n}}
         return
     yield "stage", {"stage": "review", "message": f"Improving the plan: {crit['summary'] or majors[0]['problem']}"}
     asks = "\n".join(f"- [{i.get('severity', 'minor').upper()}] {i['problem']} Fix: {i.get('fix', '')}"
-                     + (f" (rooms: {', '.join(i.get('rooms') or [])})" if i.get("rooms") else "") for i in crit["issues"])
+                     + (f" (rooms: {', '.join(i.get('rooms') or [])})" if i.get("rooms") else "") for i in issues)
     still = ""
     if not report["ok"]:  # the checker's failures go with the critique: the architect often names their root cause
         fails = sorted([c for c in report["checks"] if c["status"] == "fail"], key=lambda c: lda._group(c["id"]))[:MAX_FEEDBACK]
         still = "\nThe plan checker also still reports these problems; fix them too:\n" + lda.violations_text(
             {**report, "checks": fails}, warns=False)
+    still += _if_you_can(report)
     contents = [first, _model_turn(plan), _user_turn(
         "A senior architect reviewed your drawings and asks for these improvements:\n" + asks + still +
         "\nMake the MAJOR ones (and the minor ones where easy) while keeping everything that already works and every rule that "
         "already passes; keep rooms tiling exactly. Return the COMPLETE BuildingPlan JSON.")]
     base = _score(report)
     cand = cand_rep = None
+    accepted = False
+    why: list[str] = []
 
     async def ask_once(cts) -> dict:
         obj = None
-        async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, cts, PLAN_SYSTEM, max_tokens=32768, attempts=1):
+        async for kind, val in llm.stream_json(config.MODEL_ARCHITECT, cts, PLAN_SYSTEM, max_tokens=32768, attempts=1,
+                                               thinking=config.REVIEW_THINKING):
             if kind == "result":
                 obj = val[0]
         return obj
 
-    deadline = asyncio.get_running_loop().time() + config.REVIEW_BUDGET_S
-    for round_ in (1, 2):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + config.REVIEW_BUDGET_S
+    for round_ in (1, 2):  # the revision, then one fix round if it broke a rule or missed every major issue
         try:  # the improvement is optional: within its time budget, or we keep the checked plan
-            left = deadline - asyncio.get_running_loop().time()
+            left = deadline - loop.time()
             if left < 30:
                 raise asyncio.TimeoutError
             obj = await asyncio.wait_for(ask_once(contents), timeout=left)
@@ -354,31 +469,49 @@ async def self_review(project: dict, plan: dict, report: dict, first: types.Cont
             cand_rep = lda.check(cand, brief)
         except asyncio.TimeoutError:
             log.warning("review revision over its %ss budget; keeping the checked plan", config.REVIEW_BUDGET_S)
-            cand = None
+            why = why or ["time"]
             break
         except Exception:
             log.exception("review revision failed")
-            cand = None
+            why = why or ["error"]
             break
-        if _score(cand_rep)[0] <= base[0] or round_ == 2:
+        worse = _score(cand_rep)[0] > base[0]
+        hit = any(addresses(i, changed_rooms(plan, cand)) for i in majors)
+        if not worse and hit:
+            accepted = True
+            break
+        why = [c["id"] for c in cand_rep["checks"] if c["status"] == "fail"] if worse else ["no major issue addressed"]
+        if round_ == 2:
             break
         yield "stage", {"stage": "fix", "message": "Re-checking the improved plan…"}
-        contents = [first, _model_turn(cand), _user_turn(_feedback(cand_rep))]
+        ask = _feedback(cand_rep) if worse else ""
+        if not hit:
+            ask += ("\nThat version didn't change the rooms the architect named. Make these improvements:\n"
+                    + "\n".join(f"- {i['problem']} Fix: {i.get('fix', '')}" for i in majors)
+                    + "\nReturn the COMPLETE BuildingPlan JSON.")
+        contents = [first, _model_turn(cand), _user_turn(ask.strip())]
     attempt = len(history) + 1
-    if cand is not None and _score(cand_rep)[0] <= base[0]:
+    if accepted:
+        changed = changed_rooms(plan, cand)
+        open_issues = [i for i in issues if not addresses(i, changed)]
+        rep = with_review(cand_rep, open_issues, cand)
         history.append({"attempt": attempt, "review": True, "fail": _score(cand_rep)[0], "warn": _score(cand_rep)[1],
                         "failed": [c["id"] for c in cand_rep["checks"] if c["status"] == "fail"]})
         yield "plan", {"plan": cand, "attempt": attempt}
-        yield "compliance", {"report": cand_rep, "attempt": attempt}
-        yield "stage", {"stage": "review", "message": f"Improved after review: {crit['summary'] or majors[0]['problem']}"}
-        yield "_result", {"plan": cand, "report": cand_rep, "review": {**crit, "applied": True}}
+        yield "compliance", {"report": rep, "attempt": attempt}
+        yield "stage", {"stage": "review", "message": f"Improved after review: {crit['summary'] or majors[0]['problem']}"
+                        + (f" {len(open_issues)} smaller point{'s' if len(open_issues) != 1 else ''} stay open, listed with the "
+                           f"checks." if open_issues else "")}
+        yield "_result", {"plan": cand, "report": rep, "review": {**crit, "applied": True, "open_issues": len(open_issues)}}
     else:
-        broke = [c["id"] for c in (cand_rep or {}).get("checks", []) if c["status"] == "fail"] if cand is not None else []
-        log.info("review revision kept out: %s", broke or "timed out or failed")
-        msg = ("Kept the checked plan; the suggested changes would have broken a rule." if broke else
-               "Kept the checked plan; the improvement took too long.")
+        log.info("review revision kept out: %s", why or "no candidate")
+        n = len(issues)
+        msg = (f"The review found {n} thing{'s' if n != 1 else ''} to improve that I couldn't change without breaking a rule; "
+               f"they're listed with the checks." if why and why[0] not in ("time", "error") else
+               f"The review found {n} thing{'s' if n != 1 else ''} to improve; they're listed with the checks.")
         yield "stage", {"stage": "review", "message": msg}
-        yield "_result", {"plan": plan, "report": report, "review": {**crit, "applied": False, "rejected_because": broke or ["time"]}}
+        yield "_result", {"plan": plan, "report": with_review(report, issues, plan),
+                          "review": {**crit, "applied": False, "open_issues": n, "rejected_because": why or ["time"]}}
 
 
 # --- Step 3: design.js --------------------------------------------------------------------------------
@@ -507,10 +640,48 @@ async def repair_section(project: dict, version: dict, name: str, error: str) ->
     return fixed[0] if fixed else sec
 
 
+class Background:
+    """An async event generator running in its own task, its events buffered until someone follows them. The 3D build
+    starts on the checked plan while the optional review runs; it is cancelled and restarted only if the review changes the
+    plan."""
+
+    def __init__(self, gen: AsyncIterator[tuple[str, dict]]):
+        self.q: asyncio.Queue = asyncio.Queue()
+        self.task = asyncio.create_task(self._run(gen))
+
+    async def _run(self, gen) -> None:
+        try:
+            async for ev in gen:
+                await self.q.put(("ev", ev))
+        except Exception as e:  # handed to the follower
+            await self.q.put(("err", e))
+        finally:
+            await self.q.put(("end", None))
+
+    async def follow(self) -> AsyncIterator[tuple[str, dict]]:
+        while True:
+            kind, val = await self.q.get()
+            if kind == "end":
+                return
+            if kind == "err":
+                raise val
+            yield val
+
+    def cancel(self) -> None:
+        if not self.task.done():
+            self.task.cancel()
+
+
+def review_note_count(report: dict) -> int:
+    return sum(1 for c in report.get("checks", []) if str(c.get("id", "")).startswith("review.") and c.get("status") != "pass")
+
+
 async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
-    """Full pipeline: plan (+ fix loop) → self-review → design.js → save a Version."""
+    """Full pipeline: plan (+ fix loop) → self-review (while the 3D build of the checked plan starts) → design.js → save."""
     pid = project["id"]
     run_id = db.new_id("r_")
+    loop = asyncio.get_running_loop()
+    t0 = loop.time()
     await db.update_project(pid, stage="planning")
     plan = report = first = None
     history: list = []
@@ -520,29 +691,49 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
         else:
             yield ev, data
     rev: dict = {}
-    if config.SELF_REVIEW:
-        async for ev, data in self_review(project, plan, report, first, history):
+    build = Background(write_design(project, plan))
+    try:
+        late = loop.time() - t0 > config.REVIEW_SKIP_AFTER_S or len(history) >= config.PLAN_MAX_ATTEMPTS
+        if config.SELF_REVIEW and late:
+            log.info("skipping the drawing review: planning took %.0fs over %d attempts", loop.time() - t0, len(history))
+            rev = {"verdict": "skipped", "summary": "", "issues": [], "reason": "time"}
+        elif config.SELF_REVIEW:
+            async for ev, data in self_review(project, plan, report, first, history):
+                if ev == "_result":
+                    plan, report, rev = data["plan"], data["report"], data["review"]
+                else:
+                    yield ev, data
+            if rev.get("applied"):  # the review changed the plan: build that one instead
+                build.cancel()
+                build = Background(write_design(project, plan))
+        images = await _plan_images(pid, run_id, plan)
+        await db.update_project(pid, stage="building")
+        sections: list[dict] = []
+        async for ev, data in build.follow():
             if ev == "_result":
-                plan, report, rev = data["plan"], data["report"], data["review"]
+                sections = data["sections"]
             else:
                 yield ev, data
-    images = await _plan_images(pid, run_id, plan)
-    await db.update_project(pid, stage="building")
-    sections: list[dict] = []
-    async for ev, data in write_design(project, plan):
-        if ev == "_result":
-            sections = data["sections"]
-        else:
-            yield ev, data
+    finally:
+        build.cancel()
     yield "stage", {"stage": "save", "message": "Saving the version…"}
     fresh = await db.get_project(pid)
     n = len(fresh.get("versions") or []) + 1
-    version = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": fresh.get("current_version_id"),
+    parent = fresh.get("current_version_id")
+    version = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": parent,
                "plan": plan, "sections": sections, "compliance": report, "changes": [], "status": "ready",
                "fix_history": history, "review": rev, "plan_images": images, "brief_snapshot": fresh.get("brief")}
     await db.save_version(pid, version)
-    summary = _status(report)
+    notes = review_note_count(report)
+    summary = _status(report) + (f" · {notes} review note{'s' if notes != 1 else ''}" if notes else "")
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": version["id"], "n": n, "created_at": version["created_at"],
                                                                            "status": "ready", "summary": summary}],
                             current_version_id=version["id"], stage="ready", brief_changed=False)
+    if parent:  # comments still open on the version this replaces follow it, so they can still be applied
+        try:
+            await db.move_open_comments(pid, parent, version["id"])
+        except Exception:
+            log.exception("moving open comments to %s failed", version["id"])
+    log.info("design %s: v%d in %.0fs (%d plan attempts, review %s)", pid, n, loop.time() - t0, len(history),
+             rev.get("verdict") or "off")
     yield "version", {"version": version}

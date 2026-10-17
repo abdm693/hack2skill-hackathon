@@ -40,7 +40,9 @@ export function authorOf(c: { author?: Author }): Author {
   return c.author ?? { id: "owner", name: "Owner", role: "owner" };
 }
 
-export function isMine(a: Author, me: { ids: string[]; name?: string | null }): boolean {
+/** The server says whose a comment or reply is (`mine`; author ids are opaque handles); older payloads fall back to ids. */
+export function isMine(a: Author, me: { ids: string[]; name?: string | null }, mine?: boolean): boolean {
+  if (mine !== undefined) return mine;
   if (me.ids.includes(a.id)) return true;
   return !!me.name && a.role === "client" && a.name.trim().toLowerCase() === me.name.trim().toLowerCase();
 }
@@ -49,7 +51,7 @@ export function matches(c: Comment, f: CommentFilter, me: { ids: string[]; name?
   const a = authorOf(c);
   switch (f) {
     case "all": return true;
-    case "mine": return isMine(a, me);
+    case "mine": return isMine(a, me, c.mine);
     case "team": return a.role === "owner" || a.role === "team";
     case "client": return a.role === "client" || a.role === "guest";
     case "open": return c.status === "open";

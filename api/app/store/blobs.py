@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 from functools import lru_cache
 
 from google.cloud import storage
@@ -32,6 +33,31 @@ async def get(path: str) -> tuple[bytes, str] | None:
         data = b.download_as_bytes()
         return data, b.content_type or "application/octet-stream"
     return await asyncio.to_thread(_down)
+
+
+def _resize_webp(data: bytes, width: int) -> bytes:
+    from PIL import Image
+    im = Image.open(io.BytesIO(data))
+    im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+    if im.width > width:
+        im = im.resize((width, max(1, round(im.height * width / im.width))), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "WEBP", quality=78, method=4)
+    return out.getvalue()
+
+
+async def thumb(path: str, width: int = 640) -> tuple[bytes, str] | None:
+    """A WebP of a stored image at most `width` px wide, cached in the bucket next to the original (thumbs/w<width>/...)."""
+    key = f"thumbs/w{width}/{path}.webp"
+    got = await get(key)
+    if got:
+        return got
+    src = await get(path)
+    if not src or not src[1].startswith("image/"):
+        return src
+    data = await asyncio.to_thread(_resize_webp, src[0], width)
+    await put(key, data, "image/webp")
+    return data, "image/webp"
 
 
 def decode_data_url(data_url: str) -> tuple[bytes, str]:

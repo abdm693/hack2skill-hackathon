@@ -88,8 +88,11 @@ export interface Version {
   changes?: Change[];
   status: "building" | "ready" | "failed";
   thumbnail_url?: string;
-  /** The architect's self-review of the drawn floors (design runs). applied = the plan was revised after it. */
-  review?: { verdict: "approve" | "revise" | "skipped"; summary: string; applied?: boolean;
+  /** The architect's self-review of the drawn floors (design runs). applied = the plan was revised after it. Issues it
+   *  didn't resolve stay open: open_issues counts them, and each is also a livable "warn" check in `compliance` with id
+   *  "review.<n>" (plain words, never all-clear while any remain). */
+  review?: { verdict: "approve" | "revise" | "skipped"; summary: string; applied?: boolean; open_issues?: number;
+             rejected_because?: string[];
              issues: { severity: "major" | "minor"; rooms?: string[]; problem: string; fix?: string }[] };
   /** The floor drawings the review looked at, one PNG per level. */
   plan_images?: { level: string; name: string; url: string }[];
@@ -152,8 +155,15 @@ export interface Comment {
   status: "open" | "resolved" | "partial" | "rejected";
   resolution?: string;
   resolved_in_version?: string;
+  /** Author ids in comment payloads are opaque per-project handles ("a_…"), never uids or guest ids. */
   author?: Author;
-  replies?: { id: string; author: Author; text: string; created_at: string }[];
+  /** Whether the caller wrote this comment (computed per request; use it instead of comparing author ids). */
+  mine?: boolean;
+  /** "approval": a client's sign-off on a version (stored resolved; never counted, applied or revised). */
+  kind?: "approval";
+  /** Set when an open comment was carried over to a newer version: the version it was written on. */
+  from_version_id?: string;
+  replies?: { id: string; author: Author; text: string; created_at: string; mine?: boolean }[];
 }
 
 export interface Me { uid: string; email: string; name?: string }

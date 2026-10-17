@@ -56,7 +56,7 @@ export const CommentItem = forwardRef<
   const deleteComment = useProject((s) => s.deleteComment);
   const reply = useProject((s) => s.replyToComment);
   const author = authorOf(c);
-  const mine = isMine(author, me);
+  const mine = isMine(author, me, c.mine);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(c.text);
   const [replyText, setReplyText] = useState("");
@@ -217,7 +217,11 @@ export const CommentItem = forwardRef<
           </button>
         )}
 
-        {c.status !== "open" && (
+        {c.kind === "approval" ? (
+          <div className="mt-2">
+            <StatusChip tone="pass">✓ Approved by {author.name}</StatusChip>
+          </div>
+        ) : c.status !== "open" && (
           <div className="mt-2">
             <StatusChip tone={STATUS_TONE[c.status]}>{STATUS_LABEL[c.status]}</StatusChip>
           </div>
@@ -228,7 +232,7 @@ export const CommentItem = forwardRef<
           <Reply author={{ id: "naqsha", name: "Naqsha", role: "agent" }} text={c.resolution} rejected={c.status === "rejected"} />
         )}
         {replies.map((r) => (
-          <Reply key={r.id} author={r.author} text={r.text} at={r.created_at} mine={isMine(r.author, me)} rejected={r.author.role === "agent" && c.status === "rejected"} />
+          <Reply key={r.id} author={r.author} text={r.text} at={r.created_at} mine={isMine(r.author, me, r.mine)} rejected={r.author.role === "agent" && c.status === "rejected"} />
         ))}
 
         {replying ? (

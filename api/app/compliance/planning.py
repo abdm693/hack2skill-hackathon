@@ -33,6 +33,11 @@ DOORS = {"main_door", "door", "double_door", "sliding_door", "arch", "garage_doo
 HINGED = {"main_door", "door", "double_door"}
 GLAZED = {"window", "corner_window", "sliding_door", "ventilator"}
 HABITABLE = {"drawing", "lounge", "dining", "bedroom", "master_bedroom", "guest_bedroom", "study", "servant"}
+SKY_OK = {"open_space", "courtyard", "lawn", "driveway"}  # open to the sky; a room of any other type above roofs it over
+KIND_WORD = {"main_door": "main door", "door": "door", "double_door": "double door", "sliding_door": "sliding door",
+             "arch": "arch", "garage_door": "garage door", "window": "window", "corner_window": "corner window",
+             "ventilator": "ventilator"}
+BED_KEYS = ("bedroom", "bed", "bedrooms", "master_bedroom", "master", "guest_bedroom", "guest")
 
 REF = "Naqsha planning rule"
 IBC = "IBC 2021"
@@ -126,6 +131,12 @@ def ft(v: float) -> str:
     return f"{v:.1f}".rstrip("0").rstrip(".") + " ft"
 
 
+def _and(items: list[str]) -> str:
+    """"A", "A and B", "A, B and C"."""
+    items = [str(i) for i in items]
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" and {items[-1]}" if items else ""
+
+
 # --- the plan, indexed -------------------------------------------------------------------------------------------
 class PlanIndex:
     """Indexes a BuildingPlan once: levels, rooms, opening validity, the circulation graph and stair geometry."""
@@ -169,16 +180,74 @@ class PlanIndex:
         return (lv or {}).get("name") or (lid or "?")
 
     def name(self, rid: str) -> str:
+        """A room's name for messages (never a raw id)."""
         if rid == EXT:
             return "outside"
         if rid == ROOF:
             return "the roof"
         if rid == MUMTY:
             return "the stair tower"
-        return (self.by_id.get(rid) or {}).get("name") or rid
+        r = self.by_id.get(rid)
+        if not r:
+            return "a room that isn't in the plan"
+        return r.get("name") or str(r.get("type") or "room").replace("_", " ").capitalize()
+
+    def oname(self, o: dict) -> str:
+        """An opening in plain words, never its id: "the door between Bedroom 3 and the Lounge", "the Bath 2 ventilator",
+        "the main door"."""
+        kind = KIND_WORD.get(str(o.get("type") or ""), "opening")
+        if o.get("type") == "main_door":
+            return "the main door"
+        named = [b for b in o.get("between") or [] if b != "exterior"]
+        names = [self.name(b) for b in named]
+        if len(names) == 2 and names[0] != names[1]:
+            return f"the {kind} between {names[0]} and {names[1]}"
+        if names:
+            return f"the {names[0]} {kind}"
+        return f"a {kind}"
+
+    def sname(self, s: dict) -> str:
+        """A stair in plain words: "Ground → first stair", "First → roof stair"."""
+        def short(lid):
+            n = re.sub(r"\s*floor\s*$", "", self.lname(lid), flags=re.I).strip() or str(lid)
+            return n
+        a, b = short(s.get("from_level")), short(s.get("to_level"))
+        return f"{a[:1].upper() + a[1:].lower()} → {b.lower()} stair"
 
     def type(self, rid: str) -> str:
         return (self.by_id.get(rid) or {}).get("type", "")
+
+    def level_index(self, lid: str | None) -> int:
+        return int((self.lv.get(lid or "") or {}).get("index", 0) or 0)
+
+    def covers_above(self, lid: str | None) -> list[tuple[str, Rect]]:
+        """Rooms with a floor slab on any level above `lid` (rooms, porches, balconies, terraces; not voids or gardens)."""
+        i = self.level_index(lid)
+        return [(r["id"], self.R[r["id"]]) for r in self.rooms
+                if self.level_index(r.get("level")) > i and r.get("type") not in SKY_OK]
+
+    def covered_area(self, rid: str) -> tuple[float, list[str]]:
+        """How much of an open-to-sky room (open_space, courtyard...) has a slab over it on a higher level, and by what."""
+        a = self.R[rid]
+        lid = self.by_id[rid].get("level")
+        hits = [(cid, inter(a, cr)) for cid, cr in self.covers_above(lid)]
+        hits = [(cid, i) for cid, i in hits if i and area(i) > 0.25]
+        return union_area([i for _, i in hits]), [cid for cid, _ in hits]
+
+    def sky_lit(self, o: dict, outside: str | None) -> bool:
+        """Whether the daylight zone in front of an opening (its width × 3 ft into `outside`) is open to the sky. Only
+        open-air rooms at the ground (open_space, courtyard, lawn, driveway) can be roofed over by a higher floor."""
+        if not outside or self.type(outside) not in SKY_OK:
+            return True
+        x, y = float(o["at"][0]), float(o["at"][1])
+        w = max(float(o.get("width_ft") or 0), 1.0)
+        zone = (x - w / 2, y - 3.0, x + w / 2, y + 3.0) if _horizontal(self, o) else (x - 3.0, y - w / 2, x + 3.0, y + w / 2)
+        zone = inter(zone, self.R[outside])
+        if not zone:
+            return True
+        lid = self.by_id[outside].get("level")
+        cov = union_area([i for _, cr in self.covers_above(lid) if (i := inter(zone, cr))])
+        return cov < 0.5 * area(zone)
 
     def level_rooms(self, lid: str) -> list[dict]:
         return [r for r in self.rooms if r.get("level") == lid]
@@ -218,41 +287,43 @@ class PlanIndex:
         w = float(o.get("width_ft") or 0)
         info = {"valid": False, "kind": "pair", "rooms": [], "problems": [], "warns": [], "outside": None}
         named = [b for b in (a_id, b_id) if b != "exterior"]
+        on = self.oname(o)
+        On = on[:1].upper() + on[1:]
+        kind = KIND_WORD.get(str(o.get("type") or ""), "opening")
         for rid in named:
             r = self.by_id.get(rid)
             if not r:
-                info["problems"].append(("same_level", f"{o['id']} joins a room that does not exist ({rid})."))
+                info["problems"].append(("same_level", f"{On} joins a room that isn't in the plan."))
                 return info
             if r.get("level") != lid:
-                info["problems"].append(("same_level", f"{o['id']} on the {self.lname(lid)} joins {r.get('name', rid)}, which is on "
+                info["problems"].append(("same_level", f"A {kind} on the {self.lname(lid)} joins {self.name(rid)}, which is on "
                                          f"the {self.lname(r.get('level'))}. Openings can only join rooms on the same floor."))
                 return info
         if not named:
-            info["problems"].append(("on_edge", f"{o['id']} does not name a room."))
+            info["problems"].append(("on_edge", f"A {kind} on the {self.lname(lid)} does not name a room."))
             return info
         if len(named) == 2:
             A, B = self.by_id[a_id], self.by_id[b_id]
             e = shared_edge(self.R[a_id], self.R[b_id])
             info["rooms"] = [a_id, b_id]
             if not e:
-                info["problems"].append(("on_edge", f"{A['name']} and {B['name']} don't share a wall, so {o['id']} between them "
+                info["problems"].append(("on_edge", f"{A['name']} and {B['name']} don't share a wall, so the {kind} between them "
                                                     f"can't be built."))
                 return info
             axis, c, lo, hi = e
             across, along = (abs(y - c), x) if axis == "x" else (abs(x - c), y)
             info["edge"] = e
             if across > 0.75 or not (lo - 0.25 <= along <= hi + 0.25):
-                info["problems"].append(("on_edge", f"{o['id']} is not on the wall between {A['name']} and {B['name']}."))
+                info["problems"].append(("on_edge", f"{On} is not on the wall the two rooms share."))
                 return info
             if o.get("type") != "corner_window" and hi - lo < w + 0.25:
-                info["problems"].append(("on_edge", f"{o['id']} ({fmt(w)}) doesn't fit the {fmt(hi - lo)} wall between "
-                                                    f"{A['name']} and {B['name']}."))
+                info["problems"].append(("on_edge", f"{On} ({fmt(w)}) doesn't fit the {fmt(hi - lo)} wall the two rooms share."))
                 return info
             if along - w / 2 < lo - 0.25 or along + w / 2 > hi + 0.25:
-                info["problems"].append(("on_edge", f"{o['id']} runs past the end of the wall between {A['name']} and {B['name']}."))
+                info["problems"].append(("on_edge", f"{On} runs past the end of the wall the two rooms share."))
                 return info
             if along - w / 2 < lo + 0.3 - 1e-6 or along + w / 2 > hi - 0.3 + 1e-6:
-                info["warns"].append(f"{o['id']} sits tight against a corner; leave about 4 in for the frame.")
+                info["warns"].append(f"{On} sits tight against a corner; leave about 4 in for the frame.")
             info["valid"] = True
             return info
         # one room + exterior
@@ -266,7 +337,7 @@ class PlanIndex:
             if across <= 0.75 and lo - 0.25 <= along <= hi + 0.25 and (best is None or across < best[0]):
                 best = (across, side, axis, c, lo, hi, n, along)
         if not best:
-            info["problems"].append(("on_edge", f"{o['id']} is not on an outside wall of {A['name']}."))
+            info["problems"].append(("on_edge", f"{On} is not on an outside wall of {A['name']}."))
             return info
         _, side, axis, c, lo, hi, n, along = best
         info["side"] = side
@@ -274,19 +345,19 @@ class PlanIndex:
         ox, oy = px + n[0] * 0.4, py + n[1] * 0.4
         out = self.room_at(lid, ox, oy, exclude=[rid])
         if out and self.type(out) not in OPEN:
-            info["problems"].append(("on_edge", f"{o['id']} is drawn to the outside but {A['name']}'s {side} wall faces "
+            info["problems"].append(("on_edge", f"{On} is drawn to the outside but {A['name']}'s {side} wall faces "
                                                 f"{self.name(out)}."))
             return info
         party = self.on_party_line(axis, c, lo, hi)
         if party and not out and o.get("type") != "arch":
-            info["problems"].append(("party_wall", f"{o['id']} is on the {party} party wall. The neighbour builds right against it."))
+            info["problems"].append(("party_wall", f"{On} is on the {party} party wall. The neighbour builds right against it."))
             return info
         if lid not in (self.ground, self.roof_id) and o.get("type") in DOORS and not out:
-            info["problems"].append(("door_to_drop", f"{o['id']} is a door from {A['name']} straight out of the "
-                                                     f"{self.lname(lid)} with nothing to step onto."))
+            info["problems"].append(("door_to_drop", f"{On} leads straight out of the {self.lname(lid)} with nothing to step "
+                                                     f"onto."))
             return info
         if w > 0 and o.get("type") != "corner_window" and hi - lo < w - 0.25:
-            info["problems"].append(("on_edge", f"{o['id']} ({fmt(w)}) is wider than {A['name']}'s {fmt(hi - lo)} {side} wall."))
+            info["problems"].append(("on_edge", f"{On} ({fmt(w)}) is wider than {A['name']}'s {fmt(hi - lo)} {side} wall."))
             return info
         info["outside"] = out
         info["valid"] = True
@@ -302,7 +373,8 @@ class PlanIndex:
                 b = self.by_id.get(other)
                 res = {"valid": False, "problem": None, "edge": None}
                 if not b or b.get("level") != r.get("level"):
-                    res["problem"] = f"{r['name']} is open to {other}, which is not on the same floor."
+                    res["problem"] = (f"{r['name']} is open to {self.name(other)}, which is not on the same floor." if b else
+                                      f"{r['name']} is open to a room that isn't in the plan.")
                 else:
                     e = shared_edge(self.R[r["id"]], self.R[other])
                     if not e or e[3] - e[2] < 3.0:
@@ -438,7 +510,8 @@ def _pt_ok(p) -> bool:
 # --- daylight (used by lda.glazing) -----------------------------------------------------------------------------------
 def valid_glazing(ix: PlanIndex, room_id: str) -> float:
     """Glazing (sq ft) that really lights the room: a valid opening on the room's own wall, same level, to the outside or
-    to a same-level porch, balcony, terrace or open space (P-01, P-02, P-03, P-16)."""
+    to a same-level porch, balcony, terrace or open space (P-01, P-02, P-03, P-16). An open space or courtyard only lights a
+    window where it is open to the sky: a room, terrace or balcony on a higher floor over it roofs it over."""
     total = 0.0
     for o in ix.openings:
         if room_id not in o["between"] or o.get("type") not in GLAZED:
@@ -450,11 +523,26 @@ def valid_glazing(ix: PlanIndex, room_id: str) -> float:
             other = next(r for r in inf["rooms"] if r != room_id) if len(set(inf["rooms"])) > 1 else None
             if not other or ix.type(other) not in OPEN:
                 continue
+        else:
+            other = inf.get("outside")
+        if not ix.sky_lit(o, other):
+            continue
         total += float(o.get("width_ft") or 0) * float(o.get("height_ft") or 0)
     return total
 
 
 # --- normalisation (deterministic repairs before checking) ---------------------------------------------------------
+def drop_open_edge_openings(plan: dict) -> list[str]:
+    """Doors and arches between two rooms that are open-plan to each other (open_to): the 3D engine builds no wall on that
+    edge, so the opening is never built and shows up as "Opening not built". Drop them. Returns their ids."""
+    ix = PlanIndex(plan)
+    gone = [o["id"] for o in ix.openings if ix.info[o["id"]]["kind"] == "pair" and len(set(ix.info[o["id"]]["rooms"])) == 2
+            and ix.open_pairs.get(tuple(sorted(ix.info[o["id"]]["rooms"])), {}).get("valid")]
+    if gone:
+        plan["openings"] = [o for o in plan.get("openings") or [] if o.get("id") not in set(gone)]
+    return gone
+
+
 def normalize(plan: dict) -> list[str]:
     """Deterministic repairs of small slips that don't change the design: snap each opening onto the wall it names and
     slide it along that wall so it fits with jambs. Returns a list of what was changed."""
@@ -519,10 +607,10 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
         log.exception("planning index failed")
         out.add("plan.malformed", "Plan structure", "fail", f"The plan could not be read ({type(e).__name__}).")
         return out.checks
-    for rule in (_openings, _open_to, _privacy, _baths, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
-                 _solid_walls, _bath_sizes, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
+    for rule in (_openings, _clash, _open_to, _privacy, _baths, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
+                 _solid_walls, _bath_sizes, _covered_open, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
         try:
-            if rule in (_roof_services, _program):
+            if rule in (_roof_services, _program, _porch):
                 rule(ix, out, brief or {})
             else:
                 rule(ix, out)
@@ -530,8 +618,9 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
             log.exception("planning rule %s failed", rule.__name__)
     # One named rule per family, shown as a pass when none of its detailed checks failed (the failures speak for themselves).
     families = [
-        ("plan.rule.independence", "Rooms are independent", ("plan.privacy",),
-         "Bedrooms open only onto a corridor, lobby, lounge, balcony or their own bath; baths have one door."),
+        ("plan.rule.independence", "Rooms are independent", ("plan.privacy", "plan.circulation.balcony_links_bedrooms"),
+         "Bedrooms open only onto a corridor, lobby, lounge, balcony or their own bath; no two bedrooms share a balcony; a "
+         "dressing opens only into its own bedroom; baths have one door."),
         ("plan.rule.circulation", "Every room has a proper way in", ("plan.circulation", "plan.open_to"),
          "Every room is reached through circulation, never through a bedroom or bath, and the family reaches the lounge "
          "without crossing the drawing room."),
@@ -569,6 +658,55 @@ def _openings(ix: PlanIndex, out: _Out) -> None:
             rid = f"plan.opening.{code}:{o['id']}"
             out.add(rid, titles[code], "fail", msg, ids=[o["id"], *inf.get("rooms", [])], fix=hints[code],
                     ref=f"{REF} P-0{'1' if code == 'same_level' else '3' if code == 'party_wall' else '2'}")
+
+
+GAP = 0.3  # the 3D engine keeps this much wall between two openings on one wall run (frames), or moves/skips the later one
+
+
+def _wall_line(ix: PlanIndex, o: dict) -> tuple[str, float] | None:
+    inf = ix.info.get(o["id"]) or {}
+    if inf.get("edge"):
+        return inf["edge"][0], inf["edge"][1]
+    if inf.get("side") and inf.get("rooms"):
+        axis, c, *_ = sides(ix.R[inf["rooms"][0]])[inf["side"]]
+        return axis, c
+    return None
+
+
+def _clash(ix: PlanIndex, out: _Out) -> None:
+    """P-02b: two openings on the same wall of a room must keep the engine's spacing, or the later one is moved or not built
+    (the main door that never appeared in 3D)."""
+    order = {o["id"]: i for i, o in enumerate(ix.openings)}
+    groups: dict[tuple, list[tuple[float, float, dict]]] = defaultdict(list)
+    for o in ix.openings:
+        inf = ix.info[o["id"]]
+        if not inf["valid"] or o.get("type") == "corner_window":
+            continue
+        line = _wall_line(ix, o)
+        encl = tuple(sorted(r for r in inf["rooms"] if ix.type(r) not in OPEN))
+        if not line or not encl:
+            continue
+        axis, c = line
+        along = float(o["at"][0]) if axis == "x" else float(o["at"][1])
+        w = float(o.get("width_ft") or 0)
+        groups[(o.get("level"), encl, axis, round(c * 2) / 2)].append((along - w / 2, along + w / 2, o))
+    for items in groups.values():
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                a0, a1, oa = items[i]
+                b0, b1, ob = items[j]
+                gap = max(b0 - a1, a0 - b1)
+                if gap >= GAP - 1e-6:
+                    continue
+                first, later = sorted((oa, ob), key=lambda o: order[o["id"]])
+                door = oa.get("type") in DOORS or ob.get("type") in DOORS
+                nl, nf = ix.oname(later), ix.oname(first)
+                how = "overlap" if gap < 0 else "touch" if gap <= 0.04 else f"are only {max(1, round(gap * 12))} in apart"
+                out.add(f"plan.opening.clash:{later['id']}", "Openings too close", "fail" if door else "warn",
+                        f"{nl[:1].upper() + nl[1:]} and {nf} {how} on the same wall; the frames need at least 4 in of wall "
+                        f"between them, so one would be moved or left out.", ids=[later["id"], first["id"]],
+                        fix=f"Slide {later['id']} or {first['id']} along the wall so at least 0.5 ft of wall stays between them "
+                            f"(or make one narrower).", ref=f"{REF} P-02")
 
 
 # P-04 ----------------------------------------------------------------------------------------------------------------
@@ -616,13 +754,78 @@ def _privacy(ix: PlanIndex, out: _Out) -> None:
             out.add(f"plan.privacy.bedroom_access:{rid}", "Bedroom entrance", "fail", msg, ids=[rid],
                     fix=f"Give {r['name']} a door onto circulation (corridor, lobby, stair hall) or the family lounge.",
                     ref=f"{REF} P-05")
+    _dressings(ix, out)
+    _shared_outdoors(ix, out)
+
+
+DECK = {"balcony", "terrace", "porch"}
+
+
+def _shared_outdoors(ix: PlanIndex, out: _Out) -> None:
+    """P-09: balconies and terraces that touch (a shared edge of 1 ft or more) are one open deck; if two bedrooms open onto
+    the same deck, one bedroom can be entered from the other without crossing circulation."""
+    decks = [r for r in ix.rooms if r.get("type") in DECK and r.get("level") not in (ix.ground, ix.roof_id)]
+    seen: set[str] = set()
+    for r in decks:
+        if r["id"] in seen:
+            continue
+        comp, q = [], deque([r["id"]])
+        seen.add(r["id"])
+        while q:
+            u = q.popleft()
+            comp.append(u)
+            for v in decks:
+                if v["id"] in seen or v.get("level") != ix.by_id[u].get("level"):
+                    continue
+                e = shared_edge(ix.R[u], ix.R[v["id"]])
+                if e and e[3] - e[2] >= 1.0 - 1e-6:
+                    seen.add(v["id"])
+                    q.append(v["id"])
+        beds = sorted({nb for d in comp for nb in ix.door_adj.get(d, ()) if ix.type(nb) in PRIVATE})
+        if len(beds) < 2:
+            continue
+        comp.sort()
+        where = ix.name(comp[0]) + " connects" if len(comp) == 1 else f"{_and([ix.name(d) for d in comp])} touch, so they connect"
+        out.add(f"plan.circulation.balcony_links_bedrooms:{comp[0]}", "Shared balcony", "fail",
+                f"{where} {_and([ix.name(b) for b in beds])}: one bedroom can be entered from another without crossing a "
+                f"corridor or lounge.",
+                ids=[*comp, *beds], fix="Give each bedroom its own balcony that touches no other bedroom's balcony (keep a "
+                "room or a gap of at least 1 ft between them), or open the shared one onto the lounge or a corridor and not "
+                "into more than one bedroom.", ref=f"{REF} P-09")
+
+
+def _dressings(ix: PlanIndex, out: _Out) -> None:
+    """P-05b: a dressing (or walk-in closet) belongs to one bedroom: it opens only into that bedroom and/or its own bath."""
     for r in ix.rooms:
-        if r.get("type") in ("balcony", "terrace"):
-            beds = [nb for nb in ix.door_adj.get(r["id"], ()) if ix.type(nb) in PRIVATE]
-            if len(beds) >= 2:
-                out.add(f"plan.circulation.balcony_links_bedrooms:{r['id']}", "Shared balcony", "warn",
-                        f"{r['name']} connects {', '.join(ix.name(b) for b in beds)}, so one bedroom can be entered from another.",
-                        ids=[r["id"], *beds], fix="Split the balcony with a screen wall or give it one bedroom.", ref=f"{REF} P-09")
+        closet = r.get("type") not in PRIVATE | WET | OPEN | CIRC and re.search(r"closet|walk.?in|wardrobe", r.get("name", ""), re.I)
+        if r.get("type") != "dressing" and not closet:
+            continue
+        rid = r["id"]
+        nbs = sorted(n for n in ix.door_adj.get(rid, ()) if n != EXT)
+        if not nbs:
+            continue  # no door at all: the reach rule reports it
+        beds = [n for n in nbs if ix.type(n) in PRIVATE]
+        baths = [n for n in nbs if ix.type(n) in WET]
+        others = [n for n in nbs if n not in beds and n not in baths]
+        owner = beds[0] if len(beds) == 1 else None
+        if not beds:
+            via = {m for b in baths for m in ix.door_adj.get(b, ()) if ix.type(m) in PRIVATE}
+            owner = next(iter(via)) if len(via) == 1 else None
+        shared_bath = [b for b in baths if any(m not in (rid, owner, EXT) for m in ix.door_adj.get(b, ()))]
+        if others:
+            msg = f"{r['name']} opens to {', '.join(ix.name(n) for n in others)}; a dressing opens only into its own bedroom."
+        elif len(beds) > 1:
+            msg = f"{r['name']} opens into both {ix.name(beds[0])} and {ix.name(beds[1])}; a dressing belongs to one bedroom."
+        elif owner is None:
+            msg = f"{r['name']} has no door from a bedroom."
+        elif shared_bath:
+            msg = f"{r['name']} opens into {ix.name(shared_bath[0])}, which other rooms use too."
+        else:
+            continue
+        own = f" {ix.name(owner)}" if owner else " its bedroom"
+        out.add(f"plan.privacy.dressing:{rid}", "Dressing off its bedroom", "fail", msg, ids=[rid, *nbs],
+                fix=f"Give {r['name']} one door, into{own} (or that bedroom's own bath); move any door to a lounge or corridor "
+                    f"onto the bedroom instead.", ref=f"{REF} P-05")
 
 
 # P-06 ----------------------------------------------------------------------------------------------------------------
@@ -782,9 +985,10 @@ def _widths(ix: PlanIndex, out: _Out) -> None:
         need = 3.5 if o.get("type") == "main_door" else 2.5 if set(rooms) & (WET | {"store", "dressing"}) else 3.0 \
             if set(rooms) & (HABITABLE | {"kitchen"}) else 2.5
         if w + 1e-6 < need:
+            on = ix.oname(o)
             out.add(f"plan.circulation.door_width:{o['id']}", "Door width", "warn",
-                    f"{o['id']} is {fmt(w)} wide; {fmt(need)} is the comfortable minimum here.", ids=[o["id"]],
-                    ref=f"{REF} P-13", value=w, limit=need, unit="ft")
+                    f"{on[:1].upper() + on[1:]} is {fmt(w)} wide; {fmt(need)} is the comfortable minimum here.", ids=[o["id"]],
+                    fix=f"Make {o['id']} at least {need:g} ft wide.", ref=f"{REF} P-13", value=w, limit=need, unit="ft")
 
 
 # P-14 ----------------------------------------------------------------------------------------------------------------
@@ -801,26 +1005,131 @@ def _dead_ends(ix: PlanIndex, out: _Out) -> None:
 
 
 # P-15 (lite) ---------------------------------------------------------------------------------------------------------
-def _porch(ix: PlanIndex, out: _Out) -> None:
-    for r in ix.level_rooms(ix.ground):
-        if r.get("type") != "porch":
+CAR_W, CAR_L, WALK = 9.0, 18.0, 3.5  # a parking bay per car, and the walkway past the cars to the door
+
+
+def bays(w: float, d: float) -> int:
+    """How many 9 × 18 ft car bays fit in a w × d rect (cars side by side and/or one behind the other, either way round)."""
+    f = lambda a, b: int((a + 1e-6) // CAR_W) * int((b + 1e-6) // CAR_L)  # noqa: E731
+    return max(f(w, d), f(d, w))
+
+
+def brief_cars(brief: dict) -> int:
+    """Cars the brief asks to park (car_porch:N)."""
+    n = 0
+    for sp in brief.get("spaces") or []:
+        k, _, v = str(sp).partition(":")
+        if k.strip() == "car_porch":
+            try:
+                n = max(n, int(float(v)) if v else 1)
+            except ValueError:
+                n = max(n, 1)
+    return n
+
+
+def _named_cars(r: dict) -> int:
+    name = str(r.get("name") or "").lower()
+    m = re.search(r"(\d)\s*-?\s*car", name)
+    if m:
+        return int(m.group(1))
+    return 1 if r.get("type") == "garage" or re.search(r"\bcar|garage|parking", name) else 0
+
+
+def _door_reachable(ix: PlanIndex, pr: Rect, door: dict, cars: int) -> bool:
+    """Whether `cars` 9 × 18 ft bays (cars nose-in from the road, side by side) fit in the porch while a 3′6″ path along its
+    depth stays clear and reaches `door` (at least 3 ft of the door's width on the path)."""
+    x0, y0, x1, y1 = pr
+    W, D = x1 - x0, y1 - y0
+    if D + 1e-6 < CAR_L:  # cars can't park nose-in: only the area test applies
+        return True
+    inf = ix.info.get(door["id"]) or {}
+    w = float(door.get("width_ft") or 0)
+    x = float(door["at"][0])
+    on_side = (inf.get("edge") or ("x",))[0] == "y" if inf.get("kind") == "pair" else inf.get("side") in ("left", "right")
+    if on_side:  # a door on the porch's side wall: the path runs along that side
+        return int((W - WALK + 1e-6) // CAR_W) >= cars
+    need = min(3.0, w)
+    c, hi = max(x0, x - w / 2 + need - WALK), min(x1 - WALK, x + w / 2 - need)
+    while c <= hi + 1e-6:
+        if int((c - x0 + 1e-6) // CAR_W) + int((x1 - c - WALK + 1e-6) // CAR_W) >= cars:
+            return True
+        c += 0.25
+    return False
+
+
+def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
+    """P-15: the car porch parks every car the family asked for (9 × 18 ft a car), with a 3′6″ walkway past them to the
+    door."""
+    want = brief_cars(brief)
+    porches = [r for r in ix.level_rooms(ix.ground) if r.get("type") in ("porch", "garage")]
+    cars_for = {r["id"]: _named_cars(r) for r in porches}
+    car_porches = [r for r in porches if cars_for[r["id"]]]
+    if not car_porches and want and porches:
+        big = max(porches, key=lambda r: area(ix.R[r["id"]]))
+        car_porches, cars_for[big["id"]] = [big], 0
+    if not car_porches:
+        return
+    spare = max(0, want - sum(cars_for[r["id"]] for r in car_porches))
+    big = max(car_porches, key=lambda r: area(ix.R[r["id"]]))
+    cars_for[big["id"]] += spare
+    for r in car_porches:
+        cars = max(1, cars_for[r["id"]])
+        x0, y0, x1, y1 = ix.R[r["id"]]
+        width, depth = x1 - x0, y1 - y0
+        fits = bays(width, depth)
+        plural = "s" if cars > 1 else ""
+        if fits < cars:
+            out.add(f"plan.circulation.porch:{r['id']}", "Car porch", "fail",
+                    f"{r['name']} is {fmt(width)} × {fmt(depth)}, so it parks {fits} of the {cars} car{plural} asked for; each "
+                    f"car needs a 9 × 18 ft bay.", ids=[r["id"]],
+                    fix=f"Make {r['id']} at least {cars * CAR_W + WALK:g} ft wide × {CAR_L:g} ft deep ({cars} car{plural} side by "
+                        f"side plus a 3.5 ft walkway), or {CAR_W + WALK:g} ft wide × {cars * CAR_L:g} ft deep for cars one behind "
+                        f"the other.", ref=f"{REF} P-15", value=fits, limit=cars, unit="cars")
             continue
         doors = [o for o in ix.door_ops.get(r["id"], []) if o.get("type") in HINGED]
-        if not doors:
+        mains = [o for o in doors if o.get("type") == "main_door"]
+        if doors and not (bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars) and \
+                not any(_door_reachable(ix, ix.R[r["id"]], o, cars) for o in mains or doors):
+            d = (mains or doors)[0]
+            on = ix.oname(d)
+            out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
+                    f"With {cars} car{plural} parked in {r['name']}, no 3′6″ path is left from the gate to {on}: the door sits "
+                    f"where the car has to stand.", ids=[r["id"], d["id"]],
+                    fix=f"Move {d['id']} to one end of the porch's back wall (its edge within 3.5 ft of a side wall) or onto the "
+                        f"porch's side wall, so the car{plural} park beside a 3.5 ft path that reaches the door.",
+                    ref=f"{REF} P-15")
             continue
-        x0, y0, x1, y1 = ix.R[r["id"]]
-        m = re.search(r"(\d)\s*car", r.get("name", "").lower())
-        cars = int(m.group(1)) if m else 1
-        width, depth = x1 - x0, y1 - y0
-        if min(width, depth) < 9 or max(width, depth) < 18:
-            out.add(f"plan.circulation.porch:{r['id']}", "Car porch", "warn",
-                    f"{r['name']} is {fmt(width)} × {fmt(depth)}; a car needs a 9 × 18 ft bay.", ids=[r["id"]],
-                    fix="Make the porch at least 9 ft wide per car and 18 ft deep.", ref=f"{REF} P-15")
-        elif width < cars * 9 + 3.5 and depth < 18 + 3.5:
-            out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "warn",
-                    f"{r['name']} is {fmt(width)} wide: {cars} car{'s' if cars > 1 else ''} plus a 3′6″ walkway to "
-                    f"{doors[0]['id']} need {fmt(cars * 9 + 3.5)}.", ids=[r["id"], doors[0]["id"]],
-                    fix="Widen the porch, or put its doors on the side wall beyond the parking bay.", ref=f"{REF} P-15")
+        if doors and bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars:
+            out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
+                    f"{r['name']} is {fmt(width)} × {fmt(depth)}: {cars} car{plural} plus a 3′6″ walkway to {ix.oname(doors[0])} "
+                    f"need {fmt(cars * CAR_W + WALK)} × {fmt(CAR_L)} (or {fmt(cars * CAR_W)} × {fmt(CAR_L + WALK)}).",
+                    ids=[r["id"], doors[0]["id"]],
+                    fix=f"Widen {r['id']} to {cars * CAR_W + WALK:g} ft (or deepen it to {CAR_L + WALK:g} ft) so a 3.5 ft path runs "
+                        f"past the parked car{plural} to the door; keep the door on that path, not behind a bay.",
+                    ref=f"{REF} P-15")
+
+
+# P-16b ---------------------------------------------------------------------------------------------------------------
+def _covered_open(ix: PlanIndex, out: _Out) -> None:
+    """An open space or courtyard is open to the sky: a room, terrace or balcony on a higher floor over it turns it into a
+    dark covered slot, and the windows facing it no longer light anything."""
+    for r in ix.rooms:
+        if r.get("type") not in ("open_space", "courtyard"):
+            continue
+        a = area(ix.R[r["id"]])
+        cov, by = ix.covered_area(r["id"])
+        if a <= 0 or cov < 0.5 * a:
+            continue
+        lit = sorted({x for o in ix.openings if r["id"] in o["between"] and o.get("type") in GLAZED
+                      for x in o["between"] if x not in (r["id"], "exterior")})
+        what = f", so the {_and([ix.name(x) for x in lit])} windows face a roofed slot" if lit else ""
+        out.add(f"plan.open_space.covered:{r['id']}", "Courtyard open to the sky", "fail",
+                f"{r['name']} is under the {_and(sorted({ix.name(b) for b in by}))} above ({cov:.0f} of {a:.0f} sq ft "
+                f"covered){what}.",
+                ids=[r["id"], *by, *lit],
+                fix=f"Leave {r['id']} open to the sky, with a guard around the opening above: on every higher floor, keep the "
+                    f"area over it free of rooms, terraces and balconies (an open_space void with a railing), or move the "
+                    f"windows to an outside wall.", ref=f"{REF} P-16")
 
 
 # P-17 ----------------------------------------------------------------------------------------------------------------
@@ -881,26 +1190,28 @@ def _stairs(ix: PlanIndex, out: _Out) -> None:
         for s in ix.stairs[1:]:
             r = rect_of(s)
             if max(abs(r[i] - r0[i]) for i in range(4)) > 0.25 or s.get("kind") != s0.get("kind") or s.get("start") != s0.get("start"):
-                out.add(f"plan.stair.stacked:{s['id']}", "Stairs stacked", "fail", f"{s['id']} is not stacked on {s0['id']}.",
+                out.add(f"plan.stair.stacked:{s['id']}", "Stairs stacked", "fail",
+                        f"The {ix.sname(s).lower()} is not stacked on the {ix.sname(s0).lower()}.",
                         ids=[s["id"], s0["id"]], fix="Give every stair the same rect, kind and start so they stack in one stair hall.",
                         ref=f"{REF} P-18")
     for s in ix.stairs:
         g = ix.stair_geo(s)
         r = g["rect"]
         frm, to = s.get("from_level"), s.get("to_level")
+        sn = ix.sname(s)
         # P-19 containment
         home = [x for x in ix.level_rooms(frm) if x.get("type") in ("stair", "lobby") and within(r, ix.R[x["id"]], 0.15)]
         if not home:
             hit = [x["name"] for x in ix.level_rooms(frm) if overlap_area(r, ix.R[x["id"]]) > 0.5 and x.get("type") not in ("stair", "lobby")]
             out.add(f"plan.stair.containment:{s['id']}", "Stair inside its hall", "fail",
-                    f"The stair {s['id']} on the {ix.lname(frm)} is not inside a stair hall" + (f"; it cuts into {', '.join(hit)}." if hit else "."),
+                    f"The {sn.lower()} is not inside a stair hall" + (f"; it cuts into {', '.join(hit)}." if hit else "."),
                     ids=[s["id"]], fix="Put the stair rect fully inside a room of type stair (or lobby) on its from_level.",
                     ref=f"{REF} P-19")
         if to != ix.roof_id:
             for x in ix.level_rooms(to):
                 if overlap_area(r, ix.R[x["id"]]) > 0.5 and x.get("type") not in CIRC:
                     out.add(f"plan.stair.containment:{s['id']}:{x['id']}", "Stair inside its hall", "fail",
-                            f"The stairwell of {s['id']} cuts into {x['name']} on the {ix.lname(to)}.", ids=[s["id"], x["id"]],
+                            f"The stairwell of the {sn.lower()} cuts into {x['name']} on the {ix.lname(to)}.", ids=[s["id"], x["id"]],
                             fix="Upstairs, the stair rect must sit inside the stair hall too; keep bedrooms off the stairwell.",
                             ref=f"{REF} P-19")
         # P-20 geometry
@@ -932,7 +1243,7 @@ def _stairs(ix: PlanIndex, out: _Out) -> None:
             problems.append(f"{fmt(g['length'])} is too short for the treads plus a {fmt(max(g['width'], 3.0))} mid-landing "
                             f"(needs {fmt(need_len)})")
         if problems:
-            out.add(f"plan.stair.geometry:{s['id']}", "Stair geometry", "fail", f"Stair {s['id']}: " + "; ".join(problems) + ".",
+            out.add(f"plan.stair.geometry:{s['id']}", f"{sn} geometry", "fail", f"{sn}: " + "; ".join(problems) + ".",
                     ids=[s["id"]], fix="For 11 ft floor-to-floor: 19 risers of 6.95 in, 10 in treads, 3.5 ft flights, so a "
                                        "dog-leg rect of 7.5 ft × 11 ft along `start`.", ref=f"{REF} P-20 / {IBC} §1011.6",
                     value=round(g["length"], 2), limit=round(need_len or 0, 2), unit="ft")
@@ -945,20 +1256,54 @@ def _stairs(ix: PlanIndex, out: _Out) -> None:
             for x in ix.level_rooms(lid):
                 if x.get("type") in PRIVATE and overlap_area(r, ix.R[x["id"]]) > 0.5:
                     out.add(f"plan.stair.private:{s['id']}:{x['id']}", "Stair in a bedroom", "fail",
-                            f"The stair {s['id']} runs through {x['name']}.", ids=[s["id"], x["id"]],
+                            f"The {sn.lower()} runs through {x['name']}.", ids=[s["id"], x["id"]],
                             fix="Stairs live in a stair hall that is circulation, never inside a bedroom.", ref=f"{REF} P-22")
         if to != ix.roof_id:
             void = r  # the arriving stair's rect on the upper floor is treads or void
             for o in ix.openings:
                 if o.get("level") != to or o.get("type") not in DOORS:
                     continue
-                w = float(o.get("width_ft") or 0)
-                x0, y0 = float(o["at"][0]), float(o["at"][1])
-                zone = (x0 - w / 2, y0 - 2.0, x0 + w / 2, y0 + 2.0) if _horizontal(ix, o) else (x0 - 2.0, y0 - w / 2, x0 + 2.0, y0 + w / 2)
-                if overlap_area(zone, void) > 1.0:
+                if overlap_area(_approach(ix, o), void) > 1.0:
+                    on = ix.oname(o)
                     out.add(f"plan.stair.door_on_void:{o['id']}", "Door onto the stairwell", "fail",
-                            f"{o['id']} on the {ix.lname(to)} opens straight onto the stairwell.", ids=[o["id"], s["id"]],
+                            f"{on[:1].upper() + on[1:]} on the {ix.lname(to)} opens straight onto the stairwell.",
+                            ids=[o["id"], s["id"]],
                             fix="Move the door so it opens onto the 3.5 ft landing strip, not over the flights.", ref=f"{REF} P-22")
+    _doors_under_flights(ix, out)
+
+
+def _approach(ix: PlanIndex, o: dict, depth: float = 2.0) -> Rect:
+    """The opening's width × `depth` ft on both sides of its wall: where you stand to go through it."""
+    w = float(o.get("width_ft") or 0)
+    x0, y0 = float(o["at"][0]), float(o["at"][1])
+    return (x0 - w / 2, y0 - depth, x0 + w / 2, y0 + depth) if _horizontal(ix, o) else (x0 - depth, y0 - w / 2, x0 + depth, y0 + w / 2)
+
+
+def _doors_under_flights(ix: PlanIndex, out: _Out) -> None:
+    """P-22b: on a stair's own floor (from_level), a door whose opening or approach lies under the flights or the mid-landing
+    leads into the underside of the stair (5–6 ft of headroom under a dog-leg's landing): you can't walk through it. Doors on
+    the foot-landing strip, where the first riser starts, are the way onto the stair and are fine."""
+    for s in ix.stairs:
+        g = ix.stair_geo(s)
+        r = g["rect"]
+        frm = s.get("from_level")
+        foot = ix.strip(r, g["e_side"], 3.5)
+        for o in ix.openings:
+            if o.get("level") != frm or o.get("type") not in DOORS or not ix.info[o["id"]]["valid"]:
+                continue
+            if f"plan.stair.door_on_void:{o['id']}" in out.seen or f"plan.stair.door_under_flight:{o['id']}" in out.seen:
+                continue
+            x0, y0 = float(o["at"][0]), float(o["at"][1])
+            if contains(foot, x0, y0, 0.4) and not contains(r, x0, y0, -0.1):
+                continue
+            if overlap_area(_approach(ix, o), r) > 0.5 or contains(r, x0, y0, -0.1):
+                on = ix.oname(o)
+                out.add(f"plan.stair.door_under_flight:{o['id']}", "Door under the stair", "fail",
+                        f"{on[:1].upper() + on[1:]} on the {ix.lname(frm)} opens under the {ix.sname(s).lower()}, where the "
+                        f"flights and the mid-landing leave no headroom; nobody can walk through it.", ids=[o["id"], s["id"]],
+                        fix="Move the door off the stair rect and its 2 ft approach (onto the landing strip at the stair's start "
+                            "edge, or another wall), or flip the dog-leg's start so the mid-landing isn't over it.",
+                        ref=f"{REF} P-22")
 
 
 def _horizontal(ix: PlanIndex, o: dict) -> bool:
@@ -1009,13 +1354,13 @@ def _landing(ix: PlanIndex, out: _Out, s: dict, g: dict, lid: str, which: str) -
     if depth + 1e-6 < 3.0:
         what = "at its foot" if which == "foot" else "where it arrives"
         out.add(f"plan.stair.landing:{s['id']}:{lid}", "Stair landing", "fail",
-                f"Stair {s['id']} has only {fmt(depth)} clear {what} on the {ix.lname(lid)}; it needs 3 ft.",
+                f"The {ix.sname(s).lower()} has only {fmt(depth)} clear {what} on the {ix.lname(lid)}; it needs 3 ft.",
                 ids=[s["id"], *([hall] if hall else [])],
                 fix=f"Make the stair hall at least 3.5 ft longer than the stair at its {side} edge, where a dog-leg starts and "
                     f"arrives, on every floor.", ref=f"{REF} P-21 / {IBC} §1011.6", value=round(depth, 2), limit=3.0, unit="ft")
     if which == "arrival" and hall and not [n for n in ix.door_adj.get(hall, ())]:
         out.add(f"plan.stair.landing_exit:{s['id']}:{lid}", "Way off the landing", "fail",
-                f"The top of stair {s['id']} on the {ix.lname(lid)} lands in a hall with no way out.", ids=[s["id"], hall],
+                f"The top of the {ix.sname(s).lower()} on the {ix.lname(lid)} lands in a hall with no way out.", ids=[s["id"], hall],
                 fix="Connect the stair hall to the floor with a door or an open_to onto a corridor or lounge.", ref=f"{REF} P-21")
 
 
@@ -1302,9 +1647,9 @@ def _roof_services(ix: PlanIndex, out: _Out, brief: dict) -> None:
         if solar in ("ready", "panels"):
             st = "pass" if pct >= 55 - 1e-6 else "warn"
             out.add("plan.roof.solar", "Roof kept clear for solar", st,
-                    f"About {free:,.0f} sq ft of the roof ({pct:.0f}%) is clear for panels, roughly {kwp:.0f} kW."
-                    + ("" if st == "pass" else " Aim for at least 55%."), fix="Keep the stair tower and tank in one corner and "
-                    "the rest of the roof clear: no domes, minarets or pergolas.", ref=f"{REF} P-24", value=round(pct), limit=55, unit="%")
+                    f"{pct:.0f}% kept clear (min 55%): about {free:,.0f} sq ft for panels, roughly {kwp:.0f} kW.",
+                    fix="Keep the stair tower and tank in one corner and the rest of the roof clear: no domes, minarets or "
+                        "pergolas.", ref=f"{REF} P-24", value=round(pct), limit=55, unit="%")
 
 
 # P-25 ----------------------------------------------------------------------------------------------------------------
@@ -1411,10 +1756,23 @@ def _program(ix: PlanIndex, out: _Out, brief: dict) -> None:
             continue
         here = ix.level_rooms(lid)
         wrong = []
+        # Bedrooms: the floor's total (bedroom + master + guest) is exact; a master or guest bedroom is checked by its own type.
+        want_beds = sum(n for k, n in want.items() if k in BED_KEYS)
+        if want_beds:
+            have = _count(here, "bedroom")
+            if have != want_beds:
+                wrong.append(f"{want_beds} bedroom{'s' if want_beds != 1 else ''} in all (has {have})")
         for key, n in want.items():
+            if key in ("bedroom", "bed", "bedrooms"):
+                continue
+            if key in ("master_bedroom", "master", "guest_bedroom", "guest"):
+                t = "master_bedroom" if key.startswith("master") else "guest_bedroom"
+                have = sum(1 for r in here if r.get("type") == t)
+                if have != n:
+                    wrong.append(f"{n} {t.replace('_', ' ')}{'' if n == 1 else 's'} (has {have})")
+                continue
             have = _count(here, key)
-            exact = key in ("bedroom", "bed", "bedrooms", "master_bedroom", "guest_bedroom")
-            if (exact and have != n) or (not exact and have < n):
+            if have < n:
                 wrong.append(f"{n} {key.replace('_', ' ')}{'' if n == 1 or key.endswith('s') else 's'} (has {have})")
         if wrong:
             out.add(f"plan.program.floor:{lid}", "Rooms per floor", "fail",
@@ -1429,7 +1787,7 @@ def _program(ix: PlanIndex, out: _Out, brief: dict) -> None:
         attached_asked = True
     for fl in brief.get("floors") or []:
         prog = parse_program(fl.get("rooms") or [])
-        b = sum(n for k, n in prog.items() if k in ("bedroom", "bed", "bedrooms", "master_bedroom", "guest_bedroom"))
+        b = sum(n for k, n in prog.items() if k in BED_KEYS)
         w = sum(n for k, n in prog.items() if k in ("bath", "bathroom", "baths"))
         if b and w >= b and (lid := _level_for(ix, fl.get("level", ""))):
             attached_levels.add(lid)
@@ -1497,6 +1855,9 @@ def _bath_sizes(ix: PlanIndex, out: _Out) -> None:
 
 
 # P-26 ----------------------------------------------------------------------------------------------------------------
+DRY_BELOW = BEDROOMS | {"drawing", "prayer"}  # a bath over these drips into a bedroom, the guests' room or the prayer room
+
+
 def _wet_over_dry(ix: PlanIndex, out: _Out) -> None:
     order = [lv["id"] for lv in ix.levels]
     for r in ix.rooms:
@@ -1508,8 +1869,9 @@ def _wet_over_dry(ix: PlanIndex, out: _Out) -> None:
         below = order[i - 1]
         ra = ix.R[r["id"]]
         for x in ix.level_rooms(below):
-            if x.get("type") in BEDROOMS | {"kitchen", "drawing"} and overlap_area(ra, ix.R[x["id"]]) > 0.5 * area(ra):
+            if x.get("type") in DRY_BELOW and overlap_area(ra, ix.R[x["id"]]) > 0.5 * area(ra):
                 out.add(f"plan.structure.wet_over_dry:{r['id']}", "Bath over a dry room", "warn",
                         f"{r['name']} sits over {x['name']}: leaks and drain pipes would run through its ceiling.",
-                        ids=[r["id"], x["id"]], fix="Stack baths over baths, kitchens or stores.", ref=f"{REF} P-26")
+                        ids=[r["id"], x["id"]], fix=f"Move {r['id']} over a bath, the kitchen, a store, laundry or the stair hall "
+                                                    f"below (or swap it with a room that sits over one).", ref=f"{REF} P-26")
                 break

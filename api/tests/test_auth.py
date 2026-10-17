@@ -85,7 +85,7 @@ class FakeDB:
         for name in ("get_project", "list_projects", "list_member_projects", "create_project", "update_project", "set_members",
                      "resolve_invites", "find_by_share_token", "claim_projects", "list_comments", "add_comment", "get_comment",
                      "update_comment", "add_reply", "delete_comment", "get_version", "find_clone", "clone_project", "delete_project",
-                     "list_messages"):
+                     "list_messages", "refresh_clone"):
             mp.setattr(db, name, getattr(self, name))
 
     async def get_project(self, pid):
@@ -157,13 +157,25 @@ class FakeDB:
     async def get_version(self, pid, vid):
         return copy.deepcopy(self.versions.get(vid))
 
-    async def find_clone(self, owner, src):
-        return next((copy.deepcopy(p) for p in self.projects.values() if p["owner"] == owner and p.get("cloned_from") == src), None)
+    async def find_clone(self, owner, src, src_doc=None):
+        copies = [p for p in self.projects.values() if p["owner"] == owner and p.get("cloned_from") == src]
+        if not copies:
+            return None, False
+        s = src_doc or self.projects[src]
+        fresh = [p for p in copies if not (s.get("updated_at") and p.get("created_at", "") < s["updated_at"] and not p.get("touched"))]
+        return (copy.deepcopy(fresh[0]), False) if fresh else (copy.deepcopy(copies[0]), True)
 
-    async def clone_project(self, src, owner, name=None):
-        pid = f"p_{next(self.n)}"
+    async def clone_project(self, src, owner, name=None, once=False):
+        pid = db.clone_id(owner, src) if once else f"p_{next(self.n)}"
+        if once and pid in self.projects:
+            return copy.deepcopy(self.projects[pid])
         self.projects[pid] = {**copy.deepcopy(self.projects[src]), "id": pid, "owner": owner, "cloned_from": src, "members": [],
-                              "member_uids": [], "member_emails": []}
+                              "member_uids": [], "member_emails": [], "created_at": f"{next(self.n):05d}"}
+        return copy.deepcopy(self.projects[pid])
+
+    async def refresh_clone(self, pid, src, owner):
+        self.projects[pid] = {**copy.deepcopy(src), "id": pid, "owner": owner, "cloned_from": src["id"], "members": [],
+                              "member_uids": [], "member_emails": [], "created_at": f"{next(self.n):05d}", "refreshed": True}
         return copy.deepcopy(self.projects[pid])
 
     async def delete_project(self, pid):
@@ -256,7 +268,8 @@ def test_client_link(api):
     assert view["role"] == "client" and view["version"]["id"] == "v1" and "brief" not in view["project"]
     c = client.post(f"/api/share/{s['token']}/comments", json={"author_name": "Mr. Khan", "text": "Love the porch", "anchor": {},
                                                                "camera": {}}, headers=H(GUEST_B)).json()
-    assert c["author"] == {"id": GUEST_B, "name": "Mr. Khan", "role": "client"} and c["version_id"] == "v1"
+    assert c["author"]["name"] == "Mr. Khan" and c["author"]["role"] == "client" and c["version_id"] == "v1"
+    assert c["author"]["id"] != GUEST_B and c["author"]["id"].startswith("a_") and c["mine"] is True
     r = client.post(f"/api/share/{s['token']}/comments/{c['id']}/replies", json={"text": "Thanks", "author_name": "Mr. Khan"}).json()
     assert r["replies"][0]["text"] == "Thanks"
     assert client.post(f"/api/projects/{pid}/share", json={"enabled": False}, headers=H(GUEST_A)).json()["enabled"] is False
@@ -303,6 +316,72 @@ def test_old_versions_are_rechecked_on_read(plans):
     assert cats == {"lda", "livable"} and not v["compliance"]["ok"]   # the villa's bedrooms open into bedrooms
     new = {"id": "v2", "plan": plans["example"], "compliance": {"ok": True, "checks": [{"id": "x", "status": "pass", "category": "lda"}]}}
     assert main.fresh_version(new, None)["compliance"]["checks"] == [{"id": "x", "status": "pass", "category": "lda"}]
+
+
+def _shared_project(client, fake):
+    pid = client.post("/api/projects", json={}, headers=H(GUEST_A)).json()["id"]
+    fake.projects[pid]["current_version_id"] = "v1"
+    fake.versions["v1"] = {"id": "v1", "n": 1, "plan": {}, "sections": []}
+    s = client.post(f"/api/projects/{pid}/share", json={"enabled": True}, headers=H(GUEST_A)).json()
+    return pid, s["token"]
+
+
+def test_share_payloads_never_carry_raw_ids(api):
+    """BE-10: a guest id is a login credential; share payloads carry per-project handles and `mine` instead."""
+    client, fake = api
+    pid, token = _shared_project(client, fake)
+    own = client.post(f"/api/projects/{pid}/comments", json={"version_id": "v1", "text": "Owner note", "anchor": {}, "camera": {}},
+                      headers=H(GUEST_A)).json()
+    assert own["author"]["id"] == GUEST_A and own["mine"] is True        # the owner's own app keeps their own id
+    cli = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Porch?", "anchor": {}, "camera": {}},
+                      headers=H(GUEST_B)).json()
+    client.post(f"/api/projects/{pid}/comments/{cli['id']}/replies", json={"text": "Looking at it"}, headers=H(GUEST_A))
+    for headers in ({}, H(GUEST_B), H(token="tok-stranger")):
+        for body in (client.get(f"/api/share/{token}", headers=headers).text,
+                     client.get(f"/api/share/{token}/comments", headers=headers).text):
+            assert GUEST_A not in body and GUEST_B not in body
+    view = client.get(f"/api/share/{token}", headers=H(GUEST_B)).json()
+    by = {c["text"]: c for c in view["comments"]}
+    assert by["Porch?"]["mine"] is True and by["Owner note"]["mine"] is False
+    assert by["Porch?"]["replies"][0]["mine"] is False
+    # handles are stable: the same author has the same handle in every payload
+    assert by["Owner note"]["author"]["id"] == by["Porch?"]["replies"][0]["author"]["id"]
+    # the owner's list shows the client as a handle, and the owner's own comment as theirs
+    lst = client.get(f"/api/projects/{pid}/comments", headers=H(GUEST_A)).json()["comments"]
+    assert GUEST_B not in str(lst) and {c["text"]: c["mine"] for c in lst} == {"Owner note": True, "Porch?": False}
+    # an anonymous visitor ("anon") never owns anyone's comment
+    assert not any(c["mine"] for c in client.get(f"/api/share/{token}").json()["comments"])
+
+
+def test_client_approval_is_not_a_change_request(api):
+    """BE-25: Approve vN is stored resolved with kind "approval"; general pins don't stack."""
+    client, fake = api
+    pid, token = _shared_project(client, fake)
+    anchor = {"position": [5.3, 4, -6.6], "normal": [0, 0, 1], "label": "Whole home", "kind": "view"}
+    a = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Approved version 1.", "anchor": anchor,
+                                                           "camera": {}}, headers=H(GUEST_B)).json()
+    assert a["kind"] == "approval" and a["status"] == "resolved"
+    b = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Looks good", "anchor": anchor,
+                                                           "camera": {}, "kind": "approval"}, headers=H(GUEST_B)).json()
+    assert b["kind"] == "approval"
+    n = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Bigger kitchen", "anchor": anchor,
+                                                           "camera": {}}, headers=H(GUEST_B)).json()
+    assert n["status"] == "open" and "kind" not in n
+    assert len({tuple(x["anchor"]["position"]) for x in (a, b, n)}) == 3   # three general pins, three places
+    # Revise with every open comment takes only the change request; a picked approval is ignored
+    assert client.post(f"/api/projects/{pid}/revise", json={"version_id": "v1", "comment_ids": [a["id"]]},
+                       headers=H(GUEST_A)).status_code == 400
+
+
+def test_stale_untouched_sample_copy_is_refreshed(api):
+    client, fake = api
+    fake.projects["p_s"] = {"id": "p_s", "owner": db.SAMPLES_OWNER, "name": "Sample", "members": [], "updated_at": "00001", "versions": []}
+    a = client.post("/api/projects/p_s/clone", json={}, headers=H(GUEST_A)).json()
+    fake.projects["p_s"]["updated_at"] = "99999"        # the sample was promoted again
+    b = client.post("/api/projects/p_s/clone", json={}, headers=H(GUEST_A)).json()
+    assert b["id"] == a["id"] and fake.projects[a["id"]].get("refreshed")
+    lst = [p for p in client.get("/api/projects", headers=H(GUEST_A)).json()["projects"] if p.get("cloned_from") == "p_s"]
+    assert len(lst) == 1
 
 
 def test_brief_edit_after_design_keeps_the_stage(api):

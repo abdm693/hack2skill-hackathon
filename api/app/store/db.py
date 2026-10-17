@@ -9,12 +9,14 @@ Collaboration lives on the project document:
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import secrets
 import time
 import uuid
 from functools import lru_cache
 from typing import Any
 
+from google.api_core.exceptions import AlreadyExists, Conflict
 from google.cloud import firestore
 
 from .. import config
@@ -226,26 +228,100 @@ async def delete_comment(pid: str, cid: str) -> None:
     await _p(pid).collection("comments").document(cid).delete()
 
 
+async def move_open_comments(pid: str, from_vid: str, to_vid: str) -> int:
+    """Carry every comment still open on `from_vid` over to `to_vid` (a newer version), keeping its anchor and thread and
+    recording the version it was written on (`from_version_id`). Resolved, partial and rejected threads stay where they were
+    answered. Returns how many moved."""
+    if not from_vid or not to_vid or from_vid == to_vid:
+        return 0
+    col = _p(pid).collection("comments")
+    n = 0
+    async for d in col.where(filter=firestore.FieldFilter("version_id", "==", from_vid)).stream():
+        c = d.to_dict() or {}
+        if (c.get("status") or "open") != "open":
+            continue
+        await d.reference.update({"version_id": to_vid, "from_version_id": c.get("from_version_id") or from_vid,
+                                  "moved_at": now()})
+        n += 1
+    return n
+
+
 # --- samples & cloning ------------------------------------------------------------------------------
 SAMPLES_OWNER = "samples"
 
 
-async def find_clone(owner: str, src_pid: str) -> dict | None:
-    """The caller's existing copy of a project (samples are copied once, not on every visit)."""
-    return next((p for p in await list_projects(owner) if p.get("cloned_from") == src_pid), None)
+async def _sub_ids(pid: str, sub: str) -> set[str]:
+    return {d.id async for d in _p(pid).collection(sub).select([]).stream()}
 
 
-async def clone_project(src_pid: str, owner: str, name: str | None = None) -> dict:
-    """Copy a project (and its messages, versions, comments) into another workspace. Assets stay shared (read-only)."""
-    src = await get_project(src_pid)
-    if not src:
-        raise KeyError(src_pid)
-    pid = new_id("p_")
-    doc = {**src, "id": pid, "owner": owner, "name": name or src["name"], "created_at": now(), "updated_at": now(),
-           "cloned_from": src_pid, "members": [], "member_uids": [], "member_emails": [], "share_enabled": False,
-           "share_token": None}
-    await _p(pid).set(doc)
+async def untouched_copy(copy: dict, src: dict) -> bool:
+    """A copy with nothing of its own: no messages, comments or versions beyond the sample's, and no new concepts."""
+    if len(copy.get("concepts") or []) > len(src.get("concepts") or []):
+        return False
+    if {v.get("id") for v in copy.get("versions") or []} - {v.get("id") for v in src.get("versions") or []}:
+        return False
+    for sub in ("messages", "comments", "versions"):
+        if await _sub_ids(copy["id"], sub) - await _sub_ids(src["id"], sub):
+            return False
+    return True
+
+
+async def find_clone(owner: str, src_pid: str, src: dict | None = None) -> tuple[dict | None, bool]:
+    """The caller's existing copy of a sample (samples are copied once, not on every visit), and whether it is stale: made
+    before the sample was last updated and untouched since, so it can be refreshed with the current sample."""
+    copies = [p for p in await list_projects(owner) if p.get("cloned_from") == src_pid]
+    if not copies:
+        return None, False
+    src = src or await get_project(src_pid) or {}
+    for c in copies:  # newest first: any copy with the family's own work wins
+        if not (src.get("updated_at") and (c.get("created_at") or "") < src["updated_at"] and await untouched_copy(c, src)):
+            return c, False
+    return copies[0], True
+
+
+def clone_id(owner: str, src_pid: str) -> str:
+    """The one id a sample's copy gets in a workspace, so parallel opens can't make two copies."""
+    return "p_" + hashlib.sha1(f"{owner}:{src_pid}".encode()).hexdigest()[:12]
+
+
+def _copy_doc(src: dict, pid: str, owner: str, name: str | None) -> dict:
+    return {**src, "id": pid, "owner": owner, "name": name or src["name"], "created_at": now(), "updated_at": now(),
+            "cloned_from": src["id"], "members": [], "member_uids": [], "member_emails": [], "share_enabled": False,
+            "share_token": None, "auto_named": False}
+
+
+async def _copy_subs(src_pid: str, pid: str) -> None:
     for sub in ("messages", "versions", "comments"):
         async for d in _p(src_pid).collection(sub).stream():
             await _p(pid).collection(sub).document(d.id).set(d.to_dict())
+
+
+async def clone_project(src_pid: str, owner: str, name: str | None = None, once: bool = False) -> dict:
+    """Copy a project (and its messages, versions, comments) into another workspace. Assets stay shared (read-only).
+    once=True: the copy gets the deterministic clone_id and is created only if it doesn't exist yet (otherwise the existing
+    copy is returned), so two parallel requests make one copy; subcollections are copied only by the request that created it."""
+    src = await get_project(src_pid)
+    if not src:
+        raise KeyError(src_pid)
+    pid = clone_id(owner, src_pid) if once else new_id("p_")
+    doc = _copy_doc(src, pid, owner, name)
+    if once:
+        try:
+            await _p(pid).create(doc)
+        except (AlreadyExists, Conflict):
+            return await get_project(pid) or doc
+    else:
+        await _p(pid).set(doc)
+    await _copy_subs(src_pid, pid)
+    return doc
+
+
+async def refresh_clone(pid: str, src: dict, owner: str) -> dict:
+    """Replace an untouched copy's content with the current sample, in place (same id, same workspace)."""
+    for sub in ("messages", "versions", "comments"):
+        async for d in _p(pid).collection(sub).stream():
+            await d.reference.delete()
+    doc = _copy_doc(src, pid, owner, None)
+    await _p(pid).set(doc)
+    await _copy_subs(src["id"], pid)
     return doc
