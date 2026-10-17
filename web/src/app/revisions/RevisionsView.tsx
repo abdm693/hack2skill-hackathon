@@ -18,7 +18,8 @@ import { useViewNav } from "@/app/design/nav";
 import { useNow } from "@/app/design/RunProgress";
 import { plural, roomName, sectionPhrase, versionLine } from "@/app/design/words";
 import { anchorLabel } from "@/app/explore/snapshot";
-import { summarize } from "@/app/plan/compliance";
+import { statusLine, summarize } from "@/app/plan/compliance";
+import { useProject } from "@/app/store/project";
 import { area, changedRooms, cleanSummary, hueColor } from "@/app/plan/model";
 import { NaqshaMark } from "@/app/setup/Conversation";
 import { PlanCompare } from "./PlanCompare";
@@ -233,16 +234,14 @@ function ActivityFeed({ items, running, startedAt, attachedAt }: { items: Activi
   );
 }
 
+/** The version's checks in the one phrasing the capsule, the chip and the dock use, with what the 3D build found. */
 function ComplianceLine({ version }: { version: Version }) {
-  const s = summarize(version.compliance, version.plan);
+  const asBuilt = useProject((s) => s.asBuilt[version.id]);
+  const s = summarize(version.compliance, version.plan, asBuilt);
   return (
     <p className={cn("mt-3 flex items-start gap-2 text-[13.5px]", s.fails.length ? "text-fail" : "text-ink-2")}>
-      <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : "bg-pass")} />
-      {s.fails.length
-        ? `${plural(s.fails.length, "rule")} to fix`
-        : s.approvalReady && !s.livableIssues
-          ? `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules pass`
-          : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass, ${s.warns.length} to check`}
+      <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : s.warns.length ? "bg-warn" : "bg-pass")} />
+      {statusLine(s)}
     </p>
   );
 }

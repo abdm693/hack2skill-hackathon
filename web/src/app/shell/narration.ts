@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import type { Project, Version } from "@contracts/api-types";
 import type { ComplianceReport } from "@contracts/plan";
-import { notesLine, summarize, type Summary } from "@/app/plan/compliance";
+import { statusLine, summarize, type Summary } from "@/app/plan/compliance";
 import { useProject, type Run } from "@/app/store/project";
 
 export interface Narration {
@@ -116,14 +116,7 @@ export function complianceCounts(
   return summarize(v.compliance, v.plan, id ? asBuilt?.[id] : undefined);
 }
 
-/** "35/36 LDA · 10/11 livable · 2 to check · 3 notes from the 3D model" for the title capsule. */
+/** "36/36 LDA · 10/12 livable · 2 to check" for the title capsule: the one phrasing (compliance.statusLine). */
 export function countsLine(s: Summary): string {
-  const bits = [`${s.ldaTally.pass}/${s.ldaTally.total} LDA`];
-  if (s.livableTally.total) bits.push(`${s.livableTally.pass}/${s.livableTally.total} livable`);
-  const fix = s.fails.length;
-  const check = s.warns.length;
-  if (fix) bits.push(`${fix} to fix`);
-  if (check) bits.push(`${check} to check`);
-  if (s.notes) bits.push(notesLine(s.notes));
-  return bits.join(" · ");
+  return statusLine(s);
 }

@@ -18,6 +18,7 @@ import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
 import { api, isAbortError, type ConceptsBody, type NewComment } from "@/api/client";
 import { loadFixLoop } from "@/app/lib/fixloop";
 import { inSentence } from "@/app/plan/model";
+import { statusLine, summarize } from "@/app/plan/compliance";
 import { useProject, type ConceptRun as StoreConceptRun, type Run as StoreRun } from "@/app/store/project";
 import { useNarration, type Narration } from "@/app/shell/narration";
 import { notify } from "./kit";
@@ -126,6 +127,8 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
   const resolved: Comment[] = [];
   let stage: string | null = null;
   let fails: number[] = [];
+  // The plan each compliance report is about (the latest drawn so far), so the counts match the sheet's.
+  let curPlan: BuildingPlan | undefined = r.baseVersionId ? versions[r.baseVersionId]?.plan : undefined;
   // The plan attempt behind each entry of `fails`, and the attempts already counted.
   const attempts: (number | undefined)[] = [];
   const seen = new Set<number>();
@@ -147,6 +150,7 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
         break;
       }
       case "plan":
+        curPlan = it.plan ?? curPlan;
         if (kind === "revise") push(it.id, it.at, { kind: "plan", text: "Updated the plan", tone: "default" });
         break;
       case "compliance": {
@@ -161,14 +165,21 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
           if (it.attempt != null) seen.add(it.attempt);
         }
         const rules = it.report.checks.filter((c) => c.status === "fail").slice(0, 2).map((c) => inSentence(c.title)).join(", ");
+        // The one phrasing every count uses; the architect's notes are never counted, and "All N checks pass" is
+        // said only with nothing to fix and nothing to check.
+        const s = summarize(it.report, curPlan);
+        const clean = !s.fails.length && !s.warns.length;
+        const verdict = clean ? "every check passes" : statusLine(s);
         push(
           it.id,
           it.at,
           again
-            ? { kind: "check", text: `Keeping round ${it.attempt}, the best one: ${n ? `${plural(n, "rule")} to fix` : "every check passes"}`, tone: n ? "warn" : "pass" }
+            ? { kind: "check", text: `Keeping round ${it.attempt}, the best one: ${n ? `${plural(n, "rule")} to fix` : verdict}`, tone: n || !clean ? "warn" : "pass" }
             : n
               ? { kind: "check", text: `${plural(n, "rule")} to fix: ${rules}`, tone: "warn" }
-              : { kind: "check", text: `All ${it.report.checks.length} checks pass`, tone: "pass" },
+              : clean
+                ? { kind: "check", text: `All ${s.checks.length} checks pass`, tone: "pass" }
+                : { kind: "check", text: `Checked: ${verdict}`, tone: "warn" },
         );
         break;
       }

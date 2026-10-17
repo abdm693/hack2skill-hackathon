@@ -1,7 +1,8 @@
 /**
- * Compliance, read for people: two groups, "LDA rules" and "Livable home" (contracts: ComplianceCheck.category),
+ * Compliance, read for people: two counted groups, "LDA rules" and "Livable home" (contracts: ComplianceCheck.category),
  * values with units ("10 ft (min 10 ft)"), and, when a report predates the livable checks, the five livable rules
- * derived from the plan itself so the panel never claims a house is good on LDA alone.
+ * derived from the plan itself so the panel never claims a house is good on LDA alone. The architect's review notes
+ * and what the 3D build found are shown apart and never counted.
  */
 import type { BuildingPlan, ComplianceCheck, ComplianceReport, Room } from "@contracts/plan";
 import { feetInches, num } from "@/app/lib/utils";
@@ -100,13 +101,56 @@ export function asBuiltIssues(asBuilt: ComplianceReport | null | undefined): Com
 }
 
 /**
- * The one definition every count uses (the dock, the title capsule, the chip, the sheet, Revisions, print): "to fix"
- * and "to check" are the plan's own LDA and livable checks, a warning never counts as a pass, and what the 3D build
- * found is kept apart as "N notes from the 3D model" (stored on the version, so a reload counts the same).
+ * The architect's self-review notes ("review.1", "Architect's review: …"): advice from a second read of the plan,
+ * never a rule, so never counted in the LDA or livable tallies, the warnings or "to check".
+ */
+export function isReview(c: ComplianceCheck): boolean {
+  return /^review[.:_]/.test(c.id) || /^architect'?s review\b/i.test(c.title ?? "");
+}
+
+/** The first sentence of a message ("Bath 2 sits over the drawing room." of a longer note). */
+export function firstSentence(text: string | undefined | null): string {
+  const t = (text ?? "").trim();
+  const m = t.match(/^(.+?[.!?])(\s+(?=[A-Z0-9“"'(])|$)/);
+  return (m ? m[1] : t).trim();
+}
+
+/** The livable rule an as-built note speaks to: a door closed off by furniture, or a tight walking path. */
+const DOOR_NOTE = /^asbuilt\.(door_unreachable|stair_blocks_door)\b/;
+const PATH_NOTE = /^asbuilt\.(path_blocked|door_unreachable)\b/;
+/** The livable rows those notes would otherwise contradict, whoever wrote them (the app or the server). */
+const DOORS_ROW = /(^|\.)(doors|doors_clear|door_clearance)$/;
+const PATHS_ROW = /(^|\.)(paths|clear_paths|walkways?)$/;
+const RAILINGS_ROW = /(^|\.)(railings|guards)$/;
+
+/**
+ * No passing row contradicts what the 3D build found: when the as-built report has a door or path note, the
+ * "Doors are clear of furniture" and "A clear 3 ft path to every door" rows turn "to check", in the note's words.
+ */
+function withAsBuilt(checks: ComplianceCheck[], asBuilt: ComplianceReport | null | undefined): ComplianceCheck[] {
+  const notes = asBuiltIssues(asBuilt);
+  if (!notes.length) return checks;
+  const door = notes.find((n) => DOOR_NOTE.test(n.id));
+  const path = notes.find((n) => PATH_NOTE.test(n.id));
+  return checks.map((c) => {
+    if (c.status !== "pass" || categoryOf(c) !== "livable" || isReview(c)) return c;
+    const note = DOORS_ROW.test(c.id) ? door : PATHS_ROW.test(c.id) ? path : undefined;
+    if (!note) return c;
+    return { ...c, status: "warn", message: firstSentence(note.message) || note.title, element_ids: note.element_ids?.length ? note.element_ids : c.element_ids };
+  });
+}
+
+/**
+ * The one definition every count uses (the dock, the title capsule, the chip, the sheet, Revisions, print, the run
+ * log): "to fix" and "to check" are the plan's own LDA and livable checks, and a warning never counts as a pass.
+ * The architect's review notes are returned apart as `review`, and what the 3D build found as `asBuilt`: neither is
+ * ever folded into a tally. A door or path note does turn its livable row "to check", so no row contradicts it.
  * Approval-ready means no fails and no LDA warnings on the plan.
  */
 export function summarize(report: ComplianceReport | null | undefined, plan?: BuildingPlan, asBuilt?: ComplianceReport | null) {
-  const checks = withLivable(report, plan);
+  const all = withAsBuilt(withLivable(report, plan), asBuilt);
+  const review = all.filter(isReview);
+  const checks = all.filter((c) => !isReview(c));
   const lda = checks.filter((c) => categoryOf(c) === "lda");
   const livable = checks.filter((c) => categoryOf(c) === "livable");
   const built = asBuiltIssues(asBuilt);
@@ -119,6 +163,8 @@ export function summarize(report: ComplianceReport | null | undefined, plan?: Bu
     checks,
     lda,
     livable,
+    /** The architect's review notes: shown as "Architect's notes", never counted. */
+    review,
     asBuilt: built,
     ldaTally: ldaT,
     livableTally: livT,
@@ -139,22 +185,48 @@ export function summarize(report: ComplianceReport | null | undefined, plan?: Bu
 }
 export type Summary = ReturnType<typeof summarize>;
 
-/** "3 notes from the 3D model": how what the 3D build found is named everywhere. */
+/**
+ * The one phrasing of a version's checks, used by the title capsule, the Plan chip, the compliance sheet, the dock,
+ * Revisions, the print cover and the run log: "36/36 LDA · 10/12 livable · 2 to check". Never the as-built notes or
+ * the architect's notes.
+ */
+export function statusLine(s: Summary): string {
+  const bits = [`${s.ldaTally.pass}/${s.ldaTally.total} LDA`];
+  if (s.livableTally.total) bits.push(`${s.livableTally.pass}/${s.livableTally.total} livable`);
+  if (s.fails.length) bits.push(`${s.fails.length} to fix`);
+  if (s.warns.length) bits.push(`${s.warns.length} to check`);
+  return bits.join(" · ");
+}
+
+/** "3 notes from the 3D model": how what the 3D build found is named where it is shown (House, the As built group). */
 export function notesLine(n: number): string {
   return `${n} ${n === 1 ? "note" : "notes"} from the 3D model`;
 }
 
-/** The rules DESIGN.md promises on every plan; merged in whenever the report doesn't carry them. */
-const ALWAYS_LIVABLE = ["livable.railings", "livable.doors", "livable.paths"];
+/** "2 architect's notes". */
+export function reviewLine(n: number): string {
+  return `${n} architect's ${n === 1 ? "note" : "notes"}`;
+}
 
-/** The report's checks, plus the derived livable rules: all five when the report has none, else the three it lacks. */
+/** The rules DESIGN.md promises on every plan; merged in whenever the report doesn't carry them. */
+const ALWAYS_LIVABLE: [string, RegExp][] = [
+  ["livable.railings", RAILINGS_ROW],
+  ["livable.doors", DOORS_ROW],
+  ["livable.paths", PATHS_ROW],
+];
+
+/**
+ * The report's checks, plus the derived livable rules: all five when the report has none, else the three it lacks
+ * (a server row for the same rule, under any prefix, means the app adds none).
+ */
 export function withLivable(report: ComplianceReport | null | undefined, plan?: BuildingPlan): ComplianceCheck[] {
   const checks = report?.checks ?? [];
   if (!plan) return checks;
   const derived = livableChecks(plan);
-  if (!checks.some((c) => categoryOf(c) === "livable")) return [...checks, ...derived];
-  const have = new Set(checks.map((c) => c.id));
-  return [...checks, ...derived.filter((c) => ALWAYS_LIVABLE.includes(c.id) && !have.has(c.id))];
+  const own = checks.filter((c) => categoryOf(c) === "livable" && !isReview(c));
+  if (!own.length) return [...checks, ...derived];
+  const lacking = ALWAYS_LIVABLE.filter(([, re]) => !own.some((c) => re.test(c.id))).map(([id]) => id);
+  return [...checks, ...derived.filter((c) => lacking.includes(c.id))];
 }
 
 /** The five livable rules (DESIGN.md "Plan"), read from the plan. */

@@ -17,7 +17,8 @@ import { feetInches, num } from "@/app/lib/utils";
 import { PlanDefs, PlanSheet, sheetBounds, stairAvoid } from "./FloorPlan";
 import { layoutLabels } from "./labels";
 import { area, coveredArea, isRoofLevel, levelName, levelsOf, roomsOn, SITE_TYPES, sentenceCase } from "./model";
-import { categoryOf, summarize, tallyLine, valueLine } from "./compliance";
+import { useProject } from "@/app/store/project";
+import { categoryOf, firstSentence, isReview, reviewLine, statusLine, summarize, tallyLine, valueLine } from "./compliance";
 
 export type Paper = "a3" | "a4";
 export const PAPER: Record<Paper, { w: number; h: number; label: string }> = {
@@ -366,12 +367,15 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
   const mm = useMm();
   const lay = LAYOUT[paper];
   const p = PAPER[paper];
-  const s = useMemo(() => summarize(version.compliance, version.plan), [version]);
+  const asBuilt = useProject((st) => st.asBuilt[version.id]);
+  const s = useMemo(() => summarize(version.compliance, version.plan, asBuilt), [version, asBuilt]);
   const items: Item[] = useMemo(() => {
     const out: Item[] = [];
     const groups = [
       { title: `LDA rules · ${tallyLine(s.ldaTally)}`, list: s.lda },
       { title: `Livable home · ${tallyLine(s.livableTally)}`, list: s.livable },
+      // Advice, not rules: never counted, printed after the rules.
+      { title: `Architect's notes · ${reviewLine(s.review.length)}, not counted`, list: s.review },
     ].filter((g) => g.list.length);
     for (const g of groups) {
       out.push({ key: `g-${g.title}`, kind: "group", title: g.title });
@@ -421,13 +425,8 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
     onPages(pagesOf?.length ?? 1);
   }, [pagesOf, onPages]);
 
-  const verdict = s.fails.length
-    ? `${s.fails.length} ${s.fails.length === 1 ? "rule" : "rules"} to fix`
-    : s.approvalReady && !s.livableIssues
-      ? `Passes all ${s.lda.length} LDA checks and ${s.livable.length} livable rules`
-      : s.approvalReady
-        ? `Passes all ${s.lda.length} LDA checks; ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check`
-        : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass; ${s.warns.length} to check`;
+  // The one phrasing the capsule, the chip, the dock and Revisions use.
+  const verdict = statusLine(s);
 
   return (
     <>
@@ -493,6 +492,17 @@ function ItemView({ it }: { it: Item }) {
   const mm = useMm();
   if (it.kind === "group") return <p style={{ fontWeight: 600, fontSize: mm(3.1), margin: "2.5mm 0 1.2mm" }}>{it.title}</p>;
   const c = it.c;
+  if (isReview(c)) {
+    return (
+      <div style={{ display: "flex", gap: "2mm", padding: "0.9mm 0", borderBottom: "0.2mm solid #E4E4DF", breakInside: "avoid" }}>
+        <span style={{ width: "2mm", height: "2mm", borderRadius: "50%", marginTop: "0.7mm", flexShrink: 0, display: "inline-block", background: "#A1A1A6" }} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block" }}>{firstSentence(c.message) || sentenceCase(c.title)}</span>
+          {c.fix && <span style={{ display: "block", color: "#46464B" }}>Suggested: {c.fix}</span>}
+        </span>
+      </div>
+    );
+  }
   const v = valueLine(c);
   // Each rule's words print once: the value (or, without one, the message), then the message only when it adds
   // something (a problem, or a livable rule's reason).

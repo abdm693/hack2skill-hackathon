@@ -27,7 +27,7 @@ import { ConversationSheet } from "./ConversationSheet";
 import { DetailsDialog } from "./DetailsDialog";
 import { Dock } from "./Dock";
 import { complianceCounts, setRoomNames, useLastLine } from "./narration";
-import { notesLine, type Summary } from "@/app/plan/compliance";
+import { statusLine, type Summary } from "@/app/plan/compliance";
 import { markVersionSeen, startShare, useDefaultNext } from "./next";
 import { People } from "./People";
 import { useShell } from "./state";
@@ -389,16 +389,15 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   );
 }
 
-/** The dock's line on Plan: "passes all" only when it does, and any livable or as-built points left to look at. */
+/**
+ * The dock's line on Plan, in the one phrasing every count uses ("36/36 LDA · 10/12 livable · 2 to check"), then
+ * what to do next. Never the as-built notes or the architect's notes.
+ */
 function planLine(s: Summary): string {
-  const ldaN = s.ldaTally.total;
-  const others = s.livableIssues;
-  const notes = s.notes ? ` ${notesLine(s.notes)}.` : "";
-  const rest = (others ? ` ${others} livable ${others === 1 ? "point needs" : "points need"} a look.` : "") + notes;
-  if (s.ldaFails) return `${s.ldaFails} LDA ${s.ldaFails === 1 ? "check needs" : "checks need"} fixing.${rest}`;
-  if (s.ldaWarns) return `${s.ldaTally.pass} of ${ldaN} LDA checks pass; ${s.ldaWarns} ${s.ldaWarns === 1 ? "needs" : "need"} a look before you submit.${rest}`;
-  if (others) return `Your home passes all ${ldaN} LDA checks.${rest} Want to walk through it?`;
-  return `Your home passes all ${ldaN} LDA checks and every livable rule.${notes} Want to walk through it?`;
+  const line = statusLine(s);
+  if (s.fails.length) return `${line}. Ask me to fix ${s.fails.length === 1 ? "it" : "them"}, or open the checks.`;
+  if (s.warns.length) return `${line}. Open the checks to see what to look at, or walk through it.`;
+  return `${line}. Every check passes. Want to walk through it?`;
 }
 
 /** Leaving a project clears what was typed into Ask. */
