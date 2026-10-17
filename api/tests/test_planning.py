@@ -488,3 +488,49 @@ def test_porch_needs_a_motorbike_bay_when_the_brief_has_one(plans):
     assert "plan.circulation.porch_bike:g_porch" not in checks(p, {"spaces": ["car_porch:1"]})
     next(r for r in p["rooms"] if r["id"] == "g_porch")["rect"]["w"] = 16   # 3 ft wider: the bike sits beside the walkway
     assert "plan.circulation.porch_bike:g_porch" not in checks(p, {"spaces": ["car_porch:1", "motorbike"]})
+
+
+# --- round 4: one honest report ------------------------------------------------------------------------------------------
+def test_an_upper_open_space_over_a_court_is_a_void_not_a_room(plans):
+    """BE-F4: the villa's first-floor Light Court Void sits over the ground-floor patio: a hole in the floor with a railing,
+    so it needs no way in (the engine's definition, EN-F3)."""
+    plan, brief = load("plan-sample-villa-r3.json"), load("brief-sample-villa-r3.json")
+    ix = planning.PlanIndex(plan)
+    assert planning.is_void(ix, "f_patio_void")
+    assert not planning.is_void(ix, "g_patio") and not planning.is_void(ix, "g_side")    # ground courts are courts
+    assert "plan.circulation.unreachable:f_patio_void" not in checks(plan, brief)
+    # an upper open space over a room (not over a court) is still a floor that needs a way in
+    p = copy.deepcopy(plan)
+    next(r for r in p["rooms"] if r["id"] == "g_patio")["type"] = "store"
+    assert not planning.is_void(planning.PlanIndex(p), "f_patio_void")
+
+
+def test_the_server_reports_the_livable_rows_the_app_promises(plans):
+    """BE-F4: livable.railings, livable.doors and livable.paths (web/src/app/plan/compliance.ts, same ids and titles) are in
+    every report, so the server and the app count the same rows."""
+    rep = lda.check(load("plan-sample-10-marla-r3.json"), load("brief-sample-10-marla-r3.json"))
+    by = {c["id"]: c for c in rep["checks"]}
+    assert by["livable.railings"]["title"] == "Every stair edge and void has a railing" and by["livable.railings"]["status"] == "pass"
+    assert by["livable.doors"]["title"] == "Doors are clear of furniture" and by["livable.doors"]["status"] == "pass"
+    assert by["livable.paths"]["title"] == "A clear 3 ft path to every door" and by["livable.paths"]["status"] == "pass"
+    assert all(by[k]["category"] == "livable" for k in ("livable.railings", "livable.doors", "livable.paths"))
+    p = copy.deepcopy(plans["example"])
+    corr = next(r for r in p["rooms"] if r.get("type") in ("corridor", "lobby"))
+    corr["rect"]["w" if corr["rect"]["w"] < corr["rect"]["d"] else "d"] = 2.5
+    c = checks(p)["livable.paths"]
+    assert c["status"] == "fail" and c["message"].endswith("is 2′6″ wide (needs 3 ft).")
+
+
+def test_counts_never_take_a_warning_for_a_pass():
+    """BE-F4: one status definition: a warning is not a pass, and review notes are counted on their own."""
+    rep = {"checks": [{"id": "coverage", "category": "lda", "status": "pass"},
+                      {"id": "parapet", "category": "lda", "status": "warn"},
+                      {"id": "livable.doors", "category": "livable", "status": "pass"},
+                      {"id": "plan.structure.wet_over_dry:f_bath2", "category": "livable", "status": "warn"},
+                      {"id": "review.1", "category": "livable", "status": "warn"},
+                      {"id": "review.2", "category": "livable", "status": "warn"}]}
+    c = lda.counts(rep)
+    assert c["lda"] == {"pass": 1, "total": 2} and c["livable"] == {"pass": 1, "total": 2} and c["review"] == 2
+    assert c["warn"] == 2 and c["fail"] == 0
+    assert lda.status_line(rep) == "1/2 LDA · 1/2 livable · 2 architect's notes"
+    assert lda.status_line({"checks": rep["checks"][:4]}) == "1/2 LDA · 1/2 livable"

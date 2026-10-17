@@ -112,8 +112,11 @@ export interface Version {
   plan_images?: { level: string; name: string; url: string }[];
   /** Plan rounds: fails/warns per attempt and the deterministic repairs applied. */
   fix_history?: { attempt: number; fail: number; warn: number; failed: string[]; repairs?: string[]; review?: boolean }[];
-  /** What a revision was made from. */
-  source?: { comment_ids: string[]; instruction?: string | null };
+  /** What a revision was made from. `answer`: Naqsha's answer to the typed request (what changed, in feet and inches). */
+  source?: { comment_ids: string[]; instruction?: string | null; answer?: string };
+  /** The version rail's label ("“bigger kitchen” · 36/36 LDA · 12/12 livable · 1 architect's note"), also on the `version`
+   *  event so the rail can be labelled without a reload. */
+  summary?: string;
 }
 
 export interface VersionSummary { id: string; n: number; created_at: string; status: Version["status"]; summary?: string }

@@ -127,7 +127,7 @@ interface Comment {
 | POST | `/api/projects/{pid}/comments` | `{version_id, text, anchor, camera, snapshot_data_url?}` | `Comment` |
 | PATCH | `/api/projects/{pid}/comments/{cid}` | `{text?, status?}` | `Comment` |
 | DELETE | `/api/projects/{pid}/comments/{cid}` | | `{ok}` |
-| POST | `/api/projects/{pid}/revise` | `{version_id, comment_ids?: string[]}` | **SSE**: `stage` · `changes {changes: Change[]}` · `plan` · `compliance` · `section` (changed sections only) · `comment {comment}` (resolution) · `version {version}` · `done` |
+| POST | `/api/projects/{pid}/revise` | `{version_id, comment_ids?: string[], instruction?: string}` (which comments: see "Revise" below) | **SSE**: `stage` · `changes {changes: Change[]}` · `plan` · `compliance` · `section` (changed sections only) · `comment {comment}` (resolution) · `version {version}` (with `version.summary`, the rail label) · `done` |
 | POST | `/api/projects/{pid}/render` | `{image_data_url, prompt?, version_id?}` | `{url}`: a photoreal AI render of that viewport |
 | GET | `/api/assets/{path}` | | Image bytes, proxied from GCS (cacheable) |
 
@@ -213,12 +213,17 @@ interface AsBuiltSummary {
 
 ### Revise
 `POST /api/projects/{pid}/revise` takes `{version_id, comment_ids?: string[], instruction?: string}`.
+- Which comments are applied:
+  - `comment_ids` given: exactly those (any not resolved yet, on any version); `[]` means none.
+  - `comment_ids` missing **with** an `instruction`: none. What was typed (House, Plan or Revisions Ask, the compliance sheet's Fix) is the whole ask, so a comment held back in the chooser stays open, with no reply.
+  - `comment_ids` missing **without** an `instruction`: every open comment on the version (the Next pill's "Apply open comments").
 - With `instruction` and no comments, it runs a conversational edit, e.g. "make the kitchen bigger" typed into the Ask field.
-- `comment_ids` lets the owner choose which comments are applied.
 - The agent's resolutions are also added as a reply from `{id: "naqsha", name: "Naqsha", role: "agent"}`.
+- The new version's `source` is `{comment_ids, instruction, answer?}`: `answer` is Naqsha's answer to the typed request (what changed, in feet and inches). The `version` event's `version.summary` is the label the version rail shows.
+- Earlier answers are kept: the reviser sees every comment resolved in the version's lineage, and a later request that would shrink a window or room an earlier comment asked for restores it (or, when a rule forces it, says so in that earlier thread).
 
 ### Samples
-`POST /api/projects/{sample}/clone` returns the caller's existing clone of that sample if one exists (no duplicates). Pass `{fresh: true}` to force a new copy.
+`POST /api/projects/{sample}/clone` returns the caller's copy of that sample while it is untouched (the name it was made with, no comments, replies or versions of its own; refreshed in place when the sample has changed since). Otherwise, or with `{fresh: true}`, it makes a new copy. Copies drop the "Sample · " prefix (`"10 marla modern home, Johar Town"`), a second copy in the same workspace is named `"… (2)"`, and `cloned_from` names the sample.
 
 ### Setup messages
 - `ChatMessage.understood?` is `{guaranteed[], preferences[], assumptions[]}`, the "Here's what I understood" card.

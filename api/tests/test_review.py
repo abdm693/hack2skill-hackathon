@@ -229,7 +229,7 @@ def test_a_late_run_still_gets_the_critique(plans, monkeypatch):
     rev = v["review"]
     assert rev["verdict"] == "revise" and rev["applied"] is False and rev["revision"] == "skipped_time" and rev["open_issues"] == 1
     rows = [c for c in v["compliance"]["checks"] if c["id"].startswith("review.")]
-    assert len(rows) == 1 and rows[0]["title"] == "Architect's review: needs a change" and "Powder Room" in rows[0]["message"]
+    assert len(rows) == 1 and rows[0]["title"] == "Architect's review: needs a change" and rows[0]["message"] == "Powder room opens toward the sofa."
     assert v["plan"] == plans["example"] and [s["name"] for s in v["sections"]] == ["structure"]
     stages = [d["message"] for e, d in evs if e == "stage" and d["stage"] == "review"]
     assert stages[0] == "Reviewing the drawings like an architect…" and "1 point to look at" in stages[-1]
@@ -267,3 +267,50 @@ def test_example_is_what_the_planner_copies(plans):
     rep = lda.check(plans["example"])
     vents = [c for c in rep["checks"] if c["id"].startswith("room.vent")]
     assert vents and all(c["status"] == "pass" for c in vents)
+
+
+# --- round 4: one honest report (BE-F4) ---------------------------------------------------------------------------------------
+def _ten_marla():
+    from conftest import load
+    return load("plan-sample-10-marla-r3.json"), load("brief-sample-10-marla-r3.json"), load("review-sample-10-marla-r3.json")
+
+
+def test_a_note_that_repeats_a_rule_is_dropped():
+    """The 10 marla's review.3 ("Bath 2 sits directly over the drawing room…") repeats the open rule
+    plan.structure.wet_over_dry:f_bath2: only the rule's row is shown. Notes about other things stay."""
+    plan, brief, issues = _ten_marla()
+    rep = architect.with_review(lda.check(plan, brief), issues, plan)
+    notes = {c["id"]: c for c in rep["checks"] if c["id"].startswith("review.")}
+    assert "plan.structure.wet_over_dry:f_bath2" in {c["id"] for c in rep["checks"] if c["status"] == "warn"}
+    assert sorted(notes) == ["review.1", "review.3"]            # review.3 here is the powder-room note (issue 3 of 3)
+    assert not any("over the front-left corner" in c["message"] for c in notes.values())
+    # same rooms but another subject: kept (a note naming only the door's rooms is not the door-width rule)
+    keep = {"severity": "minor", "rooms": ["f_bath2", "g_drawing"], "problem": "Bath 2 has no space for a shower screen."}
+    assert "Bath 2 has no space" in str(architect.review_checks([keep], plan, lda.check(plan, brief)))
+
+
+def test_review_notes_are_one_plain_sentence_in_feet_and_inches():
+    plan, brief, issues = _ten_marla()
+    rep = architect.with_review(lda.check(plan, brief), issues, plan)
+    kitchen = next(c for c in rep["checks"] if c["id"] == "review.1")
+    assert kitchen["message"] == ("Placing the open kitchen and dirty kitchen side-by-side makes both rooms 6′ wide by 15′3″ "
+                                  "deep.")
+    assert "Suggested" not in kitchen["message"] and "12′ × 6′6″ dirty kitchen" in kitchen["fix"]
+    for c in rep["checks"]:
+        if c["id"].startswith("review."):
+            assert len(c["message"]) <= 160 and c["message"].count(". ") == 0 and c["message"].endswith(".")
+            assert not re.search(r"\d\.\d+ ?ft|\bft\b", c["message"] + c["fix"]), c
+            assert not re.search(r"\b(Drawing Room|Open Kitchen|Dirty Kitchen|TV Lounge|Stair Hall)\b", c["message"] + c["fix"])
+    assert architect.feet_text("15.25 ft deep") == "15′3″ deep" and architect.feet_text("a 12 x 6.5 ft room") == "a 12′ × 6′6″ room"
+    assert architect.feet_text("a 0.5 ft gap, 225 sq ft") == "a 6″ gap, 225 sq ft"
+    assert architect.one_sentence("The lobby has no door; guests walk through the drawing room to reach the lounge, which "
+                                  "is awkward every single day for a family that entertains often and wants privacy.") \
+        == "The lobby has no door; guests walk through the drawing room to reach the lounge."
+
+
+def test_status_line_matches_the_app():
+    """'A/B LDA · C/D livable · N architect's notes': warns are not passes, review notes counted apart (10 marla today)."""
+    plan, brief, issues = _ten_marla()
+    rep = architect.with_review(lda.check(plan, brief), issues, plan)
+    assert architect._status(rep) == "36/36 LDA · 10/12 livable · 2 architect's notes"
+    assert architect.review_note_count(rep) == 2

@@ -259,40 +259,86 @@ async def _sub_ids(pid: str, sub: str) -> set[str]:
     return {d.id async for d in _p(pid).collection(sub).select([]).stream()}
 
 
+SAMPLE_PREFIX = "Sample · "
+
+
+def copy_base_name(src_name: str) -> str:
+    """A sample copy's name: the sample's without the "Sample · " prefix (it is the family's home now)."""
+    name = str(src_name or "").strip()
+    return name[len(SAMPLE_PREFIX):].strip() if name.startswith(SAMPLE_PREFIX) else name or "Untitled home"
+
+
+def copy_name(src_name: str, taken: set[str]) -> str:
+    """The next free copy name in a workspace: "10 marla modern home", then "10 marla modern home (2)", "(3)"…"""
+    base = copy_base_name(src_name)
+    if base not in taken:
+        return base
+    n = 2
+    while f"{base} ({n})" in taken:
+        n += 1
+    return f"{base} ({n})"
+
+
+def renamed(copy: dict, src: dict) -> bool:
+    """Whether the family renamed a copy: a copy keeps the name it was made with (`clone_name`); a copy made before that
+    field existed carries the sample's own name."""
+    name = str(copy.get("name") or "")
+    if copy.get("clone_name") is not None:
+        return name != copy["clone_name"]
+    return name not in (str(src.get("name") or ""), copy_base_name(src.get("name")))
+
+
+async def _comment_marks(pid: str) -> dict[str, tuple]:
+    """Each comment's (status, number of replies, text): what a family's own review of a copy would change."""
+    marks = {}
+    async for d in _p(pid).collection("comments").stream():
+        x = d.to_dict() or {}
+        marks[d.id] = (x.get("status"), len(x.get("replies") or []), x.get("text"))
+    return marks
+
+
 async def untouched_copy(copy: dict, src: dict) -> bool:
-    """A copy with nothing of its own: no messages, comments or versions beyond the sample's, and no new concepts."""
+    """A copy with nothing of its own: the name it was made with, the sample's concept choice and brief, no members or
+    client link, and no messages, comments, replies or versions beyond the sample's."""
+    if renamed(copy, src) or copy.get("brief_changed") or copy.get("members") or copy.get("share_enabled"):
+        return False
+    if (copy.get("selected_concept_id") or None) != (src.get("selected_concept_id") or None):
+        return False
     if len(copy.get("concepts") or []) > len(src.get("concepts") or []):
         return False
     if {v.get("id") for v in copy.get("versions") or []} - {v.get("id") for v in src.get("versions") or []}:
         return False
-    for sub in ("messages", "comments", "versions"):
+    for sub in ("messages", "versions"):
         if await _sub_ids(copy["id"], sub) - await _sub_ids(src["id"], sub):
             return False
-    return True
+    mine, theirs = await _comment_marks(copy["id"]), await _comment_marks(src["id"])
+    return all(theirs.get(cid) == mark for cid, mark in mine.items())
 
 
-async def find_clone(owner: str, src_pid: str, src: dict | None = None) -> tuple[dict | None, bool]:
-    """The caller's existing copy of a sample (samples are copied once, not on every visit), and whether it is stale: made
-    before the sample was last updated and untouched since, so it can be refreshed with the current sample."""
-    copies = [p for p in await list_projects(owner) if p.get("cloned_from") == src_pid]
-    if not copies:
-        return None, False
-    src = src or await get_project(src_pid) or {}
-    for c in copies:  # newest first: any copy with the family's own work wins
-        if not (src.get("updated_at") and (c.get("created_at") or "") < src["updated_at"] and await untouched_copy(c, src)):
-            return c, False
-    return copies[0], True
+async def list_clones(owner: str, src_pid: str) -> list[dict]:
+    """The copies of a project in one workspace, newest first."""
+    return [p for p in await list_projects(owner) if p.get("cloned_from") == src_pid]
 
 
-def clone_id(owner: str, src_pid: str) -> str:
-    """The one id a sample's copy gets in a workspace, so parallel opens can't make two copies."""
-    return "p_" + hashlib.sha1(f"{owner}:{src_pid}".encode()).hexdigest()[:12]
+def stale_copy(copy: dict, src: dict) -> bool:
+    """Made before the sample was last updated (so an untouched copy is refreshed with the current sample)."""
+    return bool(src.get("updated_at") and (copy.get("created_at") or "") < src["updated_at"])
+
+
+def clone_id(owner: str, src_pid: str, slot: int = 1) -> str:
+    """The id a sample's copy gets in a workspace (slot 1, 2… for the first, second… copy), so parallel opens can't make
+    two copies of the same slot."""
+    key = f"{owner}:{src_pid}" + (f":{slot}" if slot > 1 else "")
+    return "p_" + hashlib.sha1(key.encode()).hexdigest()[:12]
 
 
 def _copy_doc(src: dict, pid: str, owner: str, name: str | None) -> dict:
-    return {**src, "id": pid, "owner": owner, "name": name or src["name"], "created_at": now(), "updated_at": now(),
-            "cloned_from": src["id"], "members": [], "member_uids": [], "member_emails": [], "share_enabled": False,
-            "share_token": None, "auto_named": False}
+    doc = {**src, "id": pid, "owner": owner, "name": name or src["name"], "created_at": now(), "updated_at": now(),
+           "cloned_from": src["id"], "members": [], "member_uids": [], "member_emails": [], "share_enabled": False,
+           "share_token": None, "auto_named": False, "brief_changed": False}
+    if src.get("owner") == SAMPLES_OWNER:
+        doc["clone_name"] = doc["name"]  # a rename makes it the family's own copy (opening the sample again makes a new one)
+    return doc
 
 
 async def _copy_subs(src_pid: str, pid: str) -> None:
@@ -301,14 +347,15 @@ async def _copy_subs(src_pid: str, pid: str) -> None:
             await _p(pid).collection(sub).document(d.id).set(d.to_dict())
 
 
-async def clone_project(src_pid: str, owner: str, name: str | None = None, once: bool = False) -> dict:
+async def clone_project(src_pid: str, owner: str, name: str | None = None, once: bool = False, slot: int = 1) -> dict:
     """Copy a project (and its messages, versions, comments) into another workspace. Assets stay shared (read-only).
-    once=True: the copy gets the deterministic clone_id and is created only if it doesn't exist yet (otherwise the existing
-    copy is returned), so two parallel requests make one copy; subcollections are copied only by the request that created it."""
+    once=True: the copy gets the deterministic clone_id for its slot and is created only if it doesn't exist yet (otherwise
+    the existing copy is returned), so two parallel requests make one copy; subcollections are copied only by the request
+    that created it."""
     src = await get_project(src_pid)
     if not src:
         raise KeyError(src_pid)
-    pid = clone_id(owner, src_pid) if once else new_id("p_")
+    pid = clone_id(owner, src_pid, slot) if once else new_id("p_")
     doc = _copy_doc(src, pid, owner, name)
     if once:
         try:
@@ -321,12 +368,12 @@ async def clone_project(src_pid: str, owner: str, name: str | None = None, once:
     return doc
 
 
-async def refresh_clone(pid: str, src: dict, owner: str) -> dict:
+async def refresh_clone(pid: str, src: dict, owner: str, name: str | None = None) -> dict:
     """Replace an untouched copy's content with the current sample, in place (same id, same workspace)."""
     for sub in ("messages", "versions", "comments"):
         async for d in _p(pid).collection(sub).stream():
             await d.reference.delete()
-    doc = _copy_doc(src, pid, owner, None)
+    doc = _copy_doc(src, pid, owner, name)
     await _p(pid).set(doc)
     await _copy_subs(src["id"], pid)
     return doc
