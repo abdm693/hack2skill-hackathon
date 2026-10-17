@@ -8,7 +8,7 @@ interface ShellState {
   left: LeftPanel;
   right: RightPanel;
   share: boolean;
-  /** The comments sheet opens on "Apply N open comments" (from the Next pill). */
+  /** The comments sheet opens on "Revise with N comments" (from the Next pill). */
   applyMode: boolean;
   /** A comment to scroll to and highlight in the sheet. */
   focusComment: string | null;
@@ -17,6 +17,9 @@ interface ShellState {
   /** A view's own right-hand sheet (Plan's compliance sheet), px wide: the dock moves clear of it. 0 when none. */
   viewSheet: number;
   setViewSheet(px: number): void;
+  /** House's "notes from the 3D model" list (phones open it from the title menu). */
+  asBuiltOpen: boolean;
+  setAsBuiltOpen(open: boolean): void;
   toggleChat(open?: boolean): void;
   openComments(opts?: { apply?: boolean; focus?: string | null }): void;
   closeComments(): void;
@@ -33,6 +36,10 @@ export const useShell = create<ShellState>((set, get) => ({
   focusComment: null,
   dockH: 0,
   viewSheet: 0,
+  asBuiltOpen: false,
+  setAsBuiltOpen(open) {
+    set({ asBuiltOpen: open });
+  },
   setViewSheet(px) {
     if (get().viewSheet !== px) set({ viewSheet: px });
   },
@@ -53,6 +60,6 @@ export const useShell = create<ShellState>((set, get) => ({
     set({ applyMode: on });
   },
   reset() {
-    set({ left: null, right: null, share: false, applyMode: false, focusComment: null, viewSheet: 0 });
+    set({ left: null, right: null, share: false, applyMode: false, focusComment: null, viewSheet: 0, asBuiltOpen: false });
   },
 }));

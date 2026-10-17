@@ -175,6 +175,11 @@ async def save_version(pid: str, version: dict) -> dict:
     return version
 
 
+async def patch_version(pid: str, vid: str, **fields: Any) -> None:
+    """Set some fields on a version without rewriting the rest (a concurrent repair keeps its sections)."""
+    await _p(pid).collection("versions").document(vid).update(fields)
+
+
 async def get_version(pid: str, vid: str) -> dict | None:
     snap = await _p(pid).collection("versions").document(vid).get()
     return snap.to_dict() if snap.exists else None

@@ -152,20 +152,25 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
 }
 
 function Row({ label, children, empty, assumed, onEdit, block }: { label: string; children?: ReactNode; empty?: boolean; assumed?: boolean; onEdit: () => void; block?: boolean }) {
+  // A valid dl row (dt, then dd holding the button); the button's hit area covers the whole row.
   return (
-    <button type="button" onClick={onEdit} aria-label={`Edit ${label.toLowerCase()}`} className="group grid w-full grid-cols-[88px_1fr_16px] items-start gap-3 py-2.5 text-left outline-none focus-visible:bg-surface-2">
+    <div className="group relative grid w-full grid-cols-[88px_1fr] items-start gap-3 py-2.5 has-[:focus-visible]:bg-surface-2">
       <dt className="pt-px text-[13px] text-ink-3">{label}</dt>
-      <dd className={cn("min-w-0 text-[14px] leading-snug", assumed ? "text-ink-3" : "text-ink")}>
-        {empty ? (
-          <span className="text-ink-4">Not yet</span>
-        ) : (
-          <motion.span initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE_OUT }} className={cn(block ? "block" : "flex flex-wrap items-baseline gap-x-2 gap-y-0.5", assumed && !block && "[&>span:first-child]:underline [&>span:first-child]:decoration-dotted [&>span:first-child]:decoration-ink-4 [&>span:first-child]:underline-offset-4")}>
-            {children}
-          </motion.span>
-        )}
+      <dd className="min-w-0">
+        <button type="button" onClick={onEdit} aria-label={`Edit ${label.toLowerCase()}`} className="grid w-full grid-cols-[1fr_16px] items-start gap-3 text-left outline-none after:absolute after:inset-0 after:content-['']">
+          <span className={cn("block min-w-0 text-[14px] leading-snug", assumed ? "text-ink-3" : "text-ink")}>
+            {empty ? (
+              <span className="text-ink-3">Not yet</span>
+            ) : (
+              <motion.span initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE_OUT }} className={cn(block ? "block" : "flex flex-wrap items-baseline gap-x-2 gap-y-0.5", assumed && !block && "[&>span:first-child]:underline [&>span:first-child]:decoration-dotted [&>span:first-child]:decoration-ink-4 [&>span:first-child]:underline-offset-4")}>
+                {children}
+              </motion.span>
+            )}
+          </span>
+          <ChevronRight className="mt-0.5 size-4 text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 max-md:opacity-100" strokeWidth={1.75} aria-hidden />
+        </button>
       </dd>
-      <ChevronRight className="mt-0.5 size-4 text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100" strokeWidth={1.75} />
-    </button>
+    </div>
   );
 }
 

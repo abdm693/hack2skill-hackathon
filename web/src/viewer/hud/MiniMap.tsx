@@ -9,6 +9,15 @@ const DOORS = new Set(["main_door", "door", "double_door", "sliding_door", "arch
 const FACING_AZ: Record<string, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
 const INNER = 152; // px: 168 px card minus padding
 
+/** "Master Bedroom" → "Master bedroom", "First Floor" → "First floor" (keeps "TV" and numbers), as the app writes names. */
+function sentence(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : /^[A-Z]{2,}$/.test(w) || /\d/.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+}
+
 /** "G", "1", "2", "R", "B": the floor stack's own short names. */
 export function levelShort(l: Level, levels: Level[]): string {
   const sorted = [...levels].sort((a, b) => a.index - b.index);
@@ -82,7 +91,7 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
                 className="nq-mini-floor"
                 aria-pressed={l.id === level?.id}
                 data-here={l.id === walkerLevel ? "1" : "0"}
-                title={l.id === walkerLevel ? `${l.name} (you're here)` : `Show the ${l.name.toLowerCase()} map`}
+                title={l.id === walkerLevel ? `${sentence(l.name)} (you're here)` : `Show the ${l.name.toLowerCase()} map`}
                 onClick={() => ctrl.setMapLevel(l.id === walkerLevel ? null : l.id)}
               >
                 {levelShort(l, levels)}
@@ -105,7 +114,7 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
         height={D * scale}
         viewBox={`-1 -1 ${W + 2} ${D + 2}`}
         role="img"
-        aria-label={`${level?.name ?? "Plan"} map. Click a room to go there.`}
+        aria-label={`${level ? sentence(level.name) : "Plan"} map. Click a room to go there.`}
         onPointerMove={(e) => setHover(roomAt(planAt(e).x, planAt(e).y))}
         onPointerLeave={() => setHover(null)}
         onClick={(e) => {
@@ -171,11 +180,11 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
       <div className="nq-mini-caption" aria-live="polite">
         {hover ? (
           <>
-            <b>{hover.name}</b>
+            <b>{sentence(hover.name)}</b>
             <span>{hover.id === roomId && onWalkerLevel ? "You're here" : "Click to go"}</span>
           </>
         ) : (
-          <span>{level?.name}</span>
+          <span>{level ? sentence(level.name) : null}</span>
         )}
       </div>
     </div>

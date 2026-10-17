@@ -1,15 +1,44 @@
-/** The room navigator (M): rooms by floor with type-to-filter. Shared by the owner's House and the client's walk. */
+/**
+ * The room navigator (M): rooms by floor with type-to-filter, plus the Stair and, when the plan has one, the Roof
+ * (it may have no rooms of its own). Shared by the owner's House and the client's walk.
+ */
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import type { BuildingPlan } from "@contracts/plan";
 import { cn, feetInches } from "@/app/lib/utils";
 import { Kbd } from "@/app/design/kit";
-import { CATEGORY, SITE_TYPES, levelName, levelsOf, sentenceCase } from "@/app/plan/model";
+import { CATEGORY, SITE_TYPES, isRoofLevel, levelName, levelsOf, sentenceCase } from "@/app/plan/model";
 
 const ROOM_ORDER = ["living", "bed", "wet", "service", "outdoor"];
 
 /** Rooms by floor with type-to-filter (M). Shared by the owner's House and the client's walk. */
-export function RoomNavigator({ plan, current, onGo, open = true }: { plan: BuildingPlan; current: string | null; onGo: (id: string) => void; open?: boolean }) {
+interface Place {
+  key: string;
+  label: string;
+  /** Extra words the filter matches ("terrace" finds the Roof). */
+  words?: string;
+  meta: string | null;
+  here: boolean;
+  go: () => void;
+}
+
+export function RoomNavigator({
+  plan,
+  current,
+  onGo,
+  onFloor,
+  currentLevel,
+  open = true,
+}: {
+  plan: BuildingPlan;
+  current: string | null;
+  onGo: (id: string) => void;
+  /** Go to a whole floor, as the floor stack's R does (lists the Roof when the plan has one). */
+  onFloor?: (levelId: string) => void;
+  /** The walker's floor, so "You're here" can mark the Roof. */
+  currentLevel?: string | null;
+  open?: boolean;
+}) {
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
   // The panel is placed (and made visible) a frame after it mounts: keep trying to focus the search until it can
@@ -28,9 +57,24 @@ export function RoomNavigator({ plan, current, onGo, open = true }: { plan: Buil
   }, [open]);
   const levels = levelsOf(plan);
   const rooms = plan.rooms.filter((r) => !SITE_TYPES.has(r.type) && r.type !== "stair");
-  const match = (name: string) => !q.trim() || name.toLowerCase().includes(q.trim().toLowerCase());
+  const needle = q.trim().toLowerCase();
+  const match = (p: Place) => !needle || `${p.label} ${p.words ?? ""}`.toLowerCase().includes(needle);
+  const roof = onFloor ? levels.find((l) => isRoofLevel(plan, l)) : undefined;
+  // One Stair: the lowest stair hall, where the walk up begins.
+  const stair = plan.rooms
+    .filter((r) => r.type === "stair")
+    .sort((a, b) => (levels.find((l) => l.id === a.level)?.index ?? 0) - (levels.find((l) => l.id === b.level)?.index ?? 0))[0];
   const groups = levels
-    .map((l) => ({ l, list: rooms.filter((r) => r.level === l.id && match(r.name)).sort((a, b) => ROOM_ORDER.indexOf(CATEGORY[a.type]) - ROOM_ORDER.indexOf(CATEGORY[b.type]) || a.name.localeCompare(b.name, undefined, { numeric: true })) }))
+    .map((l) => {
+      const places: Place[] = [];
+      if (roof && l.id === roof.id) places.push({ key: `floor-${l.id}`, label: "Roof", words: "terrace top solar tank", meta: null, here: currentLevel === l.id && !current, go: () => onFloor!(l.id) });
+      if (stair && stair.level === l.id) places.push({ key: stair.id, label: "Stair", words: "stairs staircase steps up", meta: null, here: current === stair.id, go: () => onGo(stair.id) });
+      const list = rooms
+        .filter((r) => r.level === l.id)
+        .sort((a, b) => ROOM_ORDER.indexOf(CATEGORY[a.type]) - ROOM_ORDER.indexOf(CATEGORY[b.type]) || a.name.localeCompare(b.name, undefined, { numeric: true }))
+        .map<Place>((r) => ({ key: r.id, label: sentenceCase(r.name), meta: `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`, here: r.id === current, go: () => onGo(r.id) }));
+      return { l, list: [...places, ...list].filter(match) };
+    })
     .filter((g) => g.list.length);
   const first = groups[0]?.list[0];
   return (
@@ -42,7 +86,7 @@ export function RoomNavigator({ plan, current, onGo, open = true }: { plan: Buil
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && first) onGo(first.id);
+            if (e.key === "Enter" && first) first.go();
             e.stopPropagation();
           }}
           placeholder="Go to a room"
@@ -55,15 +99,15 @@ export function RoomNavigator({ plan, current, onGo, open = true }: { plan: Buil
         {groups.map(({ l, list }) => (
           <div key={l.id} className="mb-1">
             <p className="px-2 pb-0.5 pt-1.5 text-[12px] text-hud-ink-2">{levelName(l)}</p>
-            {list.map((r) => (
+            {list.map((p) => (
               <button
-                key={r.id}
+                key={p.key}
                 type="button"
-                onClick={() => onGo(r.id)}
-                className={cn("flex w-full items-center justify-between gap-3 rounded-control px-2 py-1.5 text-left text-[13.5px] outline-none hover:bg-white/8 focus-visible:shadow-focus", r.id === current && "bg-white/10")}
+                onClick={p.go}
+                className={cn("flex w-full items-center justify-between gap-3 rounded-control px-2 py-1.5 text-left text-[13.5px] outline-none hover:bg-white/8 focus-visible:shadow-focus", p.here && "bg-white/10")}
               >
-                <span className="truncate">{sentenceCase(r.name)}</span>
-                {r.id === current ? <span className="text-[12px] text-hud-accent">You're here</span> : <span className="font-mono text-[12px] tabular-nums text-hud-ink-2">{feetInches(r.rect.w)} × {feetInches(r.rect.d)}</span>}
+                <span className="truncate">{p.label}</span>
+                {p.here ? <span className="text-[12px] text-hud-accent">You're here</span> : p.meta ? <span className="font-mono text-[12px] tabular-nums text-hud-ink-2">{p.meta}</span> : null}
               </button>
             ))}
           </div>

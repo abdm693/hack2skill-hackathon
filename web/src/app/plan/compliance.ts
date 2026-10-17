@@ -100,21 +100,21 @@ export function asBuiltIssues(asBuilt: ComplianceReport | null | undefined): Com
 }
 
 /**
- * Counts that never call a warning a pass: LDA and livable tallies, as-built issues merged in, and whether the plan
- * may be called approval-ready (no fails and no LDA warnings).
+ * The one definition every count uses (the dock, the title capsule, the chip, the sheet, Revisions, print): "to fix"
+ * and "to check" are the plan's own LDA and livable checks, a warning never counts as a pass, and what the 3D build
+ * found is kept apart as "N notes from the 3D model" (stored on the version, so a reload counts the same).
+ * Approval-ready means no fails and no LDA warnings on the plan.
  */
 export function summarize(report: ComplianceReport | null | undefined, plan?: BuildingPlan, asBuilt?: ComplianceReport | null) {
   const checks = withLivable(report, plan);
   const lda = checks.filter((c) => categoryOf(c) === "lda");
   const livable = checks.filter((c) => categoryOf(c) === "livable");
   const built = asBuiltIssues(asBuilt);
-  const builtLda = built.filter((c) => categoryOf(c) === "lda");
-  const builtLivable = built.filter((c) => categoryOf(c) !== "lda");
   const ldaT = tally(lda);
   const livT = tally(livable);
   const builtT = tally(built);
-  const fails = [...checks, ...built].filter((c) => c.status === "fail");
-  const warns = [...checks, ...built].filter((c) => c.status === "warn");
+  const fails = checks.filter((c) => c.status === "fail");
+  const warns = checks.filter((c) => c.status === "warn");
   return {
     checks,
     lda,
@@ -128,14 +128,21 @@ export function summarize(report: ComplianceReport | null | undefined, plan?: Bu
     livablePass: livT.pass,
     fails,
     warns,
-    ldaFails: ldaT.fail + builtLda.filter((c) => c.status === "fail").length,
-    ldaWarns: ldaT.warn + builtLda.filter((c) => c.status === "warn").length,
-    livableIssues: livT.fail + livT.warn + builtLivable.length,
+    ldaFails: ldaT.fail,
+    ldaWarns: ldaT.warn,
+    livableIssues: livT.fail + livT.warn,
+    /** What the 3D build found, never folded into the LDA or livable counts. */
+    notes: built.length,
     /** "Approval-ready" and "Passes all" are said only with no fails and no LDA warnings. */
-    approvalReady: fails.length === 0 && ldaT.warn === 0 && builtLda.length === 0,
+    approvalReady: fails.length === 0 && ldaT.warn === 0,
   };
 }
 export type Summary = ReturnType<typeof summarize>;
+
+/** "3 notes from the 3D model": how what the 3D build found is named everywhere. */
+export function notesLine(n: number): string {
+  return `${n} ${n === 1 ? "note" : "notes"} from the 3D model`;
+}
 
 /** The rules DESIGN.md promises on every plan; merged in whenever the report doesn't carry them. */
 const ALWAYS_LIVABLE = ["livable.railings", "livable.doors", "livable.paths"];

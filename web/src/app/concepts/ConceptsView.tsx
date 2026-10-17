@@ -4,7 +4,7 @@
  * remix it in a few words, and "Plan this one". No prompts or model names on screen; expensive actions can't be
  * double-fired.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, ImageOff, RotateCw, X } from "lucide-react";
@@ -12,6 +12,7 @@ import type { Concept, Project } from "@contracts/api-types";
 import { api, assetUrl } from "@/api/client";
 import { FACING_LABEL } from "@/api/domain";
 import { cn } from "@/app/lib/utils";
+import { usePhone } from "@/app/lib/hooks";
 import { useAskContext } from "@/app/shell/ask";
 import { flow, useFlow, withNight, type ConceptSlot } from "@/app/design/flow";
 import { BreathingDot, Button, Chip, Dialog, EASE_OUT, IconButton, Segmented, Shimmer, notify, useGuardedClick, useHotkeys } from "@/app/design/kit";
@@ -31,6 +32,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const night = useFlow((s) => (s.night?.pid === project.id ? s.night : null));
   const nightUrls = useFlow((s) => s.nightUrls);
   const guard = useGuardedClick(700);
+  const phone = usePhone();
 
   const concepts = useMemo(() => withNight(project.concepts, nightUrls), [project.concepts, nightUrls]);
   const labels = useMemo(() => labelConcepts(concepts), [concepts]);
@@ -45,6 +47,11 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   }, [labels]);
 
   const light: Light = params.get("light") === "night" ? "night" : "day";
+  // Night images are fetched only once Night has been chosen (they sit under the day ones for the crossfade).
+  const [nightWanted, setNightWanted] = useState(light === "night");
+  useEffect(() => {
+    if (light === "night") setNightWanted(true);
+  }, [light]);
   const setLight = useCallback(
     (l: Light) => setParams((p) => { const n = new URLSearchParams(p); if (l === "night") n.set("light", "night"); else n.delete("light"); return n; }, { replace: true }),
     [setParams],
@@ -176,7 +183,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
           onSubmit: (text) => remix(open, text),
         }
       : {
-          placeholder: "Ask for four more, like more brick and deeper shade",
+          placeholder: phone ? "Ask for four more" : "Ask for four more, like more brick and deeper shade",
           // Remixing one concept happens in its lightbox; here Ask draws four new ones.
           suggestions: [],
           busy: !!run?.running,
@@ -198,6 +205,7 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const chosen = project.selected_concept_id;
 
   return (
+    <NightWanted.Provider value={nightWanted}>
     <div className="relative h-full overflow-hidden bg-canvas">
       <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
       <div className="mx-auto max-w-[1280px] px-4 pb-40 pt-[var(--chrome-top)] sm:px-6">
@@ -336,13 +344,29 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
         }
       />
     </div>
+    </NightWanted.Provider>
   );
 }
 
-function ConceptImage({ concept, light, nightShown, className, eager }: { concept: Concept; light: Light; nightShown: boolean; className?: string; eager?: boolean }) {
+/** True once Night has been chosen on this page: until then no night image is requested. */
+const NightWanted = createContext(false);
+
+/**
+ * A concept at the size it is shown (tiles: a 960px WebP; the lightbox: 1600px), with a shimmer until it arrives.
+ * The original PNG is the fallback if the sized one fails. The night image is mounted only once Night is wanted, and
+ * crossfades in only after it has loaded.
+ */
+function ConceptImage({ concept, light, nightShown, className, eager, large }: { concept: Concept; light: Light; nightShown: boolean; className?: string; eager?: boolean; large?: boolean }) {
+  const w = large ? 1600 : 960;
+  const nightWanted = useContext(NightWanted);
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const night = light === "night" && nightShown && concept.night_url;
+  const [dayOriginal, setDayOriginal] = useState(false);
+  const [nightOriginal, setNightOriginal] = useState(false);
+  const [nightLoaded, setNightLoaded] = useState(false);
+  const night = light === "night" && nightShown && concept.night_url && nightLoaded;
+  const daySrc = dayOriginal ? assetUrl(concept.url) : assetUrl(concept.url, { w });
+  const nightSrc = nightOriginal ? assetUrl(concept.night_url) : assetUrl(concept.night_url, { w });
   if (failed) {
     return (
       <div className={cn("grid place-items-center bg-surface-2 text-ink-3", className)}>
@@ -354,19 +378,23 @@ function ConceptImage({ concept, light, nightShown, className, eager }: { concep
   }
   return (
     <div className={cn("relative overflow-hidden bg-surface-2", className)}>
+      {!loaded && <Shimmer />}
       <img
-        src={assetUrl(concept.url)}
+        src={daySrc}
         alt=""
         loading={eager ? "eager" : "lazy"}
+        decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
+        onError={() => (dayOriginal || daySrc === assetUrl(concept.url) ? setFailed(true) : setDayOriginal(true))}
         className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-[400ms] ease-out", loaded ? "opacity-100" : "opacity-0")}
       />
-      {concept.night_url && (
+      {concept.night_url && nightWanted && (
         <img
-          src={assetUrl(concept.night_url)}
+          src={nightSrc}
           alt=""
-          loading="lazy"
+          decoding="async"
+          onLoad={() => setNightLoaded(true)}
+          onError={() => !nightOriginal && nightSrc !== assetUrl(concept.night_url) && setNightOriginal(true)}
           className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-[400ms] ease-out", night ? "opacity-100" : "opacity-0")}
         />
       )}
@@ -530,7 +558,7 @@ function Lightbox({
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-4 sm:px-16">
         <motion.div key={l.concept.id} initial={{ opacity: 0, scale: 0.985 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="aspect-[4/3] max-h-full w-full max-w-[1100px] overflow-hidden rounded-media shadow-e3">
-          <ConceptImage concept={l.concept} light={light} nightShown={nightShown} eager className="h-full w-full" />
+          <ConceptImage concept={l.concept} light={light} nightShown={nightShown} eager large className="h-full w-full" />
         </motion.div>
         {count > 1 && (
           <>

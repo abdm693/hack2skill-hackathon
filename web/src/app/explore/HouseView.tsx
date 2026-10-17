@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, CircleAlert, Footprints, Layers, MessageSquarePlus, Moon, Orbit, Search, Sparkles, Sun, Sunset, X } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, DoorOpen, Footprints, Layers, MessageSquarePlus, Moon, Orbit, Search, Sparkles, Sun, Sunset, X } from "lucide-react";
 import type { Layer } from "@contracts/house-sdk";
 import type { Comment, Project, Version } from "@contracts/api-types";
 import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
@@ -26,6 +26,7 @@ import { Button, Dialog, EASE_OUT, IconButton, Kbd, Popover, Segmented, notify, 
 import { useViewNav } from "@/app/design/nav";
 import { sectionPhrase, versionLine } from "@/app/design/words";
 import { CATEGORY, SITE_TYPES, hueColor, levelKey, levelName, levelsOf, sentenceCase } from "@/app/plan/model";
+import { notesLine } from "@/app/plan/compliance";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { Composer, type CommentDraft } from "./Composer";
 import { RoomNavigator } from "./RoomNavigator";
@@ -207,7 +208,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       try {
         setAsBuilt(shown.id, await api.asBuilt(project.id, shown.id, result.summary));
       } catch {
-        setAsBuilt(shown.id, null);
+        // Keep what the version already carries (stored with it by an earlier build).
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -331,6 +332,10 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     setCommentMode((c) => !c);
   };
 
+  // Notes from the 3D model: the chip opens them; on phones the title menu does (shell state).
+  const notesOpen = useShell((s) => s.asBuiltOpen);
+  const setNotesOpen = useShell((s) => s.setAsBuiltOpen);
+
   // Room navigator
   const [navOpen, setNavOpen] = useState(false);
   const roomPill = useRef<HTMLButtonElement>(null);
@@ -364,8 +369,30 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     return null;
   };
   // Clear of the dock (the shell publishes its height as --dock-h); beside it only on very wide screens.
-  // Phones stack three rows above the dock: mode · view · version, then rooms · comment, then notes.
+  // One row above the dock (phones too: mode · view · version · rooms · comment); parts that didn't build sit above it.
   const row = (n: number) => (wide ? undefined : { bottom: `calc(var(--dock-h, 96px) + ${8 + n * 52}px)` });
+  const roomLabel = currentRoom
+    ? `${sentenceCase(currentRoom.name)} · ${levelName(levels.find((l) => l.id === currentRoom.level)!).replace(/ floor$/i, "")}`
+    : walkLevel ? (walkLevel.index === 0 ? "Outside" : levelName(walkLevel)) : "Rooms";
+  const roomsButton = (
+    <HudButton ref={roomPill} onClick={() => setNavOpen((o) => !o)} pressed={navOpen} label={phone ? (roomLabel === "Rooms" ? "Rooms" : `Rooms: ${roomLabel}`) : "Rooms (M)"} icon={phone}>
+      {phone ? (
+        <DoorOpen className="size-[18px]" strokeWidth={1.75} />
+      ) : (
+        <>
+          <span className="max-w-[180px] truncate">{roomLabel}</span>
+          <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
+        </>
+      )}
+    </HudButton>
+  );
+  const commentButton = isLatest ? (
+    <HudButton onClick={comment} pressed={commentMode} label={phone ? (commentMode ? "Comment: tap the house to pin" : "Comment") : "Comment (C)"} accent={commentMode} icon={phone && !openComments.length}>
+      <MessageSquarePlus className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
+      <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
+      {openComments.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-white/15 px-1.5 font-mono text-[11px] tabular-nums">{openComments.length}</span>}
+    </HudButton>
+  ) : null;
 
   return (
     <div className="nq-house relative h-full overflow-hidden bg-hud">
@@ -428,51 +455,54 @@ export function HouseView({ project, onProjectChange, active = true }: { project
         </AnimatePresence>
       </div>
 
-      {/* Bottom-left: mode, view, version */}
-      <div data-nq-recede="" className={cn("absolute left-3 z-20 flex flex-wrap items-center gap-2 sm:left-4", wide && "bottom-4")} style={row(0)}>
+      {/* Bottom-left: mode, view, version. Phones keep one row: rooms and comment join it as named icons. */}
+      <div data-nq-recede="" className={cn("absolute left-3 z-20 flex items-center gap-2 sm:left-4", phone ? "right-3" : "flex-wrap", wide && "bottom-4")} style={row(0)}>
         <Segmented
           label="Mode"
           tone="hud"
+          size={phone ? "lg" : "md"}
           value={mode}
           onChange={setMode}
           options={[
-            { value: "orbit", label: <span className="inline-flex items-center gap-1.5"><Orbit className="size-4" strokeWidth={1.75} />Orbit</span>, title: "Orbit (V)" },
-            { value: "walk", label: <span className="inline-flex items-center gap-1.5"><Footprints className="size-4" strokeWidth={1.75} />Walk</span>, title: "Walk (V)" },
+            { value: "orbit", label: <span className="inline-flex items-center gap-1.5"><Orbit className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} aria-hidden />{!phone && "Orbit"}</span>, aria: phone ? "Orbit" : undefined, title: "Orbit (V)" },
+            { value: "walk", label: <span className="inline-flex items-center gap-1.5"><Footprints className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} aria-hidden />{!phone && "Walk"}</span>, aria: phone ? "Walk" : undefined, title: "Walk (V)" },
           ]}
         />
-        <HudButton ref={viewBtn} onClick={() => setViewOpen((o) => !o)} pressed={viewOpen} label="View">
-          <Layers className="size-4" strokeWidth={1.75} />
+        <HudButton ref={viewBtn} onClick={() => setViewOpen((o) => !o)} pressed={viewOpen} label="View" icon={phone}>
+          <Layers className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
           <span className="max-sm:hidden">View</span>
         </HudButton>
-        <HudButton ref={versionBtn} onClick={() => setVersionOpen((o) => !o)} pressed={versionOpen} label="Versions">
+        <HudButton ref={versionBtn} onClick={() => setVersionOpen((o) => !o)} pressed={versionOpen} label={`Versions: version ${shown.n}${isLatest ? "" : ", not the latest"}`}>
           <span className="font-mono tabular-nums">v{shown.n}</span>
           {!isLatest && <span className="text-hud-ink-2 max-sm:hidden">· not the latest</span>}
           <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
         </HudButton>
-      </div>
-
-      {/* Bottom-right: rooms and comments */}
-      <div className={cn("absolute right-3 z-20 flex items-center gap-2 sm:right-4", wide && "bottom-4")} style={row(phone ? 1 : 0)}>
-        <HudButton ref={roomPill} onClick={() => setNavOpen((o) => !o)} pressed={navOpen} label="Rooms (M)">
-          <span className="max-w-[180px] truncate">{currentRoom ? `${sentenceCase(currentRoom.name)} · ${levelName(levels.find((l) => l.id === currentRoom.level)!).replace(/ floor$/i, "")}` : walkLevel ? (walkLevel.index === 0 ? "Outside" : levelName(walkLevel)) : "Rooms"}</span>
-          <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
-        </HudButton>
-        {isLatest && (
-          <HudButton onClick={comment} pressed={commentMode} label="Comment (C)" accent={commentMode}>
-            <MessageSquarePlus className="size-4" strokeWidth={1.75} />
-            <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
-            {openComments.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-white/15 px-1.5 font-mono text-[11px] tabular-nums">{openComments.length}</span>}
-          </HudButton>
+        {phone && (
+          <div className="ml-auto flex items-center gap-2">
+            {roomsButton}
+            {commentButton}
+          </div>
         )}
       </div>
 
-      {/* Notes from the as-built check and parts that didn't build */}
-      <div data-nq-recede="" className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(phone ? 2 : 1)}>
+      {/* Bottom-right: rooms and comments */}
+      {!phone && (
+        <div className={cn("absolute right-3 z-20 flex items-center gap-2 sm:right-4", wide && "bottom-4")} style={row(0)}>
+          {roomsButton}
+          {commentButton}
+        </div>
+      )}
+
+      {/* Notes from the as-built check (phones: in the title menu) and parts that didn't build */}
+      <div data-nq-recede="" className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(1)}>
         {asBuiltNotes.length > 0 && (
           <AsBuiltNotes
             notes={asBuiltNotes.map((c) => ({ id: c.id, text: c.message, room: noteRoom(c.element_ids) }))}
             roomName={(id) => sentenceCase(plan.rooms.find((r) => r.id === id)?.name ?? "")}
             onShow={(id) => goToRoom(id)}
+            chip={!phone}
+            open={notesOpen}
+            onOpenChange={setNotesOpen}
           />
         )}
         {failed.map((f) => (
@@ -532,6 +562,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
           onGhost={setGhost}
           cars={cars}
           onCars={setCars}
+          mode={mode}
           onRender={() => {
             setViewOpen(false);
             void startRender();
@@ -567,9 +598,16 @@ export function HouseView({ project, onProjectChange, active = true }: { project
           plan={plan}
           open={navOpen}
           current={room.id}
+          currentLevel={mode === "walk" ? room.level : null}
           onGo={(id) => {
             setNavOpen(false);
             goToRoom(id);
+          }}
+          onFloor={(id) => {
+            // The same path as the floor stack's R: glide there (never the tap-again "whole house" toggle).
+            setNavOpen(false);
+            applyFloor(id);
+            setParams((p) => { const n = new URLSearchParams(p); n.set("floor", id); return n; }, { replace: true });
           }}
         />
       </Popover>
@@ -618,11 +656,11 @@ const HUD_CSS = `
 .nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: var(--chrome-top, 72px); }
 .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 60px); }
 .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 112px); }
-@media (max-width: 767px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 164px); } .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 216px); } }
+@media (max-width: 767px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 112px); } .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 164px); } }
 @media (min-width: 1600px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock { bottom: 76px; } .nq-house .nq-toast { bottom: 128px; } }
 `;
 
-const HudButton = ({ ref, onClick, pressed, label, accent, children }: { ref?: React.Ref<HTMLButtonElement>; onClick: () => void; pressed?: boolean; label: string; accent?: boolean; children: ReactNode }) => (
+const HudButton = ({ ref, onClick, pressed, label, accent, icon, children }: { ref?: React.Ref<HTMLButtonElement>; onClick: () => void; pressed?: boolean; label: string; accent?: boolean; /** A 44px round icon button (phones). */ icon?: boolean; children: ReactNode }) => (
   <button
     ref={ref}
     type="button"
@@ -631,7 +669,8 @@ const HudButton = ({ ref, onClick, pressed, label, accent, children }: { ref?: R
     aria-label={label}
     title={label}
     className={cn(
-      "inline-flex h-11 items-center gap-2 rounded-full px-4 text-[13px] font-medium outline-none transition-colors focus-visible:shadow-focus",
+      "inline-flex h-11 shrink-0 items-center gap-2 rounded-full text-[13px] font-medium outline-none transition-colors focus-visible:shadow-focus",
+      icon ? "w-11 justify-center" : "px-4",
       accent ? "bg-accent text-white shadow-e2" : "glass-hud hover:bg-[rgb(40_40_44/0.88)]",
     )}
   >
@@ -664,6 +703,7 @@ function ViewPanel({
   onGhost,
   cars,
   onCars,
+  mode,
   onRender,
 }: {
   light: Light;
@@ -679,6 +719,7 @@ function ViewPanel({
   onGhost: (v: boolean) => void;
   cars: "auto" | "show" | "hide";
   onCars: (v: "auto" | "show" | "hide") => void;
+  mode: "orbit" | "walk";
   onRender: () => void;
 }) {
   return (
@@ -713,13 +754,14 @@ function ViewPanel({
         <Toggle on={ghost} onChange={onGhost}>
           See through the neighbours
         </Toggle>
-        <Toggle on={cars !== "hide"} onChange={(v) => onCars(v ? "show" : "hide")}>
+        {/* What is on screen: "auto" shows cars in Orbit and hides them in Walk (the viewer's own default). */}
+        <Toggle on={cars === "show" || (cars === "auto" && mode === "orbit")} onChange={(v) => onCars(v ? "show" : "hide")}>
           Cars
         </Toggle>
       </div>
       <div className="border-t border-white/10 px-2 pt-2">
         <Toggle on={cutFt != null} onChange={(v) => onCut(v ? Math.round(topFt * 0.42) : null)}>
-          Section cut
+          Cut away
         </Toggle>
         {cutFt != null && (
           <label className="mt-1 block px-2">
@@ -727,11 +769,11 @@ function ViewPanel({
               <span>Cut at</span>
               <span className="font-mono tabular-nums text-hud-ink">{feetInches(Math.round(cutFt))}</span>
             </span>
-            <input type="range" min={1} max={Math.round(topFt)} step={0.5} value={cutFt} onChange={(e) => onCut(Number(e.target.value))} className="mt-1 w-full accent-[var(--color-hud-accent)]" aria-label="Section height" />
+            <input type="range" min={1} max={Math.round(topFt)} step={0.5} value={cutFt} onChange={(e) => onCut(Number(e.target.value))} className="mt-1 w-full accent-[var(--color-hud-accent)]" aria-label="Cut-away height" />
           </label>
         )}
       </div>
-      <Button variant="primary" size="md" className="w-full" icon={<Sparkles className="size-4" strokeWidth={1.75} />} onClick={onRender}>
+      <Button variant="secondary" size="md" className="w-full" icon={<Sparkles className="size-4" strokeWidth={1.75} />} onClick={onRender}>
         Render this view
       </Button>
     </div>
@@ -797,16 +839,32 @@ function PinCard({ c, n, onFly, onThread, onClose }: { c: Comment; n: number; on
   );
 }
 
-function AsBuiltNotes({ notes, roomName, onShow }: { notes: { id: string; text: string; room: string | null }[]; roomName: (id: string) => string; onShow: (roomId: string) => void }) {
-  const [open, setOpen] = useState(false);
+function AsBuiltNotes({
+  notes,
+  roomName,
+  onShow,
+  chip = true,
+  open,
+  onOpenChange: setOpen,
+}: {
+  notes: { id: string; text: string; room: string | null }[];
+  roomName: (id: string) => string;
+  onShow: (roomId: string) => void;
+  /** False on phones: the title menu opens the list instead, as a sheet. */
+  chip?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const ref = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="glass-hud pointer-events-auto inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] outline-none focus-visible:shadow-focus">
-        <CircleAlert className="size-3.5 text-[#F5B97A]" strokeWidth={2} />
-        {notes.length} {notes.length === 1 ? "note" : "notes"} on the 3D model
-      </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={ref} side="top" tone="hud" className="w-[340px]" sheetBelow={640} label="Notes on the 3D model">
+      {chip && (
+        <button ref={ref} type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="glass-hud pointer-events-auto inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] outline-none focus-visible:shadow-focus">
+          <CircleAlert className="size-3.5 text-[#F5B97A]" strokeWidth={2} />
+          {notesLine(notes.length)}
+        </button>
+      )}
+      <Popover open={open} onClose={() => setOpen(false)} anchor={ref} side="top" tone="hud" className="w-[340px]" sheetBelow={chip ? 640 : 100000} label="Notes from the 3D model">
         <p className="px-1 pb-1.5 pt-0.5 text-[12px] text-hud-ink-2">What I found while building it in 3D</p>
         <ul className="space-y-1 text-[13px] leading-snug">
           {notes.map((n) => (

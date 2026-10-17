@@ -221,6 +221,10 @@ export function HouseStage({
             if (mode !== "walk") setMode("walk");
             viewer.current?.goToRoom(id);
           }}
+          onFloor={(id) => {
+            setNavOpen(false);
+            viewer.current?.setFloor(id);
+          }}
         />
       </Popover>
 

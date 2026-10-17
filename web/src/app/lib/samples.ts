@@ -19,6 +19,19 @@ export function sampleCaption(p: Project): string {
   return [b?.plot?.area_marla ? plotLabel(b.plot.area_marla) : null, place, style].filter(Boolean).join(" · ");
 }
 
+export interface SampleCounts { lda: number; livable: number }
+
+/**
+ * The checks a sample's latest version was held to, from its stored summary ("From 2 comments · 36/36 LDA · 8/8
+ * livable"), so the landing quotes real numbers that follow the rules as they change. Null when it doesn't say.
+ */
+export function sampleCounts(p: Project): SampleCounts | null {
+  const v = p.versions.find((x) => x.id === p.current_version_id) ?? [...p.versions].sort((a, b) => b.n - a.n)[0];
+  const lda = v?.summary?.match(/\b(\d+)\/(\d+) LDA\b/);
+  const livable = v?.summary?.match(/\b(\d+)\/(\d+) livable\b/);
+  return lda && livable ? { lda: Number(lda[2]), livable: Number(livable[2]) } : null;
+}
+
 /** The sample the landing hero animates (the 10 marla modern home), else the first one. */
 export function heroSample(samples: Project[]): Project | undefined {
   return samples.find((s) => Math.abs((s.brief?.plot?.area_marla ?? 0) - 10) < 0.6) ?? samples[0];

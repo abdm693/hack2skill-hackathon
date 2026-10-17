@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, CloudUpload, History, Info, LayoutGrid, Pencil, Printer, Share2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, CloudUpload, History, Info, LayoutGrid, Pencil, Printer, Share2 } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
 import { canEdit, resolveVersion, roleOf, viewAvailable } from "@/app/lib/views";
@@ -12,8 +12,10 @@ import { requireAccount, useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
 import { Menu, type MenuItem } from "@/app/ui/Menu";
 import { Tooltip } from "@/app/ui/Tooltip";
+import { notesLine } from "@/app/plan/compliance";
 import { complianceCounts, countsLine } from "./narration";
 import { startShare } from "./next";
+import { useShell } from "./state";
 
 /** "v1 · 35/36 LDA · 10/11 livable · 2 to check · Saved", for the version on screen (?v=), not just the latest. */
 export function useStatusLine(project: Project): string {
@@ -38,12 +40,15 @@ export function TitleCapsule({
   tone,
   onDetails,
   compact,
+  view,
 }: {
   project: Project;
   tone: "light" | "hud";
   onDetails: () => void;
   /** Phone: no status line, no menu chevron text. */
   compact?: boolean;
+  /** The view on screen: on a phone's House the menu also holds the notes from the 3D model. */
+  view?: string;
 }) {
   const navigate = useNavigate();
   const rename = useProject((s) => s.rename);
@@ -52,6 +57,9 @@ export function TitleCapsule({
   const [value, setValue] = useState(project.name);
   const input = useRef<HTMLInputElement>(null);
   const status = useStatusLine(project);
+  const [params] = useSearchParams();
+  const shownId = resolveVersion(project, params.get("v")).id;
+  const notes = useProject((s) => (shownId ? s.asBuilt[shownId]?.checks.filter((c) => c.status !== "pass").length ?? 0 : 0));
   const hud = tone === "hud";
   const editable = canEdit(project);
   const base = `/app/p/${project.id}`;
@@ -69,6 +77,11 @@ export function TitleCapsule({
   };
 
   const items: MenuItem[] = [];
+  const notesItem = compact && view === "house" && notes > 0;
+  if (notesItem) {
+    items.push({ label: notesLine(notes).replace(/^\w/, (c) => c.toUpperCase()), icon: <CircleAlert />, onSelect: () => useShell.getState().setAsBuiltOpen(true) });
+    items.push({ separator: true });
+  }
   if (viewAvailable(project, "revisions")) items.push({ label: "Versions", icon: <History />, onSelect: () => navigate(`${base}/revisions`) });
   if (project.current_version_id && viewAvailable(project, "plan")) items.push({ label: "Print plan…", icon: <Printer />, onSelect: () => navigate(`${base}/plan?dialog=print`) });
   if (roleOf(project) === "owner") items.push({ label: "Share…", icon: <Share2 />, onSelect: () => void startShare() });
@@ -142,7 +155,7 @@ export function TitleCapsule({
       </div>
       <Menu
         align="left"
-        width={220}
+        width={notesItem ? 250 : 220}
         label="Home menu"
         trigger={({ open, toggle }) => (
           <button

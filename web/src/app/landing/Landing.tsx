@@ -9,16 +9,23 @@ import { ArrowRight } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { api, assetUrl } from "@/api/client";
 import { cn } from "@/app/lib/utils";
-import { heroSample, openSampleHome, sampleCaption, sampleTitle } from "@/app/lib/samples";
+import { heroSample, openSampleHome, sampleCaption, sampleCounts, sampleTitle, type SampleCounts } from "@/app/lib/samples";
 import { AccountMenu } from "@/app/auth/AccountMenu";
 import { Button, buttonClass } from "@/app/ui/Button";
 import { Wordmark } from "@/app/ui/brand";
 import { ease } from "@/app/ui/motion";
 import { Construction } from "./Construction";
 
-const BENEFITS: { title: string; line: string }[] = [
-  { title: "Plot to approval-ready plan the same afternoon", line: "Tell Naqsha the plot and the family. Get dimensioned floor plans before the chai goes cold, not after weeks of back and forth." },
-  { title: "Checked against LDA, every time", line: "Every LDA bylaw that applies to your plot (36 checks on a 10 marla) and 8 livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop." },
+// Hyphenated compounds use U+2011 (a non-breaking hyphen) so "approval‑ready" never splits across lines.
+const benefits = (counts: SampleCounts | null): { title: string; line: string }[] => [
+  { title: "Plot to approval‑ready plan the same afternoon", line: "Tell Naqsha the plot and the family. Get dimensioned floor plans before the chai goes cold, not after weeks of back and forth." },
+  {
+    title: "Checked against LDA, every time",
+    // The counts are the 10 marla sample's own (they move when the rules do); without them, no number is promised.
+    line: counts
+      ? `Every LDA bylaw that applies to your plot (${counts.lda} checks on a 10 marla) and ${counts.livable} livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.`
+      : "Every LDA bylaw that applies to your plot, and the livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.",
+  },
   { title: "Walk your home before you build it", line: "Room by room, on any laptop or phone. Find the cramped bedroom while it costs nothing to fix." },
   { title: "Share with family and your architect", line: "Invite your team to design, or send your client a link. Everyone comments in one place, with their name on it." },
   { title: "Revisions in minutes, not weeks", line: "Pin a note on a wall. Naqsha returns the next version, still compliant, and answers every note in its thread." },
@@ -31,6 +38,9 @@ const STEPS: { label: string; time: string; title: string; line: string }[] = [
   { label: "Plan", time: "A few minutes", title: "See every floor, checked", line: "Dimensioned floors with doors and furniture, checked against LDA and livable rules as they are drawn. Print it for your contractor." },
   { label: "House", time: "5 minutes", title: "Walk it, change it, share it", line: "Walk through in 3D, pin notes for changes, and bring in your family, your architect or your client." },
 ];
+
+/** Header links: the same 36px height and 14px type as Sign in and Portal beside them. */
+const NAV_LINK = "h-9 items-center rounded-full px-3 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:text-ink focus-visible:shadow-focus";
 
 export function Landing() {
   const navigate = useNavigate();
@@ -58,6 +68,7 @@ export function Landing() {
   }, []);
 
   const hero = samples ? heroSample(samples) : undefined;
+  const counts = hero ? sampleCounts(hero) : null;
 
   /** Open one sample (the hero's 10 marla home when no id is given). */
   const sample = async (id?: string) => {
@@ -82,14 +93,14 @@ export function Landing() {
             <Wordmark />
           </Link>
           <nav aria-label="Main" className="flex items-center gap-1 sm:gap-2">
-            <a href="#how" className="hidden rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:text-ink focus-visible:shadow-focus md:inline-block">
+            <a href="#how" className={cn(NAV_LINK, "hidden md:inline-flex")}>
               How it works
             </a>
-            <a href="#samples" className="hidden rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:text-ink focus-visible:shadow-focus md:inline-block">
+            <a href="#samples" className={cn(NAV_LINK, "hidden md:inline-flex")}>
               Samples
             </a>
-            <AccountMenu />
-            <Link to="/app" className={buttonClass("ink", "sm", "px-4")}>
+            <AccountMenu className="h-9 px-3.5 text-[14px]" />
+            <Link to="/app" className={buttonClass("ink", "sm", "h-9 px-4 text-[14px]")}>
               Portal
             </Link>
           </nav>
@@ -115,7 +126,7 @@ export function Landing() {
             className="mt-6 flex flex-col gap-8 sm:mt-8 lg:flex-row lg:items-end lg:justify-between"
           >
             <p className="max-w-[34rem] text-body-lg text-ink-2 sm:text-[19px] sm:leading-[30px]">
-              Naqsha turns your plot and your family's wishes into an LDA-ready design and a 3D home you can walk, share and change, in one sitting.
+              Naqsha turns your plot and your family's wishes into an LDA‑ready design and a 3D home you can walk, share and change, in one sitting.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row lg:shrink-0">
               <Button variant="primary" size="lg" trailing={<ArrowRight className="size-4" strokeWidth={2} />} onClick={() => navigate("/app")}>
@@ -132,7 +143,7 @@ export function Landing() {
             transition={{ duration: 0.8, ease: ease.out, delay: 0.16 }}
             className="mt-12 sm:mt-16"
           >
-            <Construction />
+            <Construction counts={counts} />
           </motion.div>
         </section>
 
@@ -144,7 +155,7 @@ export function Landing() {
             line="What used to take weeks of sketches and site visits now fits in one sitting with your family."
           />
           <ul className="mt-14 grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-            {BENEFITS.map((b, i) => (
+            {benefits(counts).map((b, i) => (
               <Reveal key={b.title} delay={(i % 3) * 0.06} as="li">
                 <div className="h-px w-10 bg-ink" aria-hidden />
                 <h3 className="mt-5 text-heading text-ink">{b.title}</h3>

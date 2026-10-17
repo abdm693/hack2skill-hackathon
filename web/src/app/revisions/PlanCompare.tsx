@@ -13,7 +13,22 @@ import { layoutLabels, type Box, type Label } from "@/app/plan/labels";
 import { SITE_TYPES, areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
 import { feetInches } from "@/app/lib/utils";
 
-export function PlanCompare({ before, after, changed, caption, className }: { before?: BuildingPlan; after: BuildingPlan; changed: string[]; caption?: string; className?: string }) {
+export function PlanCompare({
+  before,
+  after,
+  changed,
+  caption,
+  className,
+  compact,
+}: {
+  before?: BuildingPlan;
+  after: BuildingPlan;
+  changed: string[];
+  caption?: string;
+  className?: string;
+  /** Phone and tablet: a fixed ~280px sheet inside the page that still lets the page scroll vertically. */
+  compact?: boolean;
+}) {
   const levels = useMemo(() => levelsOf(after), [after]);
   // Open on the floor of the first change (in the order the changes were made), not always the ground floor.
   const firstChanged = changed.map((id) => after.rooms.find((r) => r.id === id)?.level).find(Boolean);
@@ -88,7 +103,7 @@ export function PlanCompare({ before, after, changed, caption, className }: { be
       </div>
       <div
         ref={box}
-        className="relative mt-3 min-h-[360px] flex-1 touch-none select-none overflow-hidden rounded-card bg-surface shadow-e1"
+        className={cn("relative mt-3 select-none overflow-hidden rounded-card bg-surface shadow-e1", compact ? "h-[280px] shrink-0 touch-pan-y" : "min-h-[360px] flex-1 touch-none")}
         onPointerDown={(e) => {
           if (!before) return;
           dragging.current = true;
@@ -97,6 +112,11 @@ export function PlanCompare({ before, after, changed, caption, className }: { be
         }}
         onPointerMove={(e) => dragging.current && setWipe(toPct(e.clientX))}
         onPointerUp={() => {
+          dragging.current = false;
+          setWipe((w) => snap(w));
+        }}
+        onPointerCancel={() => {
+          // A vertical page scroll (compact) takes the pointer: settle the wipe where it was.
           dragging.current = false;
           setWipe((w) => snap(w));
         }}

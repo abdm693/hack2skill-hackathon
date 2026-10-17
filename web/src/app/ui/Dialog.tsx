@@ -58,7 +58,7 @@ export function Dialog({
     <AnimatePresence>
       {open && (
         <motion.div
-          className={cn("fixed inset-0 z-[70] flex justify-center", sheet ? "items-end" : "items-center p-4")}
+          className={cn("fixed inset-0 z-[70] flex justify-center", sheet ? "items-end" : "items-start p-4 pt-[min(12vh,96px)]")}
           initial={{ opacity: 1 }}
           exit={{ opacity: 1, transition: { duration: 0.2 } }}
         >
@@ -81,10 +81,11 @@ export function Dialog({
             initial={sheet ? { y: "100%" } : { opacity: 0, scale: 0.96 }}
             animate={sheet ? { y: 0, transition: { duration: 0.32, ease: ease.sheet } } : { opacity: 1, scale: 1, transition: { duration: 0.32, ease: ease.out } }}
             exit={sheet ? { y: "100%", transition: { duration: 0.2, ease: ease.exit } } : { opacity: 0, scale: 0.98, transition: { duration: 0.2, ease: ease.exit } }}
-            style={sheet ? undefined : { width, maxWidth: "100%" }}
+            // Top-anchored, and it scales in from its top edge, so a taller body (a field error, another tab) never moves it.
+            style={sheet ? undefined : { width, maxWidth: "100%", transformOrigin: "50% 0" }}
             className={cn(
-              "relative flex max-h-[calc(100dvh-32px)] flex-col overflow-hidden bg-surface shadow-e3 outline-none",
-              sheet ? "w-full rounded-t-panel pb-[var(--safe-b)]" : "rounded-panel",
+              "relative flex flex-col overflow-hidden bg-surface shadow-e3 outline-none",
+              sheet ? "max-h-[calc(100dvh-32px)] w-full rounded-t-panel pb-[var(--safe-b)]" : "max-h-[calc(100dvh-min(12vh,96px)-16px)] rounded-panel",
               className,
             )}
           >

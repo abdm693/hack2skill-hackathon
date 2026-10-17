@@ -3,7 +3,7 @@
  * before and after; each comment as a thread ending in Naqsha's answer (Done, Alternative offered, or Not possible
  * with the reason); and a rail of versions with clean copy.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
@@ -63,6 +63,21 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
       : null,
   );
 
+  // Before and after on the plan: a sticky column when wide, a compact sheet under "What changed" otherwise.
+  const compareNode = (compact: boolean) => {
+    const revised = showRun ? run?.version?.plan ?? run?.plan : version?.plan;
+    // While a revision hasn't touched the plan yet, show the plan it starts from.
+    const after = revised ?? (showRun ? base?.plan : undefined);
+    if (!after) return null;
+    const before = showRun ? (revised ? base?.plan : undefined) : parent?.plan;
+    const changes = showRun ? run?.version?.changes ?? run?.changes ?? [] : version?.changes ?? [];
+    // Targets can be openings or stairs: outline the room(s) each one touches.
+    const changed = [...changedRooms(after, changes).keys()];
+    const caption = !before ? (showRun ? "The plan as it stands; changes appear here as Naqsha makes them." : "The first design: nothing to compare yet.") : undefined;
+    return <PlanCompare before={before} after={after} changed={changed} caption={caption} className={compact ? "mt-8" : "h-full"} compact={compact} />;
+  };
+  const inlineCompare = wide ? null : compareNode(true);
+
   const pick = (id: string) => setParams((p) => { const n = new URLSearchParams(p); if (id === latest) n.delete("v"); else n.set("v", id); return n; });
 
   if (!project.versions.length && !run) {
@@ -79,14 +94,14 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
   return (
     <div className="relative h-full overflow-hidden bg-canvas">
       <div className="scroll-clear-chrome">
-        <div className="scroll-clear-body mx-auto grid max-w-[1400px] gap-8 px-4 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
+        <div className="scroll-clear-body mx-auto grid max-w-[1400px] grid-cols-[minmax(0,1fr)] gap-8 px-4 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
           <VersionRail versions={ordered} current={showRun ? null : vid} latest={latest} running={running} nextN={(ordered[0]?.n ?? 0) + 1} onPick={pick} />
 
           <main className="min-w-0">
             {showRun && run ? (
-              <LiveRevision run={run} base={base} onWalk={() => goTo("house")} onPlan={() => goTo("plan")} />
+              <LiveRevision run={run} base={base} compare={inlineCompare} onWalk={() => goTo("house")} onPlan={() => goTo("plan")} />
             ) : version ? (
-              <VersionStory project={project} version={version} parent={parent} run={finishedRun} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
+              <VersionStory project={project} version={version} parent={parent} run={finishedRun} compare={inlineCompare} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
             ) : (
               <p className="text-[15px] text-ink-3">Opening the version…</p>
             )}
@@ -94,17 +109,7 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
           {wide && (
             <aside className="hidden xl:sticky xl:top-4 xl:block xl:h-[calc(100dvh-var(--chrome-top)-var(--dock-h)-40px)] xl:self-start">
-              {(() => {
-                const revised = showRun ? run?.version?.plan ?? run?.plan : version?.plan;
-                // While a revision hasn't touched the plan yet, show the plan it starts from.
-                const after = revised ?? (showRun ? base?.plan : undefined);
-                const before = showRun ? (revised ? base?.plan : undefined) : parent?.plan;
-                const changes = showRun ? run?.version?.changes ?? run?.changes ?? [] : version?.changes ?? [];
-                // Targets can be openings or stairs: outline the room(s) each one touches.
-                const changed = after ? [...changedRooms(after, changes).keys()] : [];
-                const caption = !before ? (showRun ? "The plan as it stands; changes appear here as Naqsha makes them." : "The first design: nothing to compare yet.") : undefined;
-                return after ? <PlanCompare before={before} after={after} changed={changed} caption={caption} className="h-full" /> : <div className="h-full rounded-card bg-surface-2" />;
-              })()}
+              {compareNode(false) ?? <div className="h-full rounded-card bg-surface-2" />}
             </aside>
           )}
         </div>
@@ -117,7 +122,7 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
 function VersionRail({ versions, current, latest, running, nextN, onPick }: { versions: Project["versions"]; current: string | null; latest: string | null; running: boolean; nextN: number; onPick: (id: string) => void }) {
   return (
-    <nav aria-label="Versions" className="lg:sticky lg:top-4 lg:self-start">
+    <nav aria-label="Versions" className="min-w-0 lg:sticky lg:top-4 lg:self-start">
       <p className="text-label text-ink-3">Versions</p>
       <ol className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
         {running && (
@@ -159,7 +164,7 @@ function clock(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version; onWalk: () => void; onPlan: () => void }) {
+function LiveRevision({ run, base, compare, onWalk, onPlan }: { run: Run; base?: Version; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
   const running = run.status === "running";
   const now = useNow(running);
   const asked = run.instruction ? `“${run.instruction}”` : run.commentIds?.length ? plural(run.commentIds.length, "comment") : "your changes";
@@ -172,7 +177,7 @@ function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version;
       </h1>
       {!running && run.version && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button variant="primary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
+          <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
             Walk through it
           </Button>
           <Button variant="secondary" onClick={onPlan}>
@@ -191,6 +196,7 @@ function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version;
       </section>
 
       {(run.version?.changes ?? run.changes)?.length ? <Changes changes={(run.version?.changes ?? run.changes)!} before={base?.plan} after={plan} /> : null}
+      {compare}
       {run.resolved.length > 0 && <Threads comments={run.resolved} plan={base?.plan} latestVersion={run.version?.id} />}
     </div>
   );
@@ -243,7 +249,7 @@ function ComplianceLine({ version }: { version: Version }) {
 
 // ── A finished version ──────────────────────────────────────────────────────────────────────────────
 
-function VersionStory({ project, version, parent, run, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; onWalk: () => void; onPlan: () => void }) {
+function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -270,7 +276,7 @@ function VersionStory({ project, version, parent, run, onWalk, onPlan }: { proje
       </p>
       <h1 className="mt-1 text-title text-ink">{first ? "The first design, drawn from your brief." : storyTitle(summary, changes)}</h1>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button variant="primary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
+        <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
           Walk through it
         </Button>
         <Button variant="secondary" onClick={onPlan}>
@@ -301,6 +307,7 @@ function VersionStory({ project, version, parent, run, onWalk, onPlan }: { proje
                   : "Nothing in the plan needed to change for this one."}
             </p>
           )}
+          {compare}
           {comments === null ? <p className="mt-8 text-[14px] text-ink-3">Loading the comments…</p> : comments.length ? <Threads comments={comments} plan={parent?.plan} latestVersion={project.current_version_id ?? undefined} /> : null}
         </>
       )}
@@ -334,8 +341,14 @@ function Changes({ changes, before, after }: { changes: Change[]; before?: Build
 /** "Widened the master window, and 2 more changes." A sentence for the H1, never a data string. */
 function storyTitle(summary: string | undefined, changes: Change[]): string {
   const lead = changes[0] ? cleanSummary(changes[0].summary) : versionLine(summary);
-  const base = lead.replace(/^v\d+:\s*/i, "").replace(/[.;,\s]+$/, "");
-  const sentence = base ? base.charAt(0).toUpperCase() + base.slice(1) : "A revision";
+  const base = lead
+    .replace(/^v\d+:\s*/i, "")
+    .replace(/\s*·\s*\d+\/\d+.*$/, "")
+    .replace(/[“”"]/g, "")
+    .replace(/[.;,\s…]+$/, "")
+    // "From 2 comments" (a version with nothing to list) reads as what happened.
+    .replace(/^from (\d+ comments?)$/i, "Revised from $1");
+  const sentence = base && base !== "A revision" ? base.charAt(0).toUpperCase() + base.slice(1) : "A revision";
   const more = changes.length > 1 ? `, and ${changes.length - 1} more ${changes.length - 1 === 1 ? "change" : "changes"}` : "";
   return `${sentence}${more}.`;
 }
