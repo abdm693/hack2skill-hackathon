@@ -67,7 +67,7 @@ function location(project: Project, plan: BuildingPlan): string {
   return [scheme, city].filter(Boolean).join(", ");
 }
 
-export function PrintDocument({ project, version, options, conceptUrl }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string }) {
+export function PrintDocument({ project, version, options, conceptUrl, onPages }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string; /** The exact number of sheets, once the compliance report is measured. */ onPages?: (n: number) => void }) {
   const plan = version.plan;
   const paper = PAPER[options.paper];
   const lay = LAYOUT[options.paper];
@@ -76,6 +76,9 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
   const date = new Date(version.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const [compliancePages, setCompliancePages] = useState(1);
   const pages = (options.cover ? 1 : 0) + levels.length + (options.compliance ? compliancePages : 0);
+  useLayoutEffect(() => {
+    onPages?.(pages);
+  }, [pages, onPages]);
   // Page numbers are explicit (the compliance sheets re-render on their own once measured).
   const firstCompliancePage = (options.cover ? 1 : 0) + levels.length + 1;
   const block = (title: string, sheetNo: string, pageNo: number, scaled = false) => (
@@ -115,7 +118,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
                     {[project.brief?.plot?.area_marla ? plotLabel(project.brief.plot.area_marla) : null, location(project, plan)].filter(Boolean).join(" · ")}
                   </p>
                 </div>
-                <SitePlan plan={plan} widthMm={lay.sidebar + 24} heightMm={paper.h * (options.paper === "a4" ? 0.26 : 0.3)} />
+                <SitePlan plan={plan} widthMm={lay.sidebar + 24 - 5} heightMm={paper.h * (options.paper === "a4" ? 0.26 : 0.3) - 4} />
                 <AreaSchedule plan={plan} report={version.compliance} />
                 <div style={{ marginTop: "auto" }}>{block("Cover and area schedule", "A-000", 1)}</div>
               </FitColumn>
@@ -301,7 +304,9 @@ function SitePlan({ plan, widthMm, heightMm }: { plan: BuildingPlan; widthMm: nu
   return (
     <div>
       <p style={{ fontSize: mm(2.9), fontWeight: 500, margin: "0 0 1.5mm" }}>Site plan</p>
-      <svg width={`${B.w * k}mm`} height={`${B.h * k}mm`} viewBox={`${B.x} ${B.y} ${B.w} ${B.h}`}>
+      {/* At this small scale the dimension text is large for its margin: let it draw past the frame (with room kept
+          for it) rather than be cut off. */}
+      <svg width={`${B.w * k}mm`} height={`${B.h * k}mm`} viewBox={`${B.x} ${B.y} ${B.w} ${B.h}`} style={{ overflow: "visible", margin: "3mm 0 0 2mm", display: "block" }}>
         <PlanDefs ppf={ppf} />
         <PlanSheet plan={plan} levelId={ground.id} ppf={ppf} print labels={labels} />
       </svg>
@@ -331,8 +336,18 @@ function AreaSchedule({ plan, report }: { plan: BuildingPlan; report: Version["c
           </tr>
         ))}
         <tr>
-          <td style={{ fontWeight: 600 }}>Total covered</td>
+          <td style={{ fontWeight: 600 }}>
+            Total covered
+            <span style={{ display: "block", fontWeight: 400, fontSize: mm(2.3), color: "#6E6E73" }}>Includes the porch, balconies and stair tower</span>
+          </td>
           <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>{num(total)}</td>
+        </tr>
+        <tr>
+          <td>
+            Floor area for FAR
+            <span style={{ display: "block", fontSize: mm(2.3), color: "#6E6E73" }}>What LDA counts towards the floor area ratio</span>
+          </td>
+          <td className="mono" style={{ textAlign: "right" }}>{num(m.total_floor_area_sqft)}</td>
         </tr>
         <tr>
           <td>Plot</td>
@@ -399,26 +414,45 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
     const pxPerMm = unit ? unit.offsetHeight / 100 : PX_PER_MM;
     const heights = new Map<string, number>();
     for (const el of box.querySelectorAll<HTMLElement>("[data-item]")) heights.set(el.dataset.item!, el.offsetHeight / pxPerMm);
-    const pages: Item[][][] = [];
-    let cols: Item[][] = [[]];
-    let used = 0;
-    const limit = colH - 1;
-    items.forEach((it, i) => {
-      const h = heights.get(it.key) ?? 6;
-      // A group title never ends a column: it moves with its first row.
-      const next = items[i + 1];
-      const need = it.kind === "group" && next ? h + (heights.get(next.key) ?? 6) : h;
-      if (used + need > limit && cols[cols.length - 1].length) {
-        if (cols.length === lay.columns) {
-          pages.push(cols);
-          cols = [[]];
-        } else cols.push([]);
-        used = 0;
+    const pack = (limit: number) => {
+      const out: Item[][][] = [];
+      let cols: Item[][] = [[]];
+      let used = 0;
+      items.forEach((it, i) => {
+        const h = heights.get(it.key) ?? 6;
+        // A group title never ends a column: it moves with its first row.
+        const next = items[i + 1];
+        const need = it.kind === "group" && next ? h + (heights.get(next.key) ?? 6) : h;
+        if (used + need > limit && cols[cols.length - 1].length) {
+          if (cols.length === lay.columns) {
+            out.push(cols);
+            cols = [[]];
+          } else cols.push([]);
+          used = 0;
+        }
+        cols[cols.length - 1].push(it);
+        used += h;
+      });
+      out.push(cols);
+      return out;
+    };
+    const full = colH - 1;
+    let pages = pack(full);
+    // No sheet holds less than a third of a page: when the last one would, the columns are evened out across the
+    // same number of sheets (never more), so the tail sheet carries a fair share.
+    const usedOn = (pg: Item[][]) => pg.reduce((s, c) => s + c.reduce((t, x) => t + (heights.get(x.key) ?? 6), 0), 0);
+    if (pages.length > 1 && usedOn(pages[pages.length - 1]) < (full * lay.columns) / 3) {
+      const total = items.reduce((s, x) => s + (heights.get(x.key) ?? 6), 0);
+      const tallest = Math.max(...items.map((x) => heights.get(x.key) ?? 6));
+      for (let k = 0.98; k >= 0.6; k -= 0.04) {
+        const limit = Math.max(tallest + 8, Math.min(full, (total / (pages.length * lay.columns)) / k));
+        const trial = pack(limit);
+        if (trial.length === pages.length && usedOn(trial[trial.length - 1]) >= (full * lay.columns) / 3) {
+          pages = trial;
+          break;
+        }
       }
-      cols[cols.length - 1].push(it);
-      used += h;
-    });
-    pages.push(cols);
+    }
     const sig = JSON.stringify(pages.map((pg) => pg.map((c) => c.map((x) => x.key))));
     setPagesOf((prev) => (prev && JSON.stringify(prev.map((pg) => pg.map((c) => c.map((x) => x.key)))) === sig ? prev : pages));
   }, [items, colH, lay.columns, colW]);

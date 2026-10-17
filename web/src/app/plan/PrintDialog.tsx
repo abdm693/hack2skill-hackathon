@@ -86,7 +86,10 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
   useEffect(() => setPicked(levels.map((l) => l.id)), [levels]);
 
   const scale = pickScale(version.plan, paper);
-  const sheets = (cover ? 1 : 0) + picked.length + (compliance ? 1 : 0);
+  // The compliance report's sheets are measured off-screen (the same layout that prints), so the count is exact.
+  const [reportSheets, setReportSheets] = useState<Record<Paper, number | null>>({ a3: null, a4: null });
+  const measured = reportSheets[paper];
+  const sheets = (cover ? 1 : 0) + picked.length + (compliance ? measured ?? 1 : 0);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const options: PrintOptions = { paper, levels: picked, cover, compliance };
@@ -112,8 +115,7 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
               Preview
             </Button>
             <Button variant="primary" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => go()} disabled={!sheets} loading={busy}>
-              {/* The compliance report takes as many sheets as it needs (more on A4), so the count is "from". */}
-              {compliance ? `Print ${sheets}+ sheets` : `Print ${sheets} ${sheets === 1 ? "sheet" : "sheets"}`}
+              {compliance && measured == null ? "Print" : `Print ${sheets} ${sheets === 1 ? "sheet" : "sheets"}`}
             </Button>
           </>
         }
@@ -153,6 +155,19 @@ export function PrintDialog({ open, onClose, project, version }: { open: boolean
         </div>
       </Dialog>
       {portal}
+      {open && (
+        <div aria-hidden style={{ position: "fixed", left: "-30000px", top: 0, visibility: "hidden", pointerEvents: "none" }}>
+          {(["a3", "a4"] as Paper[]).map((p) => (
+            <PrintDocument
+              key={p}
+              project={project}
+              version={version}
+              options={{ paper: p, levels: [], cover: false, compliance: true }}
+              onPages={(n) => setReportSheets((s) => (s[p] === n ? s : { ...s, [p]: n }))}
+            />
+          ))}
+        </div>
+      )}
       <AnimatePresence>{preview && <PrintPreview project={project} version={version} options={preview} conceptUrl={concept?.url} onClose={() => setPreview(null)} onPrint={() => go(preview)} />}</AnimatePresence>
     </>
   );
