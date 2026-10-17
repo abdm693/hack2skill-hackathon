@@ -76,7 +76,10 @@ STAIRS (objective geometry, checked):
 ARCHITECT'S COMMON SENSE: plan the way a thoughtful Lahore architect would. Every room has its own way in from circulation: a
 bedroom opens onto a corridor, lobby, stair hall or the family lounge (plus its own bath, dressing or balcony), never through
 another bedroom, a bath, the kitchen or the drawing room; a bath has exactly one door, and the master bath opens into the master
-bedroom. A dressing opens only into its own bedroom (or that bedroom's bath), never onto a lounge. Two bedrooms never share a
+bedroom. A powder room or common bath never opens into the dining room (its door would face the dining table): open it off a
+lobby, passage or the lounge. A dressing opens only into its own bedroom (or that bedroom's bath), never onto a lounge, and is
+at least 5 ft across and 25 sq ft (a 2 ft wardrobe plus a 3 ft aisle); smaller than that, give the bedroom a wardrobe wall
+instead. Two bedrooms never share a
 balcony or terrace, and their balconies never touch (keep a room or a gap between them). Guests reach the drawing room from the
 porch or lobby without seeing the family's rooms; the family reaches the lounge without crossing the drawing room. Doors sit near
 room corners on walls the two rooms share; each bedroom keeps a solid wall for the bed and each lounge one for the TV. Rooms take

@@ -608,7 +608,7 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
         out.add("plan.malformed", "Plan structure", "fail", f"The plan could not be read ({type(e).__name__}).")
         return out.checks
     for rule in (_openings, _clash, _open_to, _privacy, _baths, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
-                 _solid_walls, _bath_sizes, _covered_open, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
+                 _solid_walls, _bath_sizes, _dressing_sizes, _covered_open, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
         try:
             if rule in (_roof_services, _program, _porch):
                 rule(ix, out, brief or {})
@@ -850,9 +850,11 @@ def _baths(ix: PlanIndex, out: _Out) -> None:
         nt = ix.type(nb)
         allowed = PRIVATE | {"dressing"} | CIRC | {"lounge"} | ({"drawing"} if t == "powder" else set())
         if nt == "dining":
-            out.add(f"plan.privacy.wc_into_dining:{rid}", "Toilet off the dining", "warn",
-                    f"{r['name']} opens straight into the dining room.", ids=[rid, nb],
-                    fix="Add a small lobby in front of it or move its door to a corridor.", ref=f"{REF} P-06")
+            # A powder room or common bath whose only door frames the dining table: guests eat facing the WC door.
+            out.add(f"plan.privacy.wc_into_dining:{rid}", "Toilet off the dining", "fail",
+                    f"{r['name']} opens straight into {ix.name(nb)}, so the toilet door faces the dining table.", ids=[rid, nb],
+                    fix=f"Open {r['name']} off a lobby, passage or the lounge instead of {ix.name(nb)}, or put a small lobby "
+                        f"(at least 4 ft deep) in front of its door.", ref=f"{REF} P-06")
         elif nt not in allowed:
             out.add(f"plan.privacy.bath_door:{rid}", "Bath door", "fail", f"{r['name']} opens into {ix.name(nb)}.",
                     ids=[rid, nb], fix="Open it into its own bedroom, a corridor, a lobby or the lounge; never a kitchen, store, "
@@ -1852,6 +1854,30 @@ def _bath_sizes(ix: PlanIndex, out: _Out) -> None:
                     f"{r['name']} is a long, narrow {fmt(w)} × {fmt(d)}; part of it is wasted corridor.", ids=[r["id"]],
                     fix="Keep baths roughly 5 × 8 to 6 × 10 ft and give the spare length to a wardrobe or the bedroom.",
                     ref=f"{REF} P-28")
+
+
+# P-28b (Naqsha): a walk-in dressing you can furnish ------------------------------------------------------------------------
+DRESSING_MIN = (25.0, 5.0)  # sq ft, short side: a 2 ft wardrobe run + a 3 ft aisle in front of it
+
+
+def _dressing_sizes(ix: PlanIndex, out: _Out) -> None:
+    need_a, need_w = DRESSING_MIN
+    for r in ix.rooms:
+        if r.get("type") != "dressing":
+            continue
+        x0, y0, x1, y1 = ix.R[r["id"]]
+        w, d = x1 - x0, y1 - y0
+        a, narrow = w * d, min(w, d)
+        if a + 1e-6 >= need_a and narrow + 1e-6 >= need_w:
+            continue
+        what = f"{fmt(narrow)} wide" if narrow + 1e-6 < need_w else f"{a:.0f} sq ft"
+        out.add(f"plan.room.dressing_size:{r['id']}", "Dressing size", "fail",
+                f"{r['name']} is only {what} ({fmt(w)} × {fmt(d)}); a walk-in dressing needs 5 ft across for a 2 ft wardrobe "
+                f"and a 3 ft aisle, and at least {need_a:g} sq ft.", ids=[r["id"]],
+                fix=f"Make {r['name']} at least 5 ft wide and {need_a:g} sq ft (e.g. 5 × 6 ft), taking the space from its "
+                    f"bedroom, or drop it and give the bedroom a built-in wardrobe wall instead.",
+                ref=f"{REF} P-28", value=round(narrow, 2) if narrow + 1e-6 < need_w else round(a),
+                limit=need_w if narrow + 1e-6 < need_w else need_a, unit="ft" if narrow + 1e-6 < need_w else "sq ft")
 
 
 # P-26 ----------------------------------------------------------------------------------------------------------------

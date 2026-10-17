@@ -226,8 +226,9 @@ Each rule is listed with an **ID**, a **status**, the **rule**, its **check**, a
 
 **P-06 `plan.privacy.bath_door`** (FAIL)
 - Rule: a WET room has **one** door.
-  - Its target is either a single PRIVATE or dressing room (attached), or CIRC, `lounge`, `drawing` (powder only) or `dining`.
-  - The dining case is a WARN `plan.privacy.wc_into_dining`: *"add a small lobby"*.
+  - Its target is either a single PRIVATE or dressing room (attached), or CIRC, `lounge` or `drawing` (powder only).
+  - A powder room or common bath whose only door opens into the `dining` room FAILS `plan.privacy.wc_into_dining`: the WC door
+    frames the dining table. Fix: *"open it off a lobby, passage or the lounge, or put a small lobby in front of its door"*.
   - Never `kitchen`, `dirty_kitchen`, `store`, `laundry` or another WET room.
 - A bath whose id or name contains "master" must open into the `master_bedroom` or its dressing.
 - Message: `"{bath} opens into {target}."`, `"{bath} has {n} doors; an attached bath opens only into its bedroom."` or `"Master Bath does not open into the master bedroom."` (argon-v1)
@@ -358,6 +359,11 @@ Each rule is listed with an **ID**, a **status**, the **rule**, its **check**, a
 
 **P-27 `plan.room.upper_open_space`** (INFO)
 - An `open_space` on an upper level is built as a floored deck. Ask for a balcony or terrace, or a true light well (schema extension in A.3).
+
+**P-28 `plan.room.bath_size`** (FAIL) and **`plan.room.dressing_size`** (FAIL)
+- A bath needs 30 sq ft and 4′6″ clear width (master 40 sq ft); a powder room 15 sq ft and 3 ft.
+- A `dressing` needs a short side of at least 5 ft (a 2 ft wardrobe plus a 3 ft aisle) and at least 25 sq ft; smaller, the
+  engine has nowhere to put the wardrobe. Fix: take the space from its bedroom, or drop it for a wardrobe wall.
 
 ### A.2 Checker bugs to fix alongside
 

@@ -333,3 +333,51 @@ def test_messages_carry_names_not_ids():
 
 def test_wet_over_dry_ignores_the_kitchen_and_baths(plans):
     assert "plan.structure.wet_over_dry:f_bath3" not in checks(copy.deepcopy(plans["example"]))
+
+
+# --- round 2 (architect-e2e p_13230dfcc54c: powder room onto the dining table, a walk-in dressing too small to furnish) -----
+def test_powder_room_into_the_dining_fails():
+    """BE2-06: the powder room's only door framed the dining table (the architect's review flagged it, then was discarded)."""
+    by = checks(load("plan-e2e-4bed-v1.json"), load("brief-e2e-4bed.json"))
+    c = by["plan.privacy.wc_into_dining:g_powder"]
+    assert c["status"] == "fail" and set(c["element_ids"]) == {"g_powder", "g_dining"}
+    assert "lobby" in c["fix"] and "lounge" in c["fix"]
+    assert not re.search(r"\b[gf]_[a-z]", c["message"] + c["fix"])
+    assert "plan.rule.independence" not in by     # the family no longer shows as a pass
+
+
+def test_bath_into_the_dining_fails_and_off_the_lounge_passes(plans):
+    p = copy.deepcopy(plans["example"])
+    assert next(o for o in p["openings"] if o["id"] == "g_powder_door")["between"] == ["g_powder", "g_lounge"]
+    assert "plan.privacy.wc_into_dining:g_powder" not in fails(p)
+    next(r for r in p["rooms"] if r["id"] == "g_lounge")["type"] = "dining"   # the same door, now onto a dining room
+    assert "plan.privacy.wc_into_dining:g_powder" in fails(p)
+    next(r for r in p["rooms"] if r["id"] == "g_powder")["type"] = "bath"     # a common bath too
+    assert "plan.privacy.wc_into_dining:g_powder" in fails(p)
+
+
+def test_dressing_too_small_to_furnish():
+    """BE2-06: a 5'6" x 4'6" walk-in dressing has no room for a 2 ft wardrobe and a 3 ft aisle."""
+    c = checks(load("plan-e2e-4bed-v1.json"))["plan.room.dressing_size:f_master_dress"]
+    assert c["status"] == "fail" and c["value"] == 4.5 and c["limit"] == 5.0 and c["unit"] == "ft"
+    assert "4′6″ wide" in c["message"] and "f_master_dress" not in c["message"]
+
+
+def test_dressing_size_thresholds(plans):
+    p = copy.deepcopy(plans["example"])
+    d = next(r for r in p["rooms"] if r["id"] == "f_master_dress")   # 6 x 5 ft: passes
+    assert "plan.room.dressing_size:f_master_dress" not in checks(p)
+    d["rect"]["w"], d["rect"]["d"] = 5.0, 5.25                         # the 10 marla sample's size: still passes
+    assert "plan.room.dressing_size:f_master_dress" not in checks(p)
+    d["rect"]["w"], d["rect"]["d"] = 6.0, 4.75                         # 28.5 sq ft but only 4'9" across
+    c = checks(p)["plan.room.dressing_size:f_master_dress"]
+    assert c["status"] == "fail" and c["unit"] == "ft" and c["limit"] == 5.0 and c["value"] == 4.75
+    d["rect"]["w"], d["rect"]["d"] = 4.5, 8.0                          # 36 sq ft, still only 4'6" across
+    assert checks(p)["plan.room.dressing_size:f_master_dress"]["status"] == "fail"
+
+
+def test_plan_prompt_states_the_dining_and_dressing_rules():
+    from app.agents import architect
+    s = " ".join(architect.PLAN_SYSTEM.split())
+    assert "never opens into the dining room" in s
+    assert "at least 5 ft across and 25 sq ft" in s
