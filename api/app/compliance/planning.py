@@ -607,8 +607,9 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
         log.exception("planning index failed")
         out.add("plan.malformed", "Plan structure", "fail", f"The plan could not be read ({type(e).__name__}).")
         return out.checks
-    for rule in (_openings, _clash, _open_to, _privacy, _baths, _wc_on_entry, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
-                 _solid_walls, _bath_sizes, _dressing_sizes, _covered_open, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
+    for rule in (_openings, _clash, _open_to, _privacy, _baths, _wc_on_entry, _reach, _routes, _main_door, _widths, _dead_ends,
+                 _porch, _solid_walls, _bath_sizes, _dressing_sizes, _covered_open, _stairs, _mumty, _roof_services, _program,
+                 _wet_over_dry):
         try:
             if rule in (_roof_services, _program, _porch):
                 rule(ix, out, brief or {})
@@ -868,7 +869,8 @@ def _baths(ix: PlanIndex, out: _Out) -> None:
 
 # P-06b ---------------------------------------------------------------------------------------------------------------
 WC_CONE_DEG, WC_CONE_FT = 30.0, 15.0  # a WC door this close to the main door's line of sight is in view from the porch
-LOBBY_MIN_DEPTH, LOBBY_DOORS = 5.0, 4  # an entrance lobby shallower than this with this many doors (main door included) is a pinch
+# an entrance lobby shallower than this, with this many doors or more (the main door included), is a pinch point
+LOBBY_MIN_DEPTH, LOBBY_DOORS = 5.0, 4
 
 
 def _span(o: dict, axis: str) -> tuple[float, float]:
