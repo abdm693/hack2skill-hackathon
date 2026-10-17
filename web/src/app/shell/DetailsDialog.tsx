@@ -4,6 +4,8 @@ import { BUDGET_LABEL, FACING_LABEL, plotLabel, spaceLabel } from "@/api/domain"
 import { relativeTime } from "@/app/lib/utils";
 import { Button } from "@/app/ui/Button";
 import { Dialog } from "@/app/ui/Dialog";
+import { sentenceCase } from "@/app/plan/model";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
 
 export function DetailsDialog({ open, onClose, project }: { open: boolean; onClose: () => void; project: Project }) {
   const b = project.brief;
@@ -20,15 +22,17 @@ export function DetailsDialog({ open, onClose, project }: { open: boolean; onClo
     ].filter(Boolean);
     rows.push(["Home", home.length ? home.join(" · ") : "Not yet"]);
     if (b.spaces?.length) rows.push(["Spaces", b.spaces.map(spaceLabel).join(", ")]);
-    if (b.style) rows.push(["Style", b.style]);
+    if (b.style) rows.push(["Style", sentenceCase(b.style)]);
     if (b.budget) rows.push(["Budget", BUDGET_LABEL[b.budget] ?? b.budget]);
-    if (b.water_tank) rows.push(["Water tank", b.water_tank === "concrete" ? "Concrete, in the stair tower" : "Blue plastic"]);
-    if (b.solar) rows.push(["Roof", b.solar === "none" ? "No solar" : b.solar === "ready" ? "Kept clear for solar" : "Solar panels included"]);
+    if (b.water_tank) rows.push(["Water tank", tankLabel(b.water_tank) ?? b.water_tank]);
+    if (b.solar) rows.push(["Roof", solarLabel(b.solar) ?? b.solar]);
   }
   if (e) {
     rows.push([`${e.authority ?? "LDA"} rules`, `${e.band}: ${e.max_coverage_pct}% coverage, ${e.max_height_ft} ft high, setbacks ${e.setbacks_ft.front}′ front and ${e.setbacks_ft.rear}′ rear`]);
   }
-  rows.push(["Versions", project.versions.length ? `${project.versions.length}` : "None yet"]);
+  // The latest version and its age, said the same way as the Versions popover ("v2 · 2 hours ago").
+  const latestV = [...project.versions].sort((a, b) => b.n - a.n)[0];
+  rows.push(["Versions", latestV ? `${project.versions.length} · latest v${latestV.n}, ${relativeTime(latestV.created_at)}` : "None yet"]);
   rows.push(["Started", relativeTime(project.created_at)]);
   rows.push(["Last change", relativeTime(project.updated_at)]);
 

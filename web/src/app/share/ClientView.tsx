@@ -7,9 +7,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
 import type { Comment } from "@contracts/api-types";
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { cn } from "@/app/lib/utils";
-import { isTyping, usePhone } from "@/app/lib/hooks";
+import { isTyping, useMediaQuery, usePhone } from "@/app/lib/hooks";
 import { setNameAsker, useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
 import { CommentsSheet } from "@/app/comments/CommentsSheet";
@@ -52,6 +52,8 @@ export function ClientView() {
   // Presence: pick up new comments and replies every 10 s (the light comments endpoint), and whether a newer
   // version exists every 30 s.
   const pid = project?.id;
+  const [revoked, setRevoked] = useState(false);
+  useEffect(() => setRevoked(false), [token]);
   useEffect(() => {
     if (!pid) return;
     const t = setInterval(async () => {
@@ -64,7 +66,11 @@ export function ClientView() {
         const pending = new Map(st.comments.map((c) => [c.id, (c.replies ?? []).filter((r) => r.id.startsWith("reply-"))]));
         const next = list.map((c) => ({ ...c, replies: [...(c.replies ?? []), ...(pending.get(c.id) ?? [])] }));
         if (JSON.stringify(next) !== JSON.stringify(st.comments)) useProject.setState({ comments: next });
-      } catch { /* stay quiet; try again next tick */ }
+      } catch (e) {
+        // The owner turned the link off: say so on this poll instead of failing quietly on the next send.
+        if (e instanceof ApiError && (e.status === 403 || e.status === 404 || e.status === 410)) setRevoked(true);
+        /* otherwise stay quiet; try again next tick */
+      }
     }, 10_000);
     return () => clearInterval(t);
   }, [pid, token]);
@@ -86,6 +92,18 @@ export function ClientView() {
     return () => clearInterval(t);
   }, [pid, token]);
 
+  if (revoked) {
+    return (
+      <div className="grid min-h-[100dvh] place-items-center bg-canvas px-4 text-center">
+        <div className="max-w-sm">
+          <Wordmark className="justify-center" />
+          <h1 className="mt-8 text-title text-ink">This link is no longer shared</h1>
+          <p className="mt-2 text-[15px] leading-[22px] text-ink-2">The owner turned it off. Ask them to share the home again if you still need it.</p>
+          <Link to="/" className="mt-6 inline-block text-[14px] font-medium text-accent underline-offset-4 hover:underline">What is Naqsha?</Link>
+        </div>
+      </div>
+    );
+  }
   if (!project) {
     if (loadState === "error") {
       return (
@@ -117,6 +135,8 @@ function ClientShell({ token }: { token: string }) {
   const addComment = useProject((s) => s.addComment);
   const [params, setParams] = useSearchParams();
   const phone = usePhone();
+  // Touch screens say "Tap", never "Click".
+  const touch = useMediaQuery("(pointer: coarse)");
   const ask = useAsk();
   const right = useShell((s) => s.right);
   const focusComment = useShell((s) => s.focusComment);
@@ -184,9 +204,11 @@ function ClientShell({ token }: { token: string }) {
     [version, addComment, openComments],
   );
 
-  const submit = async (text: string) => {
-    if (!(await ensureName())) return;
-    if (await postGeneral(text)) toast.show(`Sent to ${owner}`);
+  const submit = async (text: string): Promise<boolean> => {
+    if (!(await ensureName())) return false;
+    const ok = await postGeneral(text);
+    if (ok) toast.show(`Sent to ${owner}`);
+    return ok;
   };
 
   // Approve always targets the version on screen.
@@ -331,7 +353,7 @@ function ClientShell({ token }: { token: string }) {
                 approved && version
                   ? `You approved version ${version.n}. ${sharedBy ?? "The owner"} can see it in the comments.`
                   : tab === "house"
-                    ? "Click a spot on the house to leave a note, or walk through it room by room."
+                    ? `${touch ? "Tap" : "Click"} a spot on the house to leave a note, or walk through it room by room.`
                     : `This is version ${version?.n ?? 1}, checked against LDA rules.`
               }
               defaultPlaceholder={`Leave a note for ${owner}`}
@@ -351,7 +373,7 @@ function ClientShell({ token }: { token: string }) {
         project={project}
         clientView
         focusId={focusComment}
-        emptyHint={`Click anywhere on the house to pin a note for ${owner}, or type one below.`}
+        emptyHint={`${touch ? "Tap" : "Click"} anywhere on the house to pin a note for ${owner}, or type one below.`}
         onShow={(c: Comment) => setParams({ comment: c.id })}
       />
 

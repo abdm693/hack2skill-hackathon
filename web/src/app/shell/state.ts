@@ -20,6 +20,9 @@ interface ShellState {
   /** House's "notes from the 3D model" list (phones open it from the title menu). */
   asBuiltOpen: boolean;
   setAsBuiltOpen(open: boolean): void;
+  /** A view's full-height phone sheet is open (House's room list): the view switch steps aside for it. */
+  switchHidden: boolean;
+  setSwitchHidden(hidden: boolean): void;
   toggleChat(open?: boolean): void;
   openComments(opts?: { apply?: boolean; focus?: string | null }): void;
   closeComments(): void;
@@ -37,6 +40,10 @@ export const useShell = create<ShellState>((set, get) => ({
   dockH: 0,
   viewSheet: 0,
   asBuiltOpen: false,
+  switchHidden: false,
+  setSwitchHidden(hidden) {
+    if (get().switchHidden !== hidden) set({ switchHidden: hidden });
+  },
   setAsBuiltOpen(open) {
     set({ asBuiltOpen: open });
   },
@@ -60,6 +67,6 @@ export const useShell = create<ShellState>((set, get) => ({
     set({ applyMode: on });
   },
   reset() {
-    set({ left: null, right: null, share: false, applyMode: false, focusComment: null, viewSheet: 0, asBuiltOpen: false });
+    set({ left: null, right: null, share: false, applyMode: false, focusComment: null, viewSheet: 0, asBuiltOpen: false, switchHidden: false });
   },
 }));

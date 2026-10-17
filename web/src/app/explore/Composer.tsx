@@ -6,7 +6,7 @@ import type { BuildingPlan } from "@contracts/plan";
 import type { Comment, CommentAnchor } from "@contracts/api-types";
 import { Button, Chip, EASE_OUT, IconButton } from "@/app/design/kit";
 import { inSentence, sentenceCase } from "@/app/plan/model";
-import { anchorLabel } from "./snapshot";
+import { anchorLabel, cleanAnchorLabel } from "./snapshot";
 
 export interface CommentDraft {
   anchor: CommentAnchor;
@@ -19,7 +19,9 @@ function quickStarts(anchor: CommentAnchor, plan?: BuildingPlan): string[] {
   const room = anchor.room ? plan?.rooms.find((r) => r.id === anchor.room)?.name : undefined;
   // "Make the TV lounge bigger", "More light in Bedroom 2": numbered rooms read as names.
   const r = room ? (/\d/.test(room) ? sentenceCase(room) : `the ${inSentence(room)}`) : undefined;
-  const label = anchor.label && anchor.label !== room && !/^(wall|floor|ceiling|slab)$/i.test(anchor.label) ? inSentence(anchor.label) : undefined;
+  // The engine's "Roof (roof)" reads "the roof": no "(…)", and never the room's own name again.
+  const clean = cleanAnchorLabel(anchor.label);
+  const label = clean && clean !== room && !/^(wall|floor|ceiling|slab)$/i.test(clean) ? inSentence(clean) : undefined;
   const out: string[] = [];
   if (r) out.push(`Make ${r} bigger`, `More light in ${r}`);
   if (label) out.push(`Move the ${label} `, `Change the ${label} to `);

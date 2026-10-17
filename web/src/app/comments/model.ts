@@ -1,6 +1,7 @@
 /** Comment filters, grouping and labels (DESIGN.md "Comments and collaboration"). */
 import type { Author, Comment } from "@contracts/api-types";
 import type { BuildingPlan } from "@contracts/plan";
+import { sentenceCase } from "@/app/plan/model";
 
 export type CommentFilter = "all" | "mine" | "team" | "client" | "open" | "resolved";
 
@@ -9,6 +10,20 @@ export const FILTERS: { id: CommentFilter; label: string }[] = [
   { id: "mine", label: "Mine" },
   { id: "team", label: "Team" },
   { id: "client", label: "Client" },
+  { id: "open", label: "Open" },
+  { id: "resolved", label: "Resolved" },
+];
+
+/** Two groups that combine: who wrote it, and whether it is still open ("Client" and "Open" at once). */
+export type WhoFilter = "all" | "mine" | "team" | "client";
+export type StatusFilter = "any" | "open" | "resolved";
+export const WHO_FILTERS: { id: WhoFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "mine", label: "Mine" },
+  { id: "team", label: "Team" },
+  { id: "client", label: "Client" },
+];
+export const STATUS_FILTERS: { id: Exclude<StatusFilter, "any">; label: string }[] = [
   { id: "open", label: "Open" },
   { id: "resolved", label: "Resolved" },
 ];
@@ -76,7 +91,12 @@ const levelLabel = (plan: BuildingPlan | undefined, id?: string) => {
 export function placeOf(c: Comment, plan?: BuildingPlan): string {
   const a = c.anchor;
   const room = a.room ? plan?.rooms.find((r) => r.id === a.room)?.name : undefined;
-  const parts = [levelLabel(plan, a.level), room ?? a.label ?? null].filter(Boolean) as string[];
+  // The engine's "Roof (roof)" is just "Roof"; a name that already says the floor doesn't repeat it ("Roof", not
+  // "Roof · Roof").
+  const what = room ?? a.label?.replace(/\s*\([^)]*\)\s*$/, "").trim() ?? null;
+  const level = levelLabel(plan, a.level);
+  const levelWord = level?.toLowerCase().replace(/\s*floor$/, "");
+  const parts = [what && levelWord && what.toLowerCase().includes(levelWord) ? null : level, what ? sentenceCase(what) : null].filter(Boolean) as string[];
   return parts.length ? parts.join(" · ") : "General";
 }
 

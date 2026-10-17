@@ -30,15 +30,19 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <header className="flex items-center justify-between px-4 py-4 sm:px-8 sm:py-6">
-        <Link to="/" aria-label="Naqsha home" className="rounded-[8px] outline-none focus-visible:shadow-focus">
-          <Wordmark />
-        </Link>
-        <Link to="/app" className="rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:shadow-focus">
-          Continue as a guest
-        </Link>
+      {/* The landing's own header container (1280px, 16/32px gutters), so the wordmark doesn't jump between pages. */}
+      <header>
+        <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-3 px-4 sm:px-8">
+          <Link to="/" aria-label="Naqsha home" className="rounded-[8px] outline-none focus-visible:shadow-focus">
+            <Wordmark />
+          </Link>
+          <Link to="/app" className="rounded-full px-3 py-2 text-[14px] font-medium text-ink-2 outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:shadow-focus">
+            Continue as a guest
+          </Link>
+        </div>
       </header>
-      <main className="grid flex-1 place-items-center px-4 pb-16">
+      {/* Sign in and Create account start at the same top (the longer form grows downwards, it doesn't re-centre). */}
+      <main className="flex flex-1 items-start justify-center px-4 pb-16 pt-[min(12vh,112px)]">
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

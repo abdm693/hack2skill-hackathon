@@ -77,8 +77,9 @@ export function FloorStack({
             title={`${f.name}${f.id === "all" ? "" : "  ([ / ])"}`}
             onClick={() => onChange(f.id)}
             className={cn(
-              "relative grid place-items-center rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus",
-              vertical ? "size-9 text-[13px]" : "h-8 min-w-9 px-3 text-[13px]",
+              "hit-44 relative grid place-items-center rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus",
+              // The same 36px round thumb in Plan, Revisions and House, standing or lying down ("All" widens it).
+              f.key.length > 2 ? "h-9 min-w-9 px-3 text-[13px]" : "size-9 text-[13px]",
               tone === "light" ? (active ? "text-white" : "text-ink-2 hover:text-ink") : active ? "text-ink" : "text-hud-ink-2 hover:text-hud-ink",
             )}
           >

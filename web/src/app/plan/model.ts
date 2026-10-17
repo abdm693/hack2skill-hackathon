@@ -56,47 +56,8 @@ export const BEDROOMS = new Set<RoomType>(["bedroom", "master_bedroom", "guest_b
 export const CIRCULATION = new Set<RoomType>(["corridor", "lobby", "stair", "lounge", "dining", "balcony", "terrace", "porch", "courtyard"]);
 export const DOOR_TYPES = new Set<Opening["type"]>(["main_door", "door", "double_door", "sliding_door", "arch", "garage_door"]);
 
-const SHORT: Partial<Record<RoomType, string>> = {
-  master_bedroom: "Master bed",
-  guest_bedroom: "Guest bed",
-  bedroom: "Bedroom",
-  bath: "Bath",
-  powder: "Powder",
-  dressing: "Dressing",
-  lounge: "Lounge",
-  drawing: "Drawing",
-  dining: "Dining",
-  kitchen: "Kitchen",
-  dirty_kitchen: "Dirty kitchen",
-  corridor: "Passage",
-  lobby: "Lobby",
-  stair: "Stair",
-  store: "Store",
-  laundry: "Laundry",
-  servant: "Servant",
-  porch: "Porch",
-  garage: "Garage",
-  balcony: "Balcony",
-  terrace: "Terrace",
-  lawn: "Lawn",
-  driveway: "Drive",
-  courtyard: "Court",
-  prayer: "Prayer",
-  study: "Study",
-  open_space: "Open",
-};
-
-const TINY: Partial<Record<RoomType, string>> = {
-  master_bedroom: "Master",
-  guest_bedroom: "Guest",
-  bedroom: "Bed",
-  dirty_kitchen: "D. kitchen",
-  kitchen: "Kit.",
-  dressing: "Dress",
-  laundry: "Lndry",
-  corridor: "Pass.",
-  servant: "Serv.",
-};
+/** Proper names that keep their capital inside a sentence ("Spanish veranda", "Johar Town"). */
+const PROPER = new Set(["Spanish", "Mughal", "Moorish", "Mediterranean", "Lahore", "Karachi", "Islamabad", "Bahria", "Gulberg", "Punjab", "Eid", "Quran", "Urdu", "English"]);
 
 /**
  * "Master Bedroom" → "Master bedroom" (keeps "TV", numbers and proper nouns that are all caps, also inside
@@ -106,9 +67,24 @@ export function sentenceCase(name: string): string {
   const words = name.trim().split(/\s+/);
   const keep = (w: string) => {
     const letters = w.replace(/[^A-Za-z]/g, "");
-    return (letters.length >= 2 && letters === letters.toUpperCase()) || /\d/.test(w);
+    return (letters.length >= 2 && letters === letters.toUpperCase()) || /\d/.test(w) || PROPER.has(letters);
   };
   return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : keep(w) ? w : w.toLowerCase())).join(" ");
+}
+
+/** Places that keep their capitals inside display text ("Johar Town", "DHA Phase 6"). */
+const PLACE = /\b(Town|Phase|Lahore|Gulberg|Bahria|Johar|Defence|Cantt|Avenue|Garden|Colony|Society|Valley|City)\b/;
+
+/**
+ * Display text in sentence case when it arrived in Title Case ("Modern Contemporary" → "Modern contemporary",
+ * "Separate Dirty Kitchen" → "Separate dirty kitchen"); mixed text, place names and acronyms are left as they are.
+ */
+export function untitle(text: string): string {
+  const t = text.trim();
+  const words = t.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w));
+  if (words.length < 2 || PLACE.test(t)) return t;
+  const titled = words.every((w) => /^[A-Z]/.test(w) || /^(and|or|of|the|a|an|in|on|to|with|for)$/.test(w));
+  return titled ? sentenceCase(t) : t;
 }
 
 /**
@@ -121,20 +97,16 @@ export function inSentence(name: string): string {
 }
 
 /**
- * Name forms for a room label, longest first. Every form still names the room: "Powder room" → "Powder",
- * "Bedroom 3" → "Bed 3", "Dirty Kitchen" → "Dirty kitchen" → "D. kitchen"; a bare "Room" never appears.
+ * Name forms for a room label, longest first. A label never abbreviates ("D. kitchen") and never drops the owner
+ * ("Bedroom" for "Parents' bedroom"): the full name in sentence case, and only a trailing "room" may go ("Drawing
+ * room" → "Drawing"). A name that still doesn't fit wraps onto two lines or gets a lettered key (labels.ts).
  */
 export function nameForms(r: Room, taken: Set<string> = new Set()): string[] {
   const full = sentenceCase(r.name);
-  const num = r.name.match(/\b(\d+)\b/)?.[1];
   const out: string[] = [full];
   const words = full.split(" ");
-  if (words.length > 1 && /^(room|space|area|hall)$/i.test(words[words.length - 1])) out.push(words.slice(0, -1).join(" "));
-  const short = SHORT[r.type];
-  if (short) out.push(num && !short.includes(num) ? `${short} ${num}` : short);
-  const tiny = TINY[r.type];
-  if (tiny) out.push(num && !tiny.includes(num) ? `${tiny} ${num}` : tiny);
-  // Never let a short form collide with another room's full name ("Dirty kitchen" never becomes "Kitchen").
+  if (words.length > 1 && /^room$/i.test(words[words.length - 1])) out.push(words.slice(0, -1).join(" "));
+  // Never let a shorter form collide with another room's full name.
   return [...new Set(out)].filter((c, i) => i === 0 || !taken.has(c.toLowerCase())).filter((c) => !/^(room|space|area|hall)$/i.test(c));
 }
 

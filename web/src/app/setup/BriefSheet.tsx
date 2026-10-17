@@ -10,7 +10,9 @@ import { BUDGET_LABEL, FACING_LABEL, plotLabel, toMarla } from "@/api/domain";
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { Button, Dialog, EASE_OUT, Segmented } from "@/app/design/kit";
 import { LEVEL_LABEL, defaultProgram, levelsFor, roomsLine, toFloors, bedroomsIn, bathsIn, type Program } from "./catalogue";
-import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate } from "./widgets";
+import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate, useCurrentReport } from "./widgets";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
+import { sentenceCase, untitle } from "@/app/plan/model";
 
 export type SaveBrief = (patch: Partial<Brief>, decided: string[]) => void;
 
@@ -25,6 +27,20 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
   const program: Program | null = b ? (b.floors?.length ? defaultProgram(b, envelope) : null) : null;
   const levels = levelsFor(b?.storeys || 2);
   const porch = b?.spaces?.find((s) => s.startsWith("car_porch"));
+  // Only what is known shows as a row; the rest is one line ("Naqsha will ask about the rest"), each still settable.
+  const missing = (
+    [
+      ["plot", "Plot", !hasPlot],
+      ["location", "Location", !b?.scheme && !b?.city],
+      ["facing", "Facing", !b?.facing],
+      ["floors", "Floors", !b?.storeys],
+      ["roof", "Roof", !b?.water_tank && !b?.solar],
+      ["style", "Style", !b?.style],
+      ["budget", "Finishes", !b?.budget],
+    ] as [Exclude<Editing, null>, string, boolean][]
+  )
+    .filter(([key, , gone]) => gone && ((key !== "floors" && key !== "roof") || !!b))
+    .map(([key, label]) => ({ key, label }));
 
   return (
     <div className={className}>
@@ -33,7 +49,7 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
         <span className="text-[12.5px] text-ink-3">Tap anything to change it</span>
       </div>
       <dl className="mt-3 divide-y divide-line border-y border-line">
-        <Row label="Plot" empty={!hasPlot} assumed={auto.has("plot")} onEdit={() => setEditing("plot")}>
+        {hasPlot && <Row label="Plot" empty={!hasPlot} assumed={auto.has("plot")} onEdit={() => setEditing("plot")}>
           {hasPlot && (
             <>
               <span>{plotLabel(plot!.area_marla || toMarla(plot!.width_ft, plot!.depth_ft))}</span>
@@ -43,15 +59,15 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
               <span className={cn(auto.has("corner") && "text-ink-3 underline decoration-dotted decoration-ink-4 underline-offset-4")}>{plot!.corner ? "Corner" : "Mid-row"}</span>
             </>
           )}
-        </Row>
-        <Row label="Location" empty={!b?.scheme && !b?.city} assumed={auto.has("scheme")} onEdit={() => setEditing("location")}>
+        </Row>}
+        {(b?.scheme || b?.city) && <Row label="Location" empty={!b?.scheme && !b?.city} assumed={auto.has("scheme")} onEdit={() => setEditing("location")}>
           <span>{[b?.scheme, b?.city].filter(Boolean).join(", ")}</span>
           {b?.authority && <span className="text-[12.5px] text-ink-3">{b.authority === "LDA" ? "LDA rules" : `${b.authority}: its own bylaws`}</span>}
-        </Row>
-        <Row label="Facing" empty={!b?.facing} assumed={auto.has("facing")} onEdit={() => setEditing("facing")}>
+        </Row>}
+        {b?.facing && <Row label="Facing" empty={!b?.facing} assumed={auto.has("facing")} onEdit={() => setEditing("facing")}>
           {b?.facing && <span>The front faces {FACING_LABEL[b.facing]?.toLowerCase()}</span>}
-        </Row>
-        <Row label="Floors" empty={!b?.storeys} assumed={auto.has("floors") || auto.has("storeys")} onEdit={() => setEditing("floors")} block>
+        </Row>}
+        {!!b?.storeys && <Row label="Floors" empty={!b?.storeys} assumed={auto.has("floors") || auto.has("storeys")} onEdit={() => setEditing("floors")} block>
           {!!b?.storeys && (
             <div className="space-y-0.5">
               <p>
@@ -70,17 +86,30 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
                   ))}
             </div>
           )}
-        </Row>
-        <Row label="Roof" empty={!b?.water_tank && !b?.solar} assumed={auto.has("water_tank") || auto.has("solar")} onEdit={() => setEditing("roof")}>
-          {b?.water_tank && <span>{b.water_tank === "plastic" ? "Plastic tank" : "Concrete tank in the stair tower"}</span>}
-          {b?.solar && <span className="text-ink-2">{b.solar === "ready" ? "Clear for solar" : b.solar === "panels" ? "Solar frame" : "No solar"}</span>}
-        </Row>
-        <Row label="Style" empty={!b?.style} assumed={auto.has("style")} onEdit={() => setEditing("style")}>
-          {b?.style && <span>{b.style}</span>}
-        </Row>
-        <Row label="Finishes" empty={!b?.budget} assumed={auto.has("budget")} onEdit={() => setEditing("budget")}>
+        </Row>}
+        {(b?.water_tank || b?.solar) && <Row label="Roof" empty={!b?.water_tank && !b?.solar} assumed={auto.has("water_tank") || auto.has("solar")} onEdit={() => setEditing("roof")}>
+          {b?.water_tank && <span>{tankLabel(b.water_tank)}</span>}
+          {b?.solar && <span className="text-ink-2">{solarLabel(b.solar)}</span>}
+        </Row>}
+        {b?.style && <Row label="Style" empty={!b?.style} assumed={auto.has("style")} onEdit={() => setEditing("style")}>
+          {b?.style && <span>{sentenceCase(b.style)}</span>}
+        </Row>}
+        {b?.budget && <Row label="Finishes" empty={!b?.budget} assumed={auto.has("budget")} onEdit={() => setEditing("budget")}>
           {b?.budget && <span>{BUDGET_LABEL[b.budget]}</span>}
-        </Row>
+        </Row>}
+        {missing.length > 0 && (
+          <div className="py-2.5 text-[13.5px] leading-snug text-ink-3">
+            Naqsha will ask about the rest
+            <span className="sr-only">: {missing.map((m) => m.label.toLowerCase()).join(", ")}</span>
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              {missing.map((m) => (
+                <button key={m.key} type="button" onClick={() => setEditing(m.key)} className="inline-flex h-7 items-center rounded-chip bg-surface-2 px-2.5 text-[12.5px] font-medium text-ink-2 outline-none transition-colors hover:bg-surface-3 hover:text-ink focus-visible:shadow-focus">
+                  {m.label}
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
         <Wishes prefs={b?.preferences ?? []} onChange={(preferences) => save({ preferences }, [])} />
         {b?.notes && (
           <div className="grid grid-cols-[88px_1fr] gap-3 py-2.5">
@@ -190,7 +219,7 @@ function Wishes({ prefs, onChange }: { prefs: string[]; onChange: (p: string[]) 
         <AnimatePresence initial={false}>
           {prefs.map((p) => (
             <motion.span key={p} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="inline-flex min-h-8 max-w-full items-center gap-0.5 rounded-chip bg-surface-2 py-1 pl-2.5 text-[13px] leading-snug text-ink">
-              {p}
+              {untitle(p)}
               <button type="button" aria-label={`Remove ${p}`} onClick={() => onChange(prefs.filter((x) => x !== p))} className="grid size-6 shrink-0 place-items-center rounded-full text-ink-4 hover:bg-surface-3 hover:text-ink">
                 <X className="size-3" strokeWidth={2} />
               </button>
@@ -362,6 +391,7 @@ function FloorsDialog({ open, brief, envelope, onClose, save }: { open: boolean;
 }
 
 function RoofDialog({ open, brief, envelope, onClose, save }: { open: boolean; brief: Brief; envelope: Envelope | null; onClose: () => void; save: SaveBrief }) {
+  const report = useCurrentReport();
   const [tank, setTank] = useState<"plastic" | "concrete">(brief.water_tank ?? "concrete");
   const [solar, setSolar] = useState<"none" | "ready" | "panels">(brief.solar ?? "ready");
   useEffect(() => {
@@ -392,7 +422,7 @@ function RoofDialog({ open, brief, envelope, onClose, save }: { open: boolean; b
         </>
       }
     >
-      <RoofEditor tank={tank} solar={solar} panels={solarEstimate(envelope, brief)} onChange={(t, s) => { setTank(t); setSolar(s); }} />
+      <RoofEditor tank={tank} solar={solar} panels={solarEstimate(envelope, brief, report)} onChange={(t, s) => { setTank(t); setSolar(s); }} />
     </Dialog>
   );
 }

@@ -17,7 +17,9 @@ import { feetInches, num } from "@/app/lib/utils";
 import { PlanDefs, PlanSheet, sheetBounds, stairAvoid } from "./FloorPlan";
 import { layoutLabels } from "./labels";
 import { area, coveredArea, isRoofLevel, levelName, levelsOf, roomsOn, SITE_TYPES, sentenceCase } from "./model";
-import { categoryOf, summarize, tallyLine, valueLine } from "./compliance";
+import { useProject } from "@/app/store/project";
+import { planSolarLabel, planTankLabel } from "@/app/lib/roof";
+import { categoryOf, firstSentence, isReview, reviewLine, statusLine, summarize, tallyLine, valueLine } from "./compliance";
 
 export type Paper = "a3" | "a4";
 export const PAPER: Record<Paper, { w: number; h: number; label: string }> = {
@@ -65,7 +67,7 @@ function location(project: Project, plan: BuildingPlan): string {
   return [scheme, city].filter(Boolean).join(", ");
 }
 
-export function PrintDocument({ project, version, options, conceptUrl }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string }) {
+export function PrintDocument({ project, version, options, conceptUrl, onPages }: { project: Project; version: Version; options: PrintOptions; conceptUrl?: string; /** The exact number of sheets, once the compliance report is measured. */ onPages?: (n: number) => void }) {
   const plan = version.plan;
   const paper = PAPER[options.paper];
   const lay = LAYOUT[options.paper];
@@ -74,6 +76,9 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
   const date = new Date(version.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const [compliancePages, setCompliancePages] = useState(1);
   const pages = (options.cover ? 1 : 0) + levels.length + (options.compliance ? compliancePages : 0);
+  useLayoutEffect(() => {
+    onPages?.(pages);
+  }, [pages, onPages]);
   // Page numbers are explicit (the compliance sheets re-render on their own once measured).
   const firstCompliancePage = (options.cover ? 1 : 0) + levels.length + 1;
   const block = (title: string, sheetNo: string, pageNo: number, scaled = false) => (
@@ -113,7 +118,7 @@ export function PrintDocument({ project, version, options, conceptUrl }: { proje
                     {[project.brief?.plot?.area_marla ? plotLabel(project.brief.plot.area_marla) : null, location(project, plan)].filter(Boolean).join(" · ")}
                   </p>
                 </div>
-                <SitePlan plan={plan} widthMm={lay.sidebar + 24} heightMm={paper.h * (options.paper === "a4" ? 0.26 : 0.3)} />
+                <SitePlan plan={plan} widthMm={lay.sidebar + 24 - 5} heightMm={paper.h * (options.paper === "a4" ? 0.26 : 0.3) - 4} />
                 <AreaSchedule plan={plan} report={version.compliance} />
                 <div style={{ marginTop: "auto" }}>{block("Cover and area schedule", "A-000", 1)}</div>
               </FitColumn>
@@ -184,7 +189,7 @@ function Header({ project, title }: { project: Project; title: string }) {
   );
 }
 
-type ScheduleRow = { id: string; name: string; size: string; area: number; key?: number };
+type ScheduleRow = { id: string; name: string; size: string; area: number; key?: string };
 
 function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: BuildingPlan; level: Level; scale: number; project: Project; sidebar: number; children: ReactNode }) {
   const mm = useMm();
@@ -204,7 +209,7 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
     .sort((a, b) => area(b) - area(a))
     .map((r) => {
       const key = keys.find((k) => k.room.id === r.id);
-      return { id: r.id, name: sentenceCase(r.name), size: `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`, area: area(r), key: key && key.kind === "key" ? key.n : undefined };
+      return { id: r.id, name: sentenceCase(r.name), size: `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`, area: area(r), key: key && key.kind === "key" ? key.letter : undefined };
     });
   // The roof: what stands on it (the stair tower is its covered area), the tank and the solar area.
   if (roof) {
@@ -212,8 +217,8 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
     const t = plan.roof.water_tank;
     const s = plan.roof.solar;
     if (m) rows.unshift({ id: "mumty", name: `Stair tower (mumty), ${feetInches(m.height_ft)} high`, size: `${feetInches(m.rect.w)} × ${feetInches(m.rect.d)}`, area: m.rect.w * m.rect.d });
-    if (t) rows.push({ id: "tank", name: t.material === "plastic" ? "Water tank, plastic" : t.material === "concrete" ? "Water tank, concrete" : "Water tank", size: `${feetInches(t.rect.w)} × ${feetInches(t.rect.d)}`, area: t.rect.w * t.rect.d });
-    if (s?.rect) rows.push({ id: "solar", name: s.mode === "panels" ? "Solar panels" : "Kept clear for solar", size: `${feetInches(s.rect.w)} × ${feetInches(s.rect.d)}`, area: s.rect.w * s.rect.d });
+    if (t) rows.push({ id: "tank", name: planTankLabel(t.material), size: `${feetInches(t.rect.w)} × ${feetInches(t.rect.d)}`, area: t.rect.w * t.rect.d });
+    if (s?.rect) rows.push({ id: "solar", name: planSolarLabel(s.mode), size: `${feetInches(s.rect.w)} × ${feetInches(s.rect.d)}`, area: s.rect.w * s.rect.d });
   }
   const covered = roof && plan.roof.mumty ? plan.roof.mumty.rect.w * plan.roof.mumty.rect.d : coveredArea(plan, level.id);
   return (
@@ -246,7 +251,7 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    {r.key ? <span style={{ display: "inline-block", width: mm(3.6), height: mm(3.6), lineHeight: mm(3.6), textAlign: "center", border: "0.2mm solid #46464B", borderRadius: "50%", fontSize: mm(2.2), marginRight: "1.2mm" }}>{r.key}</span> : null}
+                    {r.key ? <span style={{ display: "inline-block", width: mm(3.6), height: mm(3.6), lineHeight: mm(3.6), textAlign: "center", border: "0.2mm solid #46464B", borderRadius: "0.8mm", fontSize: mm(2.2), marginRight: "1.2mm" }}>{r.key}</span> : null}
                     {r.name}
                   </td>
                   <td className="mono" style={{ textAlign: "right", whiteSpace: "nowrap", paddingLeft: "2mm" }}>{r.size}</td>
@@ -299,7 +304,9 @@ function SitePlan({ plan, widthMm, heightMm }: { plan: BuildingPlan; widthMm: nu
   return (
     <div>
       <p style={{ fontSize: mm(2.9), fontWeight: 500, margin: "0 0 1.5mm" }}>Site plan</p>
-      <svg width={`${B.w * k}mm`} height={`${B.h * k}mm`} viewBox={`${B.x} ${B.y} ${B.w} ${B.h}`}>
+      {/* At this small scale the dimension text is large for its margin: let it draw past the frame (with room kept
+          for it) rather than be cut off. */}
+      <svg width={`${B.w * k}mm`} height={`${B.h * k}mm`} viewBox={`${B.x} ${B.y} ${B.w} ${B.h}`} style={{ overflow: "visible", margin: "3mm 0 0 2mm", display: "block" }}>
         <PlanDefs ppf={ppf} />
         <PlanSheet plan={plan} levelId={ground.id} ppf={ppf} print labels={labels} />
       </svg>
@@ -329,8 +336,18 @@ function AreaSchedule({ plan, report }: { plan: BuildingPlan; report: Version["c
           </tr>
         ))}
         <tr>
-          <td style={{ fontWeight: 600 }}>Total covered</td>
+          <td style={{ fontWeight: 600 }}>
+            Total covered
+            <span style={{ display: "block", fontWeight: 400, fontSize: mm(2.3), color: "#6E6E73" }}>Includes the porch, balconies and stair tower</span>
+          </td>
           <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>{num(total)}</td>
+        </tr>
+        <tr>
+          <td>
+            Floor area for FAR
+            <span style={{ display: "block", fontSize: mm(2.3), color: "#6E6E73" }}>What LDA counts towards the floor area ratio</span>
+          </td>
+          <td className="mono" style={{ textAlign: "right" }}>{num(m.total_floor_area_sqft)}</td>
         </tr>
         <tr>
           <td>Plot</td>
@@ -366,12 +383,15 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
   const mm = useMm();
   const lay = LAYOUT[paper];
   const p = PAPER[paper];
-  const s = useMemo(() => summarize(version.compliance, version.plan), [version]);
+  const asBuilt = useProject((st) => st.asBuilt[version.id]);
+  const s = useMemo(() => summarize(version.compliance, version.plan, asBuilt), [version, asBuilt]);
   const items: Item[] = useMemo(() => {
     const out: Item[] = [];
     const groups = [
       { title: `LDA rules · ${tallyLine(s.ldaTally)}`, list: s.lda },
       { title: `Livable home · ${tallyLine(s.livableTally)}`, list: s.livable },
+      // Advice, not rules: never counted, printed after the rules.
+      { title: `Architect's notes · ${reviewLine(s.review.length)}, not counted`, list: s.review },
     ].filter((g) => g.list.length);
     for (const g of groups) {
       out.push({ key: `g-${g.title}`, kind: "group", title: g.title });
@@ -394,26 +414,45 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
     const pxPerMm = unit ? unit.offsetHeight / 100 : PX_PER_MM;
     const heights = new Map<string, number>();
     for (const el of box.querySelectorAll<HTMLElement>("[data-item]")) heights.set(el.dataset.item!, el.offsetHeight / pxPerMm);
-    const pages: Item[][][] = [];
-    let cols: Item[][] = [[]];
-    let used = 0;
-    const limit = colH - 1;
-    items.forEach((it, i) => {
-      const h = heights.get(it.key) ?? 6;
-      // A group title never ends a column: it moves with its first row.
-      const next = items[i + 1];
-      const need = it.kind === "group" && next ? h + (heights.get(next.key) ?? 6) : h;
-      if (used + need > limit && cols[cols.length - 1].length) {
-        if (cols.length === lay.columns) {
-          pages.push(cols);
-          cols = [[]];
-        } else cols.push([]);
-        used = 0;
+    const pack = (limit: number) => {
+      const out: Item[][][] = [];
+      let cols: Item[][] = [[]];
+      let used = 0;
+      items.forEach((it, i) => {
+        const h = heights.get(it.key) ?? 6;
+        // A group title never ends a column: it moves with its first row.
+        const next = items[i + 1];
+        const need = it.kind === "group" && next ? h + (heights.get(next.key) ?? 6) : h;
+        if (used + need > limit && cols[cols.length - 1].length) {
+          if (cols.length === lay.columns) {
+            out.push(cols);
+            cols = [[]];
+          } else cols.push([]);
+          used = 0;
+        }
+        cols[cols.length - 1].push(it);
+        used += h;
+      });
+      out.push(cols);
+      return out;
+    };
+    const full = colH - 1;
+    let pages = pack(full);
+    // No sheet holds less than a third of a page: when the last one would, the columns are evened out across the
+    // same number of sheets (never more), so the tail sheet carries a fair share.
+    const usedOn = (pg: Item[][]) => pg.reduce((s, c) => s + c.reduce((t, x) => t + (heights.get(x.key) ?? 6), 0), 0);
+    if (pages.length > 1 && usedOn(pages[pages.length - 1]) < (full * lay.columns) / 3) {
+      const total = items.reduce((s, x) => s + (heights.get(x.key) ?? 6), 0);
+      const tallest = Math.max(...items.map((x) => heights.get(x.key) ?? 6));
+      for (let k = 0.98; k >= 0.6; k -= 0.04) {
+        const limit = Math.max(tallest + 8, Math.min(full, (total / (pages.length * lay.columns)) / k));
+        const trial = pack(limit);
+        if (trial.length === pages.length && usedOn(trial[trial.length - 1]) >= (full * lay.columns) / 3) {
+          pages = trial;
+          break;
+        }
       }
-      cols[cols.length - 1].push(it);
-      used += h;
-    });
-    pages.push(cols);
+    }
     const sig = JSON.stringify(pages.map((pg) => pg.map((c) => c.map((x) => x.key))));
     setPagesOf((prev) => (prev && JSON.stringify(prev.map((pg) => pg.map((c) => c.map((x) => x.key)))) === sig ? prev : pages));
   }, [items, colH, lay.columns, colW]);
@@ -421,13 +460,8 @@ function ComplianceSheets({ project, version, paper, onPages, block }: { project
     onPages(pagesOf?.length ?? 1);
   }, [pagesOf, onPages]);
 
-  const verdict = s.fails.length
-    ? `${s.fails.length} ${s.fails.length === 1 ? "rule" : "rules"} to fix`
-    : s.approvalReady && !s.livableIssues
-      ? `Passes all ${s.lda.length} LDA checks and ${s.livable.length} livable rules`
-      : s.approvalReady
-        ? `Passes all ${s.lda.length} LDA checks; ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check`
-        : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass; ${s.warns.length} to check`;
+  // The one phrasing the capsule, the chip, the dock and Revisions use.
+  const verdict = statusLine(s);
 
   return (
     <>
@@ -493,6 +527,17 @@ function ItemView({ it }: { it: Item }) {
   const mm = useMm();
   if (it.kind === "group") return <p style={{ fontWeight: 600, fontSize: mm(3.1), margin: "2.5mm 0 1.2mm" }}>{it.title}</p>;
   const c = it.c;
+  if (isReview(c)) {
+    return (
+      <div style={{ display: "flex", gap: "2mm", padding: "0.9mm 0", borderBottom: "0.2mm solid #E4E4DF", breakInside: "avoid" }}>
+        <span style={{ width: "2mm", height: "2mm", borderRadius: "50%", marginTop: "0.7mm", flexShrink: 0, display: "inline-block", background: "#A1A1A6" }} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block" }}>{firstSentence(c.message) || sentenceCase(c.title)}</span>
+          {c.fix && <span style={{ display: "block", color: "#46464B" }}>Suggested: {c.fix}</span>}
+        </span>
+      </div>
+    );
+  }
   const v = valueLine(c);
   // Each rule's words print once: the value (or, without one, the message), then the message only when it adds
   // something (a problem, or a livable rule's reason).

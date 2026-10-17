@@ -7,6 +7,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Minus, Plus } from "lucide-react";
 import type { Brief, Chip as ChipT, Envelope } from "@contracts/api-types";
+import type { ComplianceReport } from "@contracts/plan";
 import { api, type IntakeBody } from "@/api/client";
 import { PLOT_PRESETS, STYLE_OPTIONS, parseCoordinates, plotLabel, toMarla } from "@/api/domain";
 import { cn, num } from "@/app/lib/utils";
@@ -24,12 +25,15 @@ import {
   describe,
   levelsFor,
   roomsLine,
+  scaleFor,
   suggestMove,
   used,
   type LevelId,
   type Program,
 } from "./catalogue";
 import { chat } from "./chat";
+import { SOLAR_LABEL, TANK_LABEL } from "@/app/lib/roof";
+import { useProject } from "@/app/store/project";
 
 export type Send = (body: IntakeBody, display?: string) => void;
 
@@ -164,7 +168,7 @@ export function PlotEditor({ brief, onDone, doneLabel, onSkip, disabled }: { bri
           />
         </label>
         <span className="text-[13px] text-ink-3">ft</span>
-        <span className="ml-auto font-mono text-[12.5px] tabular-nums text-ink-3">{valid ? `${num(width * depth)} sq ft · ${num(marla, 1)} marla` : "225 sq ft = 1 marla"}</span>
+        <span className="ml-auto whitespace-nowrap font-mono text-[12.5px] tabular-nums text-ink-3">{valid ? `${num(width * depth)} sq ft · ${num(marla, 1)} marla` : "225 sq ft = 1 marla"}</span>
       </div>
       {/* Why Save is off: say the range plainly. */}
       <p className={cn("mt-1.5 text-[12.5px]", (w || d) && !valid ? "text-warn" : "text-ink-3")} aria-live="polite">
@@ -223,12 +227,17 @@ export function FloorsEditor({
   const active = levels.includes(tab) ? tab : levels[0];
   const marla = brief?.plot?.area_marla || 10;
   const rooms = program[active] ?? {};
-  const cap = capacity(active, envelope, brief);
-  const use = used(active, rooms, marla);
+  // The roof's stair tower is always there: a fixed line, never part of the meter (which counts what the family adds).
+  const tower = active === "roof" ? Math.round(110 * scaleFor(marla)) : 0;
+  const cap = capacity(active, envelope, brief) - tower;
+  const use = Math.max(0, used(active, rooms, marla) - tower);
   const ratio = cap ? use / cap : 0;
   const move = suggestMove(program, levels, envelope, brief);
   const set = (id: string, n: number) => onChange({ ...program, [active]: { ...rooms, [id]: Math.max(0, n) } }, storeys);
   const items = CATALOGUE.filter((c) => c.on.includes(active));
+  // Room types at zero fold behind "More rooms", so the floor's own rooms and the answer stay close to the question.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const hidden = moreOpen ? 0 : items.filter((c) => !(rooms[c.id] ?? 0)).length;
   const beds = bedroomsIn(program);
 
   const doMove = () => {
@@ -259,7 +268,7 @@ export function FloorsEditor({
           options={storeyOptions}
         />
         <span className="text-[13px] text-ink-3">
-          {beds} {beds === 1 ? "bedroom" : "bedrooms"} in all · {authority} allows {maxStoreys === 1 ? "one storey" : `up to ${maxStoreys}`}
+          {beds} {beds === 1 ? "bedroom" : "bedrooms"} in all · {authority} allows {maxStoreys === 1 ? "one storey" : `up to ${maxStoreys} storeys`}
         </span>
       </div>
 
@@ -286,7 +295,7 @@ export function FloorsEditor({
 
       <div className="mt-3">
         <div className="flex items-baseline justify-between text-[12.5px]">
-          <span className="text-ink-3">{LEVEL_LABEL[active]} floor{active === "roof" ? " (beside the stair tower)" : ""}</span>
+          <span className="text-ink-3">{active === "roof" ? "Rooms you add on the roof" : `${LEVEL_LABEL[active]} floor`}</span>
           <span className={cn("font-mono tabular-nums", ratio > 1 ? "text-fail" : ratio > 0.9 ? "text-warn" : "text-ink-2")}>
             {num(use)} of {num(cap)} sq ft
           </span>
@@ -326,8 +335,13 @@ export function FloorsEditor({
         </div>
       )}
 
+      {active === "roof" && (
+        <p className="mt-2 border-b border-line pb-2 text-[14px] text-ink-2">
+          Stair tower · <span className="font-mono text-[13px] tabular-nums text-ink-3">{num(tower)} sq ft</span>
+        </p>
+      )}
       <ul className="mt-2 grid gap-x-6 @lg:grid-cols-2">
-        {items.map((c) => (
+        {items.filter((c) => moreOpen || (rooms[c.id] ?? 0) > 0).map((c) => (
           <li key={c.id} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-b-0 @lg:[&:nth-last-child(2)]:border-b-0">
             <span className="min-w-0">
               <span className="block truncate text-[14px] text-ink">{c.label}</span>
@@ -338,6 +352,17 @@ export function FloorsEditor({
         ))}
       </ul>
 
+      {hidden > 0 && (
+        <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-full px-1 text-[13.5px] font-medium text-accent outline-none hover:underline focus-visible:shadow-focus">
+          <Plus className="size-3.5" strokeWidth={2} />
+          {active === "roof" && !items.some((c) => (rooms[c.id] ?? 0) > 0) ? `Add a room on the roof (${hidden})` : `More rooms (${hidden})`}
+        </button>
+      )}
+      {moreOpen && items.some((c) => !(rooms[c.id] ?? 0)) && (
+        <button type="button" onClick={() => setMoreOpen(false)} className="mt-1 inline-flex h-9 items-center rounded-full px-1 text-[13px] font-medium text-ink-3 outline-none hover:text-ink focus-visible:shadow-focus">
+          Fewer rooms
+        </button>
+      )}
       <div className="mt-3 space-y-0.5 text-[12.5px] text-ink-3">
         {levels
           .filter((l) => l !== active && roomsLine(program[l]))
@@ -519,16 +544,16 @@ export function RoofEditor({
               type="button"
               role="radio"
               aria-checked={t === k}
-              aria-label={k === "plastic" ? "Blue plastic tank: cheaper, visible from the street" : "Concrete tank in the stair tower: hidden, and lasts decades. Recommended"}
+              aria-label={k === "plastic" ? `${TANK_LABEL.plastic}: cheaper, visible from the street` : `${TANK_LABEL.concrete}: hidden, and lasts decades. Recommended`}
               tabIndex={t === k ? 0 : -1}
               onKeyDown={(e) => tankKeys.onKeyDown(e, i)}
               onClick={() => onChange(k, s)}
               className={card(t === k)}
             >
               <TankArt kind={k} className="h-auto w-full" />
-              <span className="mt-2 text-[14px] font-medium text-ink">{k === "plastic" ? "Blue plastic tank" : "Concrete tank in the stair tower"}</span>
+              <span className="mt-2 text-[14px] font-medium text-ink">{TANK_LABEL[k]}</span>
               <span className="text-[12.5px] text-ink-3">{k === "plastic" ? "Cheaper, visible from the street" : "Hidden, and lasts decades"}</span>
-              {k === "concrete" && <span className="mt-1 text-[12px] font-medium text-pass">Recommended</span>}
+              {k === "concrete" && <span className="mt-1 text-[12px] font-medium text-accent">Recommended</span>}
               {t === k && <Check className="absolute right-2.5 top-2.5 size-4 text-accent" strokeWidth={2.5} aria-hidden />}
             </button>
           ))}
@@ -544,7 +569,7 @@ export function RoofEditor({
               type="button"
               role="radio"
               aria-checked={s === k}
-              aria-label={k === "ready" ? `Keep the roof clear for solar: about ${panels.count} panels, around ${panels.kw} kilowatts` : k === "panels" ? "Raised solar frame: panels on a frame you can sit under" : "Not now: use the roof as a terrace"}
+              aria-label={k === "ready" ? `${SOLAR_LABEL.ready}: about ${panels.count} panels, around ${panels.kw} kilowatts` : k === "panels" ? `${SOLAR_LABEL.panels}: panels on a frame you can sit under` : `${SOLAR_LABEL.none}: use the roof as a terrace`}
               tabIndex={s === k ? 0 : -1}
               onKeyDown={(e) => solarKeys.onKeyDown(e, i)}
               onClick={() => onChange(t, k)}
@@ -552,7 +577,7 @@ export function RoofEditor({
             >
               <SolarArt mode={k} className="h-auto w-24 shrink-0 @lg:w-full" />
               <span className="min-w-0">
-                <span className="block text-[13.5px] font-medium leading-snug text-ink @lg:mt-1.5">{k === "ready" ? "Keep the roof clear for solar" : k === "panels" ? "Raised solar frame" : "Not now"}</span>
+                <span className="block text-[13.5px] font-medium leading-snug text-ink @lg:mt-1.5">{SOLAR_LABEL[k]}</span>
                 <span className="block text-[12px] text-ink-3">{k === "ready" ? `About ${panels.count} panels, ~${panels.kw} kW` : k === "panels" ? "Panels on a frame you can sit under" : "Use the roof as a terrace"}</span>
               </span>
             </button>
@@ -564,19 +589,40 @@ export function RoofEditor({
   );
 }
 
-/** Panels that fit on a clear roof: about 55% of the floor plate, 26 sq ft and 0.55 kW a panel. */
-export function solarEstimate(envelope: Envelope | null, brief: Brief | null): { count: number; kw: number } {
-  const floor = capacity("ground", envelope, brief);
-  const count = Math.max(4, Math.round((floor * 0.33) / 26));
-  return { count, kw: Math.round(count * 0.55) };
+/**
+ * Solar on the roof, by the compliance sheet's own formula (planning.py: roughly 1 kW per 70 sq ft kept clear). With a
+ * drawn plan, the clear area is the sheet's own figure, so the two quote the same kilowatts; before one, it is
+ * estimated the same way (the house's footprint less a 2 ft edge band and the stair tower).
+ */
+export function solarEstimate(envelope: Envelope | null, brief: Brief | null, report?: ComplianceReport | null): { count: number; kw: number } {
+  const said = report?.checks.find((c) => c.id === "plan.roof.solar")?.message?.match(/about ([\d,]+) sq ft/);
+  let clear = said ? Number(said[1].replace(/,/g, "")) : 0;
+  if (!said) {
+    const r = envelope?.buildable_rect;
+    const footprint = capacity("ground", envelope, brief) * 0.85;
+    const side = r ? Math.sqrt((footprint * r.w) / Math.max(1, r.d)) : Math.sqrt(footprint);
+    const band = 2 * 2 * (side + footprint / Math.max(1, side));
+    clear = Math.max(0, footprint - band - 110 * scaleFor(brief?.plot?.area_marla || 10));
+  }
+  const kw = Math.max(1, Math.round(clear / 70));
+  return { count: Math.max(4, Math.round(kw / 0.55)), kw };
+}
+
+/** The current version's compliance report, when the home has one (so the roof question quotes the sheet). */
+export function useCurrentReport(): ComplianceReport | null {
+  return useProject((st) => {
+    const vid = st.project?.current_version_id;
+    return (vid ? st.versions[vid]?.compliance : null) ?? null;
+  });
 }
 
 export function RoofWidget({ brief, envelope, onSend, onSkip, disabled }: { brief: Brief | null; envelope: Envelope | null; onSend: Send; onSkip: () => void; disabled?: boolean }) {
   const [tank, setTank] = useState<"plastic" | "concrete">(brief?.water_tank ?? "concrete");
   const [solar, setSolar] = useState<"none" | "ready" | "panels">(brief?.solar ?? "ready");
-  const panels = solarEstimate(envelope, brief);
+  const report = useCurrentReport();
+  const panels = solarEstimate(envelope, brief, report);
   const send = () => {
-    const text = `${tank === "plastic" ? "Blue plastic tank" : "Concrete tank in the stair tower"}; ${solar === "ready" ? "keep the roof clear for solar" : solar === "panels" ? "a raised solar frame" : "no solar for now"}`;
+    const text = `${TANK_LABEL[tank]}; ${SOLAR_LABEL[solar].toLowerCase()}`;
     onSend({ message: text, chips: [`tank:${tank}`, `solar:${solar}`] }, text);
   };
   return (
@@ -754,7 +800,7 @@ export function ChipsWidget({ chips, multi, onSend, onSkip, disabled }: { chips:
       <div>
         <div className="flex flex-wrap gap-2">
           {chips.map((c) => (
-            <Chip key={c.value} tone="suggestion" disabled={disabled} onClick={() => onSend({ message: c.label, chips: [c.value] }, c.label)} title={c.hint}>
+            <Chip key={c.value} tone="suggestion" disabled={disabled} onClick={() => onSend({ message: c.label, chips: [c.value] }, c.label)} title={c.hint} aria-label={c.hint ? `${c.label}. ${c.hint}` : undefined}>
               {c.label}
               {c.hint && <span className="font-normal text-ink-3">{c.hint}</span>}
             </Chip>
@@ -770,7 +816,7 @@ export function ChipsWidget({ chips, multi, onSend, onSkip, disabled }: { chips:
     <div>
       <div className="flex flex-wrap gap-2">
         {chips.map((c) => (
-          <Chip key={c.value} selected={picked.includes(c.value)} onClick={() => toggle(c.value)} disabled={disabled} title={c.hint}>
+          <Chip key={c.value} selected={picked.includes(c.value)} onClick={() => toggle(c.value)} disabled={disabled} title={c.hint} aria-label={c.hint ? `${c.label}. ${c.hint}` : undefined}>
             {c.label}
           </Chip>
         ))}

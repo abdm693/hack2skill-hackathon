@@ -29,6 +29,7 @@ export function RoomNavigator({
   onFloor,
   currentLevel,
   open = true,
+  onClose,
 }: {
   plan: BuildingPlan;
   current: string | null;
@@ -38,6 +39,8 @@ export function RoomNavigator({
   /** The walker's floor, so "You're here" can mark the Roof. */
   currentLevel?: string | null;
   open?: boolean;
+  /** Escape in the search field closes the list (the field keeps every other key to itself). */
+  onClose?: () => void;
 }) {
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
@@ -83,7 +86,7 @@ export function RoomNavigator({
   const first = groups[0]?.list[0];
   return (
     <div>
-      <div className="flex items-center gap-2 rounded-control bg-white/8 px-2.5">
+      <div className="nq-field flex items-center gap-2 rounded-control bg-white/8 px-2.5">
         <Search className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
         <input
           ref={search}
@@ -94,6 +97,10 @@ export function RoomNavigator({
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && first) first.go();
+            if (e.key === "Escape" && onClose) {
+              e.preventDefault();
+              onClose();
+            }
             e.stopPropagation();
           }}
           placeholder="Go to a room"

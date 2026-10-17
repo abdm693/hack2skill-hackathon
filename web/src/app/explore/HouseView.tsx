@@ -30,6 +30,7 @@ import { notesLine } from "@/app/plan/compliance";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { Composer, type CommentDraft } from "./Composer";
 import { RoomNavigator } from "./RoomNavigator";
+import { usePinNumbers } from "@/app/comments/pins";
 
 export { RoomNavigator };
 import { RenderLightbox } from "./RenderLightbox";
@@ -250,12 +251,16 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     if (!c) return false;
     setDraft(null);
     setSelected(c.id);
+    // "Pin it" ends pin mode, as the client's House does (share/HouseStage.tsx).
+    setCommentMode(false);
     return true;
   };
 
   const openComments = useMemo(() => (comments ?? []).filter((c) => c.status === "open"), [comments]);
   // Pins are numbered by when they were made, the same numbers as Plan and the comments sheet (pinNumbers).
   const ordered = useMemo(() => [...(comments ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)), [comments]);
+  // The number a pin keeps across versions (the whole project's comments by when they were made).
+  const pinNo = usePinNumbers(project.id, comments);
   const selectedComment = comments?.find((c) => c.id === selected);
 
   const startRevise = (ids: string[], instruction?: string) => {
@@ -300,15 +305,22 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     if (params.get("v")) setParams((p) => { const n = new URLSearchParams(p); n.delete("v"); return n; }, { replace: true });
   }, [revise?.version, params, setParams]);
 
+  const touch = useMediaQuery("(pointer: coarse)");
   useAskContext(
     active && latestVid
       ? {
           placeholder: "Tell Naqsha what to change…",
           // "Revise with N comments" is the shell's Next pill; typed, it opens the same choice.
           busy: revise?.status === "running",
+          // Pin mode: the house is the one thing to click, so the Next pill steps aside and the dock says how.
+          ...(commentMode && mode === "orbit" ? { next: null, line: touch ? "Tap the house to pin a note · Tap Comment to stop" : "Click the house to pin a note · Esc to stop" } : {}),
           onSubmit: (text) => {
             if (/^revise with \d+ comments?$/i.test(text.trim())) useShell.getState().openComments({ apply: true });
-            else startRevise([], text);
+            else {
+              // A typed change opens the conversation ("Your changes"), as a revise from comments does.
+              useShell.getState().toggleChat(true);
+              startRevise([], text);
+            }
           },
         }
       : null,
@@ -346,6 +358,29 @@ export function HouseView({ project, onProjectChange, active = true }: { project
   const versionBtn = useRef<HTMLButtonElement>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
+
+  // Phones: the room list is a full-height sheet. The view switch steps aside while it is open, and Back closes it
+  // (opening it adds one history entry with the same address; Back pops that entry, never the page).
+  const roomsSheet = phone && navOpen && active;
+  useEffect(() => {
+    useShell.getState().setSwitchHidden(roomsSheet);
+    return () => useShell.getState().setSwitchHidden(false);
+  }, [roomsSheet]);
+  useEffect(() => {
+    if (!roomsSheet) return;
+    let popped = false;
+    window.history.pushState({ ...(window.history.state ?? {}), nqRooms: true }, "");
+    const onPop = () => {
+      popped = true;
+      setNavOpen(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed some other way (Close, Escape, a room picked): the extra entry stays but no longer means "open".
+      if (!popped && window.history.state?.nqRooms) window.history.replaceState({ ...window.history.state, nqRooms: false }, "");
+    };
+  }, [roomsSheet]);
 
   if (!shown || !plan) {
     return (
@@ -400,7 +435,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       className={phone && !tight && openComments.length > 0 ? "px-3" : undefined}
     >
       <MessageSquarePlus className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
-      <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
+      <span className="max-sm:hidden">{commentMode ? (touch ? "Tap to pin" : "Click to pin") : "Comment"}</span>
       {openComments.length > 0 &&
         (phone && tight ? (
           // A dot on the narrowest phones; the count is in the button's name and the Comments sheet.
@@ -455,7 +490,8 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       </div>
 
       {/* Left edge: floors */}
-      {levels.length > 1 && built && (
+      {/* Phones: the stack steps aside while a bottom sheet (View, Versions, Rooms) is open, so they never overlap. */}
+      {levels.length > 1 && built && !(phone && (viewOpen || versionOpen || navOpen)) && (
         <div data-nq-recede="" className={cn("absolute left-3 z-20 sm:left-4", phone ? "top-[calc(var(--chrome-top)+12px)]" : "top-1/2 -translate-y-1/2")}>
           <FloorStack items={items} value={mode === "walk" ? room.level ?? floor : floor} onChange={setFloor} tone="hud" extra={mode === "orbit" ? { id: "all", key: "All", name: "Whole house" } : undefined} />
         </div>
@@ -552,7 +588,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
           >
             <PinCard
               c={selectedComment}
-              n={ordered.findIndex((c) => c.id === selectedComment.id) + 1}
+              n={pinNo.get(selectedComment.id) ?? ordered.findIndex((c) => c.id === selectedComment.id) + 1}
               onFly={() => viewer.current?.flyTo(selectedComment)}
               onThread={() => useShell.getState().openComments({ focus: selectedComment.id })}
               onClose={() => setSelected(null)}
@@ -612,14 +648,25 @@ export function HouseView({ project, onProjectChange, active = true }: { project
         side="top"
         align="end"
         tone="hud"
-        className="w-[300px]"
+        // Phones: with the view switch stepped aside, the sheet starts right under the title row.
+        className={cn("w-[300px]", phone && "!top-[68px]")}
         sheetBelow={768}
         sheetFull
         label="Rooms"
         avoid={() => [document.querySelector(".nq-house .nq-mini")]}
       >
+        {phone && (
+          <div className="-mt-1 mb-2 flex items-center justify-between">
+            <span className="w-11" aria-hidden />
+            <span className="h-1 w-9 rounded-full bg-white/25" aria-hidden />
+            <IconButton label="Close the room list" size={44} className="-mr-1 text-hud-ink hover:bg-white/10" onClick={() => setNavOpen(false)}>
+              <X className="size-[18px]" strokeWidth={1.75} />
+            </IconButton>
+          </div>
+        )}
         <RoomNavigator
           plan={plan}
+          onClose={() => setNavOpen(false)}
           open={navOpen}
           current={room.id}
           currentLevel={mode === "walk" ? room.level : null}
@@ -661,7 +708,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       <FinishDialog
         open={finishOpen}
         comments={openComments}
-        ordered={ordered}
+        ordered={ordered} numbers={pinNo}
         onClose={() => setFinishOpen(false)}
         onRevise={(ids) => startRevise(ids)}
       />
@@ -791,7 +838,8 @@ function ViewPanel({
           Cars
         </Toggle>
       </div>
-      <div className="border-t border-white/10 px-2 pt-2">
+      {/* Same inset as the rows above: the Toggle carries its own px-2, so the wrapper adds none. */}
+      <div className="border-t border-white/10 pt-2">
         <Toggle on={cutFt != null} onChange={(v) => onCut(v ? Math.round(topFt * 0.42) : null)}>
           Cut away
         </Toggle>
@@ -816,7 +864,7 @@ function VersionMenu({ project, current, onPick, onRevisions }: { project: Proje
   const list = [...project.versions].sort((a, b) => b.n - a.n);
   return (
     <div>
-      <p className="px-2 pb-1 pt-1 text-[12px] text-hud-ink-2">Versions · the camera stays put</p>
+      <p className="px-2 pb-1 pt-1 text-[12px] text-hud-ink-2">Versions</p>
       <ul>
         {list.map((v) => (
           <li key={v.id}>
@@ -921,7 +969,7 @@ function AsBuiltNotes({
   );
 }
 
-function FinishDialog({ open, comments, ordered, onClose, onRevise }: { open: boolean; comments: Comment[]; ordered: Comment[]; onClose: () => void; onRevise: (ids: string[]) => void }) {
+function FinishDialog({ open, comments, ordered, numbers, onClose, onRevise }: { open: boolean; comments: Comment[]; ordered: Comment[]; numbers?: Map<string, number>; onClose: () => void; onRevise: (ids: string[]) => void }) {
   // Team comments go in by default; a client's comment waits until the owner includes it (DESIGN.md "Comments").
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
@@ -959,7 +1007,7 @@ function FinishDialog({ open, comments, ordered, onClose, onRevise }: { open: bo
               >
                 <span className={cn("mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px]", on ? "bg-accent text-white" : "shadow-[inset_0_0_0_1.5px_var(--color-line-strong)]")}>{on && <Check className="size-3" strokeWidth={3} />}</span>
                 <span className="grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: hueColor(c) }}>
-                  {ordered.findIndex((x) => x.id === c.id) + 1}
+                  {numbers?.get(c.id) ?? ordered.findIndex((x) => x.id === c.id) + 1}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-body text-ink">{c.text}</span>

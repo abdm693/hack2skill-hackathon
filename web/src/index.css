@@ -183,6 +183,19 @@
   outline: none;
   box-shadow: 0 0 0 2px #18181B, 0 0 0 4px #7D93FF;
 }
+/*
+ * A text field inside a rounded wrapper (the dock's Ask, the room finder) draws no square ring of its own: the
+ * wrapper carries the ring, so it follows the wrapper's radius.
+ */
+.nq-field :is(input, textarea):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.glass-hud.nq-field:has(:is(input, textarea):focus-visible),
+.glass-hud .nq-field:has(:is(input, textarea):focus-visible),
+.nq-house .nq-field:has(:is(input, textarea):focus-visible) {
+  box-shadow: 0 0 0 2px #18181B, 0 0 0 4px #7D93FF;
+}
 
 /*
  * A scrolling view under the floating top row: the scroller starts just above the capsules' lower edge and fades

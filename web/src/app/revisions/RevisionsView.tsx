@@ -18,8 +18,9 @@ import { useViewNav } from "@/app/design/nav";
 import { useNow } from "@/app/design/RunProgress";
 import { plural, roomName, sectionPhrase, versionLine } from "@/app/design/words";
 import { anchorLabel } from "@/app/explore/snapshot";
-import { summarize } from "@/app/plan/compliance";
-import { area, changedRooms, cleanSummary, hueColor } from "@/app/plan/model";
+import { statusLine, summarize } from "@/app/plan/compliance";
+import { useProject } from "@/app/store/project";
+import { area, changedRooms, cleanSummary, hueColor, sentenceCase } from "@/app/plan/model";
 import { NaqshaMark } from "@/app/setup/Conversation";
 import { PlanCompare } from "./PlanCompare";
 
@@ -72,7 +73,7 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
     const before = showRun ? (revised ? base?.plan : undefined) : parent?.plan;
     const changes = showRun ? run?.version?.changes ?? run?.changes ?? [] : version?.changes ?? [];
     // Targets can be openings or stairs: outline the room(s) each one touches.
-    const changed = [...changedRooms(after, changes).keys()];
+    const changed = [...new Set([...changedRooms(after, changes).keys(), ...planDiff(before, after).map((r) => r.id).filter((id) => after.rooms.some((x) => x.id === id))])];
     const caption = !before ? (showRun ? "The plan as it stands; changes appear here as Naqsha makes them." : "The first design: nothing to compare yet.") : undefined;
     return <PlanCompare before={before} after={after} changed={changed} caption={caption} className={compact ? "mt-8" : "h-full"} compact={compact} />;
   };
@@ -99,9 +100,9 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
           <main className="min-w-0">
             {showRun && run ? (
-              <LiveRevision run={run} base={base} compare={inlineCompare} onWalk={() => goTo("house")} onPlan={() => goTo("plan")} />
+              <LiveRevision run={run} base={base} compare={inlineCompare} onPlan={() => goTo("plan")} />
             ) : version ? (
-              <VersionStory project={project} version={version} parent={parent} run={finishedRun} compare={inlineCompare} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
+              <VersionStory project={project} version={version} parent={parent} run={finishedRun} compare={inlineCompare} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
             ) : (
               <p className="text-[15px] text-ink-3">Opening the version…</p>
             )}
@@ -121,6 +122,16 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 // ── Version rail ────────────────────────────────────────────────────────────────────────────────────
 
 function VersionRail({ versions, current, latest, running, nextN, onPick }: { versions: Project["versions"]; current: string | null; latest: string | null; running: boolean; nextN: number; onPick: (id: string) => void }) {
+  const full = useFlow((s) => s.versions);
+  // A version whose summary hasn't arrived yet is named by what was asked or its first change, never "A revision".
+  const lineOf = (v: Project["versions"][number]) => {
+    if (v.n === 1) return "The first design";
+    if (v.summary) return versionLine(v.summary);
+    const f = full[v.id];
+    const said = f?.source?.instruction?.trim() || (f?.changes?.[0] ? cleanSummary(f.changes[0].summary) : "");
+    if (said) return versionLine(said);
+    return f?.source?.comment_ids?.length ? `From ${plural(f.source.comment_ids.length, "comment")}` : "A revision";
+  };
   return (
     <nav aria-label="Versions" className="min-w-0 lg:sticky lg:top-4 lg:self-start">
       <p className="text-label text-ink-3">Versions</p>
@@ -146,7 +157,7 @@ function VersionRail({ versions, current, latest, running, nextN, onPick }: { ve
                   <span className="text-[14px] font-medium text-ink">Version {v.n}</span>
                   {v.id === latest && <span className="text-[12px] font-medium text-accent">Latest</span>}
                 </span>
-                <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-ink-2">{v.n === 1 ? "The first design" : versionLine(v.summary)}</span>
+                <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-ink-2">{lineOf(v)}</span>
                 <span className="mt-0.5 block text-[12px] text-ink-3">{relativeTime(v.created_at)}</span>
               </button>
             </li>
@@ -164,28 +175,26 @@ function clock(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function LiveRevision({ run, base, compare, onWalk, onPlan }: { run: Run; base?: Version; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
+function LiveRevision({ run, base, compare, onPlan }: { run: Run; base?: Version; compare?: ReactNode; onPlan: () => void }) {
   const running = run.status === "running";
   const now = useNow(running);
-  const asked = run.instruction ? `“${run.instruction}”` : run.commentIds?.length ? plural(run.commentIds.length, "comment") : "your changes";
+  const asked = run.instruction ? clip(run.instruction, 44) : run.commentIds?.length ? plural(run.commentIds.length, "comment") : "your changes";
   const plan = run.version?.plan ?? run.plan ?? base?.plan;
   return (
     <div>
-      <p className="text-label text-ink-3">{running ? `Revising version ${base?.n ?? ""}` : run.version ? `Version ${run.version.n}` : "Revision"}</p>
-      <h1 className="mt-1 text-title text-ink">
-        {running ? <>Working on {asked}</> : run.version ? `Version ${run.version.n} is ready` : "The revision stopped"}
+      <p className="text-label text-ink-3">{running ? `Revising version ${base?.n ?? ""}` : run.version ? `Version ${run.version.n} · ready` : "Revision"}</p>
+      <h1 className="mt-1 text-title text-ink max-sm:text-[22px] max-sm:leading-[28px]">
+        {running ? <>Working on {run.instruction ? `“${asked}”` : asked}</> : run.version ? storyTitle(run.version.n, run.instruction, undefined, run.version.changes ?? run.changes ?? []) : "The revision stopped"}
       </h1>
       {!running && run.version && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
-            Walk through it
-          </Button>
-          <Button variant="secondary" onClick={onPlan}>
+          <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onPlan}>
             Open the plan
           </Button>
         </div>
       )}
       {!running && run.version && <ComplianceLine version={run.version} />}
+      {run.instruction && <RequestCard text={run.instruction} answer={(run.version?.source as { answer?: string | null } | undefined)?.answer} pending={running} />}
 
       <section className="mt-6 rounded-card bg-surface p-5 shadow-e1" aria-live="polite">
         <div className="flex items-baseline justify-between">
@@ -233,23 +242,45 @@ function ActivityFeed({ items, running, startedAt, attachedAt }: { items: Activi
   );
 }
 
+/** "Make the master dressing room a bit…": a typed request cut at a word, for a one-line heading. */
+function clip(text: string, max: number): string {
+  const t = text.trim().replace(/\s+/g, " ").replace(/[.;,!?\s]+$/, "");
+  return t.length <= max ? t : `${t.slice(0, max - 1).replace(/[\s,;:]+\S*$/, "")}…`;
+}
+
+/** What the family typed, and Naqsha's answer to it (once the revision has one). Kept on the version, so a reload shows it. */
+function RequestCard({ text, answer, pending }: { text: string; answer?: string | null; pending?: boolean }) {
+  return (
+    <section className="mt-6 overflow-hidden rounded-card bg-surface shadow-e1" aria-label="Your request">
+      <div className="px-5 py-4">
+        <h2 className="text-label text-ink-3">Your request</h2>
+        <p className="mt-1.5 text-body text-ink">{text.trim()}</p>
+      </div>
+      {(answer || pending) && (
+        <div className="flex gap-3 border-t border-line bg-surface-2/50 px-5 py-3.5">
+          <NaqshaMark />
+          <p className={cn("min-w-0 flex-1 text-body", answer ? "text-ink" : "text-ink-3")}>{answer?.trim() || "Working on it…"}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The version's checks in the one phrasing the capsule, the chip and the dock use, with what the 3D build found. */
 function ComplianceLine({ version }: { version: Version }) {
-  const s = summarize(version.compliance, version.plan);
+  const asBuilt = useProject((s) => s.asBuilt[version.id]);
+  const s = summarize(version.compliance, version.plan, asBuilt);
   return (
     <p className={cn("mt-3 flex items-start gap-2 text-[13.5px]", s.fails.length ? "text-fail" : "text-ink-2")}>
-      <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : "bg-pass")} />
-      {s.fails.length
-        ? `${plural(s.fails.length, "rule")} to fix`
-        : s.approvalReady && !s.livableIssues
-          ? `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules pass`
-          : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass, ${s.warns.length} to check`}
+      <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : s.warns.length ? "bg-warn" : "bg-pass")} />
+      {statusLine(s)}
     </p>
   );
 }
 
 // ── A finished version ──────────────────────────────────────────────────────────────────────────────
 
-function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; compare?: ReactNode; onWalk: () => void; onPlan: () => void }) {
+function VersionStory({ project, version, parent, run, compare, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; compare?: ReactNode; onPlan: () => void }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -269,21 +300,21 @@ function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }
   const changes = version.changes ?? [];
   const summary = project.versions.find((v) => v.id === version.id)?.summary;
   const first = !version.parent_id;
+  const source = version.source as (Version["source"] & { answer?: string | null }) | undefined;
   return (
     <div>
       <p className="text-label text-ink-3">
         Version {version.n} · {relativeTime(version.created_at)}
       </p>
-      <h1 className="mt-1 text-title text-ink">{first ? "The first design, drawn from your brief." : storyTitle(summary, changes)}</h1>
+      <h1 className="mt-1 text-title text-ink max-sm:text-[22px] max-sm:leading-[28px]">{first ? "The first design, drawn from your brief." : storyTitle(version.n, source?.instruction, summary, changes)}</h1>
+      {/* "Walk through it" is the dock's Next pill on this page: one of it, not two. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
-          Walk through it
-        </Button>
-        <Button variant="secondary" onClick={onPlan}>
+        <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onPlan}>
           Open the plan
         </Button>
       </div>
       <ComplianceLine version={version} />
+      {source?.instruction && <RequestCard text={source.instruction} answer={source.answer} />}
       {run && run.activity.length > 0 && (
         <section className="mt-6 rounded-card bg-surface p-5 shadow-e1">
           <h2 className="text-[15px] font-semibold text-ink">How Naqsha made it</h2>
@@ -296,7 +327,7 @@ function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }
         </p>
       ) : (
         <>
-          {changes.length ? (
+          {changes.length || planDiff(parent?.plan, version.plan).length ? (
             <Changes changes={changes} before={parent?.plan} after={version.plan} />
           ) : (
             <p className="mt-8 max-w-xl text-body-lg text-ink-2">
@@ -318,73 +349,125 @@ function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }
 // ── What changed ────────────────────────────────────────────────────────────────────────────────────
 
 function Changes({ changes, before, after }: { changes: Change[]; before?: BuildingPlan; after?: BuildingPlan }) {
+  // Every room whose size or place changed and every opening whose width changed, not only the declared targets:
+  // each row goes under the change that names it, the rest under "Also changed on the plan".
+  const diff = useMemo(() => planDiff(before, after), [before, after]);
+  const claimed = new Set<string>();
+  const perChange = changes.map((c) => {
+    const rows = c.kind === "plan" ? diff.filter((r) => c.targets.includes(r.id) && !claimed.has(r.id)) : [];
+    rows.forEach((r) => claimed.add(r.id));
+    return rows;
+  });
+  const rest = diff.filter((r) => !claimed.has(r.id));
+  if (!changes.length && !rest.length) return null;
   return (
     <section className="mt-8">
       <h2 className="text-heading text-ink">What changed</h2>
       <ul className="mt-3 divide-y divide-line overflow-hidden rounded-card bg-surface shadow-e1">
-        {changes.map((c) => (
+        {changes.map((c, i) => (
           <motion.li key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE_OUT }} className="px-5 py-4">
             <p className="text-body text-ink">{plainSummary(c.summary, after)}</p>
             {c.kind === "plan" ? (
-              <BeforeAfter targets={c.targets} before={before} after={after} />
+              <DiffRows rows={perChange[i]} />
             ) : (
               <p className="mt-1 text-[13px] text-ink-3">{c.targets.map((t) => sectionPhrase(t, after)).join(", ").replace(/^\w/, (x) => x.toUpperCase())} redrawn in 3D</p>
             )}
             {c.comment_ids.length > 0 && <p className="mt-1 text-[12.5px] text-ink-3">From {plural(c.comment_ids.length, "comment")}</p>}
           </motion.li>
         ))}
+        {rest.length > 0 && (
+          <li className="px-5 py-4">
+            <p className="text-body text-ink">{changes.length ? "Also changed on the plan" : "Changed on the plan"}</p>
+            <DiffRows rows={rest} />
+          </li>
+        )}
       </ul>
     </section>
   );
 }
 
-/** "Widened the master window, and 2 more changes." A sentence for the H1, never a data string. */
-function storyTitle(summary: string | undefined, changes: Change[]): string {
-  const lead = changes[0] ? cleanSummary(changes[0].summary) : versionLine(summary);
-  const base = lead
-    .replace(/^v\d+:\s*/i, "")
-    .replace(/\s*·\s*\d+\/\d+.*$/, "")
-    .replace(/[“”"]/g, "")
-    .replace(/[.;,\s…]+$/, "")
-    // "From 2 comments" (a version with nothing to list) reads as what happened.
-    .replace(/^from (\d+ comments?)$/i, "Revised from $1");
-  const sentence = base && base !== "A revision" ? base.charAt(0).toUpperCase() + base.slice(1) : "A revision";
-  const more = changes.length > 1 ? `, and ${changes.length - 1} more ${changes.length - 1 === 1 ? "change" : "changes"}` : "";
-  return `${sentence}${more}.`;
+type DiffRow = { id: string; name: string; where?: string; before: string; after: string; delta: number | null };
+
+/** Rooms resized, moved, added or removed, and openings whose width changed, between two plans. */
+export function planDiff(before?: BuildingPlan, after?: BuildingPlan): DiffRow[] {
+  if (!before || !after) return [];
+  const rows: DiffRow[] = [];
+  const size = (r: { rect: { w: number; d: number } }) => `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.05;
+  const levelOf = (id: string) => after.levels.find((l) => l.id === id)?.name ?? before.levels.find((l) => l.id === id)?.name;
+  for (const a of after.rooms) {
+    const b = before.rooms.find((r) => r.id === a.id);
+    const name = sentenceCase(a.name);
+    if (!b) rows.push({ id: a.id, name, where: levelOf(a.level), before: "New", after: size(a), delta: Math.round(area(a)) });
+    else if (!near(a.rect.w, b.rect.w) || !near(a.rect.d, b.rect.d)) rows.push({ id: a.id, name, before: size(b), after: size(a), delta: Math.round(area(a) - area(b)) || null });
+    else if (!near(a.rect.x, b.rect.x) || !near(a.rect.y, b.rect.y)) rows.push({ id: a.id, name, before: size(b), after: "moved", delta: null });
+  }
+  for (const b of before.rooms) if (!after.rooms.some((r) => r.id === b.id)) rows.push({ id: b.id, name: sentenceCase(b.name), before: size(b), after: "removed", delta: null });
+  const openingName = (o: BuildingPlan["openings"][number]) => (o.type.includes("door") || o.type === "arch" ? "Door" : o.type === "ventilator" ? "Vent" : "Window");
+  const between = (o: BuildingPlan["openings"][number]) =>
+    o.between
+      .filter((x) => x && x !== "exterior")
+      .map((x) => inSentenceName(roomName(after, x)))
+      .join(" to ");
+  for (const o of after.openings) {
+    const ob = before.openings.find((x) => x.id === o.id);
+    if (ob && !near(o.width_ft, ob.width_ft)) rows.push({ id: o.id, name: openingName(o), where: between(o), before: feetInches(ob.width_ft), after: `${feetInches(o.width_ft)} wide`, delta: null });
+    else if (!ob) rows.push({ id: o.id, name: `New ${openingName(o).toLowerCase()}`, where: between(o), before: "", after: `${feetInches(o.width_ft)} wide`, delta: null });
+  }
+  return rows;
 }
 
-/** Summaries come from the reviser; make sure no id or section name slips through. */
-function plainSummary(s: string, plan?: BuildingPlan): string {
-  return cleanSummary(s).replace(/\b([bgfstr]_[a-z0-9_]+|furnish_[a-z0-9_]+|facade_[a-z0-9_]+|interior_[a-z0-9_]+)\b/g, (id) => (id.includes("_") && /^[bgfstr]_/.test(id) ? roomName(plan, id) : sectionPhrase(id, plan).replace(/^the /, "")));
+function inSentenceName(name: string): string {
+  const s = sentenceCase(name);
+  return /^.[A-Z]/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
 }
 
-function BeforeAfter({ targets, before, after }: { targets: string[]; before?: BuildingPlan; after?: BuildingPlan }) {
-  if (!before || !after) return null;
-  const rows = targets
-    .map((id) => {
-      const a = after?.rooms.find((r) => r.id === id);
-      const b = before?.rooms.find((r) => r.id === id);
-      const o = after?.openings.find((x) => x.id === id);
-      const ob = before?.openings.find((x) => x.id === id);
-      if (a) return { id, name: a.name, before: b ? `${feetInches(b.rect.w)} × ${feetInches(b.rect.d)}` : "New", after: `${feetInches(a.rect.w)} × ${feetInches(a.rect.d)}`, delta: b ? Math.round(area(a) - area(b)) : null };
-      if (o) return { id, name: o.type.includes("door") ? "Door" : "Window", before: ob ? `${feetInches(ob.width_ft)} wide` : "New", after: `${feetInches(o.width_ft)} wide`, delta: null };
-      return null;
-    })
-    .filter((r): r is NonNullable<typeof r> => !!r && r.before !== r.after);
+function DiffRows({ rows }: { rows: DiffRow[] }) {
   if (!rows.length) return null;
   return (
     <ul className="mt-2 space-y-1">
       {rows.map((r) => (
         <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
           <span className="text-ink-2">{r.name}</span>
-          <span className="font-mono tabular-nums text-ink-3">{r.before}</span>
-          <ArrowRight className="size-3 self-center text-ink-4" strokeWidth={2} />
+          {r.before && <span className="font-mono tabular-nums text-ink-3">{r.before}</span>}
+          {r.before && <ArrowRight className="size-3 self-center text-ink-4" strokeWidth={2} />}
           <span className="font-mono tabular-nums text-ink">{r.after}</span>
           {r.delta ? <span className={cn("font-mono tabular-nums font-semibold", r.delta > 0 ? "text-accent" : "text-ink-2")}>{r.delta > 0 ? "+" : "−"}{num(Math.abs(r.delta))} sq ft</span> : null}
+          {r.where && <span className="text-[12.5px] text-ink-3">· {r.where}</span>}
         </li>
       ))}
     </ul>
   );
+}
+
+/**
+ * The H1: "Version 4: a bigger master dressing room". It leads with what the family typed when there is a request,
+ * else the first change, and stays within 60 characters (one line at 1440, two at most on a phone).
+ */
+export function storyTitle(n: number, instruction: string | null | undefined, summary: string | undefined, changes: Change[]): string {
+  const lead = instruction?.trim() || (changes[0] ? cleanSummary(changes[0].summary) : versionLine(summary));
+  const base = lead
+    .replace(/^v\d+:\s*/i, "")
+    .replace(/\s*·\s*\d+\/\d+.*$/, "")
+    .replace(/[“”"]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[.;,!?\s…]+$/, "")
+    // "From 2 comments" (a version with nothing to list) reads as what happened.
+    .replace(/^from (\d+ comments?)$/i, "revised from $1");
+  const head = `Version ${n}: `;
+  if (!base || base === "A revision") return `Version ${n}`;
+  // "Make the dressing room bigger" reads as a sentence after the colon: its first letter drops (not "TV" or "LDA").
+  let words = /^[A-Z][a-z]/.test(base) ? base.charAt(0).toLowerCase() + base.slice(1) : base;
+  const room = 60 - head.length;
+  if (words.length > room) {
+    words = words.slice(0, room - 1).replace(/[\s,;:]+\S*$/, "").replace(/\s+(and|or|with|to|for|the|a|an|of|in|on)$/i, "") + "…";
+  }
+  return head + words;
+}
+
+/** Summaries come from the reviser; make sure no id or section name slips through. */
+function plainSummary(s: string, plan?: BuildingPlan): string {
+  return cleanSummary(s).replace(/\b([bgfstr]_[a-z0-9_]+|furnish_[a-z0-9_]+|facade_[a-z0-9_]+|interior_[a-z0-9_]+)\b/g, (id) => (id.includes("_") && /^[bgfstr]_/.test(id) ? roomName(plan, id) : sectionPhrase(id, plan).replace(/^the /, "")));
 }
 
 // ── Comment threads ─────────────────────────────────────────────────────────────────────────────────

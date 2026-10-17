@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowUpRight, Ellipsis, ExternalLink, PencilLine, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowUpRight, Ellipsis, ExternalLink, PencilLine, RefreshCw, Trash2 } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { api, assetUrl, errorMessage } from "@/api/client";
 import { plotLabel } from "@/api/domain";
@@ -13,6 +13,7 @@ import { cn, relativeTime } from "@/app/lib/utils";
 import { usePhone } from "@/app/lib/hooks";
 import { roleOf, stageBusy, stageLabel } from "@/app/lib/views";
 import { sampleTitle } from "@/app/lib/samples";
+import { sentenceCase } from "@/app/plan/model";
 import { requireAccount, useAuth } from "@/app/store/auth";
 import { queueFirstMessage } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
@@ -25,7 +26,6 @@ import { Dialog } from "@/app/ui/Dialog";
 import { Input } from "@/app/ui/Input";
 import { Menu } from "@/app/ui/Menu";
 import { Segmented } from "@/app/ui/Segmented";
-import { Spinner } from "@/app/ui/Spinner";
 import { Wordmark, PlotSketch } from "@/app/ui/brand";
 import { ease } from "@/app/ui/motion";
 
@@ -151,9 +151,10 @@ export function Workspace() {
 
       <main className="mx-auto max-w-[1280px] px-4 pb-24 sm:px-8">
         {/* Start a home in one message */}
-        <section className="mx-auto max-w-[720px] pb-10 pt-10 sm:pb-14 sm:pt-16" aria-labelledby="start-heading">
+        {/* One left edge: the heading, the composer, the tabs and the grid all start at the container's gutter. */}
+        <section className="max-w-[720px] pb-10 pt-10 sm:pb-14 sm:pt-16" aria-labelledby="start-heading">
           <h1 id="start-heading" className="text-[32px]/[38px] font-semibold tracking-[-.03em] text-ink sm:text-display">
-            {user?.name ? `Salaam, ${user.name.split(" ")[0]}.` : "Your homes"}
+            {user?.name ? `Salaam, ${user.name.split(" ")[0]}.` : mine.length || shared.length ? "Your homes" : "Start a home"}
           </h1>
           <p className="mt-2 text-body-lg text-ink-2">Describe your plot to start. One message is enough.</p>
           <form onSubmit={submit} className="mt-6">
@@ -213,11 +214,13 @@ export function Workspace() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.24, ease: ease.out }}
-            className="grid grid-cols-1 gap-x-6 gap-y-9 sm:grid-cols-2 lg:grid-cols-3"
+            // Two samples fill two columns; homes run three across.
+            className={cn("grid grid-cols-1 gap-x-6 gap-y-9 sm:grid-cols-2", active !== "samples" && "lg:grid-cols-3")}
           >
-            {active === "mine" && (
-              <li>
-                <NewTile onClick={() => void create()} busy={creating} />
+            {/* The composer above starts a home: no dashed "New home" tile repeating it. */}
+            {active === "mine" && !list.length && (
+              <li className="col-span-full">
+                <Empty title="No homes yet" line="Describe your plot above to start one, or open a sample to walk a finished home." />
               </li>
             )}
             {list.map((p) => (
@@ -256,8 +259,18 @@ export function Workspace() {
 
 // ── Cards ─────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The chosen concept's day image (at card size) when the home has one; else the stored thumbnail. A version's
+ * capture (a grey aerial or a cut-away) never stands in for a concept the family picked.
+ */
+function cardImage(p: Project): string | undefined {
+  const chosen = p.concepts?.find((c) => c.id === p.selected_concept_id);
+  if (chosen?.url) return assetUrl(chosen.url, { w: 640 });
+  return assetUrl(p.thumbnail_url);
+}
+
 function Thumb({ p }: { p: Project }) {
-  const url = assetUrl(p.thumbnail_url);
+  const url = cardImage(p);
   const [failed, setFailed] = useState(false);
   if (url && !failed) return <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />;
   return (
@@ -270,8 +283,11 @@ function Thumb({ p }: { p: Project }) {
 function caption(p: Project): string {
   const bits: string[] = [];
   const v = p.versions.length;
-  bits.push(v ? `Version ${v}` : stageLabel(p));
-  if (p.members_count) bits.push(`Shared with ${p.members_count}`);
+  // A home with no version yet is a draft, whatever step its brief has reached: "Draft · 8 hours ago".
+  if (!v) return ["Draft", relativeTime(p.updated_at)].join(" · ");
+  bits.push(`Version ${v}`);
+  if (p.cloned_from) bits.push("From the samples");
+  else if (p.members_count) bits.push(`Shared with ${p.members_count}`);
   else if (p.brief?.plot?.area_marla) bits.push(plotLabel(p.brief.plot.area_marla));
   bits.push(relativeTime(p.updated_at));
   return bits.join(" · ");
@@ -330,33 +346,11 @@ function SampleCard({ sample: s, opening, onOpen }: { sample: Project; opening: 
     <Card
       media={<Thumb p={s} />}
       title={sampleTitle(s.name)}
-      caption={[b?.plot?.area_marla ? plotLabel(b.plot.area_marla) : null, b?.style ?? null, "Ready to walk"].filter(Boolean).join(" · ")}
+      caption={[b?.plot?.area_marla ? plotLabel(b.plot.area_marla) : null, b?.style ? sentenceCase(b.style) : null, "Ready to walk"].filter(Boolean).join(" · ")}
       onClick={onOpen}
       label={`Explore the sample: ${sampleTitle(s.name)}`}
       badge={opening ? <StatusChip tone="progress" className="glass-light">Opening</StatusChip> : <StatusChip className="glass-light" dot={false}>Sample</StatusChip>}
     />
-  );
-}
-
-function NewTile({ onClick, busy }: { onClick: () => void; busy: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      aria-label="Start a new home"
-      className="group/new flex w-full flex-col gap-3 text-left outline-none"
-    >
-      <span className="grid aspect-[4/3] w-full place-items-center rounded-card border border-dashed border-line-strong bg-surface/60 transition-[border-color,background-color,box-shadow] duration-300 group-hover/new:border-accent-line group-hover/new:bg-surface group-focus-visible/new:shadow-focus">
-        <span className="grid size-14 place-items-center rounded-full bg-surface text-ink shadow-e1 transition-transform duration-300 group-hover/new:scale-105">
-          {busy ? <Spinner /> : <Plus className="size-6" strokeWidth={1.5} />}
-        </span>
-      </span>
-      <span className="px-0.5">
-        <span className="block text-[15px] font-semibold leading-[22px] tracking-[-.01em] text-ink">New home</span>
-        <span className="block text-[13px] leading-[18px] text-ink-3">Plot, family, wishes. Naqsha does the rest.</span>
-      </span>
-    </button>
   );
 }
 

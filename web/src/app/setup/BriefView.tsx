@@ -14,6 +14,7 @@ import { cn } from "@/app/lib/utils";
 import { useAskContext } from "@/app/shell/ask";
 import { Button, EASE_SHEET, IconButton, notify, useMediaQuery } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
+import { useProject } from "@/app/store/project";
 import { BriefSheet } from "./BriefSheet";
 import { chat, useChat } from "./chat";
 import { Conversation } from "./Conversation";
@@ -121,13 +122,18 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
     </div>
   );
 
-  const nextCard = complete && !busy && (
+  // The dock's Next pill says "Show me concepts" whenever the brief is filled (shell/next.ts): the conversation only
+  // says what comes next, and offers the button itself only when the pill isn't there.
+  const conceptsRunning = useProject((s) => !!s.conceptRun?.running);
+  const pillSaysIt = project.stage !== "setup" && !conceptsRunning;
+  const nextCard = complete && !busy && !project.current_version_id && (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.1 }} className="mt-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card bg-surface-2 px-4 py-3">
       <p className="text-[14px] text-ink-2">Next: four exteriors, by day and by night.</p>
-      {/* The dock's Next pill is the one accent here; this is its quieter twin in the conversation. */}
-      <Button variant="secondary" size="sm" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={() => goTo("concepts")}>
-        Show me concepts
-      </Button>
+      {!pillSaysIt && (
+        <Button variant="secondary" size="sm" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={() => goTo("concepts")}>
+          Show me concepts
+        </Button>
+      )}
     </motion.div>
   );
 
@@ -147,14 +153,10 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
             <p className="text-[15px] font-semibold text-ink">Brief</p>
             <p className="truncate text-[12.5px] text-ink-3">{complete ? "Ready. Change anything, any time." : "One message is enough."}</p>
           </div>
+          {/* "Decide everything for me" is the dock's chip: one of it, not two. */}
           <div className="flex shrink-0 items-center gap-1">
-            {!complete && !phone && (
-              <Button variant="quiet" size="sm" onClick={() => send({ action: "skip_all" })} disabled={busy}>
-                Decide everything for me
-              </Button>
-            )}
             {phone && (
-              <Button variant="secondary" size="sm" onClick={() => setSheet(true)}>
+              <Button variant="secondary" size="sm" onClick={() => setSheet(true)} className="hit-44 relative">
                 Plot and brief
               </Button>
             )}
@@ -174,13 +176,15 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
           failed={failed || !!unanswered}
           onRetry={() => void chat.retry(project.id, unanswered)}
           footer={nextCard}
+          designed={!!project.current_version_id}
         />
       </section>
 
       {/* Plot and live brief */}
+      {/* The column scrolls above the dock (never under the Next pill), with 16px of air at its end. */}
       {!phone && (
-        <div className="scroll-clear-chrome left-[444px]">
-          <div className="scroll-clear-body mx-auto max-w-[1040px] px-6">{canvas}</div>
+        <div className="scroll-clear-chrome left-[444px]" style={{ bottom: "calc(var(--dock-h, 132px) + 8px)" }}>
+          <div className="scroll-clear-body mx-auto max-w-[1040px] px-6" style={{ paddingBottom: 16 }}>{canvas}</div>
         </div>
       )}
 

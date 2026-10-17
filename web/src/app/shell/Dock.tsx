@@ -35,7 +35,7 @@ export interface DockProps {
   defaultPlaceholder: string;
   defaultSuggestions: string[];
   /** What Ask does when the view registers nothing. */
-  defaultSubmit: (text: string) => void | Promise<void>;
+  defaultSubmit: (text: string) => void | boolean | Promise<void | boolean>;
   commands: Command[];
   /** Whether Naqsha's line opens the conversation sheet (false where there is none, e.g. the client view). */
   conversation?: boolean;
@@ -83,7 +83,15 @@ export function Dock(props: DockProps) {
     setDraft("");
     setPaletteOpen(false);
     const fn = activeAskContext().onSubmit ?? defaultSubmit;
-    void fn(t);
+    // A send that fails keeps what was typed: the text comes back unless something new was typed meanwhile.
+    const restore = () => {
+      if (!useAskStore.getState().draft) setDraft(text);
+    };
+    try {
+      void Promise.resolve(fn(t)).then((ok) => ok === false && restore(), restore);
+    } catch {
+      restore();
+    }
   };
 
   // useAsk().submit from views
@@ -297,12 +305,14 @@ export function Dock(props: DockProps) {
               </div>
             )}
             {suggestions.length > 0 && (
-              <div className={cn("flex max-w-full gap-2", phone ? "no-scrollbar -mx-3 overflow-x-auto px-3" : "flex-wrap justify-center")}>
+              <div className={cn("flex max-w-full gap-2", phone ? "no-scrollbar -mx-3 w-[calc(100%+24px)] max-w-none self-stretch overflow-x-auto py-1 pl-3" : "flex-wrap justify-center")}>
                 {suggestions.map((s) => (
-                  <SuggestionChip key={s} tone={hud ? "hud" : "light"} onClick={() => submit(s)} className={hud ? "" : "shadow-e1"}>
+                  <SuggestionChip key={s} tone={hud ? "hud" : "light"} onClick={() => submit(s)} className={cn("shrink-0", hud ? "" : "shadow-e1")}>
                     {s}
                   </SuggestionChip>
                 ))}
+                {/* Scrolled to the end, the last chip stops 16px from the edge (end padding is not reliable in a scroller). */}
+                {phone && <span aria-hidden className="w-2 shrink-0" />}
               </div>
             )}
           </motion.div>

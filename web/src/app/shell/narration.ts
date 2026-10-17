@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import type { Project, Version } from "@contracts/api-types";
 import type { ComplianceReport } from "@contracts/plan";
-import { notesLine, summarize, type Summary } from "@/app/plan/compliance";
+import { statusLine, summarize, type Summary } from "@/app/plan/compliance";
 import { useProject, type Run } from "@/app/store/project";
 
 export interface Narration {
@@ -44,6 +44,10 @@ function room(id: string): string {
  * "Reading furnish_g_kitchen…" → "Reading the kitchen furniture…", "Looking at g_lounge…" → "Looking at the TV lounge…".
  */
 export function plain(text: string): string {
+  return tidy(plainWords(text));
+}
+
+function plainWords(text: string): string {
   return text
     .replace(/\bArgon( is)?\b/g, "")
     .replace(/\bthe AI architect\b/gi, "Naqsha")
@@ -57,6 +61,15 @@ export function plain(text: string): string {
     .replace(/\s{2,}/g, " ")
     .replace(/^\s*[a-z]/, (c) => c.toUpperCase())
     .trim();
+}
+
+/** One mark at the end of a line, never two: "Drawing….", "Done.." and "Ready?." read "Drawing…", "Done.", "Ready?". */
+export function tidy(text: string): string {
+  return text
+    .replace(/\.{3}/g, "…")
+    .replace(/…[.…]+/g, "…")
+    .replace(/([.!?])[.…]+/g, "$1")
+    .replace(/\s+([.!?…,;:])/g, "$1");
 }
 
 function runLine(run: Run, kind: "design" | "revise"): Narration | null {
@@ -116,14 +129,7 @@ export function complianceCounts(
   return summarize(v.compliance, v.plan, id ? asBuilt?.[id] : undefined);
 }
 
-/** "35/36 LDA · 10/11 livable · 2 to check · 3 notes from the 3D model" for the title capsule. */
+/** "36/36 LDA · 10/12 livable · 2 to check" for the title capsule: the one phrasing (compliance.statusLine). */
 export function countsLine(s: Summary): string {
-  const bits = [`${s.ldaTally.pass}/${s.ldaTally.total} LDA`];
-  if (s.livableTally.total) bits.push(`${s.livableTally.pass}/${s.livableTally.total} livable`);
-  const fix = s.fails.length;
-  const check = s.warns.length;
-  if (fix) bits.push(`${fix} to fix`);
-  if (check) bits.push(`${check} to check`);
-  if (s.notes) bits.push(notesLine(s.notes));
-  return bits.join(" · ");
+  return statusLine(s);
 }

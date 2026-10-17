@@ -1,8 +1,9 @@
 /**
- * The comments sheet (right): All · Mine · Team · Client · Open · Resolved, grouped by floor and room, with threads.
+ * The comments sheet (right): who (All · Mine · Team · Client) and status (Open · Resolved), combinable, grouped by
+ * floor and room, with threads.
  * "Revise with N comments" lets the owner or team pick which notes feed the next revision.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import type { Comment, Project } from "@contracts/api-types";
 import { api, userId } from "@/api/client";
@@ -13,7 +14,8 @@ import { Button } from "@/app/ui/Button";
 import { Chip } from "@/app/ui/Chip";
 import { Sheet } from "@/app/ui/Sheet";
 import { CommentItem } from "./CommentItem";
-import { FILTERS, groupComments, matches, pinNumbers, type CommentFilter } from "./model";
+import { STATUS_FILTERS, WHO_FILTERS, groupComments, matches, pinNumbers, type StatusFilter, type WhoFilter } from "./model";
+import { usePinNumbers } from "./pins";
 
 export function CommentsSheet({
   open,
@@ -47,14 +49,18 @@ export function CommentsSheet({
   const guestName = useProject((s) => s.guestName);
   const reviseRunning = useProject((s) => s.revise.status === "running");
   const user = useAuth((s) => s.user);
-  const [filter, setFilter] = useState<CommentFilter>("all");
+  const [who, setWho] = useState<WhoFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("any");
+  const pass = useCallback((c: Comment, m: { ids: string[]; name?: string | null }) => matches(c, who, m) && (status === "any" || matches(c, status, m)), [who, status]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const refs = useRef(new Map<string, HTMLElement>());
 
   const versionId = commentsFor ?? project.current_version_id;
   const plan = versionId ? versions[versionId]?.plan : undefined;
   const list = useMemo(() => comments.filter((c) => !versionId || c.version_id === versionId), [comments, versionId]);
-  const numbers = useMemo(() => pinNumbers(list), [list]);
+  // The owner's pins keep their number across versions (the whole project's comments); a client numbers their own.
+  const projectNumbers = usePinNumbers(clientView ? undefined : project.id, list);
+  const numbers = useMemo(() => (clientView ? pinNumbers(list) : projectNumbers), [clientView, list, projectNumbers]);
   const me = useMemo(() => ({ ids: [user?.uid, clientView ? undefined : userId()].filter(Boolean) as string[], name: clientView ? guestName : user?.name }), [user, clientView, guestName]);
   // Threads on earlier versions (resolved notes, with Naqsha's answers) stay readable after a revision, for everyone,
   // and the filters apply to them too.
@@ -78,8 +84,8 @@ export function CommentsSheet({
       .filter((c) => !seen.has(c.id) && seen.add(c.id))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }, [comments, others, versionId]);
-  const earlier = useMemo(() => earlierAll.filter((c) => matches(c, filter, me)), [earlierAll, filter, me]);
-  const shown = useMemo(() => list.filter((c) => matches(c, filter, me)), [list, filter, me]);
+  const earlier = useMemo(() => earlierAll.filter((c) => pass(c, me)), [earlierAll, pass, me]);
+  const shown = useMemo(() => list.filter((c) => pass(c, me)), [list, pass, me]);
   const groups = useMemo(() => groupComments(shown, plan), [shown, plan]);
   const openList = useMemo(() => list.filter((c) => c.status === "open"), [list]);
   const moderator = !clientView && canEdit(project);
@@ -142,12 +148,22 @@ export function CommentsSheet({
         </p>
       ) : (
         (list.length > 0 || earlierAll.length > 0) && (
-          <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Filter comments">
-            {FILTERS.map((f) => (
-              <Chip key={f.id} size="sm" selected={filter === f.id} onClick={() => setFilter(f.id)}>
-                {f.label}
-              </Chip>
-            ))}
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Who wrote it">
+              {WHO_FILTERS.map((f) => (
+                <Chip key={f.id} size="sm" selected={who === f.id} onClick={() => setWho(f.id)} aria-pressed={who === f.id}>
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
+            <span className="h-4 w-px bg-line-strong" aria-hidden />
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Status">
+              {STATUS_FILTERS.map((f) => (
+                <Chip key={f.id} size="sm" selected={status === f.id} onClick={() => setStatus((s) => (s === f.id ? "any" : f.id))} aria-pressed={status === f.id}>
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
           </div>
         )
       )}

@@ -316,10 +316,15 @@ export const useProject = create<ProjectState>((set, get) => {
       pushItem(k, { kind: "version", version });
       const p = get().project;
       if (p) {
+        // The rail names a new version at once: the event's summary (the server's own words) when it carries one,
+        // else what was asked or the first change, so it never reads "A revision" until a reload.
+        const said = (version as Version & { summary?: string }).summary;
+        const summary = said || version.source?.instruction?.trim() || version.changes?.[0]?.summary || undefined;
+        const entry = { id: version.id, n: version.n, created_at: version.created_at, status: version.status, ...(summary ? { summary } : {}) };
         get().patchProject({
           versions: p.versions.some((v) => v.id === version.id)
-            ? p.versions
-            : [...p.versions, { id: version.id, n: version.n, created_at: version.created_at, status: version.status }],
+            ? p.versions.map((v) => (v.id === version.id ? { ...v, ...entry, summary: v.summary || summary } : v))
+            : [...p.versions, entry],
           current_version_id: version.id,
           stage: "ready",
         });

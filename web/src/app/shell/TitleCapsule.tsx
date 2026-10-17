@@ -119,7 +119,7 @@ export function TitleCapsule({
           onClick={() => navigate("/app")}
           aria-label="All homes"
           className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:shadow-focus",
+            "hit-44 relative grid size-9 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:shadow-focus",
             hud ? "text-hud-ink-2 hover:bg-white/10 hover:text-hud-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
           )}
         >
@@ -155,7 +155,9 @@ export function TitleCapsule({
             title={editable ? "Rename" : undefined}
             disabled={!editable}
             className={cn(
-              "max-w-[min(280px,52vw)] truncate rounded-[6px] text-left text-[14px] font-semibold leading-[18px] tracking-[-.01em] outline-none focus-visible:shadow-focus disabled:cursor-default",
+              "max-w-[min(280px,56vw)] truncate rounded-[6px] text-left text-[14px] font-semibold leading-[18px] tracking-[-.01em] outline-none focus-visible:shadow-focus disabled:cursor-default",
+              // Phones: the name itself is a 44px-tall target (the capsule is 48px and has no status line there).
+              compact && "py-[13px]",
               hud ? "text-hud-ink" : "text-ink",
             )}
           >
@@ -180,7 +182,7 @@ export function TitleCapsule({
             aria-haspopup="menu"
             aria-label="Home menu"
             className={cn(
-              "grid size-8 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:shadow-focus",
+              "hit-44 relative grid size-8 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:shadow-focus",
               hud ? "text-hud-ink-2 hover:bg-white/10 hover:text-hud-ink" : "text-ink-3 hover:bg-surface-2 hover:text-ink",
               open && (hud ? "bg-white/10" : "bg-surface-2"),
             )}

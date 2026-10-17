@@ -8,7 +8,7 @@ import { Check, ChevronDown, X as XIcon, TriangleAlert } from "lucide-react";
 import type { BuildingPlan, ComplianceCheck, ComplianceReport } from "@contracts/plan";
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { EASE_OUT, Meter } from "@/app/design/kit";
-import { LDA_SECTIONS, ldaSection, notesLine, summarize, tallyLine, valueLine, type Tally } from "./compliance";
+import { firstSentence, LDA_SECTIONS, ldaSection, notesLine, reviewLine, statusLine, summarize, tallyLine, valueLine, type Tally } from "./compliance";
 import { sentenceCase } from "./model";
 
 export function ComplianceChip({ ref, report, plan, asBuilt, onClick, active }: { ref?: Ref<HTMLButtonElement>; report: ComplianceReport; plan?: BuildingPlan; asBuilt?: ComplianceReport | null; onClick: () => void; active?: boolean }) {
@@ -21,6 +21,7 @@ export function ComplianceChip({ ref, report, plan, asBuilt, onClick, active }: 
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      aria-label={`Checks: ${statusLine(s)}`}
       className={cn(
         "inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium shadow-e1 outline-none transition-colors focus-visible:shadow-focus",
         active ? "bg-ink text-white" : "bg-surface text-ink hover:bg-surface-2",
@@ -40,12 +41,8 @@ export function ComplianceChip({ ref, report, plan, asBuilt, onClick, active }: 
           <span className={active ? "text-white/70" : "text-ink-3"}>livable</span>
         </>
       )}
-      {(s.fails.length > 0 || check > 0) && (
-        <span className={cn("max-sm:hidden", active ? "text-white/70" : s.fails.length ? "text-fail" : "text-warn")}>
-          · {s.fails.length ? `${s.fails.length} to fix` : `${check} to check`}
-        </span>
-      )}
-      {s.notes > 0 && <span className={cn("max-lg:hidden", active ? "text-white/70" : "text-ink-3")}>· {notesLine(s.notes)}</span>}
+      {s.fails.length > 0 && <span className={cn("max-sm:hidden", active ? "text-white/70" : "text-fail")}>· {s.fails.length} to fix</span>}
+      {check > 0 && <span className={cn("max-sm:hidden", active ? "text-white/70" : "text-warn")}>· {check} to check</span>}
     </button>
   );
 }
@@ -86,11 +83,8 @@ export function CompliancePanel({
   }, [s.lda]);
   const fails = s.fails.length;
   const checks = s.warns.length;
-  const verdict = fails
-    ? `${fails} ${fails === 1 ? "rule" : "rules"} to fix`
-    : s.approvalReady
-      ? "Approval-ready"
-      : `${s.ldaWarns} LDA ${s.ldaWarns === 1 ? "point" : "points"} to check`;
+  // The one phrasing every count uses (capsule, chip, dock, Revisions, print): "36/36 LDA · 10/12 livable · 2 to check".
+  const verdict = `${!fails && s.approvalReady ? "Approval-ready · " : ""}${statusLine(s)}`;
   const headline = fails
     ? running
       ? stage === "fix" || stage === "plan" || stage === "compliance"
@@ -100,7 +94,7 @@ export function CompliancePanel({
           : "I'm building this version in 3D. Ask me to fix these once it's ready."
       : "Ask me to fix it, or change the plan yourself."
     : s.approvalReady
-      ? `Passes all ${s.ldaTally.total} LDA checks${s.livableTally.total ? (s.livableIssues ? `. ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check.` : ` and ${s.livableTally.total} livable rules.`) : "."}${s.notes ? ` ${notesLine(s.notes)}.` : ""}`
+      ? `Passes all ${s.ldaTally.total} LDA checks${s.livableTally.total ? (s.livableIssues ? `. ${s.livableIssues} livable ${s.livableIssues === 1 ? "point" : "points"} to check.` : ` and ${s.livableTally.total} livable rules.`) : "."}`
       : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass. Look at the ${checks === 1 ? "one" : checks} marked below before you submit.`;
   const setbackChecks = s.lda.filter((c) => c.id.startsWith("setback.") && c.id !== "setback.envelope" && c.id !== "setback.side");
 
@@ -196,7 +190,40 @@ export function CompliancePanel({
         </section>
       )}
 
-      {/* As built: what the 3D build found */}
+      {/* Architect's notes: the self-review's advice, collapsed, never counted */}
+      {s.review.length > 0 && (
+        <section className="mt-6 border-t border-line pt-1">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => ({ ...o, review: !o.review }))}
+            aria-expanded={!!open.review}
+            className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left outline-none hover:bg-surface-2/50 focus-visible:bg-surface-2"
+          >
+            <span className="text-[15px] font-semibold text-ink">{reviewLine(s.review.length)}</span>
+            <ChevronDown className={cn("size-3.5 text-ink-3 transition-transform duration-(--dur-fast)", open.review && "rotate-180")} strokeWidth={1.75} />
+          </button>
+          <AnimatePresence initial={false}>
+            {open.review && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.24, ease: EASE_OUT }}
+                className="overflow-hidden"
+              >
+                <p className="px-5 pt-0.5 text-[12.5px] text-ink-3">A second read of the plan, as an architect would give it. Advice, not rules: these aren't counted above.</p>
+                <ul className="px-3 pt-1">
+                  {s.review.map((c) => (
+                    <NoteRow key={c.id} c={c} selected={selectedId === c.id} onSelect={onSelect} />
+                  ))}
+                </ul>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
+
+      {/* As built: what the 3D build found (only notes that aren't a pass) */}
       {s.asBuilt.length > 0 && (
         <section className="mt-6">
           <GroupHeading title="As built" t={s.asBuiltTally} line={notesLine(s.notes)} />
@@ -245,6 +272,38 @@ function StatusMark({ status, className }: { status: "pass" | "warn" | "fail"; c
     >
       {status === "pass" ? <Check className="size-2.5" strokeWidth={3} /> : status === "warn" ? <TriangleAlert className="size-2.5" strokeWidth={2.5} /> : <XIcon className="size-2.5" strokeWidth={3} />}
     </span>
+  );
+}
+
+/** An architect's note: its first sentence; open it for the rest and "Suggested: …". */
+function NoteRow({ c, selected, onSelect }: { c: ComplianceCheck; selected: boolean; onSelect: (c: ComplianceCheck | null) => void }) {
+  const head = firstSentence(c.message) || sentenceCase(c.title);
+  const rest = (c.message ?? "").trim().slice(head.length).trim();
+  const fix = (c.fix ?? "").trim();
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(selected ? null : c)}
+        aria-expanded={selected}
+        className={cn(
+          "flex w-full gap-2.5 rounded-control px-2 py-2 text-left outline-none transition-colors focus-visible:shadow-focus",
+          selected ? "bg-accent-soft" : "hover:bg-surface-2/70",
+        )}
+      >
+        <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-ink-4" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] leading-snug text-ink">{head}</span>
+          {selected && rest && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{rest}</span>}
+          {selected && fix && (
+            <span className="mt-1 block text-[12.5px] leading-snug text-ink-2">
+              <span className="font-medium text-ink">Suggested: </span>
+              {fix}
+            </span>
+          )}        </span>
+        <ChevronDown className={cn("mt-1 size-3.5 shrink-0 text-ink-3 transition-transform duration-(--dur-fast)", selected && "rotate-180")} strokeWidth={1.75} />
+      </button>
+    </li>
   );
 }
 

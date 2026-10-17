@@ -26,8 +26,10 @@ import { PlotCanvas } from "@/app/setup/PlotCanvas";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { CompliancePanel, ComplianceChip } from "./CompliancePanel";
 import { FloorPlan, type PlanPin } from "./FloorPlan";
-import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, changedRooms, coveredArea, hueColor, levelKey, levelName, levelsOf } from "./model";
+import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, changedRooms, coveredArea, hueColor, levelKey, levelName, levelsOf, sentenceCase } from "./model";
 import { PrintDialog } from "./PrintDialog";
+import { RoomKeyRow } from "./RoomKey";
+import { usePinNumbers } from "@/app/comments/pins";
 
 export function PlanView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
   const goTo = useViewNav();
@@ -155,23 +157,27 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const [pinSel, setPinSel] = useState<string | null>(null);
   const [pinAt, setPinAt] = useState<{ x: number; y: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Numbered across the whole project (comments/pins.ts): a pin keeps its number from version to version.
+  const pinNo = usePinNumbers(project.id, comments);
   const pins = useMemo<PlanPin[]>(() => {
     if (running || !plan || !comments?.length) return [];
     const ordered = [...comments].sort((a, b) => a.created_at.localeCompare(b.created_at));
     return ordered
-      .map((c, i) => ({ c, n: i + 1 }))
+      .map((c, i) => ({ c, n: pinNo.get(c.id) ?? i + 1 }))
       .filter(({ c }) => anchorLevel(plan, c) === level && c.anchor.kind !== "view")
       .map(({ c, n }) => {
         const [x, y] = anchorPlanXY(c);
         return { id: c.id, n, x, y, hue: authorHue(c), text: c.text, selected: pinSel === c.id };
       })
       .filter((p) => p.x > -2 && p.y > -2 && p.x < plan.site.plot.width_ft + 2 && p.y < plan.site.plot.depth_ft + 2);
-  }, [running, plan, comments, level, pinSel]);
+  }, [running, plan, comments, level, pinSel, pinNo]);
   const selectedPin = comments?.find((c) => c.id === pinSel);
 
   // Keys for rooms too small to label
-  const [keys, setKeys] = useState<{ n: number; room: Room }[]>([]);
+  const [keys, setKeys] = useState<{ n: number; letter: string; room: Room }[]>([]);
   const [keysOpen, setKeysOpen] = useState(false);
+  // Phones: the legend is folded behind a "Key" button.
+  const [legendOpen, setLegendOpen] = useState(false);
 
   // Dialogs
   const [confirmAgain, setConfirmAgain] = useState(false);
@@ -381,9 +387,9 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
                 <Button variant="secondary" size="sm" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => setPrinting(true)} className="h-9" aria-label="Print or save as PDF">
                   <span className="hidden sm:inline">Print</span>
                 </Button>
-                <IconButton label="Design again" variant="secondary" size={36} onClick={() => setConfirmAgain(true)}>
-                  <RotateCcw className="size-4" strokeWidth={1.75} />
-                </IconButton>
+                <Button variant="secondary" size="sm" icon={<RotateCcw className="size-4" strokeWidth={1.75} />} onClick={() => setConfirmAgain(true)} className="h-9">
+                  Design again
+                </Button>
               </>
             )}
           </div>
@@ -412,6 +418,18 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
       {/* Legend */}
       {plan && (
         <div ref={legendRef} className={cn("pointer-events-none absolute left-3 z-10 max-w-[300px] sm:left-4", wide ? "bottom-4" : "bottom-[calc(var(--dock-h,96px)+12px)]")}>
+          {/* Phones: the key stays folded behind one button, so the lawn, the gates and the road stay in view. */}
+          {phone && (
+            <button
+              type="button"
+              onClick={() => setLegendOpen((o) => !o)}
+              aria-expanded={legendOpen}
+              className="hit-44 pointer-events-auto relative mb-2 inline-flex h-9 items-center gap-1.5 rounded-full bg-surface/90 px-3.5 text-[13px] font-medium text-ink-2 shadow-e1 outline-none backdrop-blur focus-visible:shadow-focus"
+            >
+              {legendOpen ? "Hide key" : "Key"}
+            </button>
+          )}
+          {(!phone || legendOpen) && (
           <div className="pointer-events-auto rounded-control bg-surface/90 px-3 py-2 text-[12px] text-ink-3 shadow-e1 backdrop-blur">
             <p className="flex items-center gap-2">
               <span className="h-0 w-5 border-t border-dashed border-accent" />
@@ -434,7 +452,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
                       .map(({ r, d }, i) => (
                         <span key={r.id} className="whitespace-nowrap">
                           {i > 0 && " · "}
-                          {r.name} <span className="font-mono font-semibold tabular-nums text-accent">{d === "new" ? "new" : `${d > 0 ? "+" : "−"}${num(Math.abs(d))}`}</span>
+                          {sentenceCase(r.name)} <span className="font-mono font-semibold tabular-nums text-accent">{d === "new" ? "new" : `${d > 0 ? "+" : "−"}${num(Math.abs(d))}`}</span>
                         </span>
                       ))}
                   </p>
@@ -446,13 +464,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
                 {keys.length <= 3 || keysOpen ? (
                   <ul className={cn("space-y-0.5", keys.length > 3 && "absolute bottom-full left-0 mb-2 max-h-[50vh] w-max overflow-y-auto rounded-control bg-surface p-3 shadow-e2")}>
                     {keys.map((k) => (
-                      <li key={k.room.id} className="flex items-center gap-2 whitespace-nowrap">
-                        <span className="grid size-4 place-items-center rounded-full border border-ink-2 bg-white text-[10px] font-semibold text-ink">{k.n}</span>
-                        <span className="text-ink-2">{k.room.name}</span>
-                        <span className="font-mono tabular-nums">
-                          {feetInches(k.room.rect.w)} × {feetInches(k.room.rect.d)}
-                        </span>
-                      </li>
+                      <RoomKeyRow key={k.room.id} letter={k.letter} room={k.room} />
                     ))}
                   </ul>
                 ) : null}
@@ -464,6 +476,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 

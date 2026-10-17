@@ -27,7 +27,7 @@ import { ConversationSheet } from "./ConversationSheet";
 import { DetailsDialog } from "./DetailsDialog";
 import { Dock } from "./Dock";
 import { complianceCounts, setRoomNames, useLastLine } from "./narration";
-import { notesLine, type Summary } from "@/app/plan/compliance";
+import { statusLine, type Summary } from "@/app/plan/compliance";
 import { markVersionSeen, startShare, useDefaultNext } from "./next";
 import { People } from "./People";
 import { useShell } from "./state";
@@ -99,6 +99,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   const applyMode = useShell((s) => s.applyMode);
   const focusComment = useShell((s) => s.focusComment);
   const viewSheet = useShell((s) => s.viewSheet);
+  const switchHidden = useShell((s) => s.switchHidden);
   const { toggleChat, openComments, closeComments, setShare, setApplyMode } = useShell.getState();
   const versions = useProject((s) => s.versions);
   const loadVersion = useProject((s) => s.loadVersion);
@@ -195,7 +196,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
       case "concepts":
         if (conceptsRunning) return null;
         if (!project.concepts.length) return "Your brief is ready. Shall I sketch four exteriors?";
-        if (!project.selected_concept_id) return "Tap the one you like. Ask for a change and I'll draw variations.";
+        if (!project.selected_concept_id) return `${touch ? "Tap" : "Click"} the one you like. Ask for a change and I'll draw variations.`;
         if (current) return "Your plan follows the concept marked Chosen. Open another to plan it instead.";
         return "Good choice. I'll plan the floors around it next.";
       case "plan":
@@ -206,12 +207,12 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         const shownId = resolveVersion(project, params.get("v")).id;
         if (shownId && shownId !== current) return "This is an earlier version. Switch to the latest to pin notes.";
         if (openCount) return openCount === 1 ? "1 note so far. I'll turn it into the next version." : `${openCount} notes so far. I'll turn them into the next version.`;
-        return phone ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
+        return touch ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
       }
       case "revisions":
         return null;
     }
-  }, [view, project, versions, asBuilt, lastLine, conceptsRunning, current, editor, openCount, params, phone]);
+  }, [view, project, versions, asBuilt, lastLine, conceptsRunning, current, editor, openCount, params, touch]);
 
   const defaultSuggestions = useMemo(() => {
     if (!editor) return [];
@@ -303,30 +304,18 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
 
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
-      <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
-        <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
-          <Suspense fallback={<ViewLoading tone={tone} />}>
-            {view !== "house" && <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />}
-            {(view === "house" || keepHouse) && (
-              <div className={cn("absolute inset-0", view !== "house" && "pointer-events-none invisible")} aria-hidden={view !== "house" || undefined}>
-                <HouseView project={project} onProjectChange={(p) => useProject.setState({ project: p })} active={view === "house"} />
-              </div>
-            )}
-          </Suspense>
-        </ErrorBoundary>
-      </main>
-
-      {/* Top: title capsule · view switch · people */}
+      {/* Top: title capsule · view switch · people. First in the DOM, so Tab reaches All homes, the title, the switch,
+          Comments and Share before the view's own HUD. z-[31]: now that it comes first, it still paints over the view's z-30 layers exactly as it did when it came after them. */}
       {phone ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 px-3 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[31] flex flex-col gap-2 px-3 pt-3">
           <div className="flex h-12 items-center justify-between gap-2">
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} compact view={view} />
             <People project={project} tone={tone} compact />
           </div>
-          <ViewSwitch project={project} view={view} tone={tone} fill />
+          {!switchHidden && <ViewSwitch project={project} view={view} tone={tone} fill />}
         </div>
       ) : (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-[var(--chrome)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[31] grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-[var(--chrome)]">
           <div className="flex min-w-0 justify-start">
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} />
           </div>
@@ -339,6 +328,19 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           </div>
         </div>
       )}
+
+      <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
+        <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
+          <Suspense fallback={<ViewLoading tone={tone} />}>
+            {view !== "house" && <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />}
+            {(view === "house" || keepHouse) && (
+              <div className={cn("absolute inset-0", view !== "house" && "pointer-events-none invisible")} aria-hidden={view !== "house" || undefined}>
+                <HouseView project={project} onProjectChange={(p) => useProject.setState({ project: p })} active={view === "house"} />
+              </div>
+            )}
+          </Suspense>
+        </ErrorBoundary>
+      </main>
 
       {/* Dock */}
       {!anySheetOnPhone && (
@@ -389,16 +391,15 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   );
 }
 
-/** The dock's line on Plan: "passes all" only when it does, and any livable or as-built points left to look at. */
+/**
+ * The dock's line on Plan, in the one phrasing every count uses ("36/36 LDA · 10/12 livable · 2 to check"), then
+ * what to do next. Never the as-built notes or the architect's notes.
+ */
 function planLine(s: Summary): string {
-  const ldaN = s.ldaTally.total;
-  const others = s.livableIssues;
-  const notes = s.notes ? ` ${notesLine(s.notes)}.` : "";
-  const rest = (others ? ` ${others} livable ${others === 1 ? "point needs" : "points need"} a look.` : "") + notes;
-  if (s.ldaFails) return `${s.ldaFails} LDA ${s.ldaFails === 1 ? "check needs" : "checks need"} fixing.${rest}`;
-  if (s.ldaWarns) return `${s.ldaTally.pass} of ${ldaN} LDA checks pass; ${s.ldaWarns} ${s.ldaWarns === 1 ? "needs" : "need"} a look before you submit.${rest}`;
-  if (others) return `Your home passes all ${ldaN} LDA checks.${rest} Want to walk through it?`;
-  return `Your home passes all ${ldaN} LDA checks and every livable rule.${notes} Want to walk through it?`;
+  const line = statusLine(s);
+  if (s.fails.length) return `${line}. Ask me to fix ${s.fails.length === 1 ? "it" : "them"}, or open the checks.`;
+  if (s.warns.length) return `${line}. Open the checks to see what to look at, or walk through it.`;
+  return `${line}. Every check passes. Want to walk through it?`;
 }
 
 /** Leaving a project clears what was typed into Ask. */

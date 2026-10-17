@@ -4,7 +4,7 @@
  * remix it in a few words, and "Plan this one". No prompts or model names on screen; expensive actions can't be
  * double-fired.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, ImageOff, RotateCw, X } from "lucide-react";
@@ -15,9 +15,12 @@ import { cn } from "@/app/lib/utils";
 import { usePhone } from "@/app/lib/hooks";
 import { useAskContext } from "@/app/shell/ask";
 import { flow, useFlow, withNight, type ConceptSlot } from "@/app/design/flow";
-import { BreathingDot, Button, Chip, Dialog, EASE_OUT, IconButton, Segmented, Shimmer, notify, useGuardedClick, useHotkeys } from "@/app/design/kit";
+import { BreathingDot, Button, Chip, Dialog, EASE_OUT, IconButton, Segmented, Shimmer, notify, useGuardedClick, useHotkeys, useMediaQuery } from "@/app/design/kit";
+import { tidy } from "@/app/shell/narration";
 import { useViewNav } from "@/app/design/nav";
 import { labelConcepts, nextRootLetter, type Labelled } from "./names";
+import { sentenceCase } from "@/app/plan/model";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
 
 const REMIX_IDEAS = ["Darker glass", "More timber", "Add a jaali screen", "Brick instead of plaster"];
 
@@ -195,9 +198,9 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const chips = [
     brief?.plot ? (brief.plot.corner ? "Corner" : "Mid-row") : null,
     brief?.facing ? `Faces ${FACING_LABEL[brief.facing]?.toLowerCase()}` : null,
-    brief?.solar === "panels" ? "Solar frame" : brief?.solar === "ready" ? "Solar-ready roof" : null,
-    brief?.water_tank === "concrete" ? "Tank in the stair tower" : brief?.water_tank === "plastic" ? "Plastic tank" : null,
-    brief?.style || null,
+    brief?.solar && brief.solar !== "none" ? solarLabel(brief.solar) : null,
+    tankLabel(brief?.water_tank),
+    brief?.style ? sentenceCase(brief.style) : null,
   ].filter(Boolean) as string[];
 
   const pendingRoots = run && !run.baseId ? run.slots.filter((s) => s.status !== "done") : [];
@@ -505,6 +508,30 @@ function Lightbox({
     const t = setTimeout(() => setArmed(true), 400);
     return () => clearTimeout(t);
   }, []);
+  // The title, the description and "Remix it:" start at the image's left edge and the actions end at its right edge:
+  // measure where the image sits (it is sized by the space left, at 4:3).
+  const root = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const wide = useMediaQuery("(min-width: 640px)");
+  const [edges, setEdges] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const r = root.current;
+    const f = frame.current;
+    if (!r || !f) return;
+    const place = () => {
+      const a = r.getBoundingClientRect();
+      const b = f.getBoundingClientRect();
+      if (!b.width) return;
+      const next = { left: Math.round(b.left - a.left), width: Math.round(b.width) };
+      setEdges((e) => (e && e.left === next.left && e.width === next.width ? e : next));
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(r);
+    ro.observe(f);
+    return () => ro.disconnect();
+  }, [l.concept.id]);
+  const aligned = edges && wide ? { marginLeft: edges.left, width: edges.width, paddingLeft: 0, paddingRight: 0 } : undefined;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = /^(INPUT|TEXTAREA)$/.test((e.target as HTMLElement)?.tagName ?? "");
@@ -518,7 +545,8 @@ function Lightbox({
   }, [onClose, onStep]);
   return (
     <motion.div
-      className="absolute inset-0 z-30 flex flex-col bg-canvas pt-[100px] md:pt-[64px]"
+      ref={root}
+      className="absolute inset-0 z-30 flex flex-col bg-canvas pt-[calc(var(--chrome-top,128px)+8px)] sm:pt-[100px] md:pt-[64px]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -528,18 +556,19 @@ function Lightbox({
       aria-label={`Concept ${l.label}`}
       style={{ pointerEvents: armed ? "auto" : "none", paddingBottom: "calc(var(--dock-h, 96px) + 8px)" }}
     >
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-6">
+      {/* Phones: Day/Night and Close on their own row above the title, and the description runs full width. */}
+      <div className="flex flex-col-reverse gap-2 px-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6 sm:pt-4" style={aligned}>
         <div className="min-w-0">
           <p className="text-heading text-ink">
             {l.label} <span className="text-ink-3">· {l.name}</span>
           </p>
           {l.concept.instruction ? (
-            <p className="text-[13px] text-ink-3">A remix: “{l.concept.instruction}”</p>
+            <p className="text-[13px] text-ink-3">A remix: “{tidy(l.concept.instruction.trim())}”</p>
           ) : l.concept.summary ? (
-            <p className="max-w-[760px] text-[13px] leading-[18px] text-ink-3">{l.concept.summary}</p>
+            <p className="max-w-[760px] text-[13px] leading-[18px] text-ink-3">{tidy(l.concept.summary.trim())}</p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-2">
           <Segmented
             label="Light"
             size="sm"
@@ -557,7 +586,7 @@ function Lightbox({
       </div>
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-4 sm:px-16">
-        <motion.div key={l.concept.id} initial={{ opacity: 0, scale: 0.985 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="aspect-[4/3] max-h-full w-full max-w-[1100px] overflow-hidden rounded-media shadow-e3">
+        <motion.div ref={frame} key={l.concept.id} initial={{ opacity: 0, scale: 0.985 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="aspect-[4/3] max-h-full w-full max-w-[1100px] overflow-hidden rounded-media shadow-e3">
           <ConceptImage concept={l.concept} light={light} nightShown={nightShown} eager large className="h-full w-full" />
         </motion.div>
         {count > 1 && (
@@ -572,7 +601,7 @@ function Lightbox({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 sm:px-6" style={aligned}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[13px] text-ink-3">Remix it:</span>
           {REMIX_IDEAS.map((idea) => (

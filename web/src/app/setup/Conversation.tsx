@@ -24,6 +24,19 @@ export function NaqshaMark({ className }: { className?: string }) {
   );
 }
 
+/**
+ * Once the home has a version, the setup turns no longer point at "Show me concepts" (that step is done): the
+ * clause that says so is dropped from what Naqsha said.
+ */
+export function afterDesign(text: string): string {
+  return text
+    .replace(/[;,]?\s*(?:I will|I'll) sketch four exterior[^.;]*?when you tap Show me concepts\./gi, ".")
+    .replace(/[;,]?\s*when you tap Show me concepts,[^.]*\./gi, ".")
+    .replace(/\s*When you're ready, tap Show me concepts\./gi, "")
+    .replace(/\.\./g, ".")
+    .trim();
+}
+
 function Paragraphs({ text }: { text: string }) {
   return (
     <>
@@ -50,6 +63,7 @@ export function Conversation({
   onRetry,
   className,
   footer,
+  designed,
 }: {
   messages: ChatMessage[];
   draft: string | null;
@@ -66,6 +80,8 @@ export function Conversation({
   onRetry?: () => void;
   className?: string;
   footer?: ReactNode;
+  /** The home already has a version: no pointers to "Show me concepts". */
+  designed?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -100,7 +116,7 @@ export function Conversation({
               <div className="flex gap-3">
                 <NaqshaMark className="mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <Paragraphs text={m.text} />
+                  <Paragraphs text={designed ? afterDesign(m.text) : m.text} />
                 </div>
               </div>
               {m.understood && (

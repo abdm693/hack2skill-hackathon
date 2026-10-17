@@ -20,18 +20,20 @@ export function useBusyViews(): Partial<Record<SwitchViewId, boolean>> {
 export function ViewSwitch({ project, view, tone, fill }: { project: Project; view: ViewId; tone: "light" | "hud"; fill?: boolean }) {
   const navigate = useNavigate();
   const busy = useBusyViews();
-  const options = VIEWS.filter((v) => viewAvailable(project, v.id) || v.id === view).map((v) => ({
+  const options: { value: ViewId; label: string; busy: boolean }[] = VIEWS.filter((v) => viewAvailable(project, v.id) || v.id === view).map((v) => ({
     value: v.id,
     label: v.label,
-    busy: !!busy[v.id] && v.id !== view,
+    busy: !!busy[v.id as SwitchViewId] && v.id !== view,
   }));
+  // Versions isn't one of the four views, but while it is on screen the switch says so: an active item, never none.
+  if (view === "revisions") options.push({ value: "revisions", label: "Versions", busy: false });
   // One place only (a brand-new home): nothing to switch between.
   if (options.length < 2) return null;
   return (
     <div className={cn("pointer-events-auto rounded-full", tone === "hud" ? "glass-hud" : "glass-light", fill && "w-full")}>
-      <Segmented<SwitchViewId>
+      <Segmented<ViewId>
         label="Views of this home"
-        value={view as SwitchViewId}
+        value={view}
         options={options}
         onChange={(v) => {
           // Day or night carries across the views (Concepts and House read it; the hidden House keeps it).
