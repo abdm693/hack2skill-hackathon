@@ -102,3 +102,17 @@ export function stageLabel(p: Project): string {
 export function stageBusy(p: Project): boolean {
   return p.stage === "planning" || p.stage === "building" || p.stage === "revising";
 }
+
+/**
+ * The version a view shows from ?v=: a version id or its number (?v=2), else the current version. `known` is false
+ * when ?v= names no version of this home (the caller falls back to the current one and says so).
+ */
+export function resolveVersion(p: Project, v: string | null | undefined): { id: string | null; known: boolean } {
+  const current = p.current_version_id ?? null;
+  if (!v) return { id: current, known: true };
+  if (p.versions.some((x) => x.id === v)) return { id: v, known: true };
+  const n = Number(v.replace(/^v/i, ""));
+  const byN = Number.isInteger(n) ? p.versions.find((x) => x.n === n) : undefined;
+  if (byN) return { id: byN.id, known: true };
+  return { id: current, known: false };
+}

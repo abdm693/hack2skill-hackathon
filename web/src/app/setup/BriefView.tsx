@@ -71,6 +71,8 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
   };
 
   useAskContext({
+    // The conversation is on screen here: the dock doesn't repeat Naqsha's line (it would cover the question).
+    line: null,
     placeholder: complete ? "Anything to add or change? A prayer room, a third storey…" : "Tell me about the plot and who will live there",
     // The conversation already shows Naqsha's suggestions under its last turn; the dock keeps to the one shortcut.
     suggestions: complete ? [] : ["Decide everything for me"],
@@ -95,7 +97,7 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
           {w && d ? (
             <PlotCanvas width={w} depth={d} envelope={env} corner={corner} facing={brief?.facing} className="mx-auto block h-auto max-h-[64vh] w-full" />
           ) : (
-            <EmptyPlot />
+            <EmptyPlot authority={brief?.authority} />
           )}
           <AnimatePresence>
             {preview && (
@@ -107,7 +109,7 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
         </div>
         {brief?.plot?.width_ft ? (
           <p className="mt-3 px-1 text-[13px] text-ink-3">
-            {plotLabel(brief.plot.area_marla)} {brief.plot.corner ? "corner" : "mid-row"} plot{brief.scheme ? ` in ${brief.scheme}` : ""}. The blue line is how far LDA lets you build.
+            {plotLabel(brief.plot.area_marla)} {brief.plot.corner ? "corner" : "mid-row"} plot{brief.scheme ? ` in ${brief.scheme}` : ""}. The blue line is how far {brief.authority || project.envelope?.authority || "LDA"} lets you build.
           </p>
         ) : null}
       </div>
@@ -118,7 +120,8 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
   const nextCard = complete && !busy && (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.1 }} className="mt-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card bg-surface-2 px-4 py-3">
       <p className="text-[14px] text-ink-2">Next: four exteriors, by day and by night.</p>
-      <Button variant="primary" size="sm" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={() => goTo("concepts")}>
+      {/* The dock's Next pill is the one accent here; this is its quieter twin in the conversation. */}
+      <Button variant="secondary" size="sm" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={() => goTo("concepts")}>
         Show me concepts
       </Button>
     </motion.div>
@@ -131,8 +134,9 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
         aria-label="Conversation"
         className={cn(
           "absolute z-10 flex flex-col overflow-hidden bg-surface",
-          phone ? "inset-x-0 bottom-[132px] top-[var(--chrome-top)]" : "bottom-[132px] left-3 top-[72px] w-[420px] rounded-panel shadow-e2",
+          phone ? "inset-x-0 top-[var(--chrome-top)]" : "left-3 top-[72px] w-[420px] rounded-panel shadow-e2",
         )}
+        style={{ bottom: "calc(var(--dock-h, 132px) + 8px)" }}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
           <div className="min-w-0">
@@ -171,8 +175,8 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
 
       {/* Plot and live brief */}
       {!phone && (
-        <div className="absolute inset-y-0 left-[444px] right-0 overflow-y-auto [scrollbar-width:thin]">
-          <div className="mx-auto max-w-[1040px] px-6 pb-32 pt-[72px]">{canvas}</div>
+        <div className="scroll-clear-chrome left-[444px]">
+          <div className="scroll-clear-body mx-auto max-w-[1040px] px-6">{canvas}</div>
         </div>
       )}
 
@@ -204,7 +208,7 @@ export function BriefView({ project, onProjectChange }: { project: Project; onPr
   );
 }
 
-function EmptyPlot() {
+function EmptyPlot({ authority }: { authority?: string | null }) {
   return (
     <div className="grid aspect-[4/3] place-items-center px-8 text-center">
       <div>
@@ -212,7 +216,7 @@ function EmptyPlot() {
           <rect x="22" y="12" width="76" height="112" fill="none" stroke="#CFCFC8" strokeDasharray="4 4" />
           <path d="M6 140H114" stroke="#E4E4DF" strokeWidth="6" />
         </svg>
-        <p className="mt-3 text-body text-ink-3">Your plot appears here, to scale, with what LDA lets you build.</p>
+        <p className="mt-3 text-body text-ink-3">Your plot appears here, to scale, with what {authority || "LDA"} lets you build.</p>
       </div>
     </div>
   );

@@ -6,9 +6,28 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Check, Plus, X } from "lucide-react";
-import type { Brief, ChatMessage } from "@contracts/api-types";
+import type { Brief, ChatMessage, Envelope } from "@contracts/api-types";
 import { FACING_LABEL, plotLabel } from "@/api/domain";
-import { cn } from "@/app/lib/utils";
+import { cn, feetInches, num } from "@/app/lib/utils";
+
+/**
+ * The guarantees for the brief as it stands now: the authority's limits from the current envelope (so a plot edit
+ * never leaves stale figures on the card), then the rules that carry no numbers.
+ */
+export function currentGuarantees(server: string[], envelope: Envelope | null, brief: Brief | null): string[] {
+  if (!envelope) return server;
+  const a = brief?.authority ?? envelope.authority ?? "LDA";
+  const sb = envelope.setbacks_ft;
+  const out = [
+    `${a}: keep ${feetInches(sb.front)} open at the front and ${feetInches(sb.rear)} at the back${sb.left || sb.right ? `, ${feetInches(Math.max(sb.left, sb.right))} on one side` : ""}`,
+    `Up to ${num(envelope.max_coverage_pct)}% ground coverage (${num(Math.min(envelope.buildable_rect.w * envelope.buildable_rect.d, envelope.max_ground_coverage_sqft))} sq ft a floor)`,
+    `${envelope.max_storeys} storeys at most, ${feetInches(envelope.max_height_ft)} to the parapet`,
+  ];
+  if (brief?.plot?.corner) out.push(`A ${(brief.plot.area_marla ?? 10) <= 10.15 ? 5 : 10} ft splay at the corner`);
+  // Keep the server's rules that carry no figures (livable rules); its numbered lines may be from an older plot.
+  for (const g of server) if (!/\d/.test(g) && !out.includes(g)) out.push(g);
+  return out;
+}
 
 export interface Fact { key: string; text: string }
 
@@ -39,6 +58,7 @@ const rise = (i: number) => ({ initial: { opacity: 0, y: 6 }, animate: { opacity
 export function UnderstoodCard({
   m,
   brief,
+  envelope,
   interactive,
   onCorrect,
   onRemoveAssumption,
@@ -46,6 +66,7 @@ export function UnderstoodCard({
 }: {
   m: ChatMessage;
   brief: Brief | null;
+  envelope?: Envelope | null;
   /** Only the latest card can be edited. */
   interactive: boolean;
   /** Send a correction to Naqsha ("It's 2 storeys, not 3"). */
@@ -57,9 +78,25 @@ export function UnderstoodCard({
   const u = m.understood!;
   const said = interactive ? saidFacts(brief) : [];
   const prefs = interactive && brief?.preferences ? brief.preferences : u.preferences;
+  const guaranteed = interactive ? currentGuarantees(u.guaranteed, envelope ?? null, brief) : u.guaranteed;
+  const [expanded, setExpanded] = useState(false);
   let i = 0;
+  // Earlier cards fold to one line (the latest card is the brief as it stands).
+  if (!interactive && !expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[12.5px] font-medium text-ink-2 outline-none hover:text-ink focus-visible:shadow-focus"
+        aria-expanded={false}
+      >
+        <Check className="size-3.5 text-pass" strokeWidth={2.5} />
+        What I understood then · {u.guaranteed.length + u.assumptions.length + u.preferences.length} points
+      </button>
+    );
+  }
   return (
-    <div className="mt-3 overflow-hidden rounded-card bg-surface shadow-e1">
+    <div className="@container mt-3 overflow-hidden rounded-card bg-surface shadow-e1">
       {(said.length > 0 || u.assumptions.length > 0) && (
         <div className="space-y-2.5 px-4 pb-3 pt-3.5">
           {said.length > 0 && (
@@ -88,11 +125,12 @@ export function UnderstoodCard({
           )}
         </div>
       )}
-      <div className="grid border-t border-line sm:grid-cols-2">
-        <div className="px-4 py-3 sm:border-r sm:border-line">
+      {/* Two columns only when the card itself is wide enough (it lives in a 420px sheet). */}
+      <div className="grid border-t border-line @min-[480px]:grid-cols-2">
+        <div className="px-4 py-3 @min-[480px]:border-r @min-[480px]:border-line">
           <p className="mb-1.5 text-caption text-ink-3">Guaranteed</p>
           <ul className="space-y-1">
-            {u.guaranteed.map((g) => (
+            {guaranteed.map((g) => (
               <motion.li key={g} {...rise(i++)} className="flex gap-2 text-[13.5px] leading-snug text-ink">
                 <Check className="mt-0.5 size-3.5 shrink-0 text-pass" strokeWidth={2.5} />
                 {g}
@@ -100,7 +138,7 @@ export function UnderstoodCard({
             ))}
           </ul>
         </div>
-        <div className="border-t border-line px-4 py-3 sm:border-t-0">
+        <div className="border-t border-line px-4 py-3 @min-[480px]:border-t-0">
           <p className="mb-1.5 text-caption text-ink-3">Preferences</p>
           <Preferences prefs={prefs} interactive={interactive} onChange={onPreferences} start={i} />
         </div>
@@ -199,6 +237,7 @@ function Token({ text, kind, interactive, onEdit, onRemove }: { text: string; ki
         disabled={!interactive}
         onClick={() => setEditing(true)}
         title={interactive ? "Tap to correct" : undefined}
+        aria-label={interactive ? `Correct ${text}` : undefined}
         className={cn("h-full rounded-chip px-2.5 outline-none focus-visible:shadow-focus", interactive && "hover:text-ink", kind === "assumed" && "underline decoration-dotted decoration-ink-4 underline-offset-[5px]", onRemove && interactive && "pr-1")}
       >
         {text}

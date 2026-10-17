@@ -1,10 +1,17 @@
 /** localStorage-backed store for mock mode. */
 import type { Brief, ChatMessage, Comment, Member, Project, Version } from "@contracts/api-types";
 
+export type MockBrief = Brief & { plot: NonNullable<Brief["plot"]> };
+/** A brief with a plot (zeros when the size isn't known yet). */
+export function withPlot(b: Brief): MockBrief {
+  return { ...b, plot: b.plot ?? { width_ft: 0, depth_ft: 0, area_marla: 0, corner: false } };
+}
+
 export interface IntakeState {
   step: number; // index into the question list
   done: boolean;
-  brief: Brief;
+  /** The mock keeps a plot on its working brief (zeros until known). */
+  brief: MockBrief;
 }
 
 export interface MockDB {

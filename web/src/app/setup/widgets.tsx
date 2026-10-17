@@ -14,6 +14,9 @@ import { Button, Chip, EASE_OUT, Meter, SPRING, Segmented } from "@/app/design/k
 import { StyleArt } from "./StyleArt";
 import {
   CATALOGUE,
+  applyMove,
+  extrasOf,
+  overFloor,
   LEVEL_LABEL,
   bedroomsIn,
   capacity,
@@ -163,6 +166,10 @@ export function PlotEditor({ brief, onDone, doneLabel, onSkip, disabled }: { bri
         <span className="text-[13px] text-ink-3">ft</span>
         <span className="ml-auto font-mono text-[12.5px] tabular-nums text-ink-3">{valid ? `${num(width * depth)} sq ft · ${num(marla, 1)} marla` : "225 sq ft = 1 marla"}</span>
       </div>
+      {/* Why Save is off: say the range plainly. */}
+      <p className={cn("mt-1.5 text-[12.5px]", (w || d) && !valid ? "text-warn" : "text-ink-3")} aria-live="polite">
+        Plots run 10–400 ft wide and 20–600 ft deep.
+      </p>
       <div className="mt-3">
         <Segmented
           label="Plot position"
@@ -225,13 +232,20 @@ export function FloorsEditor({
 
   const doMove = () => {
     if (!move) return;
-    const from = { ...(program[move.from] ?? {}) };
-    from[move.id] = Math.max(0, (from[move.id] ?? 0) - 1);
-    const to = { ...(program[move.to] ?? {}) };
-    to[move.id] = (to[move.id] ?? 0) + 1;
-    onChange({ ...program, [move.from]: from, [move.to]: to }, storeys);
+    onChange(applyMove(program, move), storeys);
   };
   const moveItem = move ? CATALOGUE.find((c) => c.id === move.id) : undefined;
+  // Storeys up to what the authority allows here (the envelope says; three when it isn't known yet).
+  const authority = envelope?.authority ?? brief?.authority ?? "LDA";
+  const maxStoreys = Math.max(1, Math.min(3, envelope?.max_storeys || 3));
+  const storeyOptions = Array.from({ length: Math.max(maxStoreys, Math.min(3, storeys)) }, (_, i) => i + 1).map((n) => ({
+    value: String(n),
+    label: n === 1 ? "1 storey" : String(n),
+    aria: n === 1 ? "1 storey" : `${n} storeys`,
+    title: n === maxStoreys ? `${authority} allows up to ${maxStoreys === 1 ? "one storey" : `${maxStoreys} storeys`} here` : undefined,
+    disabled: n > maxStoreys,
+  }));
+  const extras = extrasOf(rooms);
 
   return (
     <div className="@container">
@@ -241,14 +255,10 @@ export function FloorsEditor({
           size="sm"
           value={String(storeys)}
           onChange={(v) => onChange(program, Number(v))}
-          options={[
-            { value: "1", label: "1 storey" },
-            { value: "2", label: "2" },
-            { value: "3", label: "3", title: "LDA allows up to three" },
-          ]}
+          options={storeyOptions}
         />
         <span className="text-[13px] text-ink-3">
-          {beds} {beds === 1 ? "bedroom" : "bedrooms"} in all
+          {beds} {beds === 1 ? "bedroom" : "bedrooms"} in all · {authority} allows {maxStoreys === 1 ? "one storey" : `up to ${maxStoreys}`}
         </span>
       </div>
 
@@ -289,7 +299,7 @@ export function FloorsEditor({
               <div className="mt-2 flex flex-wrap items-center gap-2 rounded-control bg-warn-soft px-3 py-2 text-[13px] text-ink">
                 <span>
                   Too much for the {LEVEL_LABEL[active].toLowerCase()} floor.
-                  {move && moveItem && move.from === active ? ` Move the ${moveItem.label.replace(" + bath", "").toLowerCase()} ${levelsFor(storeys).indexOf(move.to) < levelsFor(storeys).indexOf(move.from) ? "down" : "up"}?` : ""}
+                  {move && moveItem && move.from === active ? ` Move the ${shortName(moveItem.label)} ${levelsFor(storeys).indexOf(move.to) < levelsFor(storeys).indexOf(move.from) ? "down" : "up"}?` : ""}
                 </span>
                 {move && move.from === active && (
                   <button type="button" onClick={doMove} className="font-medium text-accent hover:underline">
@@ -301,6 +311,19 @@ export function FloorsEditor({
           )}
         </AnimatePresence>
       </div>
+
+      {extras.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[12px] text-ink-3">Also on this floor, from your brief</p>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label={`Other rooms on the ${LEVEL_LABEL[active].toLowerCase()} floor`}>
+            {extras.map((x) => (
+              <li key={x.key} className="inline-flex h-7 items-center rounded-chip bg-surface-2 px-2.5 text-[12.5px] font-medium text-ink-2" title="Kept as you asked. Change it in the conversation.">
+                {x.n > 1 ? `${x.n} × ${x.label}` : x.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <ul className="mt-2 grid gap-x-6 @lg:grid-cols-2">
         {items.map((c) => (
@@ -330,8 +353,18 @@ export function FloorsEditor({
 export function FloorsWidget({ brief, envelope, initial, onSend, onSkip, disabled }: { brief: Brief | null; envelope: Envelope | null; initial: Program; onSend: Send; onSkip: () => void; disabled?: boolean }) {
   const [program, setProgram] = useState<Program>(initial);
   const [storeys, setStoreys] = useState(Math.max(1, Math.min(3, brief?.storeys || 2)));
+  const [asking, setAsking] = useState(false);
   const levels = levelsFor(storeys);
-  const send = () => {
+  const over = overFloor(program, levels, envelope, brief);
+  const move = over ? suggestMove(program, levels, envelope, brief) : null;
+  const moveItem = move ? CATALOGUE.find((c) => c.id === move.id) : undefined;
+  const moveWord = move ? (levels.indexOf(move.to) < levels.indexOf(move.from) ? "down" : "up") : "";
+  const send = (force = false) => {
+    if (over && !force) {
+      setAsking(true);
+      return;
+    }
+    setAsking(false);
     const text = describe(program, levels);
     onSend({ message: text, chips: chipsFor(program, levels) }, text || "Use this layout");
   };
@@ -345,15 +378,42 @@ export function FloorsWidget({ brief, envelope, initial, onSend, onSkip, disable
         onChange={(p, s) => {
           setProgram(p);
           setStoreys(s);
+          setAsking(false);
         }}
       />
+      <AnimatePresence>
+        {asking && over && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div role="alert" className="mt-3 rounded-control bg-warn-soft px-3 py-2.5 text-[13.5px] leading-5 text-ink">
+              The {LEVEL_LABEL[over.level].toLowerCase()} floor is over by {num(over.over)} sq ft.{" "}
+              {moveItem ? `Move the ${shortName(moveItem.label)} ${moveWord}, or keep it anyway?` : "Take a room off, or keep it anyway?"}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {move && moveItem && (
+                  <Button variant="secondary" size="sm" onClick={() => { setProgram(applyMove(program, move)); setAsking(false); }}>
+                    Move the {shortName(moveItem.label)} {moveWord}
+                  </Button>
+                )}
+                <Button variant="quiet" size="sm" onClick={() => send(true)} disabled={disabled}>
+                  Keep it anyway
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <QuestionActions onSkip={onSkip} disabled={disabled}>
-        <Button variant="primary" size="sm" onClick={send} disabled={disabled}>
+        <Button variant="primary" size="sm" onClick={() => send()} disabled={disabled || asking}>
           Use these floors
         </Button>
       </QuestionActions>
     </div>
   );
+}
+
+/** "Bed + bath" → "bed", "Master bed + bath" → "master bedroom", "Study" → "study". */
+function shortName(label: string): string {
+  const l = label.replace(" + bath", "").replace("Master bed", "Master bedroom");
+  return l.charAt(0).toLowerCase() + l.slice(1);
 }
 
 // ── Roof ────────────────────────────────────────────────────────────────────────────────────────────
@@ -603,10 +663,18 @@ export function MapWidget({ chips, onSend, onSkip, disabled }: { chips?: ChipT[]
   const [facing, setFacing] = useState<string | undefined>();
   const coords = useMemo(() => (value.trim() ? parseCoordinates(value) : null), [value]);
   const offersFacing = !!chips?.length;
-  const send = () => {
-    const parts = [facing ? `The front faces ${DIR_NAME[facing].toLowerCase()}` : null, coords ? `Pin: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : null].filter(Boolean) as string[];
-    onSend({ message: parts.join(". "), chips: [...(facing ? [facing] : []), ...(coords ? [`coords:${coords.lat},${coords.lng}`] : [])] }, parts.join(". "));
+  const send = (withPin = true) => {
+    const pin = withPin ? coords : null;
+    const parts = [facing ? `The front faces ${DIR_NAME[facing].toLowerCase()}` : null, pin ? `Pin: ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}` : null].filter(Boolean) as string[];
+    onSend({ message: parts.join(". "), chips: [...(facing ? [facing] : []), ...(pin ? [`coords:${pin.lat},${pin.lng}`] : [])] }, parts.join(". "));
   };
+  // The secondary action keeps what was picked: with a facing, "Skip the pin" sends just the facing. "Decide for me"
+  // is offered only while nothing is chosen.
+  const secondary = facing
+    ? { label: "Skip the pin", run: () => send(false) }
+    : coords
+      ? null
+      : { label: "Decide for me", run: onSkip };
   return (
     <div className="space-y-3">
       {offersFacing && <FacingPicker value={facing} onChange={setFacing} />}
@@ -620,8 +688,8 @@ export function MapWidget({ chips, onSend, onSkip, disabled }: { chips?: ChipT[]
         className="h-11 w-full rounded-control bg-surface px-3.5 text-body text-ink shadow-[inset_0_0_0_1px_var(--color-line-strong)] outline-none placeholder:text-ink-4 focus:shadow-[inset_0_0_0_1px_var(--color-accent),var(--shadow-focus)]"
       />
       {value.trim() && <p className={cn("text-[12.5px]", coords ? "text-pass" : "text-warn")}>{coords ? `Found ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : "No coordinates in that yet. Links with @31.47,74.27 work."}</p>}
-      <QuestionActions onSkip={onSkip} disabled={disabled} skipLabel="Skip the pin">
-        <Button variant="primary" size="sm" disabled={(!coords && !facing) || disabled} onClick={send}>
+      <QuestionActions onSkip={secondary?.run} disabled={disabled} skipLabel={secondary?.label}>
+        <Button variant="primary" size="sm" disabled={(!coords && !facing) || disabled} onClick={() => send()}>
           Continue
         </Button>
       </QuestionActions>

@@ -10,10 +10,15 @@ export function DetailsDialog({ open, onClose, project }: { open: boolean; onClo
   const e = project.envelope;
   const rows: [string, string][] = [];
   if (b) {
-    rows.push(["Plot", `${plotLabel(b.plot.area_marla)} · ${b.plot.width_ft}′ × ${b.plot.depth_ft}′ · ${b.plot.corner ? "Corner" : "Mid-row"}`]);
+    rows.push(["Plot", b.plot?.width_ft ? `${plotLabel(b.plot.area_marla)} · ${b.plot.width_ft}′ × ${b.plot.depth_ft}′ · ${b.plot.corner ? "Corner" : "Mid-row"}` : "Not yet"]);
     rows.push(["Where", [b.scheme, b.city].filter(Boolean).join(", ") || "Lahore"]);
     if (b.facing) rows.push(["Front faces", FACING_LABEL[b.facing] ?? b.facing]);
-    rows.push(["Home", `${b.storeys} ${b.storeys === 1 ? "storey" : "storeys"} · ${b.bedrooms} bedrooms · ${b.bathrooms} baths`]);
+    const home = [
+      b.storeys ? `${b.storeys} ${b.storeys === 1 ? "storey" : "storeys"}` : null,
+      b.bedrooms ? `${b.bedrooms} ${b.bedrooms === 1 ? "bedroom" : "bedrooms"}` : null,
+      b.bathrooms ? `${b.bathrooms} ${b.bathrooms === 1 ? "bath" : "baths"}` : null,
+    ].filter(Boolean);
+    rows.push(["Home", home.length ? home.join(" · ") : "Not yet"]);
     if (b.spaces?.length) rows.push(["Spaces", b.spaces.map(spaceLabel).join(", ")]);
     if (b.style) rows.push(["Style", b.style]);
     if (b.budget) rows.push(["Budget", BUDGET_LABEL[b.budget] ?? b.budget]);
@@ -21,7 +26,7 @@ export function DetailsDialog({ open, onClose, project }: { open: boolean; onClo
     if (b.solar) rows.push(["Roof", b.solar === "none" ? "No solar" : b.solar === "ready" ? "Kept clear for solar" : "Solar panels included"]);
   }
   if (e) {
-    rows.push(["LDA rules", `${e.band}: ${e.max_coverage_pct}% coverage, ${e.max_height_ft} ft high, setbacks ${e.setbacks_ft.front}′ front and ${e.setbacks_ft.rear}′ rear`]);
+    rows.push([`${e.authority ?? "LDA"} rules`, `${e.band}: ${e.max_coverage_pct}% coverage, ${e.max_height_ft} ft high, setbacks ${e.setbacks_ft.front}′ front and ${e.setbacks_ft.rear}′ rear`]);
   }
   rows.push(["Versions", project.versions.length ? `${project.versions.length}` : "None yet"]);
   rows.push(["Started", relativeTime(project.created_at)]);

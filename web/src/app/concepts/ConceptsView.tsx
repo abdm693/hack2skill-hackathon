@@ -93,11 +93,12 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   // Choose → plan
   const [confirm, setConfirm] = useState<Labelled | null>(null);
   const [choosing, setChoosing] = useState(false);
-  const choose = async (l: Labelled, force = false) => {
-    if (choosing) return;
+  /** Choose a concept and go to the plan. `quiet` leaves error reporting to the caller (the autopilot retries). */
+  const choose = async (l: Labelled, force = false, quiet = false): Promise<boolean> => {
+    if (choosing) return false;
     if (!force && project.current_version_id && project.selected_concept_id !== l.concept.id) {
       setConfirm(l);
-      return;
+      return false;
     }
     setChoosing(true);
     try {
@@ -106,30 +107,47 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
       const fresh = force || !project.current_version_id;
       goTo("plan", { state: fresh ? { autostart: true, walk: autopilot } : undefined });
       if (force) void flow.design(project.id);
+      return true;
     } catch (e) {
-      notify.error("Couldn't choose that concept", e);
+      if (!quiet) notify.error("Couldn't choose that concept", e);
+      return false;
     } finally {
       setChoosing(false);
     }
   };
 
-  // "Decide everything for me": take the first concept as soon as it lands.
-  const [autopilot] = useState(() => !!(location.state as { autopilot?: boolean } | null)?.autopilot);
+  // "Decide everything for me": take the first concept once the run has finished and the server has saved it
+  // (concepts are stored when all four are done, so choosing earlier returns "concept not found").
+  const [autopilot, setAutopilot] = useState(() => !!(location.state as { autopilot?: boolean } | null)?.autopilot);
   const autoDone = useRef(false);
+  const autoTries = useRef(0);
   useEffect(() => {
     // Forget the request in history so a reload or Back doesn't choose again.
     if (autopilot) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const conceptsSettled = !run?.running;
   useEffect(() => {
-    if (!autopilot || autoDone.current) return;
+    if (!autopilot || autoDone.current || !conceptsSettled) return;
     const first = roots[0];
-    if (!first) return;
+    if (!first || !project.concepts.some((c) => c.id === first.concept.id)) return;
     autoDone.current = true;
     // Let the first image land on screen for a beat, then carry on (deliberately not cancelled on re-render).
-    setTimeout(() => void choose(first, !!project.current_version_id), 1400);
+    const attempt = async () => {
+      autoTries.current += 1;
+      const ok = await choose(first, !!project.current_version_id, true);
+      if (ok) return;
+      if (autoTries.current < 2) {
+        setTimeout(() => void attempt(), 2000);
+        return;
+      }
+      autoDone.current = false;
+      setAutopilot(false);
+      notify.error("I couldn't choose a concept for you. Tap the one you like and I'll plan it.");
+    };
+    setTimeout(() => void attempt(), 1400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autopilot, roots.length]);
+  }, [autopilot, roots.length, conceptsSettled, project.concepts]);
 
   const remix = (base: Labelled, instruction: string) => {
     const t = instruction.trim();
@@ -144,6 +162,17 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
       ? {
           placeholder: `Describe a change to ${open.label}, like darker glass`,
           busy: !!run?.running,
+          // The lightbox has its own remix row and its own "Plan this one": the dock adds neither.
+          suggestions: [],
+          next: null,
+          line:
+            project.selected_concept_id === open.concept.id
+              ? project.current_version_id
+                ? "This is your chosen look. Your plan follows it."
+                : "This is your chosen look."
+              : project.current_version_id
+                ? "Plan this one instead?"
+                : "Like this one? Plan it, or ask for a change.",
           onSubmit: (text) => remix(open, text),
         }
       : {
@@ -461,7 +490,7 @@ function Lightbox({
   }, [onClose, onStep]);
   return (
     <motion.div
-      className="absolute inset-0 z-30 flex flex-col bg-canvas pb-[96px] pt-[100px] md:pt-[64px]"
+      className="absolute inset-0 z-30 flex flex-col bg-canvas pt-[100px] md:pt-[64px]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -469,7 +498,7 @@ function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={`Concept ${l.label}`}
-      style={{ pointerEvents: armed ? "auto" : "none" }}
+      style={{ pointerEvents: armed ? "auto" : "none", paddingBottom: "calc(var(--dock-h, 96px) + 8px)" }}
     >
       <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-6">
         <div className="min-w-0">

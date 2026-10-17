@@ -8,7 +8,7 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
 import { isTyping, usePhone } from "@/app/lib/hooks";
-import { canEdit, defaultView, isViewId, LEGACY_VIEW, roleOf, viewAvailable, VIEWS, type ViewId } from "@/app/lib/views";
+import { canEdit, defaultView, hasVersion, isViewId, LEGACY_VIEW, resolveVersion, roleOf, viewAvailable, VIEWS, type ViewId } from "@/app/lib/views";
 import { requireAccount, useAuth } from "@/app/store/auth";
 import { useMembers } from "@/app/store/members";
 import { useProject } from "@/app/store/project";
@@ -27,6 +27,7 @@ import { ConversationSheet } from "./ConversationSheet";
 import { DetailsDialog } from "./DetailsDialog";
 import { Dock } from "./Dock";
 import { complianceCounts, setRoomNames, useLastLine } from "./narration";
+import type { Summary } from "@/app/plan/compliance";
 import { markVersionSeen, startShare, useDefaultNext } from "./next";
 import { People } from "./People";
 import { useShell } from "./state";
@@ -36,7 +37,7 @@ import { ViewSwitch } from "./ViewSwitch";
 // The 3D view pulls in three.js: load it only when someone opens House.
 const HouseView = lazy(() => import("@/app/explore/HouseView").then((m) => ({ default: m.HouseView })));
 
-type ViewProps = { project: Project; onProjectChange(p: Project): void };
+type ViewProps = { project: Project; onProjectChange(p: Project): void; active?: boolean };
 const VIEW_COMPONENT: Record<ViewId, ComponentType<ViewProps>> = {
   brief: BriefView,
   concepts: ConceptsView,
@@ -96,6 +97,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   const share = useShell((s) => s.share);
   const applyMode = useShell((s) => s.applyMode);
   const focusComment = useShell((s) => s.focusComment);
+  const viewSheet = useShell((s) => s.viewSheet);
   const { toggleChat, openComments, closeComments, setShare, setApplyMode } = useShell.getState();
   const versions = useProject((s) => s.versions);
   const loadVersion = useProject((s) => s.loadVersion);
@@ -147,7 +149,8 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         const v = VIEWS[Number(e.key) - 1];
         if (v && viewAvailable(project, v.id)) {
           e.preventDefault();
-          navigate(`/app/p/${project.id}/${v.id}`);
+          const light = new URLSearchParams(window.location.search).get("light");
+          navigate(`/app/p/${project.id}/${v.id}${light ? `?light=${light}` : ""}`);
         }
         return;
       }
@@ -156,7 +159,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         ask.focus();
         return;
       }
-      if (mod && (e.key === "j" || e.key === "J") && editor) {
+      if (mod && (e.key === "j" || e.key === "J") && editor && view !== "brief") {
         e.preventDefault();
         toggleChat();
         return;
@@ -182,8 +185,9 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
     return [];
   }, [messages]);
 
+  const asBuilt = useProject((s) => s.asBuilt);
   const defaultLine = useMemo(() => {
-    const counts = complianceCounts(project, versions);
+    const counts = complianceCounts(project, versions, asBuilt);
     switch (view) {
       case "brief":
         return lastLine ?? "Tell me about the plot and who will live there. One message is enough.";
@@ -191,18 +195,22 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         if (conceptsRunning) return null;
         if (!project.concepts.length) return "Your brief is ready. Shall I sketch four exteriors?";
         if (!project.selected_concept_id) return "Tap the one you like. Ask for a change and I'll draw variations.";
+        if (current) return "Your plan follows the concept marked Chosen. Open another to plan it instead.";
         return "Good choice. I'll plan the floors around it next.";
       case "plan":
         if (!current) return "I'll lay out the floors and check every LDA rule as I go.";
-        if (counts && counts.lda.pass === counts.lda.total) return `Your home passes all ${counts.lda.total} LDA checks. Want to walk through it?`;
-        return counts ? `${counts.lda.total - counts.lda.pass} LDA checks need attention.` : null;
-      case "house":
+        return counts ? planLine(counts) : null;
+      case "house": {
         if (!editor) return null;
-        return openCount ? `${openCount} ${openCount === 1 ? "note" : "notes"} so far. I'll turn them into the next version.` : "Look around, then press C to pin a note anywhere.";
+        const shownId = resolveVersion(project, params.get("v")).id;
+        if (shownId && shownId !== current) return "This is an earlier version. Switch to the latest to pin notes.";
+        if (openCount) return `${openCount} ${openCount === 1 ? "note" : "notes"} so far. I'll turn them into the next version.`;
+        return phone ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
+      }
       case "revisions":
         return null;
     }
-  }, [view, project, versions, lastLine, conceptsRunning, current, editor, openCount]);
+  }, [view, project, versions, asBuilt, lastLine, conceptsRunning, current, editor, openCount, params, phone]);
 
   const defaultSuggestions = useMemo(() => {
     if (!editor) return [];
@@ -278,18 +286,31 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
     "--chrome-top": phone ? (VIEWS.filter((v) => viewAvailable(project, v.id)).length > 1 ? "128px" : "72px") : "calc(var(--chrome) * 2 + 48px)",
     "--sheet-top": phone ? "0px" : "calc(var(--chrome) * 2 + 48px)",
   } as CSSProperties;
-  const sheetLeft = !phone && left === "chat";
+  const chatOpen = left === "chat" && view !== "brief";
+  const sheetLeft = !phone && chatOpen;
   const sheetRight = !phone && right === "comments";
-  const anySheetOnPhone = phone && (left || right);
+  const anySheetOnPhone = phone && (chatOpen || right || viewSheet > 0);
   const View = VIEW_COMPONENT[view];
   const hideNext = right === "comments" && applyMode;
+  // House stays mounted (hidden) once opened, so coming back from Plan keeps the camera, the light and the built
+  // model instead of rebuilding for seconds.
+  const [houseKept, setHouseKept] = useState(view === "house");
+  useEffect(() => {
+    if (view === "house") setHouseKept(true);
+  }, [view]);
+  const keepHouse = houseKept && hasVersion(project) && view !== "brief";
 
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
       <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
         <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
           <Suspense fallback={<ViewLoading tone={tone} />}>
-            <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />
+            {view !== "house" && <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />}
+            {(view === "house" || keepHouse) && (
+              <div className={cn("absolute inset-0", view !== "house" && "pointer-events-none invisible")} aria-hidden={view !== "house" || undefined}>
+                <HouseView project={project} onProjectChange={(p) => useProject.setState({ project: p })} active={view === "house"} />
+              </div>
+            )}
           </Suspense>
         </ErrorBoundary>
       </main>
@@ -321,7 +342,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           className="pointer-events-none absolute bottom-0 z-30 flex justify-center px-3 pb-[calc(var(--chrome)+var(--safe-b))] transition-[left,right] duration-[320ms] ease-sheet"
           style={{
             left: sheetLeft ? "calc(420px + var(--chrome) * 2)" : 0,
-            right: sheetRight ? "calc(380px + var(--chrome) * 2)" : 0,
+            right: sheetRight ? "calc(380px + var(--chrome) * 2)" : viewSheet ? `calc(${viewSheet}px + var(--chrome) * 2)` : 0,
           }}
         >
           <div className="w-full max-w-[720px]">
@@ -335,13 +356,13 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
               defaultSuggestions={defaultSuggestions}
               defaultSubmit={defaultSubmit}
               commands={commands}
-              conversation={editor}
+              conversation={editor && view !== "brief"}
             />
           </div>
         </div>
       )}
 
-      {editor && <ConversationSheet project={project} view={view} />}
+      {editor && view !== "brief" && <ConversationSheet project={project} view={view} />}
       <CommentsSheet
         open={right === "comments"}
         onClose={closeComments}
@@ -362,6 +383,17 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   );
 }
 
+/** The dock's line on Plan: "passes all" only when it does, and any livable or as-built points left to look at. */
+function planLine(s: Summary): string {
+  const ldaN = s.ldaTally.total;
+  const others = s.livableIssues;
+  const rest = others ? ` ${others} livable ${others === 1 ? "point needs" : "points need"} a look.` : "";
+  if (s.ldaFails) return `${s.ldaFails} LDA ${s.ldaFails === 1 ? "check needs" : "checks need"} fixing.${rest}`;
+  if (s.ldaWarns) return `${s.ldaTally.pass} of ${ldaN} LDA checks pass; ${s.ldaWarns} ${s.ldaWarns === 1 ? "needs" : "need"} a look before you submit.${rest}`;
+  if (others) return `Your home passes all ${ldaN} LDA checks.${rest} Want to walk through it?`;
+  return `Your home passes all ${ldaN} LDA checks and every livable rule. Want to walk through it?`;
+}
+
 /** Leaving a project clears what was typed into Ask. */
 function DraftReset() {
   useEffect(() => () => useAskStore.setState({ draft: "" }), []);
@@ -377,6 +409,9 @@ function ViewLoading({ tone }: { tone: "light" | "hud" }) {
 }
 
 function ShellLoading() {
+  useEffect(() => {
+    document.title = "Opening your home · Naqsha";
+  }, []);
   return (
     <div className="grid h-[100dvh] place-items-center bg-canvas">
       <span className="flex items-center gap-2.5 text-[14px] text-ink-3"><Spinner /> Opening your home…</span>
@@ -388,6 +423,9 @@ function ShellError({ message, onRetry }: { message?: string; onRetry?: () => vo
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
   const notFound = /not found|404/i.test(message ?? "");
+  useEffect(() => {
+    document.title = `${notFound ? "This home isn't here" : "This home didn't open"} · Naqsha`;
+  }, [notFound]);
   return (
     <div className="grid h-[100dvh] place-items-center bg-canvas px-4">
       <div className="max-w-sm text-center">

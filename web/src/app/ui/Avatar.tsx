@@ -20,6 +20,17 @@ export function roleColor(role?: AvatarRole | null): string {
   return ROLE_HUE[role ?? "viewer"] ?? ROLE_HUE.viewer;
 }
 
+/**
+ * One hue per author (DESIGN.md "Comments"): the same hash as the pins in Plan and House (plan/model authorHue),
+ * keyed by the author's id, else their name.
+ */
+export function authorColor(key?: string | null): string {
+  if (!key) return "var(--color-author-1)";
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return `var(--color-author-${(h % 6) + 1})`;
+}
+
 /** "Ahmed Raza" → "AR", "ahmed@x.pk" → "A", "" → "?". */
 export function initials(name?: string | null): string {
   const n = (name ?? "").trim().replace(/@.*$/, "");
@@ -37,6 +48,7 @@ export function Avatar({
   name,
   role,
   color,
+  hueKey,
   size = 28,
   ring,
   className,
@@ -44,6 +56,8 @@ export function Avatar({
 }: {
   name?: string | null;
   role?: AvatarRole | null;
+  /** The author's id (or name): gives them their one hue, the same as their pins. */
+  hueKey?: string | null;
   /** Override the role colour (any CSS colour). */
   color?: string;
   size?: AvatarSize;
@@ -61,7 +75,7 @@ export function Avatar({
         ring && "ring-2 ring-surface",
         className,
       )}
-      style={{ background: color ?? roleColor(role) }}
+      style={{ background: color ?? (hueKey ? authorColor(hueKey) : roleColor(role)) }}
       title={title ?? name ?? undefined}
       aria-hidden={title || name ? undefined : true}
       role={title || name ? "img" : undefined}
@@ -105,7 +119,7 @@ export function AvatarStack({
   return (
     <span className={cn("inline-flex items-center", className)}>
       {shown.map((p, i) => (
-        <Avatar key={p.id} name={p.name} role={p.role} size={size} ring className={i ? "-ml-2" : ""} />
+        <Avatar key={p.id} name={p.name} role={p.role} hueKey={p.id} size={size} ring className={i ? "-ml-2" : ""} />
       ))}
       {rest > 0 && (
         <span

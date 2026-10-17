@@ -60,7 +60,7 @@ function NotFound() {
         <p className="mt-2 text-[15px] text-ink-2">This page doesn't exist.</p>
         <div className="mt-6 flex justify-center gap-2">
           <Link to="/" className={buttonClass("secondary")}>Home</Link>
-          <Link to="/app" className={buttonClass("ink")}>Open portal</Link>
+          <Link to="/app" className={buttonClass("ink")}>Portal</Link>
         </div>
       </div>
     </div>

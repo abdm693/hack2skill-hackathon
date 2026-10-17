@@ -29,7 +29,9 @@ export function focusables(root: HTMLElement): HTMLElement[] {
  * While `active`: move focus into `ref` (the first [data-autofocus] or the first focusable), keep Tab inside it,
  * and give focus back to whatever had it before when it ends.
  */
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean) {
+export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean, returnFocus?: () => HTMLElement | null | undefined) {
+  const returnRef = useRef(returnFocus);
+  returnRef.current = returnFocus;
   useEffect(() => {
     if (!active) return;
     const before = document.activeElement as HTMLElement | null;
@@ -58,7 +60,10 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean
     return () => {
       cancelAnimationFrame(t);
       document.removeEventListener("keydown", onKey);
-      if (before && document.contains(before)) before.focus({ preventScroll: true });
+      // Back to where the person was: the caller's choice (e.g. the card's More button), else the element that had
+      // focus when this opened, if it still exists. A menu item that opened the dialog is gone by now.
+      const target = returnRef.current?.() ?? (before && document.contains(before) ? before : null);
+      if (target) window.setTimeout(() => target.focus({ preventScroll: true }), 0);
     };
   }, [active, ref]);
 }

@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import type { Comment, Project } from "@contracts/api-types";
-import { userId } from "@/api/client";
+import { api, userId } from "@/api/client";
 import { canEdit } from "@/app/lib/views";
 import { useAuth } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
@@ -54,13 +54,31 @@ export function CommentsSheet({
   const versionId = commentsFor ?? project.current_version_id;
   const plan = versionId ? versions[versionId]?.plan : undefined;
   const list = useMemo(() => comments.filter((c) => !versionId || c.version_id === versionId), [comments, versionId]);
-  // A client has no Revisions view: their notes on earlier versions, with Naqsha's answers, stay readable here.
-  const earlier = useMemo(
-    () => (clientView && versionId ? comments.filter((c) => c.version_id !== versionId).sort((a, b) => b.created_at.localeCompare(a.created_at)) : []),
-    [clientView, comments, versionId],
-  );
   const numbers = useMemo(() => pinNumbers(list), [list]);
   const me = useMemo(() => ({ ids: [user?.uid, clientView ? undefined : userId()].filter(Boolean) as string[], name: clientView ? guestName : user?.name }), [user, clientView, guestName]);
+  // Threads on earlier versions (resolved notes, with Naqsha's answers) stay readable after a revision, for everyone,
+  // and the filters apply to them too.
+  // The owner's store holds the shown version's comments only: fetch the other versions' threads when the sheet opens.
+  const [others, setOthers] = useState<Comment[]>([]);
+  useEffect(() => {
+    if (!open || clientView || !versionId || project.versions.length < 2) return;
+    let alive = true;
+    api
+      .listComments(project.id)
+      .then((all) => alive && setOthers(all.filter((c) => c.version_id !== versionId)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [open, clientView, versionId, project.id, project.versions.length]);
+  const earlierAll = useMemo(() => {
+    if (!versionId) return [];
+    const seen = new Set<string>();
+    return [...comments.filter((c) => c.version_id !== versionId), ...others]
+      .filter((c) => !seen.has(c.id) && seen.add(c.id))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }, [comments, others, versionId]);
+  const earlier = useMemo(() => earlierAll.filter((c) => matches(c, filter, me)), [earlierAll, filter, me]);
   const shown = useMemo(() => list.filter((c) => matches(c, filter, me)), [list, filter, me]);
   const groups = useMemo(() => groupComments(shown, plan), [shown, plan]);
   const openList = useMemo(() => list.filter((c) => c.status === "open"), [list]);
@@ -123,7 +141,7 @@ export function CommentsSheet({
           Naqsha will make a new version with these changes and answer each one in its thread.
         </p>
       ) : (
-        list.length > 0 && (
+        (list.length > 0 || earlierAll.length > 0) && (
           <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Filter comments">
             {FILTERS.map((f) => (
               <Chip key={f.id} size="sm" selected={filter === f.id} onClick={() => setFilter(f.id)}>
@@ -143,13 +161,13 @@ export function CommentsSheet({
           <span className="grid size-11 place-items-center rounded-full bg-surface-2 text-ink-3">
             <MessageSquarePlus className="size-5" strokeWidth={1.75} />
           </span>
-          <p className="mt-3 text-[15px] font-semibold text-ink">{earlier.length ? "No notes on this version yet" : "No comments yet"}</p>
+          <p className="mt-3 text-[15px] font-semibold text-ink">{earlierAll.length ? "No notes on this version yet" : "No comments yet"}</p>
           <p className="mt-1 max-w-[260px] text-[13px] leading-[18px] text-ink-3">
             {emptyHint ?? "Press C in the House view, then click anywhere to pin a note. Naqsha turns notes into the next version."}
           </p>
         </div>
       ) : shown.length === 0 ? (
-        <p className="px-1 py-10 text-center text-[13px] text-ink-3">Nothing here with this filter.</p>
+        <p className="px-1 py-10 text-center text-[13px] text-ink-3">Nothing on this version with this filter.</p>
       ) : (
         // Filters apply instantly: no exit animations to wait for.
         <div className="flex flex-col gap-1">
@@ -158,7 +176,7 @@ export function CommentsSheet({
             if (!items.length) return null;
             return (
               <section key={g.key} className="pt-2">
-                <h3 className="sticky top-0 z-[1] -mx-5 bg-surface/95 px-5 py-1.5 text-[12px] font-medium text-ink-3 backdrop-blur-sm">{g.label}</h3>
+                <h3 className="sticky top-0 z-[1] -mx-5 bg-surface px-5 py-1.5 text-[12px] font-medium text-ink-3">{g.label}</h3>
                 <div className="flex flex-col divide-y divide-line">
                   {items.map((c) => (
                     <CommentItem
@@ -188,7 +206,7 @@ export function CommentsSheet({
 
       {earlier.length > 0 && !(applyMode && canApply) && (
         <section className="pt-4" aria-label="Notes on earlier versions">
-          <h3 className="sticky top-0 z-[1] -mx-5 bg-surface/95 px-5 py-1.5 text-[12px] font-medium text-ink-3 backdrop-blur-sm">On earlier versions</h3>
+          <h3 className="sticky top-0 z-[1] -mx-5 bg-surface px-5 py-1.5 text-[12px] font-medium text-ink-3">On earlier versions</h3>
           <div className="flex flex-col divide-y divide-line">
             {earlier.map((c) => (
               <CommentItem key={c.id} comment={c} me={me} moderator={false} clientView={clientView} highlight={focusId === c.id} />

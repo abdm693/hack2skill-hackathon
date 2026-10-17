@@ -7,12 +7,16 @@ import type { BuildingPlan } from "@contracts/plan";
 import { cn } from "@/app/lib/utils";
 import { FloorStack, stackItems } from "@/app/design/FloorStack";
 import { Segmented } from "@/app/design/kit";
-import { PlanDefs, PlanSheet, sheetBounds } from "@/app/plan/FloorPlan";
-import { areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
+import { PlanDefs, PlanSheet, deltaStrings, sheetBounds, stairAvoid } from "@/app/plan/FloorPlan";
+import { stairDrawing } from "@/app/plan/geometry";
+import { layoutLabels, type Box, type Label } from "@/app/plan/labels";
+import { SITE_TYPES, areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
+import { feetInches } from "@/app/lib/utils";
 
 export function PlanCompare({ before, after, changed, caption, className }: { before?: BuildingPlan; after: BuildingPlan; changed: string[]; caption?: string; className?: string }) {
   const levels = useMemo(() => levelsOf(after), [after]);
-  const firstChanged = after.rooms.find((r) => changed.includes(r.id))?.level;
+  // Open on the floor of the first change (in the order the changes were made), not always the ground floor.
+  const firstChanged = changed.map((id) => after.rooms.find((r) => r.id === id)?.level).find(Boolean);
   const [level, setLevel] = useState(firstChanged ?? levels[0]?.id ?? "ground");
   useEffect(() => {
     if (firstChanged) setLevel(firstChanged);
@@ -44,6 +48,25 @@ export function PlanCompare({ before, after, changed, caption, className }: { be
   const cutX = B.x + (B.w * wipe) / 100;
   const id = useMemo(() => `cmp-${Math.random().toString(36).slice(2, 8)}`, []);
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName);
+  // The same labels as the drawing, so its numbered markers get a key beside it.
+  const labels = useMemo<Label[]>(() => {
+    if (!ppf) return [];
+    const lv = levels.find((l) => l.id === level);
+    const rooms = after.rooms.filter((r) => r.level === level);
+    const site = lv?.index === 0 ? rooms.filter((r) => SITE_TYPES.has(r.type)) : [];
+    const building = rooms.filter((r) => !SITE_TYPES.has(r.type));
+    const stairs = [
+      ...after.stairs.filter((s) => s.from_level === level),
+      ...(after.stairs.some((s) => s.from_level === level) ? [] : after.stairs.filter((s) => s.to_level === level)),
+    ].map((s) => stairDrawing(s, after.levels));
+    void stairs;
+    const avoid: Box[] = stairAvoid(after, level, ppf);
+    return layoutLabels([...site, ...building], ppf, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
+  }, [after, level, levels, ppf, deltas]);
+  const keys = labels.filter((l): l is Extract<Label, { kind: "key" }> => l.kind === "key");
+  // Before / After pills ride either side of the wipe line (the north arrow sits top-right).
+  const drawLeft = (size.w - B.w * ppf) / 2;
+  const cutPx = drawLeft + (cutX - B.x) * ppf;
 
   return (
     <div className={cn("flex flex-col", className)}>
@@ -95,18 +118,29 @@ export function PlanCompare({ before, after, changed, caption, className }: { be
           )}
           {wipe < 100 && (
             <g clipPath={`url(#${id}-a)`}>
-              <PlanSheet plan={after} levelId={level} ppf={ppf || 1} changed={changed} deltas={deltas} />
+              <PlanSheet plan={after} levelId={level} ppf={ppf || 1} changed={changed} deltas={deltas} labels={labels} />
             </g>
           )}
           {before && wipe > 0 && wipe < 100 && <line x1={cutX} y1={B.y} x2={cutX} y2={B.y + B.h} stroke="#2747F5" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
         </svg>
         {before && wipe > 0 && wipe < 100 && (
           <>
-            <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1">Before</span>
-            <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1">After</span>
+            <span className="pointer-events-none absolute top-3 -translate-x-full rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.max(64, cutPx - 8) }}>Before</span>
+            <span className="pointer-events-none absolute top-3 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.min(size.w - 60, cutPx + 8) }}>After</span>
           </>
         )}
       </div>
+      {keys.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-3" aria-label="Room key">
+          {keys.map((k) => (
+            <li key={k.room.id} className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="grid size-4 place-items-center rounded-full border border-ink-2 bg-white text-[10px] font-semibold text-ink">{k.n}</span>
+              <span className="text-ink-2">{k.room.name}</span>
+              <span className="font-mono tabular-nums">{feetInches(k.room.rect.w)} × {feetInches(k.room.rect.d)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="mt-2 text-[12.5px] text-ink-3">{caption ?? (before ? "Drag across the plan to compare. Changed rooms are outlined." : "Nothing to compare yet.")}</p>
     </div>
   );

@@ -46,7 +46,8 @@ export function WorkingHairline({ active }: { active: boolean }) {
 
 export function StageStrip({ run, tone = "light" }: { run: Run; tone?: "light" | "hud" }) {
   const current = namedStage(run.stage);
-  const idx = current ? STAGES.findIndex((s) => s.id === current) : -1;
+  // Never step back: a fix after the review is still the review stage (the strip only moves forward).
+  const idx = Math.max(current ? STAGES.findIndex((s) => s.id === current) : -1, ...run.reached.map((r) => STAGES.findIndex((s) => s.id === r)));
   const running = run.status === "running";
   return (
     <ol className="flex items-center gap-1.5" aria-label="Design progress">

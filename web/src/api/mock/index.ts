@@ -9,7 +9,7 @@ import { currentUser } from "../auth";
 import { mockUserName } from "./auth";
 import { ApiError } from "../errors";
 import { userId } from "../mode";
-import { clone, db, latency, now, save, sleep, touch, uid } from "./db";
+import { clone, db, latency, now, save, sleep, touch, uid, withPlot } from "./db";
 import { RENDER_IMAGE } from "./fixtures";
 import { envelopeFor, recheck } from "./lda";
 import { nightOf } from "./night";
@@ -230,10 +230,10 @@ export const mockApi: Api = {
       if (patch.name !== undefined) p.name = patch.name.trim() || p.name;
       if (patch.brief) {
         p.brief = clone(patch.brief);
-        const { width_ft, depth_ft, corner } = patch.brief.plot;
+        const { width_ft = 0, depth_ft = 0, corner = false } = patch.brief.plot ?? {};
         p.envelope = width_ft && depth_ft ? envelopeFor(width_ft, depth_ft, corner, patch.brief.authority) : null;
         const st = db().intake[pid];
-        if (st) st.brief = clone(patch.brief);
+        if (st) st.brief = withPlot(clone(patch.brief));
       }
       touch(p);
       save();
@@ -523,6 +523,14 @@ export const mockApi: Api = {
   },
 
   // ── The client view ───────────────────────────────────────────────────────────────────────────────
+  async listSharedComments(token) {
+    const s = await this.getShared(token);
+    return s.comments;
+  },
+  async getSharedMeta(token) {
+    const s = await this.getShared(token);
+    return { current_version_id: s.project.current_version_id ?? s.version.id, versions: s.project.versions.map((v) => ({ id: v.id, n: v.n })) };
+  },
   async getShared(token) {
     await latency(220);
     seedIfEmpty();

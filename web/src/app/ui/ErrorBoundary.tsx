@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<
         <div className="max-w-sm">
           <p className="text-heading">{this.props.label ?? "This part didn't load"}</p>
           <p className={cn("mt-1.5 text-[15px] leading-[22px]", hud ? "text-hud-ink-2" : "text-ink-2")}>Your work is saved. Try again, or reload the page.</p>
-          <div className="mt-5 flex justify-center gap-2">
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
             <button
               type="button"
               onClick={() => this.setState({ error: null })}
@@ -46,6 +46,14 @@ export class ErrorBoundary extends Component<
             >
               Reload
             </button>
+            {location.pathname !== "/app" && (
+              <a
+                href="/app"
+                className={cn("inline-flex h-10 items-center rounded-full px-4 text-[15px] font-medium outline-none focus-visible:shadow-focus", hud ? "text-hud-ink hover:bg-white/10" : "text-ink-2 hover:bg-surface-2 hover:text-ink")}
+              >
+                Back to your homes
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { Tooltip } from "./Tooltip";
  * Legacy names still work: outline → secondary, ghost → quiet, glass → hud.
  */
 const base =
-  "group relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium " +
+  "group hit-44 relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium " +
   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[160ms] ease-out " +
   "active:scale-[.97] active:duration-[120ms] outline-none focus-visible:border-accent focus-visible:shadow-focus " +
   "disabled:pointer-events-none disabled:opacity-45 aria-busy:pointer-events-none";
@@ -19,7 +19,7 @@ const variants = {
   secondary: "border-line-strong bg-surface text-ink hover:border-ink-4 hover:bg-canvas",
   quiet: "border-transparent bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
   ink: "border-transparent bg-ink text-white hover:bg-ink-2",
-  hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.72)] focus-visible:border-hud-accent",
+  hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.86)] focus-visible:border-hud-accent",
   danger: "border-transparent bg-fail text-white hover:bg-[#A9211A]",
 } as const;
 
@@ -69,7 +69,7 @@ export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSi
 // ── Icon button ───────────────────────────────────────────────────────────────────────────────────────
 
 const iconButton = cva(
-  "relative inline-grid shrink-0 place-items-center rounded-full border outline-none " +
+  "hit-44 relative inline-grid shrink-0 place-items-center rounded-full border outline-none " +
     "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[160ms] ease-out active:scale-[.94] " +
     "focus-visible:border-accent focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-40",
   {
@@ -78,7 +78,7 @@ const iconButton = cva(
         quiet: "border-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
         secondary: "border-line-strong bg-surface text-ink hover:bg-canvas",
         primary: "border-transparent bg-accent text-white hover:bg-accent-press",
-        hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.72)] focus-visible:border-hud-accent",
+        hud: "glass-hud border-transparent hover:bg-[rgb(24_24_27/.86)] focus-visible:border-hud-accent",
         "hud-quiet": "border-transparent text-hud-ink-2 hover:bg-white/10 hover:text-hud-ink",
       },
       size: { xs: "size-7", sm: "size-8", md: "size-10", lg: "size-11" },

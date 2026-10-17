@@ -88,7 +88,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKey(e, i)}
             className={cn(
-              "relative z-0 inline-flex h-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium outline-none transition-colors duration-[160ms]",
+              "hit-44 relative z-0 inline-flex h-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium outline-none transition-colors duration-[160ms]",
               "focus-visible:shadow-focus disabled:cursor-not-allowed disabled:opacity-40",
               size === "md" ? "px-3.5 text-[13px]" : "px-3 text-[12px]",
               fill && "flex-1",

@@ -134,7 +134,16 @@ async function errorFromResponse(res: Response): Promise<StreamError> {
     } catch { detail = text; }
   } catch { /* ignore */ }
   const recoverable = res.status >= 500 || res.status === 429;
-  return new StreamError(detail ? detail.slice(0, 300) : `Request failed (${res.status})`, recoverable, res.status);
+  // An HTML error page (a proxy or a crash) is never shown to people: say it plainly instead.
+  if (!detail || /^\s*</.test(detail)) {
+    detail =
+      res.status === 404 ? "Not found." :
+      res.status === 401 ? "Please sign in to do that." :
+      res.status === 403 ? "You don't have access to that." :
+      recoverable ? "Naqsha is briefly unavailable. Try again shortly." :
+      `The server returned ${res.status}.`;
+  }
+  return new StreamError(detail.slice(0, 300), recoverable, res.status);
 }
 
 /** Read until the server closes the stream, or cancel after `ms`. */

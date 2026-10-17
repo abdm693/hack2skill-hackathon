@@ -6,7 +6,7 @@
  *   p_demo_johar (ready, v1 + v2), p_demo_lake (choosing concepts), p_demo_wapda (mid-setup, corner kanal plot)
  */
 import type { Author, Brief, Change, ChatMessage, Comment, Concept, Project, Version } from "@contracts/api-types";
-import { db, save, uid } from "./db";
+import { db, save, uid, withPlot } from "./db";
 import { ARGON_SECTIONS, CONCEPT_IMAGES, clonePlan, revisedSection } from "./fixtures";
 import { demoSetupState } from "./intake";
 import { ARGON_REPORT, envelopeFor, recheck } from "./lda";
@@ -173,7 +173,7 @@ function store(home: ReturnType<typeof finishedHome>, into: "projects" | "sample
   for (const v of home.versions) d.versions[v.id] = v;
   d.comments[home.project.id] = home.comments;
   d.messages[home.project.id] = home.messages;
-  d.intake[home.project.id] = { step: 99, done: true, brief: home.project.brief! };
+  d.intake[home.project.id] = { step: 99, done: true, brief: withPlot(home.project.brief!) };
   d[into].push(home.project);
   try { localStorage.setItem(FIX_LOOP_KEY(home.versions[0].id), JSON.stringify([5, 1, 0])); } catch { /* ignore */ }
 }
@@ -220,7 +220,7 @@ export function seedIfEmpty() {
     thumbnail_url: CONCEPT_IMAGES[1],
   });
   d.messages[pid2] = transcript("Lake City, 10 marla, east facing, 5 bedrooms", t2);
-  d.intake[pid2] = { step: 99, done: true, brief: b2 };
+  d.intake[pid2] = { step: 99, done: true, brief: withPlot(b2) };
 
   // 3. Mid-setup.
   const pid3 = "p_demo_wapda";
@@ -232,7 +232,7 @@ export function seedIfEmpty() {
     updated_at: ago(9),
     stage: "setup",
     brief: setup.brief,
-    envelope: envelopeFor(setup.brief.plot.width_ft, setup.brief.plot.depth_ft, setup.brief.plot.corner),
+    envelope: envelopeFor(setup.brief.plot!.width_ft, setup.brief.plot!.depth_ft, setup.brief.plot!.corner),
     concepts: [],
     selected_concept_id: null,
     versions: [],

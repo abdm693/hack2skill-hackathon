@@ -12,6 +12,11 @@ interface ShellState {
   applyMode: boolean;
   /** A comment to scroll to and highlight in the sheet. */
   focusComment: string | null;
+  /** How much of the bottom edge the dock takes (px), as --dock-h says; views fit their drawings above it. */
+  dockH: number;
+  /** A view's own right-hand sheet (Plan's compliance sheet), px wide: the dock moves clear of it. 0 when none. */
+  viewSheet: number;
+  setViewSheet(px: number): void;
   toggleChat(open?: boolean): void;
   openComments(opts?: { apply?: boolean; focus?: string | null }): void;
   closeComments(): void;
@@ -26,6 +31,11 @@ export const useShell = create<ShellState>((set, get) => ({
   share: false,
   applyMode: false,
   focusComment: null,
+  dockH: 0,
+  viewSheet: 0,
+  setViewSheet(px) {
+    if (get().viewSheet !== px) set({ viewSheet: px });
+  },
   toggleChat(open) {
     const next = open ?? get().left !== "chat";
     set({ left: next ? "chat" : null });
@@ -43,6 +53,6 @@ export const useShell = create<ShellState>((set, get) => ({
     set({ applyMode: on });
   },
   reset() {
-    set({ left: null, right: null, share: false, applyMode: false, focusComment: null });
+    set({ left: null, right: null, share: false, applyMode: false, focusComment: null, viewSheet: 0 });
   },
 }));

@@ -100,8 +100,20 @@ export function layoutLabels(rooms: Room[], ppf: number, opts: { avoid?: Box[]; 
     if (!done) {
       key += 1;
       const rad = 8 / ppf;
-      out.push({ room: r, kind: "key", n: key, cx, cy });
-      placed.push({ x0: cx - rad, y0: cy - rad, x1: cx + rad, y1: cy + rad });
+      // A stair hall is mostly the stair's own drawing: its marker goes in a free corner, not on the flights.
+      let at = { x: cx, y: cy };
+      if (r.type === "stair") {
+        const m = rad + pad;
+        const corners = [
+          { x: x + m, y: y + d - m },
+          { x: x + w - m, y: y + d - m },
+          { x: x + m, y: y + m },
+          { x: x + w - m, y: y + m },
+        ];
+        at = corners.find((c) => !placed.some((p) => overlaps(p, { x0: c.x - rad, y0: c.y - rad, x1: c.x + rad, y1: c.y + rad }))) ?? corners[0];
+      }
+      out.push({ room: r, kind: "key", n: key, cx: at.x, cy: at.y });
+      placed.push({ x0: at.x - rad, y0: at.y - rad, x1: at.x + rad, y1: at.y + rad });
     }
   }
   // Number keys in reading order (front-left first) so the legend reads naturally.

@@ -7,7 +7,6 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Project } from "@contracts/api-types";
 import { canEdit, hasVersion, roleOf, type ViewId } from "@/app/lib/views";
-import { requireAccount } from "@/app/store/auth";
 import { useProject } from "@/app/store/project";
 import type { NextMove } from "./ask";
 import { useShell } from "./state";
@@ -33,9 +32,12 @@ function useSeen(): string[] {
   return useMemo(() => JSON.parse(raw) as string[], [raw]);
 }
 
-/** Opens the share dialog, asking a guest to make an account first. */
+/**
+ * Opens the share dialog. A guest owner can turn on the client link straight away; the dialog asks for an account
+ * only for email invites and team roles.
+ */
 export async function startShare() {
-  if (await requireAccount("share")) useShell.getState().setShare(true);
+  useShell.getState().setShare(true);
 }
 
 export function useDefaultNext(view: ViewId, project: Project | null): NextMove | null {
@@ -49,7 +51,14 @@ export function useDefaultNext(view: ViewId, project: Project | null): NextMove 
   return useMemo<NextMove | null>(() => {
     if (!project) return null;
     const st = useProject.getState();
-    const to = (v: ViewId, qs = "") => navigate(`/app/p/${project.id}/${v}${qs}`);
+    const to = (v: ViewId, qs = "") => {
+      // Day or night carries over (the House keeps ?light=night when you come back to it).
+      const light = new URLSearchParams(window.location.search).get("light");
+      const q = new URLSearchParams(qs.replace(/^\?/, ""));
+      if (light && !q.has("light")) q.set("light", light);
+      const search = q.toString();
+      navigate(`/app/p/${project.id}/${v}${search ? `?${search}` : ""}`);
+    };
     const client = roleOf(project) === "client";
     const current = project.current_version_id;
     const latest = [...project.versions].sort((a, b) => b.n - a.n)[0];
@@ -89,14 +98,15 @@ export function useDefaultNext(view: ViewId, project: Project | null): NextMove 
         return null;
       case "house":
         if (reviseRunning || designRunning) return null;
-        if (latest?.n > 1 && latest.id === current && !seen.includes(latest.id)) {
-          return { label: "See what changed", run: () => to("revisions") };
-        }
+        // A comment saved on this version wins at once: the next move is to revise with it.
         if (open > 0) {
           return {
             label: `Revise with ${open} ${open === 1 ? "comment" : "comments"}`,
             run: () => useShell.getState().openComments({ apply: true }),
           };
+        }
+        if (latest?.n > 1 && latest.id === current && !seen.includes(latest.id)) {
+          return { label: "See what changed", run: () => to("revisions") };
         }
         if (roleOf(project) === "owner") return { label: "Share", run: () => void startShare() };
         return null;

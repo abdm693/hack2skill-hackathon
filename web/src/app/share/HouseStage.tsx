@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { MessageSquarePlus } from "lucide-react";
+import { ChevronDown, MessageSquarePlus } from "lucide-react";
 import type { Comment, Project, Version } from "@contracts/api-types";
 import type { DesignSectionSrc } from "@/engine";
 import { HouseViewer, type ViewerHandle } from "@/viewer/HouseViewer";
@@ -21,6 +21,9 @@ import { Tooltip } from "@/app/ui/Tooltip";
 import { Kbd } from "@/app/ui/Kbd";
 import { ease } from "@/app/ui/motion";
 import { useShell } from "@/app/shell/state";
+import { Popover } from "@/app/design/kit";
+import { RoomNavigator } from "@/app/explore/RoomNavigator";
+import { levelName, levelsOf, sentenceCase } from "@/app/plan/model";
 import { anchorPlace } from "./anchor";
 import { NewComment } from "./NewComment";
 
@@ -49,6 +52,10 @@ export function HouseStage({
   const [draft, setDraft] = useState<Draft | null>(null);
   // The viewer shows its own build progress; we only need to know when the house is ready.
   const [building, setBuilding] = useState(true);
+  // Walk: the room navigator (M) and the room you are in.
+  const [navOpen, setNavOpen] = useState(false);
+  const [room, setRoom] = useState<string | null>(null);
+  const roomPill = useRef<HTMLButtonElement>(null);
 
   const mode: "orbit" | "walk" = params.get("mode") === "walk" ? "walk" : "orbit";
   const setMode = useCallback(
@@ -72,6 +79,7 @@ export function HouseStage({
       if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey || draft) return;
       if ((e.key === "c" || e.key === "C") && mode === "orbit") setCommentMode((v) => !v);
       if (e.key === "v" || e.key === "V") setMode(mode === "walk" ? "orbit" : "walk");
+      if (e.key === "m" || e.key === "M") setNavOpen((o) => !o);
       if (e.key === "Escape" && commentMode) setCommentMode(false);
     };
     window.addEventListener("keydown", onKey);
@@ -119,7 +127,15 @@ export function HouseStage({
     return true;
   };
 
-  const hudBottom = phone ? "calc(var(--dock-h) + 12px)" : "var(--chrome)";
+  // Above the dock at every width, as in the owner's House.
+  const hudBottom = "calc(var(--dock-h, 96px) + 12px)";
+  /** In walk, pin at the crosshair, exactly as the C key does; in orbit, click to pin. */
+  const comment = () => {
+    if (mode === "walk") window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", code: "KeyC", bubbles: true }));
+    else setCommentMode((v) => !v);
+  };
+  const levels = useMemo(() => levelsOf(version.plan), [version.plan]);
+  const current = room ? version.plan.rooms.find((r) => r.id === room) : undefined;
 
   return (
     <div className={cn("absolute inset-0 overflow-hidden bg-hud", !active && "pointer-events-none invisible")} aria-hidden={active ? undefined : true}>
@@ -134,6 +150,7 @@ export function HouseStage({
         onSelectComment={(id) => openComments({ focus: id })}
         onReady={() => void onReady()}
         onExitWalk={() => setMode("orbit")}
+        onRoomChange={(id) => setRoom(id)}
       />
 
       {/* Orbit · Walk, Comment */}
@@ -148,15 +165,31 @@ export function HouseStage({
             options={[{ value: "orbit", label: "Orbit", title: "Orbit (V)" }, { value: "walk", label: "Walk", title: "Walk (V)" }]}
           />
         </div>
-        {mode === "orbit" && (
-          <Tooltip content={commentMode ? "Click anywhere on the house" : "Pin a comment"} shortcut={["C"]}>
+        <button
+          ref={roomPill}
+          type="button"
+          onClick={() => setNavOpen((o) => !o)}
+          aria-expanded={navOpen}
+          aria-label="Rooms (M)"
+          title="Rooms (M)"
+          className="glass-hud pointer-events-auto inline-flex h-11 max-w-[220px] items-center gap-2 rounded-full px-4 text-[14px] font-medium outline-none hover:bg-[rgb(24_24_27/.86)]"
+        >
+          <span className="truncate">
+            {current ? `${sentenceCase(current.name)} · ${(levels.find((l) => l.id === current.level) ? levelName(levels.find((l) => l.id === current.level)!) : "").replace(/ floor$/i, "")}` : "Rooms"}
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 text-hud-ink-2" strokeWidth={1.75} />
+          {!phone && <Kbd tone="hud">M</Kbd>}
+        </button>
+        {(
+          <Tooltip content={mode === "walk" ? "Pin a comment where you look" : commentMode ? "Click anywhere on the house" : "Pin a comment"} shortcut={["C"]}>
             <button
               type="button"
-              onClick={() => setCommentMode((v) => !v)}
-              aria-pressed={commentMode}
+              onClick={comment}
+              aria-pressed={mode === "orbit" ? commentMode : undefined}
+              aria-label="Comment (C)"
               className={cn(
                 "pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full px-4 text-[14px] font-medium outline-none transition-colors focus-visible:shadow-focus",
-                commentMode ? "bg-hud-ink text-ink" : "glass-hud hover:bg-[rgb(24_24_27/.72)]",
+                commentMode ? "bg-hud-ink text-ink" : "glass-hud hover:bg-[rgb(24_24_27/.86)]",
               )}
             >
               <MessageSquarePlus className="size-4" strokeWidth={1.75} />
@@ -166,6 +199,30 @@ export function HouseStage({
           </Tooltip>
         )}
       </div>
+
+      <Popover
+        open={navOpen && active}
+        onClose={() => setNavOpen(false)}
+        anchor={roomPill}
+        side="top"
+        tone="hud"
+        className="w-[300px]"
+        sheetBelow={768}
+        sheetFull
+        label="Rooms"
+        avoid={() => [document.querySelector(".nq-mini")]}
+      >
+        <RoomNavigator
+          plan={version.plan}
+          open={navOpen}
+          current={room}
+          onGo={(id) => {
+            setNavOpen(false);
+            if (mode !== "walk") setMode("walk");
+            viewer.current?.goToRoom(id);
+          }}
+        />
+      </Popover>
 
       {/* New comment */}
       <div className="pointer-events-none absolute inset-x-0 z-[30] flex justify-center px-3" style={{ bottom: "calc(var(--dock-h) + 12px)" }}>

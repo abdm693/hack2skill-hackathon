@@ -40,6 +40,8 @@ export interface Run {
   resumed: boolean;
   /** Last raw pipeline stage ("plan", "fix", "compliance", "review", "build", "save", "changes"). */
   stage: string | null;
+  /** When this page re-attached to the run: steps before it were replayed in a burst (their times aren't known). */
+  attachedAt?: number;
   reached: NamedStage[];
   plan?: BuildingPlan;
   planAttempt?: number;
@@ -135,7 +137,8 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
         stage = it.stage;
         const named = namedStage(it.stage);
         if (named && !reached.includes(named)) reached.push(named);
-        const text = kind === "design" ? designStageLine(it.stage, fails) : humanize(it.message || designStageLine(it.stage, fails), basePlan);
+        const afterReview = it.stage === "fix" && reached.includes("review");
+        const text = kind === "design" ? (afterReview ? "Acting on the review" : designStageLine(it.stage, fails)) : humanize(it.message || designStageLine(it.stage, fails), basePlan);
         push(it.id, it.at, { kind: "stage", text, tone: "default" });
         break;
       }
@@ -190,6 +193,7 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
     resumed: !!r.resumed && !r.serverStart,
     stage,
     reached,
+    attachedAt: r.attachedAt,
     plan: r.plan,
     planAttempt: r.planAttempt,
     compliance: r.compliance,
@@ -400,6 +404,7 @@ export function narration(run: Run | null | undefined): string | null {
   const stage = run.stage;
   if (!stage) return run.resumed ? "Picking up where I left off" : "Reading the brief";
   if (stage === "build") return run.sections.length ? `Building the house in 3D · ${plural(run.sections.length, "part")}` : "Building the house in 3D";
+  if (stage === "fix" && run.reached.includes("review")) return "Acting on the review";
   return designStageLine(stage, run.failures);
 }
 

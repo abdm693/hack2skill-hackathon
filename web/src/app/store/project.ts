@@ -76,6 +76,8 @@ export interface Run {
   serverStart?: boolean;
   resumed?: boolean;
   baseVersionId?: string;
+  /** Re-attached (GET /run): when, so replayed steps aren't stamped with the re-attach time. */
+  attachedAt?: number;
   /** Revise: what was typed into Ask, and which comments were picked. */
   instruction?: string;
   commentIds?: string[];
@@ -99,6 +101,8 @@ interface ProjectState {
   design: Run;
   revise: Run;
   versions: Record<string, Version>;
+  /** What the 3D build found, per version (POST /asbuilt once House has built it): merged into the counts. */
+  asBuilt: Record<string, ComplianceReport>;
   comments: Comment[];
   commentsFor: string | null;
   /** Rename/brief edits: "Saving…" then "Saved" for 1.5 s in the title capsule (never a toast). */
@@ -130,6 +134,7 @@ interface ProjectState {
   resumeRun(): Promise<void>;
   loadVersion(vid: string): Promise<Version | null>;
   cacheVersion(v: Version): void;
+  setAsBuilt(vid: string, report: ComplianceReport | null): void;
 
   loadComments(versionId: string): Promise<void>;
   /** Quietly pick up comments and replies others added (a client's notes) for the loaded version. */
@@ -190,6 +195,13 @@ const canWrite = (p: Project) => p.role !== "client";
 const GUEST_NAME_KEY = "naqsha.guestName";
 function readGuestName(): string | null {
   try { return localStorage.getItem(GUEST_NAME_KEY) || null; } catch { return null; }
+}
+
+// The client view asks a visitor's name once, before their first note or reply (see setNameAsker).
+let nameAsker: (() => Promise<string | null>) | null = null;
+/** The client view registers how to ask a visitor's name; comments and replies wait for it. */
+export function setNameAsker(fn: (() => Promise<string | null>) | null) {
+  nameAsker = fn;
 }
 
 /** The author shown on an optimistic reply until the server's copy arrives. */
@@ -324,6 +336,7 @@ export const useProject = create<ProjectState>((set, get) => {
     design: idleRun(),
     revise: idleRun(),
     versions: {},
+    asBuilt: {},
     comments: [],
     commentsFor: null,
     saveState: "idle",
@@ -351,6 +364,7 @@ export const useProject = create<ProjectState>((set, get) => {
         design: idleRun(),
         revise: idleRun(),
         versions: {},
+        asBuilt: {},
         comments: [],
         commentsFor: null,
         saveState: "idle",
@@ -392,6 +406,7 @@ export const useProject = create<ProjectState>((set, get) => {
         design: idleRun(),
         revise: idleRun(),
         versions: {},
+        asBuilt: {},
         comments: [],
         commentsFor: null,
         shareToken: token,
@@ -509,7 +524,7 @@ export const useProject = create<ProjectState>((set, get) => {
       } catch (e) {
         if (isAbortError(e) || !live(pid)) return;
         set({ intakeFailed: body });
-        toast.error("The AI architect couldn't reply", e, { label: "Try again", run: () => void get().retryIntake() });
+        toast.error("Naqsha couldn't reply. Try again.", e, { label: "Try again", run: () => void get().retryIntake() });
       } finally {
         if (live(pid)) {
           const draft = get().draft;
@@ -612,7 +627,7 @@ export const useProject = create<ProjectState>((set, get) => {
       // The project stage says which pipeline is running; the first stage event confirms it.
       let key: RunKey = p.stage === "revising" ? "revise" : "design";
       let decided = false;
-      set({ [key]: { ...idleRun(), status: "running", startedAt: Date.now(), resumed: true } } as Partial<ProjectState>);
+      set({ [key]: { ...idleRun(), status: "running", startedAt: Date.now(), resumed: true, attachedAt: Date.now() } } as Partial<ProjectState>);
       const switchTo = (actual: RunKey) => {
         if (actual === key) return;
         set({ [key]: idleRun(), [actual]: { ...get()[key], status: "running" } } as Partial<ProjectState>);
@@ -666,6 +681,13 @@ export const useProject = create<ProjectState>((set, get) => {
       set({ versions: { ...get().versions, [v.id]: v } });
     },
 
+    setAsBuilt(vid, report) {
+      const next = { ...get().asBuilt };
+      if (report) next[vid] = report;
+      else delete next[vid];
+      set({ asBuilt: next });
+    },
+
     // ── Comments ────────────────────────────────────────────────────────────────────────────────────
     async loadComments(versionId) {
       const pid = get().pid;
@@ -717,6 +739,7 @@ export const useProject = create<ProjectState>((set, get) => {
       const pid = get().pid;
       if (!pid) return null;
       const token = get().shareToken;
+      if (token && !get().guestName && nameAsker && !(await nameAsker())) return null;
       try {
         const c = token
           ? await api.createSharedComment(token, { ...body, author_name: get().guestName ?? "Guest" })
@@ -778,6 +801,8 @@ export const useProject = create<ProjectState>((set, get) => {
       const body = text.trim();
       if (!pid || !body) return false;
       const token = get().shareToken;
+      // A visitor's first reply asks their name too, so one person never shows as two authors.
+      if (token && !get().guestName && nameAsker && !(await nameAsker())) return false;
       const me = currentAuthor(get().project?.role, get().guestName, !!token);
       const temp: Reply = { id: nid("reply"), author: me, text: body, created_at: new Date().toISOString() };
       const patchReplies = (fn: (r: Reply[]) => Reply[]) =>

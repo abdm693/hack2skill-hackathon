@@ -90,7 +90,7 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
         )}
       </dl>
 
-      <EnvelopeFacts envelope={envelope} corner={!!plot?.corner} />
+      <EnvelopeFacts envelope={envelope} corner={!!plot?.corner} authority={b?.authority} />
 
       {/* Editors */}
       <Dialog open={editing === "plot"} onClose={() => setEditing(null)} title="Plot" description="Pick a standard size or enter the exact width and depth." width={560}>
@@ -153,7 +153,7 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
 
 function Row({ label, children, empty, assumed, onEdit, block }: { label: string; children?: ReactNode; empty?: boolean; assumed?: boolean; onEdit: () => void; block?: boolean }) {
   return (
-    <button type="button" onClick={onEdit} className="group grid w-full grid-cols-[88px_1fr_16px] items-start gap-3 py-2.5 text-left outline-none focus-visible:bg-surface-2">
+    <button type="button" onClick={onEdit} aria-label={`Edit ${label.toLowerCase()}`} className="group grid w-full grid-cols-[88px_1fr_16px] items-start gap-3 py-2.5 text-left outline-none focus-visible:bg-surface-2">
       <dt className="pt-px text-[13px] text-ink-3">{label}</dt>
       <dd className={cn("min-w-0 text-[14px] leading-snug", assumed ? "text-ink-3" : "text-ink")}>
         {empty ? (
@@ -216,7 +216,7 @@ function Wishes({ prefs, onChange }: { prefs: string[]; onChange: (p: string[]) 
   );
 }
 
-function EnvelopeFacts({ envelope, corner }: { envelope: Envelope | null; corner: boolean }) {
+function EnvelopeFacts({ envelope, corner, authority }: { envelope: Envelope | null; corner: boolean; authority?: string | null }) {
   if (!envelope) return null;
   const r = envelope.buildable_rect;
   const perFloor = Math.min(r.w * r.d, envelope.max_ground_coverage_sqft);
@@ -224,7 +224,7 @@ function EnvelopeFacts({ envelope, corner }: { envelope: Envelope | null; corner
   const notes = [...envelope.notes].sort((a, b) => Number(/corner|splay/i.test(b) && corner) - Number(/corner|splay/i.test(a) && corner));
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="mt-6">
-      <h3 className="text-[15px] font-semibold text-ink">What LDA lets you build</h3>
+      <h3 className="text-[15px] font-semibold text-ink">What {authority || envelope.authority || "LDA"} lets you build</h3>
       <p className="mt-1 text-body text-ink-2">
         Up to <span className="font-mono tabular-nums text-ink">{num(perFloor)}</span> sq ft a floor, {envelope.max_storeys} storeys, {feetInches(envelope.max_height_ft)} to the parapet.
       </p>

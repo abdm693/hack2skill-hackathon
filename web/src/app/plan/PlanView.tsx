@@ -10,6 +10,10 @@ import { Printer, RotateCcw, X } from "lucide-react";
 import type { ComplianceCheck, Room } from "@contracts/plan";
 import type { Project } from "@contracts/api-types";
 import { cn, feetInches, num, relativeTime } from "@/app/lib/utils";
+import { resolveVersion } from "@/app/lib/views";
+import { useShell } from "@/app/shell/state";
+import { useProject } from "@/app/store/project";
+import { toast } from "@/app/store/toast";
 import { plotLabel } from "@/api/domain";
 import { useAskContext } from "@/app/shell/ask";
 import { flow, fixLoopOf, useFlow } from "@/app/design/flow";
@@ -22,7 +26,7 @@ import { PlotCanvas } from "@/app/setup/PlotCanvas";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { CompliancePanel, ComplianceChip } from "./CompliancePanel";
 import { FloorPlan, type PlanPin } from "./FloorPlan";
-import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, coveredArea, hueColor, levelKey, levelName, levelsOf } from "./model";
+import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, changedRooms, coveredArea, hueColor, levelKey, levelName, levelsOf } from "./model";
 import { PrintDialog } from "./PrintDialog";
 
 export function PlanView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
@@ -37,8 +41,18 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const run = useFlow((s) => (s.design?.pid === project.id ? s.design : null));
   const revise = useFlow((s) => (s.revise?.pid === project.id ? s.revise : null));
   const running = run?.status === "running";
-  const vid = params.get("v") ?? project.current_version_id;
+  // ?v= is a version id or its number (?v=2); one that doesn't exist falls back to the latest, and says so.
+  const vParam = params.get("v");
+  const resolved = resolveVersion(project, vParam);
+  const vid = resolved.id;
+  useEffect(() => {
+    if (!vParam || resolved.known) return;
+    toast.show(`There's no version ${vParam.replace(/^v/i, "")} of this home. Showing the latest.`);
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("v"); return n; }, { replace: true });
+  }, [vParam, resolved.known, setParams]);
   const version = useFlow((s) => (vid ? s.versions[vid] : undefined));
+  const asBuilt = useProject((s) => (vid ? s.asBuilt[vid] : undefined));
+  const dockH = useShell((s) => s.dockH);
   const parent = useFlow((s) => (version?.parent_id ? s.versions[version.parent_id] : undefined));
   const comments = useFlow((s) => (vid ? s.comments[vid] : undefined));
 
@@ -96,6 +110,12 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const [sheet, setSheet] = useState(false);
   const [check, setCheck] = useState<ComplianceCheck | null>(null);
   useEffect(() => setCheck(null), [vid, running]);
+  // Closing the sheet clears its highlight; while it is open the dock moves clear of it.
+  useEffect(() => {
+    if (!sheet) setCheck(null);
+    useShell.getState().setViewSheet(sheet ? 380 : 0);
+  }, [sheet]);
+  useEffect(() => () => useShell.getState().setViewSheet(0), []);
   const selectCheck = (c: ComplianceCheck | null) => {
     setCheck(c);
     const id = c?.element_ids?.[0];
@@ -107,13 +127,17 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const issues = useMemo(() => (running && report ? report.checks.filter((c) => c.status === "fail").flatMap((c) => c.element_ids ?? []) : undefined), [running, report]);
 
   // Changes vs the parent version
-  const changedIds = useMemo(() => (version?.changes ?? []).filter((c) => c.kind === "plan").flatMap((c) => c.targets).filter((id) => version?.plan.rooms.some((r) => r.id === id)), [version]);
+  // Targets may be rooms, openings (f_master_w) or stairs: each maps to the room(s) it touches.
+  const changeNotes = useMemo(() => (version ? changedRooms(version.plan, version.changes) : new Map<string, string[]>()), [version]);
+  const changedIds = useMemo(() => [...changeNotes.keys()], [changeNotes]);
   const [showChanges, setShowChanges] = useState(true);
   const deltas = useMemo(() => (version && changedIds.length ? areaDeltas(parent?.plan, version.plan, changedIds) : undefined), [version, parent, changedIds]);
   const changesOn = !running && showChanges && changedIds.length > 0;
 
   // Pins (numbered the same way in House)
   const [pinSel, setPinSel] = useState<string | null>(null);
+  const [pinAt, setPinAt] = useState<{ x: number; y: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const pins = useMemo<PlanPin[]>(() => {
     if (running || !plan || !comments?.length) return [];
     const ordered = [...comments].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -172,10 +196,13 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   // Ask: a typed change becomes a revision of this version.
   const latestVid = project.current_version_id;
   useAskContext(
-    latestVid && !running
+    !plan && !running && !latestVid
+      ? // Empty: the big "Draw the plan" is the one accent; the dock doesn't repeat it.
+        { next: null }
+      : latestVid && !running
       ? {
           placeholder: "Tell Naqsha what to change…",
-          suggestions: report && failures(report) ? ["Fix the rules that still fail"] : ["Make the kitchen bigger", "Add a prayer room upstairs"],
+          suggestions: report && failures(report) ? ["Fix the rules that still fail"] : planSuggestions(plan),
           busy: revise?.status === "running",
           onSubmit: (text) => flow.revise(project.id, { version_id: latestVid, instruction: text }),
         }
@@ -184,7 +211,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
 
   const lvl = levels.find((l) => l.id === level);
   const covered = plan && lvl ? coveredArea(plan, lvl.id) : 0;
-  const notLatest = !!params.get("v") && params.get("v") !== project.current_version_id;
+  const notLatest = !!vid && vid !== project.current_version_id;
   const brief = project.brief;
   const sheetW = 380;
   const [headH, setHeadH] = useState(120);
@@ -204,11 +231,12 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
     headObs.current.observe(el);
   }, []);
   // The drawing keeps clear of the floating pieces: the legend sits beside it on wider screens, below it on phones.
+  const dockClear = wide ? 16 : (dockH || 96) + 12;
   const inset = {
     top: headH + 12,
     left: phone ? 12 : Math.max(76, wide ? 76 : legend.w + 32),
     right: (sheet && !phone ? sheetW + 24 : 16) + (phone ? 0 : 8),
-    bottom: 100 + (phone ? legend.h + 8 : 0),
+    bottom: dockClear + (phone ? legend.h + 8 : 0),
   };
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName).map((it) => ({
     ...it,
@@ -243,7 +271,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   }
 
   return (
-    <div className="relative h-full overflow-hidden bg-canvas">
+    <div ref={rootRef} className="relative h-full overflow-hidden bg-canvas">
       <WorkingHairline active={running || revise?.status === "running"} />
 
       {/* The sheet */}
@@ -258,12 +286,17 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
             changed={changesOn ? changedIds : undefined}
             deltas={changesOn ? deltas : undefined}
             pins={pins}
-            onPin={(id) => setPinSel((s) => (s === id ? null : id))}
+            onPin={(id, at) => {
+              const r = rootRef.current?.getBoundingClientRect();
+              setPinAt(at && r ? { x: at.x - r.left, y: at.y - r.top } : null);
+              setPinSel((s) => (s === id ? null : id));
+            }}
+            notes={changesOn ? changeNotes : undefined}
             setbacks={report?.envelope.setbacks_ft}
             inset={inset}
             resetKey={`${plan.site.plot.width_ft}x${plan.site.plot.depth_ft}`}
             fit={phone ? "plot" : "sheet"}
-            controlsClassName={cn("right-3 sm:right-4", wide ? "bottom-4" : "bottom-[96px]", sheet && !phone && "right-[404px] sm:right-[404px]")}
+            controlsClassName={cn("right-3 sm:right-4", wide ? "bottom-4" : "bottom-[calc(var(--dock-h,96px)+12px)]", sheet && !phone && "right-[404px] sm:right-[404px]")}
             onKeys={setKeys}
             className={cn(draft && "[&_svg]:opacity-[0.92]")}
           />
@@ -317,7 +350,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
                 Changes since v{parent.n}
               </button>
             )}
-            {report && plan && <ComplianceChip report={report} plan={plan} onClick={() => setSheet((s) => !s)} active={sheet} />}
+            {report && plan && <ComplianceChip report={report} plan={plan} asBuilt={running ? null : asBuilt} onClick={() => setSheet((s) => !s)} active={sheet} />}
             {version && !running && (
               <>
                 <Button variant="secondary" size="sm" icon={<Printer className="size-4" strokeWidth={1.75} />} onClick={() => setPrinting(true)} className="h-9" aria-label="Print or save as PDF">
@@ -353,7 +386,7 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
 
       {/* Legend */}
       {plan && (
-        <div ref={legendRef} className={cn("pointer-events-none absolute left-3 z-10 max-w-[300px] sm:left-4", wide ? "bottom-4" : "bottom-[96px]")}>
+        <div ref={legendRef} className={cn("pointer-events-none absolute left-3 z-10 max-w-[300px] sm:left-4", wide ? "bottom-4" : "bottom-[calc(var(--dock-h,96px)+12px)]")}>
           <div className="pointer-events-auto rounded-control bg-surface/90 px-3 py-2 text-[12px] text-ink-3 shadow-e1 backdrop-blur">
             <p className="flex items-center gap-2">
               <span className="h-0 w-5 border-t border-dashed border-accent" />
@@ -417,7 +450,8 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2, ease: EASE_OUT }}
-            className={cn("absolute left-1/2 z-30 w-[min(420px,calc(100vw-24px))] -translate-x-1/2 rounded-card bg-surface p-4 shadow-e2", wide ? "bottom-6" : "bottom-[104px]")}
+            className="absolute z-30 w-[min(360px,calc(100vw-24px))] rounded-card bg-surface p-4 shadow-e2"
+            style={pinPopoverStyle(pinAt, rootRef.current, dockClear)}
           >
             <div className="flex items-start gap-3">
               <span className="grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white ring-2 ring-white" style={{ background: hueColor(selectedPin) }}>
@@ -463,6 +497,8 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
               <CompliancePanel
                 report={report}
                 plan={plan}
+                asBuilt={running ? null : asBuilt}
+                stage={running ? run?.stage : null}
                 failures={loop}
                 selectedId={check?.id}
                 onSelect={selectCheck}
@@ -493,4 +529,29 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
       {version && <PrintDialog open={printing} onClose={() => setPrinting(false)} project={project} version={version} />}
     </div>
   );
+}
+
+/** Beside its pin (right, else left), clamped clear of the top row and the dock. */
+function pinPopoverStyle(at: { x: number; y: number } | null, root: HTMLElement | null, dockClear: number): React.CSSProperties {
+  const W = root?.clientWidth ?? window.innerWidth;
+  const H = root?.clientHeight ?? window.innerHeight;
+  const w = Math.min(360, W - 24);
+  const h = 170;
+  if (!at) return { left: Math.max(12, (W - w) / 2), bottom: dockClear };
+  const right = at.x + 22 + w <= W - 12;
+  const left = right ? at.x + 22 : Math.max(12, at.x - 22 - w);
+  const top = Math.min(Math.max(at.y - 28, 12), Math.max(12, H - dockClear - h));
+  return { left, top };
+}
+
+/** Plan suggestions that make sense for this plan: never a room it already has. */
+function planSuggestions(plan: { rooms: { type: string; level: string; name: string }[] } | undefined): string[] {
+  const has = (t: string, level?: string) => !!plan?.rooms.some((r) => r.type === t && (!level || r.level === level));
+  const out: string[] = [];
+  out.push("Make the kitchen bigger");
+  if (!has("prayer")) out.push("Add a prayer room upstairs");
+  else if (!has("study")) out.push("Add a study");
+  if (!has("store")) out.push("Add a store near the kitchen");
+  else if (!has("balcony")) out.push("Add a balcony to the master bedroom");
+  return out.slice(0, 2);
 }

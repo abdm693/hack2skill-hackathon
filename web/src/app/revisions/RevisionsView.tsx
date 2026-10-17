@@ -19,7 +19,7 @@ import { useNow } from "@/app/design/RunProgress";
 import { plural, roomName, sectionPhrase, versionLine } from "@/app/design/words";
 import { anchorLabel } from "@/app/explore/snapshot";
 import { summarize } from "@/app/plan/compliance";
-import { area, hueColor } from "@/app/plan/model";
+import { area, changedRooms, cleanSummary, hueColor } from "@/app/plan/model";
 import { NaqshaMark } from "@/app/setup/Conversation";
 import { PlanCompare } from "./PlanCompare";
 
@@ -46,8 +46,10 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  // The live run takes the stage while it runs, and stays for the version it made until someone picks another.
-  const showRun = !!run && (running || run.status === "error" || (!picked && run.version?.id === project.current_version_id));
+  // The live run takes the stage while it runs; once it is done the page becomes that version's finished story
+  // (before / wipe / after with deltas), keeping the run's timeline.
+  const showRun = !!run && (running || run.status === "error");
+  const finishedRun = run && run.status === "done" && run.version?.id === vid ? run : null;
   const base = useFlow((s) => (run?.baseVersionId ? s.versions[run.baseVersionId] : undefined));
 
   const latest = project.current_version_id;
@@ -76,29 +78,30 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
   return (
     <div className="relative h-full overflow-hidden bg-canvas">
-      <div className="absolute inset-0 overflow-y-auto [scrollbar-width:thin]">
-        <div className="mx-auto grid max-w-[1400px] gap-8 px-4 pb-40 pt-[var(--chrome-top)] sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
+      <div className="scroll-clear-chrome">
+        <div className="scroll-clear-body mx-auto grid max-w-[1400px] gap-8 px-4 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(360px,440px)]">
           <VersionRail versions={ordered} current={showRun ? null : vid} latest={latest} running={running} nextN={(ordered[0]?.n ?? 0) + 1} onPick={pick} />
 
           <main className="min-w-0">
             {showRun && run ? (
               <LiveRevision run={run} base={base} onWalk={() => goTo("house")} onPlan={() => goTo("plan")} />
             ) : version ? (
-              <VersionStory project={project} version={version} parent={parent} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
+              <VersionStory project={project} version={version} parent={parent} run={finishedRun} onWalk={() => goTo("house", version.id === latest ? undefined : { search: `v=${version.id}` })} onPlan={() => goTo("plan", version.id === latest ? undefined : { search: `v=${version.id}` })} />
             ) : (
               <p className="text-[15px] text-ink-3">Opening the version…</p>
             )}
           </main>
 
           {wide && (
-            <aside className="hidden xl:sticky xl:top-[72px] xl:block xl:h-[calc(100dvh-200px)] xl:self-start">
+            <aside className="hidden xl:sticky xl:top-4 xl:block xl:h-[calc(100dvh-var(--chrome-top)-var(--dock-h)-40px)] xl:self-start">
               {(() => {
                 const revised = showRun ? run?.version?.plan ?? run?.plan : version?.plan;
                 // While a revision hasn't touched the plan yet, show the plan it starts from.
                 const after = revised ?? (showRun ? base?.plan : undefined);
                 const before = showRun ? (revised ? base?.plan : undefined) : parent?.plan;
                 const changes = showRun ? run?.version?.changes ?? run?.changes ?? [] : version?.changes ?? [];
-                const changed = changes.filter((c) => c.kind === "plan").flatMap((c) => c.targets);
+                // Targets can be openings or stairs: outline the room(s) each one touches.
+                const changed = after ? [...changedRooms(after, changes).keys()] : [];
                 const caption = !before ? (showRun ? "The plan as it stands; changes appear here as Naqsha makes them." : "The first design: nothing to compare yet.") : undefined;
                 return after ? <PlanCompare before={before} after={after} changed={changed} caption={caption} className="h-full" /> : <div className="h-full rounded-card bg-surface-2" />;
               })()}
@@ -114,7 +117,7 @@ export function RevisionsView({ project, onProjectChange }: { project: Project; 
 
 function VersionRail({ versions, current, latest, running, nextN, onPick }: { versions: Project["versions"]; current: string | null; latest: string | null; running: boolean; nextN: number; onPick: (id: string) => void }) {
   return (
-    <nav aria-label="Versions" className="lg:sticky lg:top-[72px] lg:self-start">
+    <nav aria-label="Versions" className="lg:sticky lg:top-4 lg:self-start">
       <p className="text-label text-ink-3">Versions</p>
       <ol className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
         {running && (
@@ -184,7 +187,7 @@ function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version;
           <h2 className="text-[15px] font-semibold text-ink">What Naqsha is doing</h2>
           {running && !run.resumed && <span className="font-mono text-[12px] tabular-nums text-ink-3">{clock(now - run.startedAt)}</span>}
         </div>
-        <ActivityFeed items={run.activity} running={running} startedAt={run.resumed ? undefined : run.startedAt} />
+        <ActivityFeed items={run.activity} running={running} startedAt={run.resumed ? undefined : run.startedAt} attachedAt={run.attachedAt} />
       </section>
 
       {(run.version?.changes ?? run.changes)?.length ? <Changes changes={(run.version?.changes ?? run.changes)!} before={base?.plan} after={plan} /> : null}
@@ -193,7 +196,7 @@ function LiveRevision({ run, base, onWalk, onPlan }: { run: Run; base?: Version;
   );
 }
 
-function ActivityFeed({ items, running, startedAt }: { items: Activity[]; running: boolean; startedAt?: number }) {
+function ActivityFeed({ items, running, startedAt, attachedAt }: { items: Activity[]; running: boolean; startedAt?: number; attachedAt?: number }) {
   return (
     <ol className="mt-3 space-y-0.5">
       <AnimatePresence initial={false}>
@@ -209,7 +212,8 @@ function ActivityFeed({ items, running, startedAt }: { items: Activity[]; runnin
                 )}
               </span>
               <span className={cn("min-w-0 flex-1 text-[14px] leading-relaxed", running && last ? "text-ink" : "text-ink-2", it.tone === "fail" && "text-fail")}>{it.text}</span>
-              {startedAt && <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink-4">{clock(it.at - startedAt)}</span>}
+              {/* Steps replayed on re-attach all arrive at once: their real time isn't known, so none is shown. */}
+              {startedAt && !(attachedAt && it.at - attachedAt < 1500) && <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink-4">{clock(it.at - startedAt)}</span>}
             </motion.li>
           );
         })}
@@ -228,14 +232,18 @@ function ComplianceLine({ version }: { version: Version }) {
   return (
     <p className={cn("mt-3 flex items-start gap-2 text-[13.5px]", s.fails.length ? "text-fail" : "text-ink-2")}>
       <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", s.fails.length ? "bg-fail" : "bg-pass")} />
-      {s.fails.length ? `${plural(s.fails.length, "rule")} to fix` : `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules pass`}
+      {s.fails.length
+        ? `${plural(s.fails.length, "rule")} to fix`
+        : s.approvalReady && !s.livableIssues
+          ? `All ${s.lda.length} LDA checks and ${s.livable.length} livable rules pass`
+          : `${s.ldaTally.pass} of ${s.ldaTally.total} LDA checks pass, ${s.warns.length} to check`}
     </p>
   );
 }
 
 // ── A finished version ──────────────────────────────────────────────────────────────────────────────
 
-function VersionStory({ project, version, parent, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; onWalk: () => void; onPlan: () => void }) {
+function VersionStory({ project, version, parent, run, onWalk, onPlan }: { project: Project; version: Version; parent?: Version; run?: Run | null; onWalk: () => void; onPlan: () => void }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -260,7 +268,7 @@ function VersionStory({ project, version, parent, onWalk, onPlan }: { project: P
       <p className="text-label text-ink-3">
         Version {version.n} · {relativeTime(version.created_at)}
       </p>
-      <h1 className="mt-1 text-title text-ink">{first ? "The first design" : versionLine(summary)}</h1>
+      <h1 className="mt-1 text-title text-ink">{first ? "The first design, drawn from your brief." : storyTitle(summary, changes)}</h1>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button variant="primary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onWalk}>
           Walk through it
@@ -270,6 +278,12 @@ function VersionStory({ project, version, parent, onWalk, onPlan }: { project: P
         </Button>
       </div>
       <ComplianceLine version={version} />
+      {run && run.activity.length > 0 && (
+        <section className="mt-6 rounded-card bg-surface p-5 shadow-e1">
+          <h2 className="text-[15px] font-semibold text-ink">How Naqsha made it</h2>
+          <ActivityFeed items={run.activity} running={false} startedAt={run.resumed ? undefined : run.startedAt} attachedAt={run.attachedAt} />
+        </section>
+      )}
       {first ? (
         <p className="mt-8 max-w-xl text-body-lg text-ink-2">
           Drawn from your brief and chosen concept. Walk through it and pin what you'd change; Naqsha will make version {version.n + 1} and explain each change here.
@@ -317,9 +331,18 @@ function Changes({ changes, before, after }: { changes: Change[]; before?: Build
   );
 }
 
+/** "Widened the master window, and 2 more changes." A sentence for the H1, never a data string. */
+function storyTitle(summary: string | undefined, changes: Change[]): string {
+  const lead = changes[0] ? cleanSummary(changes[0].summary) : versionLine(summary);
+  const base = lead.replace(/^v\d+:\s*/i, "").replace(/[.;,\s]+$/, "");
+  const sentence = base ? base.charAt(0).toUpperCase() + base.slice(1) : "A revision";
+  const more = changes.length > 1 ? `, and ${changes.length - 1} more ${changes.length - 1 === 1 ? "change" : "changes"}` : "";
+  return `${sentence}${more}.`;
+}
+
 /** Summaries come from the reviser; make sure no id or section name slips through. */
 function plainSummary(s: string, plan?: BuildingPlan): string {
-  return s.replace(/\b([bgfstr]_[a-z0-9_]+|furnish_[a-z0-9_]+|facade_[a-z0-9_]+|interior_[a-z0-9_]+)\b/g, (id) => (id.includes("_") && /^[bgfstr]_/.test(id) ? roomName(plan, id) : sectionPhrase(id, plan).replace(/^the /, "")));
+  return cleanSummary(s).replace(/\b([bgfstr]_[a-z0-9_]+|furnish_[a-z0-9_]+|facade_[a-z0-9_]+|interior_[a-z0-9_]+)\b/g, (id) => (id.includes("_") && /^[bgfstr]_/.test(id) ? roomName(plan, id) : sectionPhrase(id, plan).replace(/^the /, "")));
 }
 
 function BeforeAfter({ targets, before, after }: { targets: string[]; before?: BuildingPlan; after?: BuildingPlan }) {

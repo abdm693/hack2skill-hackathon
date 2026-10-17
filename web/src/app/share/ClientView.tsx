@@ -3,14 +3,14 @@
  * No Brief, no Details. A banner says who shared it; the visitor gives only a name, once, on their first comment.
  * Next reads "Approve vN". Comments refresh every 10 s so the owner's answers show up.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MessageSquare } from "lucide-react";
 import type { Comment } from "@contracts/api-types";
 import { api } from "@/api/client";
 import { cn } from "@/app/lib/utils";
 import { isTyping, usePhone } from "@/app/lib/hooks";
-import { useProject } from "@/app/store/project";
+import { setNameAsker, useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
 import { CommentsSheet } from "@/app/comments/CommentsSheet";
 import { FloorPlan, type PlanPin } from "@/app/plan/FloorPlan";
@@ -46,27 +46,45 @@ export function ClientView() {
     void openShared(token);
   }, [token, openShared]);
   useEffect(() => {
-    if (project?.name) document.title = `${project.name} · Naqsha`;
-  }, [project?.name]);
+    document.title = project?.name ? `${project.name} · Naqsha` : loadState === "error" ? "This link isn't working · Naqsha" : "Opening the home · Naqsha";
+  }, [project?.name, loadState]);
 
-  // Presence: pick up new comments and replies every 10 s.
+  // Presence: pick up new comments and replies every 10 s (the light comments endpoint), and whether a newer
+  // version exists every 30 s.
+  const pid = project?.id;
   useEffect(() => {
-    if (!project) return;
+    if (!pid) return;
     const t = setInterval(async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const shared = await api.getShared(token);
+        const list = await api.listSharedComments(token);
         const st = useProject.getState();
         if (st.shareToken !== token) return;
         // Keep optimistic replies that the server hasn't echoed yet.
         const pending = new Map(st.comments.map((c) => [c.id, (c.replies ?? []).filter((r) => r.id.startsWith("reply-"))]));
-        useProject.setState({
-          comments: shared.comments.map((c) => ({ ...c, replies: [...(c.replies ?? []), ...(pending.get(c.id) ?? [])] })),
-        });
+        const next = list.map((c) => ({ ...c, replies: [...(c.replies ?? []), ...(pending.get(c.id) ?? [])] }));
+        if (JSON.stringify(next) !== JSON.stringify(st.comments)) useProject.setState({ comments: next });
       } catch { /* stay quiet; try again next tick */ }
     }, 10_000);
     return () => clearInterval(t);
-  }, [project, token]);
+  }, [pid, token]);
+  useEffect(() => {
+    if (!pid) return;
+    let warned: string | null = null;
+    const t = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const meta = await api.getSharedMeta(token);
+        const st = useProject.getState();
+        const shownId = st.project?.current_version_id;
+        if (st.shareToken !== token || !meta.current_version_id || meta.current_version_id === shownId || warned === meta.current_version_id) return;
+        warned = meta.current_version_id;
+        const n = meta.versions.find((v) => v.id === meta.current_version_id)?.n;
+        toast.show(`Version ${n ?? "a new"} is ready`, { action: { label: "View", run: () => void useProject.getState().openShared(token) }, duration: 0 });
+      } catch { /* try again later */ }
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [pid, token]);
 
   if (!project) {
     if (loadState === "error") {
@@ -109,10 +127,26 @@ function ClientShell({ token }: { token: string }) {
   const [houseSeen, setHouseSeen] = useState(tab === "house");
   useEffect(() => { if (tab === "house") setHouseSeen(true); }, [tab]);
   const tone = tab === "house" ? "hud" : "light";
-  const [approved, setApproved] = useState(() => {
-    try { return !!version && localStorage.getItem(approvedKey(version.id)) === "1"; } catch { return false; }
-  });
+  // Approval is per version: a new version shown is a new question.
+  const [approved, setApproved] = useState(false);
+  useEffect(() => {
+    try { setApproved(!!version && localStorage.getItem(approvedKey(version.id)) === "1"); } catch { setApproved(false); }
+  }, [version?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const owner = sharedBy || "the owner";
+  // The visitor's name is asked once, before their first note of any kind (replies included).
+  const nameWaiter = useRef<((name: string | null) => void) | null>(null);
+  const ensureName = useCallback(async (): Promise<boolean> => {
+    if (useProject.getState().guestName) return true;
+    const name = await new Promise<string | null>((resolve) => {
+      nameWaiter.current = resolve;
+      setAskName("");
+    });
+    return !!name;
+  }, []);
+  useEffect(() => {
+    setNameAsker(async () => ((await ensureName()) ? useProject.getState().guestName : null));
+    return () => setNameAsker(null);
+  }, [ensureName]);
 
   useEffect(() => () => reset(), [reset]);
 
@@ -151,19 +185,14 @@ function ClientShell({ token }: { token: string }) {
   );
 
   const submit = async (text: string) => {
-    if (!useProject.getState().guestName) {
-      setAskName(text);
-      return;
-    }
+    if (!(await ensureName())) return;
     if (await postGeneral(text)) toast.show(`Sent to ${owner}`);
   };
 
+  // Approve always targets the version on screen.
   const approve = async () => {
     if (!version) return;
-    if (!useProject.getState().guestName) {
-      setAskName(`Approved version ${version.n}.`);
-      return;
-    }
+    if (!(await ensureName())) return;
     if (await postGeneral(`Approved version ${version.n}.`)) {
       try { localStorage.setItem(approvedKey(version.id), "1"); } catch { /* ignore */ }
       setApproved(true);
@@ -310,6 +339,7 @@ function ClientShell({ token }: { token: string }) {
               defaultSubmit={submit}
               commands={commands}
               conversation={false}
+              askLabel="Send to the owner"
             />
           </div>
         </div>
@@ -328,14 +358,16 @@ function ClientShell({ token }: { token: string }) {
       <NameDialog
         open={askName !== null}
         initial={guestName ?? ""}
-        onClose={() => setAskName(null)}
-        onSave={async (name) => {
-          useProject.getState().setGuestName(name);
-          const text = askName;
+        onClose={() => {
           setAskName(null);
-          if (!text) return;
-          if (text.startsWith("Approved version")) await approve();
-          else if (await postGeneral(text)) toast.show(`Sent to ${owner}`);
+          nameWaiter.current?.(null);
+          nameWaiter.current = null;
+        }}
+        onSave={(name) => {
+          useProject.getState().setGuestName(name);
+          setAskName(null);
+          nameWaiter.current?.(name);
+          nameWaiter.current = null;
         }}
       />
     </div>

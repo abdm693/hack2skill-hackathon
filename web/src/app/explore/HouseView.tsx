@@ -15,6 +15,9 @@ import { HouseViewer, type ViewerHandle } from "@/viewer/HouseViewer";
 import type { DesignSectionSrc, SectionResult } from "@/engine";
 import { api, errorMessage } from "@/api/client";
 import { cn, feetInches, hourLabel, relativeTime } from "@/app/lib/utils";
+import { resolveVersion } from "@/app/lib/views";
+import { useProject } from "@/app/store/project";
+import { toast } from "@/app/store/toast";
 import { useAskContext } from "@/app/shell/ask";
 import { useShell } from "@/app/shell/state";
 import { flow, useFlow } from "@/app/design/flow";
@@ -25,6 +28,9 @@ import { sectionPhrase, versionLine } from "@/app/design/words";
 import { CATEGORY, SITE_TYPES, hueColor, levelKey, levelName, levelsOf, sentenceCase } from "@/app/plan/model";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { Composer, type CommentDraft } from "./Composer";
+import { RoomNavigator } from "./RoomNavigator";
+
+export { RoomNavigator };
 import { RenderLightbox } from "./RenderLightbox";
 import { placeholderSnapshot } from "./snapshot";
 
@@ -40,14 +46,22 @@ const LAYERS: { id: Layer; label: string }[] = [
 type Light = "day" | "dusk" | "night";
 const ALL_LAYERS: Record<Layer, boolean> = { structure: true, facade: true, interior: true, furniture: true, landscape: true, lighting: true, custom: true };
 
-export function HouseView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
+export function HouseView({ project, onProjectChange, active = true }: { project: Project; onProjectChange(p: Project): void; active?: boolean }) {
   const goTo = useViewNav();
   const [params, setParams] = useSearchParams();
   // Beside the dock only when there is room for both clusters and a 720px dock between them.
   const wide = useMediaQuery("(min-width: 1600px)");
   const phone = useMediaQuery("(max-width: 767px)");
 
-  const vid = params.get("v") ?? project.current_version_id ?? "";
+  // ?v= is a version id or its number (?v=2); one that doesn't exist falls back to the latest, and says so.
+  const vParam = params.get("v");
+  const resolved = resolveVersion(project, vParam);
+  const vid = resolved.id ?? "";
+  useEffect(() => {
+    if (!active || !vParam || resolved.known) return;
+    toast.show(`There's no version ${vParam.replace(/^v/i, "")} of this home. Showing the latest.`);
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("v"); return n; }, { replace: true });
+  }, [active, vParam, resolved.known, setParams]);
   const version = useFlow((s) => (vid ? s.versions[vid] : undefined));
   const comments = useFlow((s) => (vid ? s.comments[vid] : undefined));
   const revise = useFlow((s) => (s.revise?.pid === project.id ? s.revise : null));
@@ -115,7 +129,10 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const [finishOpen, setFinishOpen] = useState(false);
   const [finishWalk, setFinishWalk] = useState(false);
   const [failed, setFailed] = useState<SectionResult[]>([]);
-  const [asBuilt, setAsBuilt] = useState<ComplianceReport | null>(null);
+  const [built, setBuilt] = useState(false);
+  // What the 3D build found lives in the project store, so Plan's sheet and the status line count it too.
+  const asBuilt = useProject((s) => (shown ? s.asBuilt[shown.id] ?? null : null));
+  const setAsBuilt = (vidFor: string, r: ComplianceReport | null) => useProject.getState().setAsBuilt(vidFor, r);
   const topFt = useMemo(() => (plan ? Math.max(...plan.levels.map((l) => l.elevation_ft + l.height_ft)) + 2 : 30), [plan]);
 
   const applyFloor = useCallback((id: string) => {
@@ -162,6 +179,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       setFailed(result.sections.filter((s) => !s.ok));
       const first = !ready.current;
       ready.current = true;
+      setBuilt(true);
       // A deep link to a room (?room=f_bed2) goes there once the house is built; a floor (?floor=) shows that floor.
       const linked = initialRoom.current;
       if (linked && shown?.plan.rooms.some((r) => r.id === linked)) {
@@ -187,9 +205,9 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
         }
       }
       try {
-        setAsBuilt(await api.asBuilt(project.id, shown.id, result.summary));
+        setAsBuilt(shown.id, await api.asBuilt(project.id, shown.id, result.summary));
       } catch {
-        setAsBuilt(null);
+        setAsBuilt(shown.id, null);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -246,7 +264,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   // ?room= set from outside (the command bar's rooms) while the house is open.
   const roomParam = params.get("room");
   useEffect(() => {
-    if (!roomParam || roomParam === room.id) return;
+    if (!active || !roomParam || roomParam === room.id) return;
     if (!ready.current) {
       initialRoom.current = roomParam;
       return;
@@ -256,18 +274,18 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
     setRoom({ id: r.id, level: r.level });
     viewer.current?.goToRoom(r.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomParam]);
+  }, [roomParam, active]);
 
   // ?comment=<id> ("Show where" in the comments sheet): fly to the pin once it is loaded, then forget the param.
   const commentParam = params.get("comment");
   useEffect(() => {
-    if (!commentParam || !comments) return;
+    if (!active || !commentParam || !comments) return;
     const c = comments.find((x) => x.id === commentParam);
     if (!c) return;
     setSelected(c.id);
     viewer.current?.flyTo(c);
     setParams((p) => { const n = new URLSearchParams(p); n.delete("comment"); return n; }, { replace: true });
-  }, [commentParam, comments, setParams]);
+  }, [active, commentParam, comments, setParams]);
 
   // When a revision lands, follow the new version (the camera stays where it is).
   const lastRevised = useRef<string | null>(null);
@@ -279,7 +297,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   }, [revise?.version, params, setParams]);
 
   useAskContext(
-    latestVid
+    active && latestVid
       ? {
           placeholder: "Tell Naqsha what to change…",
           // "Revise with N comments" is the shell's Next pill; typed, it opens the same choice.
@@ -292,15 +310,26 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       : null,
   );
 
-  useHotkeys({
-    v: () => setMode(mode === "walk" ? "orbit" : "walk"),
-    c: () => mode === "orbit" && isLatest && setCommentMode((c) => !c),
-    m: () => setNavOpen((o) => !o),
-    Escape: () => {
-      if (commentMode && !draft) setCommentMode(false);
-      setSelected(null);
+  useHotkeys(
+    {
+      v: () => setMode(mode === "walk" ? "orbit" : "walk"),
+      c: () => mode === "orbit" && isLatest && setCommentMode((c) => !c),
+      m: () => setNavOpen((o) => !o),
+      Escape: () => {
+        if (commentMode && !draft) setCommentMode(false);
+        setSelected(null);
+      },
     },
-  });
+    active,
+  );
+  /** Comment: in orbit, click to pin; in walk, pin at the crosshair, exactly as the C key does. */
+  const comment = () => {
+    if (mode === "walk") {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", code: "KeyC", bubbles: true }));
+      return;
+    }
+    setCommentMode((c) => !c);
+  };
 
   // Room navigator
   const [navOpen, setNavOpen] = useState(false);
@@ -323,6 +352,17 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   const walkLevel = !currentRoom && mode === "walk" && room.level ? levels.find((l) => l.id === room.level) : undefined;
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName);
   const asBuiltNotes = asBuilt?.checks.filter((c) => c.status !== "pass") ?? [];
+  const noteRoom = (ids: string[] | undefined) => {
+    for (const id of ids ?? []) {
+      if (plan.rooms.some((r) => r.id === id)) return id;
+      const o = plan.openings.find((x) => x.id === id);
+      const side = o?.between.find((b) => b !== "exterior" && plan.rooms.some((r) => r.id === b));
+      if (side) return side;
+      const base = plan.rooms.filter((r) => id.startsWith(`${r.id}_`)).sort((a, b) => b.id.length - a.id.length)[0];
+      if (base) return base.id;
+    }
+    return null;
+  };
   // Clear of the dock (the shell publishes its height as --dock-h); beside it only on very wide screens.
   // Phones stack three rows above the dock: mode · view · version, then rooms · comment, then notes.
   const row = (n: number) => (wide ? undefined : { bottom: `calc(var(--dock-h, 96px) + ${8 + n * 52}px)` });
@@ -371,8 +411,8 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Left edge: floors */}
-      {levels.length > 1 && (
-        <div data-nq-recede="" className="absolute left-3 top-1/2 z-20 -translate-y-1/2 sm:left-4">
+      {levels.length > 1 && built && (
+        <div data-nq-recede="" className={cn("absolute left-3 z-20 sm:left-4", phone ? "top-[calc(var(--chrome-top)+12px)]" : "top-1/2 -translate-y-1/2")}>
           <FloorStack items={items} value={mode === "walk" ? room.level ?? floor : floor} onChange={setFloor} tone="hud" extra={mode === "orbit" ? { id: "all", key: "All", name: "Whole house" } : undefined} />
         </div>
       )}
@@ -418,7 +458,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
           <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
         </HudButton>
         {isLatest && (
-          <HudButton onClick={() => (mode === "walk" ? notify.info("Press C to pin a comment where you stand") : setCommentMode((c) => !c))} pressed={commentMode} label="Comment (C)" accent={commentMode}>
+          <HudButton onClick={comment} pressed={commentMode} label="Comment (C)" accent={commentMode}>
             <MessageSquarePlus className="size-4" strokeWidth={1.75} />
             <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
             {openComments.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-white/15 px-1.5 font-mono text-[11px] tabular-nums">{openComments.length}</span>}
@@ -428,7 +468,13 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 
       {/* Notes from the as-built check and parts that didn't build */}
       <div data-nq-recede="" className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(phone ? 2 : 1)}>
-        {asBuiltNotes.length > 0 && <AsBuiltNotes notes={asBuiltNotes.map((c) => c.message)} />}
+        {asBuiltNotes.length > 0 && (
+          <AsBuiltNotes
+            notes={asBuiltNotes.map((c) => ({ id: c.id, text: c.message, room: noteRoom(c.element_ids) }))}
+            roomName={(id) => sentenceCase(plan.rooms.find((r) => r.id === id)?.name ?? "")}
+            onShow={(id) => goToRoom(id)}
+          />
+        )}
         {failed.map((f) => (
           <div key={f.name} className="glass-hud pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 text-[13px]">
             <CircleAlert className="size-3.5 text-[#F5B97A]" strokeWidth={2} />
@@ -471,7 +517,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </AnimatePresence>
 
       {/* Popovers */}
-      <Popover open={viewOpen} onClose={() => setViewOpen(false)} anchor={viewBtn} side="top" tone="hud" className="w-[300px]">
+      <Popover open={viewOpen} onClose={() => setViewOpen(false)} anchor={viewBtn} side="top" tone="hud" className="w-[300px]" sheetBelow={640} label="View">
         <ViewPanel
           light={light}
           onLight={setLight}
@@ -492,7 +538,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
           }}
         />
       </Popover>
-      <Popover open={versionOpen} onClose={() => setVersionOpen(false)} anchor={versionBtn} side="top" tone="hud" className="w-[300px]">
+      <Popover open={versionOpen} onClose={() => setVersionOpen(false)} anchor={versionBtn} side="top" tone="hud" className="w-[300px]" sheetBelow={640} label="Versions">
         <VersionMenu
           project={project}
           current={shown.id}
@@ -504,9 +550,22 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
           onRevisions={() => goTo("revisions")}
         />
       </Popover>
-      <Popover open={navOpen} onClose={() => setNavOpen(false)} anchor={roomPill} side="top" align="end" tone="hud" className="w-[300px]">
+      <Popover
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+        anchor={roomPill}
+        side="top"
+        align="end"
+        tone="hud"
+        className="w-[300px]"
+        sheetBelow={768}
+        sheetFull
+        label="Rooms"
+        avoid={() => [document.querySelector(".nq-house .nq-mini")]}
+      >
         <RoomNavigator
           plan={plan}
+          open={navOpen}
           current={room.id}
           onGo={(id) => {
             setNavOpen(false);
@@ -552,6 +611,10 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 
 /** Make room for the toolbars inside the viewer's own HUD (viewer classes; harmless if they change). */
 const HUD_CSS = `
+.nq-house .nq-glass { background: rgb(24 24 27 / 0.75); }
+.nq-house .nq-mini-north, .nq-house .nq-mini-caption, .nq-house .nq-build-meta, .nq-house .nq-kbd { font-size: 12px; }
+.nq-house .nq-mini-floor { position: relative; min-width: 28px; min-height: 26px; font-size: 12px; }
+@media (pointer: coarse), (max-width: 639px) { .nq-house .nq-mini-floor::after { content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2)); } }
 .nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: var(--chrome-top, 72px); }
 .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 60px); }
 .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 112px); }
@@ -569,7 +632,7 @@ const HudButton = ({ ref, onClick, pressed, label, accent, children }: { ref?: R
     title={label}
     className={cn(
       "inline-flex h-11 items-center gap-2 rounded-full px-4 text-[13px] font-medium outline-none transition-colors focus-visible:shadow-focus",
-      accent ? "bg-accent text-white shadow-e2" : "glass-hud hover:bg-[rgb(40_40_44/0.72)]",
+      accent ? "bg-accent text-white shadow-e2" : "glass-hud hover:bg-[rgb(40_40_44/0.88)]",
     )}
   >
     {children}
@@ -632,15 +695,14 @@ function ViewPanel({
           { value: "night", label: <span className="inline-flex items-center gap-1.5"><Moon className="size-3.5" strokeWidth={1.75} />Night</span> },
         ]}
       />
-      {light === "day" && (
-        <label className="block px-2">
-          <span className="flex justify-between text-[12px] text-hud-ink-2">
-            <span>Sun</span>
-            <span className="font-mono tabular-nums text-hud-ink">{hourLabel(hour)}</span>
-          </span>
-          <input type="range" min={7} max={17.5} step={0.25} value={hour} onChange={(e) => onHour(Number(e.target.value))} className="mt-1 w-full accent-[var(--color-hud-accent)]" aria-label="Time of day" />
-        </label>
-      )}
+      {/* Always here (disabled at dusk and night), so the light control above never moves under the cursor. */}
+      <label className={cn("block px-2", light !== "day" && "opacity-45")}>
+        <span className="flex justify-between text-[12px] text-hud-ink-2">
+          <span>Sun</span>
+          <span className="font-mono tabular-nums text-hud-ink">{light === "day" ? hourLabel(hour) : light === "dusk" ? "After sunset" : "Night"}</span>
+        </span>
+        <input type="range" min={7} max={17.5} step={0.25} value={hour} disabled={light !== "day"} onChange={(e) => onHour(Number(e.target.value))} className="mt-1 w-full accent-[var(--color-hud-accent)] disabled:cursor-not-allowed" aria-label="Time of day" />
+      </label>
       <div className="border-t border-white/10 pt-2">
         <p className="px-2 pb-1 text-[12px] text-hud-ink-2">Show</p>
         {LAYERS.map((l) => (
@@ -705,58 +767,6 @@ function VersionMenu({ project, current, onPick, onRevisions }: { project: Proje
   );
 }
 
-const ROOM_ORDER = ["living", "bed", "wet", "service", "outdoor"];
-
-function RoomNavigator({ plan, current, onGo }: { plan: BuildingPlan; current: string | null; onGo: (id: string) => void }) {
-  const [q, setQ] = useState("");
-  const levels = levelsOf(plan);
-  const rooms = plan.rooms.filter((r) => !SITE_TYPES.has(r.type) && r.type !== "stair");
-  const match = (name: string) => !q.trim() || name.toLowerCase().includes(q.trim().toLowerCase());
-  const groups = levels
-    .map((l) => ({ l, list: rooms.filter((r) => r.level === l.id && match(r.name)).sort((a, b) => ROOM_ORDER.indexOf(CATEGORY[a.type]) - ROOM_ORDER.indexOf(CATEGORY[b.type]) || a.name.localeCompare(b.name, undefined, { numeric: true })) }))
-    .filter((g) => g.list.length);
-  const first = groups[0]?.list[0];
-  return (
-    <div>
-      <div className="flex items-center gap-2 rounded-control bg-white/8 px-2.5">
-        <Search className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
-        <input
-          autoFocus
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && first) onGo(first.id);
-            e.stopPropagation();
-          }}
-          placeholder="Go to a room"
-          aria-label="Go to a room"
-          className="h-9 min-w-0 flex-1 bg-transparent text-[13.5px] text-hud-ink outline-none placeholder:text-hud-ink-2"
-        />
-        <Kbd tone="hud">M</Kbd>
-      </div>
-      <div className="mt-2 max-h-[50vh] overflow-y-auto [scrollbar-width:thin]">
-        {groups.map(({ l, list }) => (
-          <div key={l.id} className="mb-1">
-            <p className="px-2 pb-0.5 pt-1.5 text-[12px] text-hud-ink-2">{levelName(l)}</p>
-            {list.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => onGo(r.id)}
-                className={cn("flex w-full items-center justify-between gap-3 rounded-control px-2 py-1.5 text-left text-[13.5px] outline-none hover:bg-white/8 focus-visible:shadow-focus", r.id === current && "bg-white/10")}
-              >
-                <span className="truncate">{sentenceCase(r.name)}</span>
-                {r.id === current ? <span className="text-[12px] text-hud-accent">You're here</span> : <span className="font-mono text-[11.5px] tabular-nums text-hud-ink-2">{feetInches(r.rect.w)} × {feetInches(r.rect.d)}</span>}
-              </button>
-            ))}
-          </div>
-        ))}
-        {!groups.length && <p className="px-2 py-3 text-[13px] text-hud-ink-2">No room called that.</p>}
-      </div>
-    </div>
-  );
-}
-
 function PinCard({ c, n, onFly, onThread, onClose }: { c: Comment; n: number; onFly: () => void; onThread: () => void; onClose: () => void }) {
   return (
     <div>
@@ -787,21 +797,32 @@ function PinCard({ c, n, onFly, onThread, onClose }: { c: Comment; n: number; on
   );
 }
 
-function AsBuiltNotes({ notes }: { notes: string[] }) {
+function AsBuiltNotes({ notes, roomName, onShow }: { notes: { id: string; text: string; room: string | null }[]; roomName: (id: string) => string; onShow: (roomId: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} className="glass-hud pointer-events-auto inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] outline-none focus-visible:shadow-focus">
+      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="glass-hud pointer-events-auto inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] outline-none focus-visible:shadow-focus">
         <CircleAlert className="size-3.5 text-[#F5B97A]" strokeWidth={2} />
         {notes.length} {notes.length === 1 ? "note" : "notes"} on the 3D model
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={ref} side="top" tone="hud" className="w-[320px]">
-        <ul className="space-y-2 p-1 text-[13px] leading-snug">
+      <Popover open={open} onClose={() => setOpen(false)} anchor={ref} side="top" tone="hud" className="w-[340px]" sheetBelow={640} label="Notes on the 3D model">
+        <p className="px-1 pb-1.5 pt-0.5 text-[12px] text-hud-ink-2">What I found while building it in 3D</p>
+        <ul className="space-y-1 text-[13px] leading-snug">
           {notes.map((n) => (
-            <li key={n} className="flex gap-2">
+            <li key={n.id} className="flex items-start gap-2 rounded-control px-1 py-1.5">
               <span className="mt-[7px] size-1 shrink-0 rounded-full bg-[#F5B97A]" />
-              {n}
+              <span className="min-w-0 flex-1">{n.text}</span>
+              {n.room && (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onShow(n.room!); }}
+                  className="hit-44 relative shrink-0 rounded-full px-2.5 py-1 text-[12.5px] font-medium text-hud-accent outline-none hover:bg-white/10"
+                  aria-label={`Show me ${roomName(n.room)}`}
+                >
+                  Show me
+                </button>
+              )}
             </li>
           ))}
         </ul>

@@ -8,7 +8,7 @@ import type { Member, Project, Role } from "@contracts/api-types";
 import { shareUrl } from "@/api/client";
 import { copyText } from "@/app/lib/hooks";
 import { cn } from "@/app/lib/utils";
-import { useAuth } from "@/app/store/auth";
+import { requireAccount, useAuth } from "@/app/store/auth";
 import { useMembers } from "@/app/store/members";
 import { toast } from "@/app/store/toast";
 import { Avatar } from "@/app/ui/Avatar";
@@ -70,70 +70,75 @@ export function ShareDialog({ open, onClose, project }: { open: boolean; onClose
       open={open}
       onClose={onClose}
       title="Share this home"
-      description="Invite your team to design with you, or send your client a link."
+      description={user ? "Invite your team to design with you, or send your client a link." : "Send your client a link to view and comment. No account needed for that."}
       width={520}
       actions={<Button variant="secondary" onClick={onClose}>Done</Button>}
     >
-      {/* Invite */}
-      <form onSubmit={submit} className="flex flex-col gap-2.5" noValidate>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="name@example.com"
-            aria-label="Email to invite"
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setError(null); }}
-            error={error ?? undefined}
-            leading={<Mail className="size-4" strokeWidth={1.75} />}
-            wrapperClassName="flex-1"
-            data-autofocus
-          />
-          <div className="flex gap-2">
-            <Segmented<Invitable>
-              label="Invite as"
-              value={role}
-              onChange={setRoleChoice}
-              options={[{ value: "team", label: "Team" }, { value: "client", label: "Client" }]}
-              className="h-11 p-1 [&>button]:px-3.5"
-            />
-            <Button type="submit" variant="primary" className="h-11 px-5" loading={inviting} disabled={!email.trim()}>
-              Invite
-            </Button>
-          </div>
-        </div>
-        <p className="text-[12px] leading-4 text-ink-3">
-          {role === "team" ? "Team can design, comment and run revisions." : "Clients can view the plan and 3D, walk through, and comment."}
-        </p>
-      </form>
+      {user ? (
+        <>
+          {/* Invite */}
+          <form onSubmit={submit} className="flex flex-col gap-2.5" noValidate>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                aria-label="Email to invite"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                error={error ?? undefined}
+                leading={<Mail className="size-4" strokeWidth={1.75} />}
+                wrapperClassName="flex-1"
+                data-autofocus
+              />
+              <div className="flex gap-2">
+                <Segmented<Invitable>
+                  label="Invite as"
+                  value={role}
+                  onChange={setRoleChoice}
+                  options={[{ value: "team", label: "Team" }, { value: "client", label: "Client" }]}
+                  className="h-11 p-1 [&>button]:px-3.5"
+                />
+                <Button type="submit" variant="primary" className="h-11 px-5" loading={inviting} disabled={!email.trim()}>
+                  Invite
+                </Button>
+              </div>
+            </div>
+            <p className="text-[12px] leading-4 text-ink-3">
+              {role === "team" ? "Team can design, comment and run revisions." : "Clients can view the plan and 3D, walk through, and comment."}
+            </p>
+          </form>
 
-      {/* People */}
-      <div className="mt-5">
-        <p className="mb-1 text-[13px] font-medium text-ink-2">People with access</p>
-        <ul className="flex flex-col">
-          {user && (
-            <PersonRow name={user.name || user.email.split("@")[0]} email={user.email} role="owner" you />
-          )}
-          {members.map((m) => (
-            <PersonRow
-              key={m.email}
-              name={m.name}
-              email={m.email}
-              role={m.role}
-              invited={m.status === "invited"}
-              onRole={(r) => void setRole(m.email, r)}
-              onRemove={() => void remove(m.email)}
-            />
-          ))}
-          {status === "loading" && members.length === 0 && (
-            <li className="flex items-center gap-2 py-3 text-[13px] text-ink-3"><Spinner /> Loading people…</li>
-          )}
-        </ul>
-      </div>
+          {/* People */}
+          <div className="mt-5">
+            <p className="mb-1 text-[13px] font-medium text-ink-2">People with access</p>
+            <ul className="flex flex-col">
+              {user && (
+                <PersonRow name={user.name || user.email.split("@")[0]} email={user.email} role="owner" you />
+              )}
+              {members.map((m) => (
+                <PersonRow
+                  key={m.email}
+                  name={m.name}
+                  email={m.email}
+                  role={m.role}
+                  invited={m.status === "invited"}
+                  onRole={(r) => void setRole(m.email, r)}
+                  onRemove={() => void remove(m.email)}
+                />
+              ))}
+              {status === "loading" && members.length === 0 && (
+                <li className="flex items-center gap-2 py-3 text-[13px] text-ink-3"><Spinner /> Loading people…</li>
+              )}
+            </ul>
+          </div>
+
+        </>
+      ) : null}
 
       {/* Client link */}
-      <div className="mt-5 rounded-[16px] bg-canvas p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
+      <div className={cn("rounded-[16px]", user && "mt-5", "bg-canvas p-4 shadow-[inset_0_0_0_1px_var(--color-line)]")}>
         <div className="flex items-start gap-3">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-surface text-ink-2 shadow-e1">
             <Link2 className="size-4" strokeWidth={1.75} />
@@ -157,6 +162,22 @@ export function ShareDialog({ open, onClose, project }: { open: boolean; onClose
           </div>
         )}
       </div>
+
+      {/* Invite by email needs an account, so people know who invited them. A guest is asked here, inline. */}
+      {!user && (
+        <div className="mt-3 flex flex-col gap-3 rounded-[16px] p-4 shadow-[inset_0_0_0_1px_var(--color-line)] sm:flex-row sm:items-center">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-ink-2">
+            <Mail className="size-4" strokeWidth={1.75} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold text-ink">Invite by email</p>
+            <p className="text-[13px] leading-[18px] text-ink-3">Bring in your team to design, or invite a client by name. Invites need a free account.</p>
+          </div>
+          <Button variant="secondary" size="sm" className="self-start sm:self-auto" onClick={() => void requireAccount("invite")}>
+            Create an account
+          </Button>
+        </div>
+      )}
     </Dialog>
   );
 }
