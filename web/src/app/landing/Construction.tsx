@@ -53,7 +53,8 @@ export function Construction({ className, counts }: { className?: string; /** Th
   const [now, setNow] = useState(0);
   const [done, setDone] = useState(false);
 
-  // Start when half of the frame is visible.
+  // Start when a quarter of the frame is visible (at 1440 × 900 its top sits in the first screen, so it plays
+  // without a scroll).
   useEffect(() => {
     if (reduced) return;
     const el = root.current;
@@ -61,7 +62,7 @@ export function Construction({ className, counts }: { className?: string; /** Th
     // Already on screen when the page opens: start now.
     const r = el.getBoundingClientRect();
     const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
-    if (r.height && visible / r.height >= 0.5) {
+    if (r.height && visible / r.height >= 0.25) {
       setRun((x) => (x === 0 ? 1 : x));
       return;
     }
@@ -72,7 +73,7 @@ export function Construction({ className, counts }: { className?: string; /** Th
           io.disconnect();
         }
       },
-      { threshold: 0.5 },
+      { threshold: 0.25 },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -86,7 +87,8 @@ export function Construction({ className, counts }: { className?: string; /** Th
     let raf = 0;
     const tick = (t: number) => {
       const s = (t - start) / 1000;
-      setNow(s);
+      // rAF stamps can run a hair before the start: never a negative clock (no "Plot -2′ × -3′" on Replay).
+      setNow(Math.max(0, s));
       if (s < T.end + 0.2) raf = requestAnimationFrame(tick);
       else setDone(true);
     };
@@ -96,13 +98,14 @@ export function Construction({ className, counts }: { className?: string; /** Th
 
   const time = reduced ? T.end + 1 : now;
   const caption = [...CAPTIONS].reverse().find(([t]) => time >= t)?.[1] ?? CAPTIONS[0][1];
-  const k = Math.min(1, time / 0.8);
+  const k = Math.min(1, Math.max(0, time / 0.8));
   const eased = 1 - Math.pow(1 - k, 3);
   const dims = `${Math.round(35 * eased)}′ × ${Math.round(65 * eased)}′`;
 
-  // Phone: crop to the house and its level marks (x 96–870) so it stays big; the photo is cropped identically.
+  // Phone: crop to the house, its level marks and the crane (x 96–886) so it stays big and nothing is cut at the
+  // frame's edge; the photo is cropped identically.
   const vx = phone ? 96 : 0;
-  const vw = phone ? 774 : W;
+  const vw = phone ? 790 : W;
   const imgStyle: CSSProperties = { width: `${(W / vw) * 100}%`, left: `${(-vx / vw) * 100}%` };
 
   return (
@@ -141,7 +144,8 @@ export function Construction({ className, counts }: { className?: string; /** Th
       )}
 
       {/* Captions */}
-      <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 sm:bottom-5 sm:left-5">
+      {/* Phones: the caption rides at the top, clear of the ground line; wider frames keep it bottom-left. */}
+      <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 sm:bottom-5 sm:left-5 sm:top-auto">
         <Chip dark={time >= T.wipe}>
           <span className="tabular">{time < T.plinth ? `Plot ${run || reduced ? dims : "35′ × 65′"} · mid‑row` : caption}</span>
         </Chip>

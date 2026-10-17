@@ -33,10 +33,10 @@ const benefits = (counts: SampleCounts | null): { title: string; line: string }[
 ];
 
 const STEPS: { label: string; time: string; title: string; line: string }[] = [
-  { label: "Brief", time: "2 minutes", title: "Tell Naqsha about the plot", line: "Size, which way it faces, who will live there. One message is enough; Naqsha asks only what it still needs." },
-  { label: "Concepts", time: "1 minute", title: "Choose a direction", line: "Four exteriors by day and by night. Pick the one that feels like home and Naqsha plans the floors around it." },
-  { label: "Plan", time: "A few minutes", title: "See every floor, checked", line: "Dimensioned floors with doors and furniture, checked against LDA and livable rules as they are drawn. Print it for your contractor." },
-  { label: "House", time: "5 minutes", title: "Walk it, change it, share it", line: "Walk through in 3D, pin notes for changes, and bring in your family, your architect or your client." },
+  { label: "Brief", time: "2 min", title: "Tell Naqsha about the plot", line: "Size, which way it faces, who will live there. One message is enough; Naqsha asks only what it still needs." },
+  { label: "Concepts", time: "1 min", title: "Choose a direction", line: "Four exteriors by day and by night. Pick the one that feels like home and Naqsha plans the floors around it." },
+  { label: "Plan", time: "5 min", title: "See every floor, checked", line: "Dimensioned floors with doors and furniture, checked against LDA and livable rules as they are drawn. Print it for your contractor." },
+  { label: "House", time: "5 min", title: "Walk it, change it, share it", line: "Walk through in 3D, pin notes for changes, and bring in your family, your architect or your client." },
 ];
 
 /** Header links: the same 36px height and 14px type as Sign in and Portal beside them. */
@@ -158,7 +158,8 @@ export function Landing() {
             {benefits(counts).map((b, i) => (
               <Reveal key={b.title} delay={(i % 3) * 0.06} as="li">
                 <div className="h-px w-10 bg-ink" aria-hidden />
-                <h3 className="mt-5 text-heading text-ink">{b.title}</h3>
+                {/* Two lines reserved: a title that wraps never pushes its body below its neighbours'. */}
+                <h3 className="mt-5 text-heading text-ink sm:min-h-[2lh]">{b.title}</h3>
                 <p className="mt-2 text-[15px] leading-[24px] text-ink-2">{b.line}</p>
               </Reveal>
             ))}
