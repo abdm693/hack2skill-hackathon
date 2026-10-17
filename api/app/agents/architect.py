@@ -25,6 +25,7 @@ from ..compliance import lda, planning
 from ..gemini import client
 from ..store import blobs, db
 from . import drawing
+from .intake import FACING_NAME
 
 log = logging.getLogger("naqsha.architect")
 ROOT = Path(__file__).resolve().parents[3]
@@ -58,9 +59,15 @@ Output ONE BuildingPlan JSON. Follow the conventions in the TypeScript reference
 - An open_space or courtyard that lights rooms stays open to the sky: nothing on any floor above covers it (no room, terrace or
   balcony; leave an open_space void with a railing over it).
 - Car porch: a 9 × 18 ft bay per car in brief.spaces car_porch:N, plus a 3 ft 6 in walkway past the cars to the main door
-  (2 cars side by side: at least 21.5 ft wide × 18 ft deep, or 18 ft wide × 21.5 ft deep).
+  (2 cars side by side: at least 21.5 ft wide × 18 ft deep, or 18 ft wide × 21.5 ft deep). A bay may be as little as 14 ft
+  deep only where the porch opens straight onto the driveway or the front open space (the car's tail stands out over it).
+  When the brief mentions a motorbike (brief.spaces motorbike, or the preferences), add a 3 × 7 ft motorbike bay in the porch,
+  clear of the cars and the walkway: the porch is 3 ft wider (or 3 ft deeper) than the cars and walkway need.
 - Levels: ground (index 0, elevation = plinth 1.5), first, second as needed, then a final "roof" level whose height_ft equals
   the parapet height.
+- Storeys: every level with an enclosed room counts as a storey, the roof included; only the stair tower (mumty) is
+  excluded. When brief.storeys equals the envelope's max_storeys, the roof holds only the stair tower, the water tank, solar
+  and open terraces: put the laundry, stores, servant rooms, gym and kitchenette on the floors below.
 
 STAIRS (objective geometry, checked):
 - For 11 ft floor-to-floor: 19 risers of 6.95 in, 10 in treads, 3.5 ft flights, so a dog-leg rect of 7.5 ft × 11 ft along `start`.
@@ -77,7 +84,10 @@ ARCHITECT'S COMMON SENSE: plan the way a thoughtful Lahore architect would. Ever
 bedroom opens onto a corridor, lobby, stair hall or the family lounge (plus its own bath, dressing or balcony), never through
 another bedroom, a bath, the kitchen or the drawing room; a bath has exactly one door, and the master bath opens into the master
 bedroom. A powder room or common bath never opens into the dining room (its door would face the dining table): open it off a
-lobby, passage or the lounge. A dressing opens only into its own bedroom (or that bedroom's bath), never onto a lounge, and is
+lobby, passage or the lounge. From the open main door guests must never look into a WC: a powder room or common bath door
+never faces the main door across the lobby, lounge or drawing room it opens into, and never sits within about 30° of the main
+door's line within 15 ft; put it on a side wall, round a corner. Keep the entrance lobby at least 5 ft deep when 4 or more
+doors open off it. A dressing opens only into its own bedroom (or that bedroom's bath), never onto a lounge, and is
 at least 5 ft across and 25 sq ft (a 2 ft wardrobe plus a 3 ft aisle); smaller than that, give the bedroom a wardrobe wall
 instead. Two bedrooms never share a
 balcony or terrace, and their balconies never touch (keep a room or a gap between them). Guests reach the drawing room from the
@@ -108,10 +118,22 @@ def _brief_for_prompt(brief: dict) -> dict:
     return {k: brief[k] for k in BRIEF_KEYS if brief.get(k) not in (None, "", [], {})}
 
 
+def storey_limit_note(brief: dict, env: dict) -> str:
+    """At the authority's storey limit a roof room would be one storey too many: say so outright."""
+    try:
+        at_cap = int(brief.get("storeys") or 0) >= int(env.get("max_storeys") or 99)
+    except (TypeError, ValueError):
+        at_cap = False
+    return (f"STOREY LIMIT: this brief is at the authority's limit of {env['max_storeys']} storeys, so the roof holds only the "
+            f"stair tower, the water tank, solar and open terraces (no laundry, store or other enclosed room up there).\n\n"
+            if at_cap else "")
+
+
 def _plan_prompt(brief: dict, env: dict, concept) -> str:
     return (
         f"BRIEF:\n{json.dumps(_brief_for_prompt(brief), indent=1)}\n\n"
         f"LDA ENVELOPE (deterministic, from the regulations):\n{json.dumps({k: v for k, v in env.items() if k != '_band'}, indent=1)}\n\n"
+        + storey_limit_note(brief, env) +
         f"TYPESCRIPT REFERENCE for the plan (conventions + types):\n{_read(CONTRACTS / 'plan.ts')}\n\n"
         f"EXAMPLE of a good plan for a 10 marla LDA plot that passes every check (reference only; design for THIS brief):\n"
         f"{json.dumps(json.loads(_read(EXAMPLE_PLAN)), separators=(',', ':'))}\n\n"
@@ -253,7 +275,8 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
             yield "stage", {"stage": "plan", "message": "Laying out the floors…"}
         else:
             k = best[0][0]
-            yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt} of {config.PLAN_MAX_ATTEMPTS})…"}
+            yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt - 1} of "
+                                                      f"{config.PLAN_MAX_ATTEMPTS - 1})…"}
         obj = None
         try:
             # a fix round edits a plan we already have: one try, and if the model stalls we keep the best plan so far
@@ -305,6 +328,8 @@ drawings (road at the bottom of each sheet) with the room table and the adjacenc
 - furniture: a bed with side tables and a wardrobe, a sofa set facing a TV, a dining table for six, each with 3 ft paths and doors
   that don't hit furniture;
 - roof access: the stair reaches the roof under the stair tower, with its door beside the top landing.
+Name sides as front, back, left and right: the road is the front, at the bottom of every sheet, and left and right are as seen
+from the road. Never use compass points (north, south-east...) for a side of the house or a room.
 Call an issue "major" only if the family would suffer from it every day; don't nitpick taste or ask for things outside the brief.
 Each fix must be concrete (which room, which wall, how many feet) and must keep the plan inside the setbacks.
 Return JSON: {"verdict": "approve" | "revise", "summary": "<one calm sentence for the family: what you would improve, or what
@@ -322,6 +347,16 @@ def room_table(plan: dict) -> str:
     return "\n".join(lines)
 
 
+def orientation(brief: dict, plan: dict) -> str:
+    """How the drawings sit, for the review: the road is the front, and the plot's facing, which the critique must not turn
+    into compass sides (Argon once said the roof door "opens south" on a north-facing plot)."""
+    facing = (brief or {}).get("facing") or (plan.get("site") or {}).get("facing")
+    faces = (f"the plot faces {FACING_NAME.get(str(facing), str(facing).lower())} (its road side)" if facing else
+             "the plot's facing is not known")
+    return (f"The road (front) is at the bottom of every sheet; {faces}. Say front/back/left/right (left and right as seen "
+            f"from the road), never compass points.")
+
+
 async def review(project: dict, plan: dict, report: dict) -> dict:
     """Argon looks at the drawn floors and critiques them. Returns {verdict, summary, issues}."""
     brief = project.get("brief") or {}
@@ -329,7 +364,8 @@ async def review(project: dict, plan: dict, report: dict) -> dict:
     for lid, lname, png in drawing.render_all(plan):
         parts += [types.Part.from_text(text=f"{lname} plan:"), types.Part.from_bytes(data=png, mime_type="image/png")]
     remaining = [f"- [{c['status'].upper()}] {c['message']}" for c in report["checks"] if c["status"] in ("fail", "warn")]
-    text = (f"THE FAMILY'S BRIEF:\n{json.dumps(_brief_for_prompt(brief))}\n\nROOMS (feet):\n{room_table(plan)}\n\n"
+    text = (f"ORIENTATION: {orientation(brief, plan)}\n\n"
+            f"THE FAMILY'S BRIEF:\n{json.dumps(_brief_for_prompt(brief))}\n\nROOMS (feet):\n{room_table(plan)}\n\n"
             f"STAIRS: {json.dumps(plan.get('stairs'))}\nROOF: {json.dumps(plan.get('roof'))}\n\n"
             f"ISSUES THE SOFTWARE STILL REPORTS:\n{chr(10).join(remaining) or '(none)'}\n\nReview the plan now.")
     parts.append(types.Part.from_text(text=text))
@@ -411,26 +447,55 @@ def with_review(report: dict, issues: list[dict], plan: dict) -> dict:
     return {**report, "checks": keep + review_checks(issues, plan)}
 
 
+async def _critique(project: dict, plan: dict, report: dict) -> dict:
+    """Argon's critique within its own timeout (REVIEW_CRITIQUE_S): {verdict, summary, issues}, or a skipped review (reason
+    "timeout", or the error) so the run goes on without it."""
+    try:
+        return await asyncio.wait_for(review(project, plan, report), config.REVIEW_CRITIQUE_S)
+    except asyncio.TimeoutError:
+        log.warning("review critique over its %ss timeout; building the checked plan", config.REVIEW_CRITIQUE_S)
+        return {"verdict": "skipped", "summary": "", "issues": [], "reason": "timeout"}
+    except Exception as e:
+        log.exception("review failed")
+        return {"verdict": "skipped", "summary": "", "issues": [], "error": type(e).__name__}
+
+
+def _reviewed(crit: dict, smaller: bool = False) -> str:
+    n = len(crit["issues"])
+    return (f"Reviewed the drawings: {n}{' smaller' if smaller else ''} point{'s' if n != 1 else ''} to look at, listed with "
+            f"the checks." if n else
+            f"Reviewed the drawings. {crit['summary'] or 'The circulation, privacy and daylight read well.'}")
+
+
+async def critique_only(project: dict, plan: dict, report: dict) -> AsyncIterator[tuple[str, dict]]:
+    """The review of a late run (planning used every attempt, or took long): Argon critiques the drawings while the 3D build
+    of the checked plan runs, within its own timeout, and its open issues join the report as "Architect's review" rows. No
+    revision is made (revision "skipped_time"): the plan stays the checked one."""
+    yield "stage", {"stage": "review", "message": "Reviewing the drawings like an architect…"}
+    crit = await _critique(project, plan, report)
+    if crit["verdict"] == "skipped":
+        yield "_result", {"report": report, "review": {**crit, "applied": False, "revision": "skipped_time"}}
+        return
+    yield "stage", {"stage": "review", "message": _reviewed(crit)}
+    yield "_result", {"report": with_review(report, crit["issues"], plan),
+                      "review": {**crit, "applied": False, "open_issues": len(crit["issues"]), "revision": "skipped_time"}}
+
+
 async def self_review(project: dict, plan: dict, report: dict, first: types.Content, history: list) -> AsyncIterator[tuple[str, dict]]:
     """Critique the drawn plan; if there are real problems, revise (with one fix round when the revision breaks a rule) and
     keep the revision only if it breaks no rule and changes what a major issue is about. Whatever stays open is added to the
     report as livable warnings, so nothing the review found is silently dropped."""
     brief = project["brief"]
     yield "stage", {"stage": "review", "message": "Reviewing the drawings like an architect…"}
-    try:
-        crit = await review(project, plan, report)
-    except Exception as e:
-        log.exception("review failed")
-        yield "_result", {"plan": plan, "report": report, "review": {"verdict": "skipped", "summary": "", "issues": [],
-                                                                       "error": type(e).__name__}}
+    crit = await _critique(project, plan, report)
+    if crit["verdict"] == "skipped":
+        yield "_result", {"plan": plan, "report": report, "review": crit}
         return
     issues = crit["issues"]
     majors = [i for i in issues if i.get("severity") == "major"]
     if crit["verdict"] != "revise" or not majors:
         n = len(issues)
-        msg = (f"Reviewed the drawings: {n} smaller point{'s' if n != 1 else ''} to look at, listed with the checks." if n else
-               f"Reviewed the drawings. {crit['summary'] or 'The circulation, privacy and daylight read well.'}")
-        yield "stage", {"stage": "review", "message": msg}
+        yield "stage", {"stage": "review", "message": _reviewed(crit, smaller=True)}
         yield "_result", {"plan": plan, "report": with_review(report, issues, plan),
                           "review": {**crit, "applied": False, "open_issues": n}}
         return
@@ -691,15 +756,22 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
     async for ev, data in make_plan(project):
         if ev == "_result":
             plan, report, history, first = data["plan"], data["report"], data["history"], data["first"]
+            chosen = data.get("chosen_attempt") or len(history)
         else:
             yield ev, data
     rev: dict = {}
     build = Background(write_design(project, plan))
     try:
         late = loop.time() - t0 > config.REVIEW_SKIP_AFTER_S or len(history) >= config.PLAN_MAX_ATTEMPTS
-        if config.SELF_REVIEW and late:
-            log.info("skipping the drawing review: planning took %.0fs over %d attempts", loop.time() - t0, len(history))
-            rev = {"verdict": "skipped", "summary": "", "issues": [], "reason": "time"}
+        if config.SELF_REVIEW and late:  # a critique only, overlapping the build of the checked plan; no revision
+            log.info("critique only: planning took %.0fs over %d attempts", loop.time() - t0, len(history))
+            async for ev, data in critique_only(project, plan, report):
+                if ev == "_result":
+                    report, rev = data["report"], data["review"]
+                else:
+                    yield ev, data
+            if review_note_count(report):  # the review rows join the checks shown while the build finishes
+                yield "compliance", {"report": report, "attempt": chosen}
         elif config.SELF_REVIEW:
             async for ev, data in self_review(project, plan, report, first, history):
                 if ev == "_result":
@@ -709,6 +781,8 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
             if rev.get("applied"):  # the review changed the plan: build that one instead
                 build.cancel()
                 build = Background(write_design(project, plan))
+            elif review_note_count(report):
+                yield "compliance", {"report": report, "attempt": chosen}
         images = await _plan_images(pid, run_id, plan)
         await db.update_project(pid, stage="building")
         sections: list[dict] = []

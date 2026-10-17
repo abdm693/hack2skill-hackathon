@@ -233,6 +233,17 @@ Each rule is listed with an **ID**, a **status**, the **rule**, its **check**, a
 - A bath whose id or name contains "master" must open into the `master_bedroom` or its dressing.
 - Message: `"{bath} opens into {target}."`, `"{bath} has {n} doors; an attached bath opens only into its bedroom."` or `"Master Bath does not open into the master bedroom."` (argon-v1)
 
+**P-06b `plan.privacy.wc_on_entry:<room>`** (FAIL; purdah)
+- Rule: from the open main door, guests on the porch never look straight into a WC.
+- Check: take the room the ground-floor main door opens into (lobby, lounge or drawing room) and the main door's line of sight,
+  square to its wall and into that room. A powder room or common bath whose door opens into the same room FAILS when either:
+  - its door is on the opposite, parallel wall and the two door spans overlap when projected across the room; or
+  - its door lies within 30° of the main door's line and within 15 ft of the main door.
+- Message: `"From the main door you look straight into the Powder Room: its door faces the main door across the Entrance Lobby, so guests at the door see the WC."` (architect-e2e p_cc2b1126c4d1 v_57f77f161634: main door at (13, 25.75), Powder Room door at (24, 25.75), across an 11 ft × 4′6″ lobby.)
+- Fix hint: *"Move the Powder Room door to a side wall of the lobby, out of the main door's line of sight (or round a corner), or turn the lobby so the two doors don't face each other."*
+- With it, **`plan.circulation.lobby_crowded:<lobby>`** (WARN): the lobby inside the main door is under 5 ft deep and 4 or
+  more doors (the main door included) open off it.
+
 **P-07 `plan.privacy.kitchen`** (FAIL)
 - Rule: no door or `open_to` between {kitchen, dirty_kitchen} and PRIVATE or WET.
 
@@ -277,6 +288,14 @@ Each rule is listed with an **ID**, a **status**, the **rule**, its **check**, a
   3. A walkway 3 ft wide exists from the pedestrian gate (or the car gate) to the main door's approach, through porch ∪ driveway ∪ lawn minus the bays. Test it with a grid BFS at 0.5 ft, inflating the bays by 1.5 ft.
 - Message: `"The car bay in {porch} blocks {door}."` or `"No 3 ft walkway from the gate to the main door past the parked car."`
 - Fix hint: *"Make the porch ≥ 9 ft per car + 3.5 ft walkway wide, or put the porch door on the porch side wall beyond the bay."*
+- As implemented (`planning._porch`, round 3): bays are counted as the engine lays them out (`parking.ts porchBays`). Cars
+  drive in across one porch edge, chosen as the engine does (a driveway beyond it is best, then open ground, the front edge
+  preferred; an enclosed room beyond rules an edge out). A bay is 9 ft wide and 18 ft deep, or at least 14 ft deep when that
+  edge opens onto the driveway or the front open space, because the car's tail may stand up to 4 ft out over it
+  (`contracts/engine-notes.md`). So a 17′ × 16′ porch parks 1 of 2 cars in both the plan check and the as-built note.
+- **`plan.circulation.porch_bike:<porch>`** (WARN): when the brief mentions a motorbike (`motorbike` in brief.spaces, or
+  "motorbike", "bike" or "scooter" in the preferences or notes), the porch also needs a 3 × 7 ft motorbike bay beside the cars
+  and the walkway, or 3 ft deeper than the cars. Message: `"Car Porch (13′ × 18′) has no 3 × 7 ft space left for the motorbike once the car and the 3′6″ walkway to the door are in."`
 
 **P-16 `plan.daylight.real`** (FAIL, replaces the LDA glazing count)
 - Rule: habitable rooms and kitchens need valid outside glazing of at least 8% of the floor area.

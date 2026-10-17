@@ -381,3 +381,110 @@ def test_plan_prompt_states_the_dining_and_dressing_rules():
     s = " ".join(architect.PLAN_SYSTEM.split())
     assert "never opens into the dining room" in s
     assert "at least 5 ft across and 25 sq ft" in s
+
+
+# --- round 3: a WC in view of the main door (architect-e2e p_cc2b1126c4d1 v_57f77f161634), the porch as the engine parks it ----
+def entry_plan(powder: tuple, door: tuple) -> dict:
+    """A 10 ft wide lobby behind a porch, the main door in the middle of its front wall at (5, 6), and a powder room at
+    `powder` (x, y, w, d) whose door is at `door`."""
+    x, y, w, d = powder
+    return {"site": {"plot": {"width_ft": 30, "depth_ft": 40}},
+            "levels": [{"id": "ground", "index": 0, "elevation_ft": 1.5, "height_ft": 11, "name": "Ground Floor"},
+                       {"id": "roof", "index": 1, "elevation_ft": 12.5, "height_ft": 3.5, "name": "Roof"}],
+            "rooms": [{"id": "g_porch", "level": "ground", "type": "porch", "name": "Porch", "rect": {"x": 0, "y": 0, "w": 10, "d": 6}},
+                      {"id": "g_lobby", "level": "ground", "type": "lobby", "name": "Entrance Lobby",
+                       "rect": {"x": 0, "y": 6, "w": 10, "d": 12}},
+                      {"id": "g_powder", "level": "ground", "type": "powder", "name": "Powder Room",
+                       "rect": {"x": x, "y": y, "w": w, "d": d}}],
+            "openings": [{"id": "g_main_door", "level": "ground", "type": "main_door", "between": ["g_lobby", "g_porch"],
+                          "at": [5, 6], "width_ft": 3.5, "height_ft": 7.5},
+                         {"id": "g_powder_door", "level": "ground", "type": "door", "between": ["g_powder", "g_lobby"],
+                          "at": list(door), "width_ft": 2.5, "height_ft": 7}]}
+
+
+def wc_check(plan):
+    return next((c for c in planning.check(plan) if c["id"] == "plan.privacy.wc_on_entry:g_powder"), None)
+
+
+def test_wc_on_entry_fails_when_the_powder_door_faces_the_main_door():
+    """BE3-05: the main door (13, 25.75) and the Powder Room door (24, 25.75) share one axis across an 11 ft x 4'6" lobby."""
+    by = checks(load("plan-e2e-powder-entry.json"), load("brief-e2e-powder-entry.json"))
+    c = by["plan.privacy.wc_on_entry:g_powder"]
+    assert c["status"] == "fail" and c["message"].startswith("From the main door you look straight into the Powder Room")
+    assert "faces the main door across the Entrance Lobby" in c["message"] and "side wall" in c["fix"]
+    assert not re.search(r"\b[gfr]_[a-z]", c["message"] + c["fix"] + c["title"])
+    assert {"g_powder", "g_powder_door", "g_main_door"} <= set(c["element_ids"])
+    assert "plan.rule.independence" not in by
+    lobby = by["plan.circulation.lobby_crowded:g_lobby"]   # 4'6" deep with four doors
+    assert lobby["status"] == "warn" and "4′6″ deep" in lobby["message"]
+    # the staged samples and the 4-bed fixture: no WC in view of the main door
+    for plan, brief in (("plan-sample-10-marla-r2.json", "brief-sample-10-marla.json"),
+                        ("plan-sample-villa-r2.json", "brief-sample-villa.json"),
+                        ("plan-e2e-4bed-v1.json", "brief-e2e-4bed.json"), ("plan-e2e-10-marla-v1.json", "brief-e2e-10-marla.json"),
+                        ("plan-villa-v2.json", "brief-villa.json")):
+        ids = {c["id"] for c in lda.check(load(plan), load(brief) if brief else None)["checks"]}
+        assert not any(i.startswith(("plan.privacy.wc_on_entry", "plan.circulation.lobby_crowded")) for i in ids), plan
+
+
+def test_the_few_shot_example_keeps_the_wc_out_of_view(plans):
+    """The plan every design starts from: its powder room opens off the lounge 48° off the main door's line, 22 ft away."""
+    assert not any(c["id"].startswith("plan.privacy.wc_on_entry") for c in planning.check(plans["example"]))
+
+
+def test_wc_on_entry_geometry():
+    across = wc_check(entry_plan((3, 18, 5, 5), (5.5, 18)))          # on the back wall, the spans overlap
+    assert across and "faces the main door" in across["message"]
+    off = wc_check(entry_plan((6, 18, 4, 5), (8.75, 18)))             # back wall, out of the door's span but 17° off its line
+    assert off and "almost in line" in off["message"]
+    cone = wc_check(entry_plan((10, 13, 5, 5), (10, 16.5)))           # a side wall 10.5 ft in: 25° off the main door's line
+    assert cone and "almost in line" in cone["message"]
+    assert wc_check(entry_plan((10, 6, 5, 5), (10, 8))) is None       # a side wall by the door: 68° off, out of sight
+    assert wc_check(entry_plan((10, 10, 5, 5), (10, 13.5))) is None   # a side wall 7.5 ft in: 34° off its line
+    far = entry_plan((10, 13, 5, 5), (10, 16.5))                      # beyond 15 ft along a deeper lobby: out of the cone
+    next(r for r in far["rooms"] if r["id"] == "g_lobby")["rect"]["d"] = 30
+    next(r for r in far["rooms"] if r["id"] == "g_powder")["rect"]["y"] = 28
+    next(o for o in far["openings"] if o["id"] == "g_powder_door")["at"] = [10, 30]
+    assert wc_check(far) is None
+    attached = entry_plan((3, 18, 5, 5), (5.5, 18))                   # a bath off a bedroom, not off the lobby: not this rule
+    next(r for r in attached["rooms"] if r["id"] == "g_lobby")["type"] = "corridor"
+    assert wc_check(attached)                                         # still the room behind the main door
+
+
+def test_plan_prompt_states_the_wc_and_motorbike_rules():
+    from app.agents import architect
+    s = " ".join(architect.PLAN_SYSTEM.split())
+    assert "guests must never look into a WC" in s and "within about 30° of the main door's line within 15 ft" in s
+    assert "3 × 7 ft motorbike bay" in s and "14 ft deep only where the porch opens straight onto the driveway" in s
+
+
+def test_porch_counts_bays_as_the_engine_parks_them(plans):
+    """BE3-06: the engine lets a car's tail stand up to 4 ft out over the porch's open drive-in edge, so a 17' x 16' porch parks
+    one car (p_13230dfcc54c v1, whose as-built note says 1 of 2), not none."""
+    c = checks(load("plan-e2e-4bed-v1.json"), load("brief-e2e-4bed.json"))["plan.circulation.porch:g_porch"]
+    assert c["status"] == "fail" and c["value"] == 1 and c["limit"] == 2
+    assert "parks 1 of the 2 cars" in c["message"] and "14′ deep where its tail can stand out over the driveway" in c["message"]
+    assert planning.edge_bays(17, 16, 4) == 1 and planning.edge_bays(17, 16) == 0 and planning.edge_bays(18, 14, 4) == 2
+    assert planning.edge_bays(18, 13.5, 4) == 0 and planning.edge_bays(9, 36) == 2 and planning.edge_bays(8.5, 20) == 0
+    ix = planning.PlanIndex(plans["example"])
+    assert planning.car_edge(ix, "g_porch") == ("front", 4.0, "driveway")
+    # a porch whose front is only 2 ft from the road: the tail can't stand out 4 ft, so 15 ft deep parks nothing (16 ft would)
+    p = copy.deepcopy(plans["example"])
+    next(r for r in p["rooms"] if r["id"] == "g_porch")["rect"].update(y=2.3, d=15)
+    next(r for r in p["rooms"] if r["id"] == "g_driveway")["rect"].update(d=2.3)
+    ix = planning.PlanIndex(p)
+    assert planning.car_edge(ix, "g_porch")[1] == pytest.approx(2.0)
+    assert checks(p, {"spaces": ["car_porch:1"]})["plan.circulation.porch:g_porch"]["value"] == 0
+
+
+def test_porch_needs_a_motorbike_bay_when_the_brief_has_one(plans):
+    by = checks(load("plan-e2e-powder-entry.json"), load("brief-e2e-powder-entry.json"))   # "porch for 1 car plus motorbike"
+    c = by["plan.circulation.porch_bike:g_porch"]
+    assert c["status"] == "warn" and "no 3 × 7 ft space left for the motorbike" in c["message"]
+    assert not re.search(r"\b[gfr]_[a-z]", c["message"] + c["fix"])
+    assert planning.brief_bike({"preferences": ["porch for 1 car plus a motorbike"]})
+    assert planning.brief_bike({"spaces": ["car_porch:1", "motorbike"]}) and not planning.brief_bike({"spaces": ["car_porch:2"]})
+    p = copy.deepcopy(plans["example"])                               # 13' x 18' porch, 1 car: no room for the bike
+    assert "plan.circulation.porch_bike:g_porch" in checks(p, {"spaces": ["car_porch:1", "motorbike"]})
+    assert "plan.circulation.porch_bike:g_porch" not in checks(p, {"spaces": ["car_porch:1"]})
+    next(r for r in p["rooms"] if r["id"] == "g_porch")["rect"]["w"] = 16   # 3 ft wider: the bike sits beside the walkway
+    assert "plan.circulation.porch_bike:g_porch" not in checks(p, {"spaces": ["car_porch:1", "motorbike"]})

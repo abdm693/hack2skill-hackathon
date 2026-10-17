@@ -44,6 +44,8 @@ Every turn:
    Rooms per floor go in `floors` as "level=room,room:count", e.g. ["ground=drawing,kitchen,dirty_kitchen,bedroom:1,bath:2",
    "first=bedroom:3,bath:3,lounge"]. Use bedroom (or master_bedroom / guest_bedroom), bath, powder, drawing, lounge, dining,
    kitchen, kitchenette, dirty_kitchen, prayer, study, store, laundry, servant_quarter, dressing, terrace, balcony.
+   A stair up to the roof is standard in every home: never record it as a terrace or a roof terrace. Record roof_terrace
+   only when they ask for a terrace or a sitting area on the roof.
    "Attached baths" means one bath per bedroom: set bathrooms accordingly (plus a powder room if they mention one).
    If they take a wish back or contradict one ("remove the dirty kitchen", "no open kitchen after all"), drop it with
    remove_preferences (and remove_spaces for a room), in the same update_brief call.
@@ -63,9 +65,10 @@ Call update_brief together with ask or complete_setup in ONE step."""
 class Turn:
     """Per-turn state the tools write into."""
 
-    def __init__(self, brief: dict, before: dict):
+    def __init__(self, brief: dict, before: dict, said: str = ""):
         self.brief = brief
         self.before = before
+        self.said = said  # everything the family has typed (this turn and before): what a roof terrace must come from
         self.reply: dict | None = None
         self.understood: dict | None = None
         self.complete = False
@@ -102,9 +105,12 @@ class Turn:
               bedrooms: Total bedrooms (servant quarters excluded).
               bathrooms: Total baths including any powder room.
               spaces: Spaces to add: drawing, tv_lounge, dining, kitchen, dirty_kitchen, servant_quarter, car_porch:N (N cars),
-                lawn, prayer, store, laundry, roof_terrace, study, gym.
+                motorbike (a motorbike parked in the porch), lawn, prayer, store, laundry, roof_terrace, study, gym.
+                Reaching the roof by stair is standard (never a terrace): add roof_terrace only when they ask for a terrace
+                or a sitting area on the roof.
               remove_spaces: Spaces they no longer want.
-              floors: Rooms per floor, each "level=room,room:count", e.g. "ground=drawing,kitchen,bedroom:1,bath:2".
+              floors: Rooms per floor, each "level=room,room:count", e.g. "ground=drawing,kitchen,bedroom:1,bath:2". A
+                terrace on the first or second floor is a terrace on that floor; "roof=terrace" only for a roof terrace.
               water_tank: "plastic" or "concrete".
               solar: "none", "ready" (roof kept clear for panels later) or "panels" (panels now).
               style: Modern Contemporary, Spanish, Classic, Minimalist, Mediterranean, Mughal Revival, Industrial or free text.
@@ -135,6 +141,8 @@ class Turn:
                          ("preferences", preferences), ("remove_preferences", remove_preferences), ("notes", note)):
                 if v not in (None, "", []):
                     patch[k] = v
+            if not terrace_said(t.said):  # "a stair all the way up to the roof" is not a roof terrace
+                patch = drop_roof_terrace(patch)
             if patch.get("bedrooms") and not patch.get("bathrooms") and not t.brief.get("bathrooms"):
                 patch["bathrooms"] = int(patch["bedrooms"]) + 1
                 decided_for_them = list(decided_for_them or []) + ["bathrooms"]
@@ -205,6 +213,40 @@ class Turn:
         return [update_brief, get_lda_envelope, ask, present_understanding, complete_setup]
 
 
+TERRACE_RE = re.compile(r"terrace|\bsit(ting)?\b|seating|roof\s*-?\s*(top\s*)?(garden|lounge|deck|party|gathering)|"
+                        r"barbe?cue|\bbbq\b", re.I)
+
+
+def terrace_said(text: str) -> bool:
+    """Whether the family asked for a terrace or a sitting area (on the roof or anywhere), in their own words."""
+    return bool(TERRACE_RE.search(text or ""))
+
+
+def drop_roof_terrace(patch: dict) -> dict:
+    """The patch without a roof terrace the family never asked for: roof_terrace in spaces, and a terrace on the roof's
+    per-floor program (a roof level left empty is dropped, so it never clears what was recorded before)."""
+    out = dict(patch)
+    if out.get("spaces"):
+        out["spaces"] = [s for s in out["spaces"] if str(s).strip().lower().replace(" ", "_") != "roof_terrace"]
+        if not out["spaces"]:
+            out.pop("spaces")
+    floors = []
+    for f in out.get("floors") or []:
+        spec = intake.parse_floor_spec(f) if isinstance(f, str) else f
+        if isinstance(spec, dict) and spec.get("level") == "roof":
+            rooms = [r for r in spec.get("rooms") or [] if str(r).split(":")[0] not in ("terrace", "roof_terrace")]
+            if not rooms:
+                continue
+            f = {"level": "roof", "rooms": rooms}
+        floors.append(f)
+    if "floors" in out:
+        if floors:
+            out["floors"] = floors
+        else:
+            out.pop("floors")
+    return out
+
+
 def _compact(b: dict) -> dict:
     return {k: v for k, v in b.items() if v not in (None, "", [], {}, False) and k != "auto_filled"} | (
         {"decided_by_naqsha": b["auto_filled"]} if b.get("auto_filled") else {})
@@ -235,7 +277,8 @@ async def agent_turn(project: dict, brief: dict, before: dict, history: list[dic
     t0 = time.monotonic()
     if widget_patch:
         brief = intake.merge_brief(brief, widget_patch, [], spaces_mode="replace")
-    turn = Turn(brief, before)
+    said = " ".join([str(m.get("text") or "") for m in history if m.get("role") == "user"] + [user_text or ""])
+    turn = Turn(brief, before, said)
     agent = Agent(name="naqsha_setup", model=Gemini(model=config.MODEL_SETUP, retry_options=RETRY), instruction=INSTRUCTION,
                   tools=turn.tools(), generate_content_config=types.GenerateContentConfig(
                       temperature=0.4, max_output_tokens=2048,

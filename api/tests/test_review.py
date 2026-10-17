@@ -142,6 +142,126 @@ def test_revisions_keep_review_notes_about_untouched_rooms(plans):
     assert [c["element_ids"] for c in notes] == [["g_kitchen"]]
 
 
+def test_fix_rounds_are_numbered_from_one(plans, monkeypatch):
+    """BE3-04: the first fix round is "round 1 of 2", not "round 2 of 3"."""
+    async def ask(contents, thinking=None, attempts=2):
+        yield "result", (copy.deepcopy(plans["example"]), "")
+
+    async def no_concept(project):
+        return None
+    monkeypatch.setattr(architect, "_ask_plan", ask)
+    monkeypatch.setattr(architect, "_concept_part", no_concept)
+    monkeypatch.setattr(architect.config, "PLAN_MAX_ATTEMPTS", 3)
+    brief = {"plot": {"width_ft": 35, "depth_ft": 65, "area_marla": 10.1, "corner": False}, "bedrooms": 5}
+
+    async def go():
+        return [ev async for ev in architect.make_plan({"id": "p1", "brief": brief})]
+    fixes = [d["message"] for e, d in asyncio.run(go()) if e == "stage" and d["stage"] == "fix"]
+    assert len(fixes) == 2 and fixes[0].endswith("(round 1 of 2)…") and fixes[1].endswith("(round 2 of 2)…")
+    assert fixes[0].startswith("Fixing 1 problem ")
+
+
+class FakeRun:
+    """The design pipeline around the review, with no model calls: a late plan (every attempt used), a build that streams
+    one section, and an in-memory store."""
+
+    def __init__(self, plans, monkeypatch, review):
+        self.saved = {}
+        plan = copy.deepcopy(plans["example"])
+        self.brief = {"plot": {"width_ft": 35, "depth_ft": 65, "area_marla": 10.1, "corner": False}, "facing": "N"}
+        report = lda.check(plan, self.brief)
+
+        async def make_plan(project):
+            yield "stage", {"stage": "plan", "message": "Laying out the floors…"}
+            yield "_result", {"plan": plan, "report": report, "first": None, "chosen_attempt": 3,
+                              "history": [{"attempt": i} for i in (1, 2, 3)]}
+
+        async def write_design(project, plan, extra=None):
+            yield "stage", {"stage": "build", "message": "Building the 3D model…"}
+            await asyncio.sleep(0.01)
+            yield "section", {"section": {"name": "structure", "layer": "structure", "code": ""}, "index": 0}
+            yield "_result", {"sections": [{"name": "structure", "layer": "structure", "code": ""}]}
+
+        async def self_review(*a, **k):
+            raise AssertionError("a late run makes no revision")
+            yield  # pragma: no cover
+
+        def no_model(*a, **k):
+            raise AssertionError("no model call on the late path besides the critique")
+
+        async def plan_images(pid, run_id, plan):
+            return []
+
+        async def update_project(pid, **f):
+            return f
+
+        async def get_project(pid):
+            return {"id": pid, "versions": [], "brief": self.brief}
+
+        async def save_version(pid, v):
+            self.saved = v
+            return v
+        monkeypatch.setattr(architect, "make_plan", make_plan)
+        monkeypatch.setattr(architect, "write_design", write_design)
+        monkeypatch.setattr(architect, "self_review", self_review)
+        monkeypatch.setattr(architect, "review", review)
+        monkeypatch.setattr(architect.llm, "stream_json", no_model)
+        monkeypatch.setattr(architect, "_plan_images", plan_images)
+        for name, fn in (("update_project", update_project), ("get_project", get_project), ("save_version", save_version)):
+            monkeypatch.setattr(db, name, fn)
+
+    def run(self):
+        async def go():
+            return [ev async for ev in architect.design({"id": "p1", "brief": self.brief})]
+        return asyncio.run(go())
+
+
+def test_a_late_run_still_gets_the_critique(plans, monkeypatch):
+    """BE3-04: a run that used every plan attempt still stores a review (approve or revise) whose open issues are listed with
+    the checks as "Architect's review" rows; no revision is made."""
+    async def review(project, plan, report):
+        return {"verdict": "revise", "summary": "The powder room faces the lounge.",
+                "issues": [{"severity": "major", "rooms": ["g_powder"], "problem": "g_powder opens toward the sofa.",
+                            "fix": "Turn its door to the side wall."}]}
+    fake = FakeRun(plans, monkeypatch, review)
+    evs = fake.run()
+    v = next(d["version"] for e, d in evs if e == "version")
+    rev = v["review"]
+    assert rev["verdict"] == "revise" and rev["applied"] is False and rev["revision"] == "skipped_time" and rev["open_issues"] == 1
+    rows = [c for c in v["compliance"]["checks"] if c["id"].startswith("review.")]
+    assert len(rows) == 1 and rows[0]["title"] == "Architect's review: needs a change" and "Powder Room" in rows[0]["message"]
+    assert v["plan"] == plans["example"] and [s["name"] for s in v["sections"]] == ["structure"]
+    stages = [d["message"] for e, d in evs if e == "stage" and d["stage"] == "review"]
+    assert stages[0] == "Reviewing the drawings like an architect…" and "1 point to look at" in stages[-1]
+    shown = [d["report"] for e, d in evs if e == "compliance"]
+    assert shown and architect.review_note_count(shown[-1]) == 1
+
+
+def test_a_late_critique_that_runs_over_is_left_out(plans, monkeypatch):
+    async def review(project, plan, report):
+        await asyncio.sleep(5)
+    monkeypatch.setattr(architect.config, "REVIEW_CRITIQUE_S", 0.05)
+    fake = FakeRun(plans, monkeypatch, review)
+    v = next(d["version"] for e, d in fake.run() if e == "version")
+    assert v["review"]["verdict"] == "skipped" and v["review"]["reason"] == "timeout" and v["review"]["revision"] == "skipped_time"
+    assert not architect.review_note_count(v["compliance"]) and v["sections"]
+
+
+def test_the_review_names_sides_not_compass_points(plans, monkeypatch):
+    sent = []
+
+    async def stream(model, contents, system, max_tokens=None, **k):
+        sent.append((system, " ".join(p.text for p in contents[0].parts if getattr(p, "text", None))))
+        yield "result", ({"verdict": "approve", "summary": "Works.", "issues": []}, "")
+    monkeypatch.setattr(architect.llm, "stream_json", stream)
+    out = asyncio.run(architect.review({"brief": {"facing": "N"}}, plans["example"], lda.check(plans["example"])))
+    assert out["verdict"] == "approve"
+    system, text = sent[0]
+    assert "ORIENTATION: The road (front) is at the bottom of every sheet; the plot faces north (its road side)." in text
+    assert "never compass points" in text and "Never use compass points" in " ".join(system.split())
+    assert "the plot faces south-east" in architect.orientation({}, {"site": {"facing": "SE"}})
+
+
 def test_example_is_what_the_planner_copies(plans):
     """The few-shot example every plan starts from: every bath has a ventilator on its own outside wall."""
     rep = lda.check(plans["example"])
