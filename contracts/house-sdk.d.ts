@@ -210,15 +210,22 @@ export interface HouseSDK {
    * Place one furniture item. Returns the group so you can tweak it. The engine keeps clearances and may move it:
    * floor items never stand in a door's clear zone (its width × 3 ft on each side, plus the leaf's swing), an
    * open-plan crossing, on a stair or its landings, or (tall items) in front of a window; they slide along their
-   * wall, move to another wall, get up to 15% narrower, or are left out (reported). A room's defining piece (a
-   * bedroom's bed, a bath's WC, a kitchen's fridge and hob, a dressing room's wardrobe) is never silently missing:
-   * a smaller version is tried, plants and chairs give way, and if it still has no place the build reports a fail.
+   * wall, move to another wall, get up to 15% narrower (a wardrobe down to 60 %, then a 1.6 ft deep hanging unit),
+   * or are left out quietly. In a bedroom, lounge, drawing, dining, study or prayer room a tall piece never stands
+   * across the room's only window (with two or more, only the smallest may be covered as a last resort); a wardrobe
+   * that has no other spot is left out with a note. A room's defining piece (a bedroom's bed, a bath's WC, basin and
+   * shower or tub, a powder room's WC and basin, a kitchen's fridge and hob, a dressing room's wardrobe) is never
+   * silently missing: a smaller version is tried (a 1.5 × 1.2 ft wall-hung basin, a 2.6 ft shower tray, then a
+   * wet-area shower on the wall), plants and chairs give way, and if it still has no place the build reports a fail.
+   * curtains always hang centred on a window or sliding door (the one on that wall nearest along_ft, else the room's
+   * largest), never over a door; a room with no window gets none.
    * Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on solid wall, never over a door or window;
    * a tv lines up over its tv_unit, a mirror over a dresser or vanity, a painting over a sofa or sideboard. A
    * tv_unit keeps 1.5 ft from every door frame; in a bedroom it goes only on the wall the bed faces. side_tables
    * stand on the two sides of the bed; table_lamp, hob, sink_kitchen and microwave stand on a nightstand or counter.
-   * Cars go into parking bays that keep the gate-to-main-door walkway clear (one bay per car the design parks).
-   * After each section every door and stair landing keeps a 3 ft path.
+   * Cars go into 9 × 18 ft parking bays (8.5 ft wide at the least) that keep the gate-to-main-door walkway clear: one
+   * per car the design parks, and as many as the plan's porch asks for ("Car porch (2 cars)"); a car that does not
+   * fit is reported. After each section every door and stair landing keeps a 3 ft path.
    */
   furnish(item: FurnitureType, o: FurnishOptions): THREE_NS.Object3D;
   /** Sensible default layout for a room by its type (use when no specific intent). */

@@ -9,7 +9,11 @@
  *  4. the walkway from the gate to the main door is clear of cars, and the walk starts on it with the door in view;
  *  5. 3 ft walking paths join every door and stair landing of each room cluster;
  *  6. openings cut only into the wall between the rooms they name;
- *  7. stairs at code (treads, landings, foot strip) and the stair tower covers the top flight.
+ *  7. stairs at code (treads, landings, foot strip) and the stair tower covers the top flight;
+ *  8. headroom: every cell inside a stair's footprint a walker can stand in has 6′8″ clear to the soffit above
+ *     (anything lower is boxed in as under-stair storage);
+ *  9. windows: every curtain pair hangs centred on a window or sliding door (never over a door), and no tall piece
+ *     (wardrobe, bookshelf, fridge, TV unit) stands in front of a window in a habitable room (zones.HABITABLE).
  */
 import * as THREE from "three";
 import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
@@ -18,8 +22,8 @@ import type { BuildCtx } from "../core/ctx";
 import { resolveHit } from "../core/tags";
 import { rectContains } from "../core/grid";
 import { subtract } from "../structure/cover";
-import { openingsOnEdge } from "../structure/stairs-geo";
-import { doorClearance, intrudes, keepOut, solidIntervals } from "../furniture/zones";
+import { HEADROOM, openingsOnEdge } from "../structure/stairs-geo";
+import { blocksWindow, doorClearance, HABITABLE, intrudes, isTall, keepOut, solidIntervals } from "../furniture/zones";
 import { parking, onWalkwayRect } from "../furniture/parking";
 import { pathReport } from "../furniture/paths";
 import { ITEMS } from "../furniture/items";
@@ -50,6 +54,8 @@ export function runChecks(res: BuildResult): Check[] {
   out.push(checkPaths(ctx));
   out.push(checkOpenings(ctx));
   out.push(checkStairs(ctx));
+  out.push(checkHeadroom(ctx, res, col));
+  out.push(checkWindows(ctx));
   return out;
 }
 
@@ -375,5 +381,99 @@ function checkStairs(ctx: BuildCtx): Check {
     title: "Stairs at code, tower over the top flight",
     status,
     detail: `${ctx.model.stairs.length} stairs, treads ≥ ${minT.toFixed(1)} in, foot strip ≥ ${(strips.length ? Math.min(...strips) : 0).toFixed(1)} ft; ${uncovered.length ? "the roof stairwell is NOT inside the tower" : "the tower covers the top flight and its landing"}${notes.length ? `; ${notes.map((n) => n.message).join(" ")}` : ""}`,
+  };
+}
+
+// ── 8. headroom under the stairs ───────────────────────────────────────────────────────────────────────────
+/**
+ * EN2-01: on every 0.25 ft cell of a stair's footprint on its lower floor where a walker fits (a 0.56 m wide column
+ * from step height to a 1.78 m head is free of walk colliders), the clear height to the stair's own soffit or landing
+ * above must be at least 6′8″. Reports the lowest headroom over a walkable cell for each stair.
+ */
+function checkHeadroom(ctx: BuildCtx, res: BuildResult, col: THREE.Mesh): Check {
+  const meshes = sceneMeshes(res);
+  const bvh = (col.geometry as unknown as { boundsTree: MeshBVH }).boundsTree;
+  const rc = new THREE.Raycaster();
+  const box = new THREE.Box3();
+  const I = new THREE.Matrix4();
+  const spots: Check["spots"] = [];
+  const per: string[] = [];
+  let bad = 0, cells = 0;
+  for (const lay of ctx.model.stairs) {
+    const lv = lay.stair.from.id;
+    const r = lay.rect;
+    let min = Infinity;
+    let at: [number, number] | null = null;
+    for (let x = r.x + 0.125; x < r.x + r.w; x += 0.25)
+      for (let y = r.y + 0.125; y < r.y + r.d; y += 0.25) {
+        if (!standable(ctx, lv, x, y)) continue;
+        const F = ctx.plan.roomAt(lv, x, y)!.floorH;
+        box.min.set(x * FT - 0.28, F * FT + 0.12, -y * FT - 0.28);
+        box.max.set(x * FT + 0.28, F * FT + 1.78, -y * FT + 0.28);
+        if (bvh.intersectsBox(box, I)) continue;
+        rc.set(new THREE.Vector3(x * FT, (F + 0.3) * FT, -y * FT), new THREE.Vector3(0, 1, 0));
+        rc.far = 14 * FT;
+        const hit = rc.intersectObjects(meshes, false).find((h) => resolveHit(h.object, h.faceIndex).kind === "stair");
+        if (!hit) continue;
+        cells++;
+        const head = hit.point.y / FT - F;
+        if (head < min) {
+          min = head;
+          at = [x, y];
+        }
+        if (head < HEADROOM - 0.02) {
+          bad++;
+          if (spots.length < 30) spots.push({ level: lv, x: +x.toFixed(2), y: +y.toFixed(2), note: `${head.toFixed(2)} ft headroom` });
+        }
+      }
+    if (Number.isFinite(min) && at) per.push(`${lay.stair.from.name} → ${lay.stair.to.name}: ${min.toFixed(2)} ft at (${at[0].toFixed(1)}, ${at[1].toFixed(1)})`);
+    else per.push(`${lay.stair.from.name} → ${lay.stair.to.name}: no walkable cell under it`);
+  }
+  return {
+    id: "headroom",
+    title: "6′8″ headroom under every stair",
+    status: bad ? "fail" : "pass",
+    detail: `${bad ? `${bad} walkable cells under a stair have less than 6′8″` : `${cells} walkable cells under the stairs, all with 6′8″ or more`}; lowest per stair: ${per.join("; ")}`,
+    spots,
+  };
+}
+
+// ── 9. curtains on glazing, nothing tall across a window ────────────────────────────────────────────────────
+function checkWindows(ctx: BuildCtx): Check {
+  const bad: string[] = [];
+  const spots: Check["spots"] = [];
+  let pairs = 0, tall = 0;
+  for (const it of ctx.items) {
+    const room = ctx.plan.room(it.room);
+    if (!room) continue;
+    if (it.type === "curtains") {
+      pairs++;
+      const side = it.against as "front" | "back" | "left" | "right" | undefined;
+      const mid = side === "front" || side === "back" ? (it.x0 + it.x1) / 2 : (it.y0 + it.y1) / 2;
+      const glaze = side ? ctx.model.roomWalls(room, side).flatMap((wl) => wl.run.openings.filter((o) => !o.isDoor || o.op.type === "sliding_door")) : [];
+      const onGlass = glaze.some((o) => Math.abs((o.u0 + o.u1) / 2 - mid) < 0.35);
+      const onDoor = side ? ctx.model.roomWalls(room, side).some((wl) => wl.run.openings.some((o) => o.isDoor && o.op.type !== "sliding_door" && mid > o.u0 - 0.3 && mid < o.u1 + 0.3)) : false;
+      if (!onGlass || onDoor) {
+        bad.push(`curtains in ${room.name} ${onDoor ? "over a door" : "not centred on a window"}`);
+        spots.push({ level: room.level, x: +((it.x0 + it.x1) / 2).toFixed(1), y: +((it.y0 + it.y1) / 2).toFixed(1), note: "curtains off the glazing" });
+      }
+      continue;
+    }
+    if (it.cls !== "floor" || !HABITABLE.has(room.type) || !isTall(it.type, it.h1 - it.h0)) continue;
+    for (const z of keepOut(ctx, room)) {
+      if (!blocksWindow(it.type, it.h1 - it.h0, z) || z.op === "ventilator") continue;
+      if (it.x0 < z.x1 - 0.05 && z.x0 < it.x1 - 0.05 && it.y0 < z.y1 - 0.05 && z.y0 < it.y1 - 0.05) {
+        tall++;
+        bad.push(`${it.type} across ${z.id} in ${room.name}`);
+        spots.push({ level: room.level, x: +((it.x0 + it.x1) / 2).toFixed(1), y: +((it.y0 + it.y1) / 2).toFixed(1), note: `${it.type} in front of a window` });
+      }
+    }
+  }
+  return {
+    id: "windows",
+    title: "Curtains on glazing, windows kept clear",
+    status: bad.length ? "fail" : "pass",
+    detail: bad.length ? `${bad.length} problems: ${bad.slice(0, 8).join("; ")}` : `${pairs} curtain pairs, each centred on a window or sliding door; no tall piece in front of a window (${tall} found)`,
+    spots,
   };
 }

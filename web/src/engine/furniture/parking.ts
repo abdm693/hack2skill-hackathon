@@ -33,7 +33,10 @@ export interface Parking {
 }
 
 const CELL = 0.5;
-const CAR = { w: 6.1, l: 15.8 }; // design bays for an SUV
+/** EN2-04: a parking bay is the plan rule's 9 × 18 ft (api compliance/planning.py CAR_W, CAR_L), never narrower than
+ *  8.5 ft, so the doors of a parked car still open */
+export const BAY_W = [9, 8.5];
+export const BAY_L = 18;
 const cache = new WeakMap<BuildCtx, Parking>();
 
 export function parking(ctx: BuildCtx): Parking {
@@ -199,8 +202,8 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
   const chosen: R[] = [];
   const ov = (a: R, b: R) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.d - 0.01 && b.y < a.y + a.d - 0.01;
   // EN-04: lay out as many bays as the design parks cars (at least one per porch), side by side, on either side of
-  // the walkway, or one behind the other (tandem) in a deep porch; narrower bays (down to the car's own 6.1 ft)
-  // before a car is left out
+  // the walkway, or one behind the other (tandem) in a deep porch; EN2-04: every bay 9 ft wide (8.5 ft at the least)
+  // and 18 ft deep, as the plan check counts them
   let wanted = Math.max(1, want ?? ctx.carsWanted ?? 1);
   for (const pr of porches) {
     const placed = porchBays(pr, Math.max(1, wanted));
@@ -228,21 +231,17 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
     const edgeC = e.side === "front" ? r.y : e.side === "back" ? r.y + r.d : e.side === "left" ? r.x : r.x + r.w;
     const lo = alongX ? r.x : r.y;
     // depth slots: one bay deep, or two (tandem) when the porch is deep enough for two cars nose to tail
-    const tandem = depth >= 2 * (CAR.l + 0.5) - 0.01;
-    const bl = tandem ? Math.min(18, depth / 2) : Math.max(CAR.l + 0.5, Math.min(18, depth));
-    const outBy = tandem ? 0 : Math.min(4, Math.max(0, bl - depth)); // a short porch: the car's tail may stand in the driveway
+    const tandem = depth >= 2 * BAY_L - 0.01;
+    const bl = BAY_L;
+    const outBy = tandem ? 0 : Math.max(0, bl - depth); // a short porch: the car's tail may stand in the driveway
+    if (outBy > 4 + 1e-6) return 0;
     const slots = tandem ? [0, 1] : [0];
     const rot = alongX ? (inward > 0 ? 0 : 180) : inward > 0 ? -90 : 90;
     type C = { rect: R; score: number; slot: number; u: number };
-    // a bay may also be the car's own length (16.3 ft) and stand up to 4 ft out over the open drive-in edge, so it
-    // keeps clear of a door at the back of the porch
+    // a bay may stand up to 4 ft out over the open drive-in edge, so it keeps clear of a door at the back of the porch
     const poses: { len: number; out: number; slot: number }[] = [];
     for (const slot of slots) poses.push({ len: bl, out: outBy, slot });
-    if (!tandem) {
-      const short = CAR.l + 0.5;
-      for (const len of bl > short + 0.01 ? [bl, short] : [bl])
-        for (let ob = Math.max(outBy, 0.5); ob <= 4 + 1e-6; ob += 0.5) poses.push({ len, out: ob, slot: 0 });
-    }
+    if (!tandem) for (let ob = Math.max(outBy, 0) + 0.5; ob <= 4 + 1e-6; ob += 0.5) poses.push({ len: bl, out: ob, slot: 0 });
     const singles = (bw: number): C[] => {
       const out: C[] = [];
       const us: number[] = [];
@@ -285,9 +284,9 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
       const extra = cs.find((c) => !base.some((b) => ov(b.rect, c.rect)) && feasible([...base.map((b) => b.rect), c.rect]));
       return extra ? [...base, extra] : null;
     };
-    const fitAcross = Math.max(1, Math.floor((width + 0.01) / CAR.w)) * slots.length;
+    const fitAcross = Math.max(1, Math.floor((width + 0.01) / BAY_W[BAY_W.length - 1])) * slots.length;
     for (let k = Math.min(n, fitAcross); k >= 1; k--) {
-      for (const bw of [9, 8.5, 8, 7.5, 7, 6.6, CAR.w]) {
+      for (const bw of BAY_W) {
         if (bw > width + 1e-6) continue;
         const arr = arrange(k, bw);
         if (!arr) continue;
@@ -304,7 +303,7 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
   // in front of a porch bay
   for (const dr of plan.roomsOn(g.id).filter((r) => r.type === "driveway")) {
     const r = dr.rect;
-    const bl = CAR.l + 0.5, bw = 8.5;
+    const bl = BAY_L, bw = BAY_W[0];
     if (r.d < bl || r.w < bw) continue;
     for (let n = 0, cap = Math.min(2, wanted); n < cap; n++) {
       let best: { rect: R; score: number } | null = null;

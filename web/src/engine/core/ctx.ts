@@ -82,6 +82,9 @@ export class BuildCtx {
   readonly downlit = new Set<string>();
   /** cars the design asks for (furnish("car_*") calls counted before the sections run): parking lays out that many bays */
   carsWanted = 0;
+  /** EN2-04: cars the plan itself asks for ("Car porch (2 cars)", or "a 2-car porch" in its notes): parked at the end
+   *  when the design furnished fewer */
+  carsPlan = 0;
   /** cars actually parked / asked for so far (for the "Only N of M cars fit" note) */
   carsParked = 0;
   carsAsked = 0;

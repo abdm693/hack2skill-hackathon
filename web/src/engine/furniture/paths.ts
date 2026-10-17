@@ -7,17 +7,17 @@
  */
 import * as THREE from "three";
 import type { BuildCtx, PlacedItem } from "../core/ctx";
-import { FT, DEG } from "../core/util";
+import { FT, DEG, warn } from "../core/util";
 import type { RoomM } from "../plan/model";
 import { innerRect } from "../interior";
-import { keepOut } from "./zones";
-import { humanType } from "../core/notes";
-import { DECOR, roomLabel } from "./place";
+import { blocksWindow, keepOut } from "./zones";
 
 const CELL = 0.25;
 const FIXED = new Set(["kitchen_counter", "wc", "vanity", "shower", "bathtub", "tv_unit", "car_sedan", "car_suv", "fridge", "kitchen_island", "washing_machine", "oven"]);
-/** moved if that frees the path, but never left out */
-const KEEP = new Set(["bed_king", "bed_queen", "bed_single", "sofa_3", "sofa_2", "sofa_l", "dining_table_4", "dining_table_6", "dining_table_8", "wardrobe", "study_desk", "dresser"]);
+/** moved if that frees the path, but never left out (a dresser that cannot move off the walkway is left out) */
+const KEEP = new Set(["bed_king", "bed_queen", "bed_single", "sofa_3", "sofa_2", "sofa_l", "dining_table_4", "dining_table_6", "dining_table_8", "wardrobe", "study_desk"]);
+/** may be made up to 15 % narrower to move off a walkway */
+const NARROWER = new Set(["dresser", "sideboard", "console_table", "bookshelf", "dressing_table", "wardrobe", "study_desk"]);
 type Box = { x0: number; x1: number; y0: number; y1: number };
 
 const inflateOf = (it: PlacedItem) => (it.type.startsWith("bed_") ? 1.25 : it.type.startsWith("dining_table") ? 2.2 : 1.5);
@@ -204,7 +204,7 @@ function repairCluster(ctx: BuildCtx, rooms: RoomM[]): void {
   const bareLab = labels(g, g.base);
   const score = (mask: Uint8Array) => joined(g, mask, entries, bareLab, bareCells);
   const stuck = new Set<PlacedItem>();
-  for (let iter = 0; iter < 8; iter++) {
+  for (let iter = 0; iter < 12; iter++) {
     const cur = score(maskWith()).ok;
     if (!score(maskWith()).blocked.length) return;
     // the piece whose removal reconnects the most entries (smaller pieces first on ties)
@@ -240,7 +240,7 @@ function repairCluster(ctx: BuildCtx, rooms: RoomM[]): void {
       if (!relocate(ctx, c.it, rooms, (box) => routeFree(c.it, box))) {
         if (KEEP.has(c.it.type)) stuck.add(c.it);
         else drop(ctx, c.it);
-      }
+      } else stuck.clear(); // (a piece that moved may have freed a spot for one that could not move before)
       continue;
     }
     if (!relocate(ctx, culprit.it, rooms, (box) => score(maskWith(culprit!.it, { it: culprit!.it, box })).ok > cur)) {
@@ -249,7 +249,7 @@ function repairCluster(ctx: BuildCtx, rooms: RoomM[]): void {
         continue;
       }
       drop(ctx, culprit.it);
-    }
+    } else stuck.clear();
   }
   // EN-03/EN-07: one note per room group (whichever room started the repair), naming the floor; a later section
   // that frees the path takes the note away again
@@ -335,57 +335,108 @@ function bfsRoute(g: Grid, s: number, t: number): [number, number][] | null {
 function relocate(ctx: BuildCtx, it: PlacedItem, rooms: RoomM[], improves: (box: Box) => boolean): boolean {
   const room = ctx.plan.room(it.room);
   if (!room || it.w === undefined || it.d === undefined) return false;
-  const w = it.w, d = it.d;
+  const w0 = it.w, d = it.d;
   const inner = room.cat === "enclosed" ? innerRect(ctx, room) : { x0: room.rect.x + 0.2, x1: room.rect.x + room.rect.w - 0.2, y0: room.rect.y + 0.2, y1: room.rect.y + room.rect.d - 0.2 };
-  const zones = keepOut(ctx, room).filter((z) => z.kind !== "window");
+  // (EN2-02: a tall piece is never moved in front of a window to free a path)
+  const zones = keepOut(ctx, room).filter((z) => z.kind !== "window" || blocksWindow(it.type, it.h1 - it.h0, z));
   const others = ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "floor");
   const ov = (a: Box, b: Box, t = 0.06) => a.x0 < b.x1 - t && b.x0 < a.x1 - t && a.y0 < b.y1 - t && b.y0 < a.y1 - t;
   const ok = (b: Box) => b.x0 >= inner.x0 - 0.01 && b.x1 <= inner.x1 + 0.01 && b.y0 >= inner.y0 - 0.01 && b.y1 <= inner.y1 + 0.01 && !zones.some((z) => ov(b, z, 0.02)) && !others.some((q) => ov(b, q)) && improves(b);
   const cx = (it.x0 + it.x1) / 2, cy = (it.y0 + it.y1) / 2;
-  const cands: { x: number; y: number; rot: number; side?: string }[] = [];
-  if (it.against) {
-    for (const side of ["front", "back", "left", "right"]) {
-      const rot = ROT[side];
-      const t = rot * DEG;
-      const hx = (Math.abs(Math.cos(t)) * w + Math.abs(Math.sin(t)) * d) / 2, hy = (Math.abs(Math.sin(t)) * w + Math.abs(Math.cos(t)) * d) / 2;
-      const axisX = side === "front" || side === "back";
-      const c = side === "front" ? inner.y0 + hy + 0.02 : side === "back" ? inner.y1 - hy - 0.02 : side === "left" ? inner.x0 + hx + 0.02 : inner.x1 - hx - 0.02;
-      const lo = axisX ? inner.x0 + hx : inner.y0 + hy, hi = axisX ? inner.x1 - hx : inner.y1 - hy;
-      const pref = axisX ? cx : cy;
-      const walls = ctx.model.roomWalls(room, side as "front" | "back" | "left" | "right");
-      const half = axisX ? hx : hy;
-      for (let k = 0; k <= Math.ceil((hi - lo) / 0.25) * 2; k++) {
-        const u = pref + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
-        if (u < lo || u > hi) continue;
-        if (!walls.some((wl) => u - half >= wl.a - 0.3 && u + half <= wl.b + 0.3)) continue;
-        cands.push(axisX ? { x: u, y: c, rot, side } : { x: c, y: u, rot, side });
+  // wall runs that meet end to end (a T junction behind) are one face
+  const wallsOf = (side: string) => {
+    const walls: { a: number; b: number }[] = [];
+    for (const wl of ctx.model.roomWalls(room, side as "front" | "back" | "left" | "right").map((x) => ({ a: x.a, b: x.b })).sort((p, q) => p.a - q.a)) {
+      const last = walls[walls.length - 1];
+      if (last && wl.a <= last.b + 0.06) last.b = Math.max(last.b, wl.b);
+      else walls.push(wl);
+    }
+    return walls;
+  };
+  const candidates = (w: number) => {
+    const cands: { x: number; y: number; rot: number; side?: string }[] = [];
+    if (it.against) {
+      for (const side of ["front", "back", "left", "right"]) {
+        const rot = ROT[side];
+        const t = rot * DEG;
+        const hx = (Math.abs(Math.cos(t)) * w + Math.abs(Math.sin(t)) * d) / 2, hy = (Math.abs(Math.sin(t)) * w + Math.abs(Math.cos(t)) * d) / 2;
+        const axisX = side === "front" || side === "back";
+        const c = side === "front" ? inner.y0 + hy + 0.02 : side === "back" ? inner.y1 - hy - 0.02 : side === "left" ? inner.x0 + hx + 0.02 : inner.x1 - hx - 0.02;
+        const lo = axisX ? inner.x0 + hx : inner.y0 + hy, hi = axisX ? inner.x1 - hx : inner.y1 - hy;
+        const pref = axisX ? cx : cy;
+        const walls = wallsOf(side);
+        const half = axisX ? hx : hy;
+        for (let k = 0; k <= Math.ceil((hi - lo) / 0.25) * 2; k++) {
+          const u = pref + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
+          if (u < lo || u > hi) continue;
+          if (!walls.some((wl) => u - half >= wl.a - 0.3 && u + half <= wl.b + 0.3)) continue;
+          cands.push(axisX ? { x: u, y: c, rot, side } : { x: c, y: u, rot, side });
+        }
       }
+      // same wall first
+      cands.sort((a, b) => (a.side === it.against ? 0 : 1) - (b.side === it.against ? 0 : 1));
+    } else {
+      for (let rr = 0.25; rr <= 4.001; rr += 0.25) for (let a = 0; a < 24; a++) cands.push({ x: cx + Math.cos((a / 24) * Math.PI * 2) * rr, y: cy + Math.sin((a / 24) * Math.PI * 2) * rr, rot: it.rot ?? 0 });
     }
-    // same wall first
-    cands.sort((a, b) => (a.side === it.against ? 0 : 1) - (b.side === it.against ? 0 : 1));
-  } else {
-    for (let rr = 0.25; rr <= 4.001; rr += 0.25) for (let a = 0; a < 24; a++) cands.push({ x: cx + Math.cos((a / 24) * Math.PI * 2) * rr, y: cy + Math.sin((a / 24) * Math.PI * 2) * rr, rot: it.rot ?? 0 });
-  }
+    return cands;
+  };
   void rooms;
-  for (const c of cands) {
-    const box = footprint(c.x, c.y, w, d, c.rot);
-    if (!ok(box)) continue;
-    const dx = c.x - cx, dy = c.y - cy;
-    const deps = ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "top" && (q.x0 + q.x1) / 2 > it.x0 && (q.x0 + q.x1) / 2 < it.x1 && (q.y0 + q.y1) / 2 > it.y0 && (q.y0 + q.y1) / 2 < it.y1);
-    for (const q of [it, ...deps]) {
-      q.group.position.x += dx * FT;
-      q.group.position.z -= dy * FT;
-      q.x0 += dx; q.x1 += dx; q.y0 += dy; q.y1 += dy;
-    }
-    if (c.rot !== (it.rot ?? 0)) {
-      it.group.rotation.y = c.rot * DEG;
-      it.rot = c.rot;
+  // EN2-02: a piece that may be made shorter (a dresser, a sideboard) tries 95, 90 and 85 % of its width too
+  for (const k of NARROWER.has(it.type) ? [1, 0.95, 0.9, 0.85] : [1]) {
+    const w = w0 * k;
+    for (const c of candidates(w)) {
+      const box = footprint(c.x, c.y, w, d, c.rot);
+      if (!ok(box)) continue;
+      const dx = c.x - cx, dy = c.y - cy;
+      const old = { side: it.against, x0: it.x0, x1: it.x1, y0: it.y0, y1: it.y1 };
+      const deps = ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "top" && (q.x0 + q.x1) / 2 > it.x0 && (q.x0 + q.x1) / 2 < it.x1 && (q.y0 + q.y1) / 2 > it.y0 && (q.y0 + q.y1) / 2 < it.y1);
+      for (const q of [it, ...deps]) {
+        q.group.position.x += dx * FT;
+        q.group.position.z -= dy * FT;
+        q.x0 += dx; q.x1 += dx; q.y0 += dy; q.y1 += dy;
+      }
+      if (c.rot !== (it.rot ?? 0)) {
+        it.group.rotation.y = c.rot * DEG;
+        it.rot = c.rot;
+        if (c.side) it.against = c.side;
+      }
+      if (k !== 1) {
+        it.group.scale.x *= k;
+        it.w = w;
+      }
       Object.assign(it, box);
-      if (c.side) it.against = c.side;
+      rehang(ctx, it, old, dx, dy);
+      return true;
     }
-    return true;
   }
   return false;
+}
+
+/** Pictures that hang over a moved piece: a mirror or painting over it moves along with it on the same wall and is
+ *  taken down when it goes to another wall; a tall piece takes down the pictures it now stands in front of. */
+function rehang(ctx: BuildCtx, it: PlacedItem, old: { side?: string; x0: number; x1: number; y0: number; y1: number }, dx: number, dy: number): void {
+  const DECO = new Set(["mirror_wall", "painting"]);
+  const along = (side: string | undefined, b: Box): [number, number] => (side === "front" || side === "back" ? [b.x0, b.x1] : [b.y0, b.y1]);
+  const take = (q: PlacedItem) => {
+    q.group.removeFromParent();
+    const k = ctx.items.indexOf(q);
+    if (k >= 0) ctx.items.splice(k, 1);
+  };
+  for (const q of ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "wall" && DECO.has(q.type) && q.against && q.against === old.side)) {
+    const [a, b] = along(old.side, old), [qa, qb] = along(old.side, q);
+    if (qb <= a + 0.1 || qa >= b - 0.1) continue;
+    if (it.against === old.side) {
+      const sx = old.side === "front" || old.side === "back" ? dx : 0, sy = old.side === "left" || old.side === "right" ? dy : 0;
+      q.group.position.x += sx * FT;
+      q.group.position.z -= sy * FT;
+      q.x0 += sx; q.x1 += sx; q.y0 += sy; q.y1 += sy;
+    } else take(q);
+  }
+  if (it.h1 - it.h0 > 5 && it.against)
+    for (const q of ctx.items.filter((q) => q !== it && q.room === it.room && q.cls === "wall" && DECO.has(q.type) && q.against === it.against)) {
+      const [a, b] = along(it.against, it), [qa, qb] = along(it.against, q);
+      if (qb > a + 0.1 && qa < b - 0.1) take(q);
+    }
 }
 
 function drop(ctx: BuildCtx, it: PlacedItem): void {
@@ -398,8 +449,8 @@ function drop(ctx: BuildCtx, it: PlacedItem): void {
     const k = ctx.items.indexOf(q);
     if (k >= 0) ctx.items.splice(k, 1);
   }
-  const room = ctx.plan.room(it.room);
-  if (!DECOR.has(it.type)) ctx.notes.add({ id: `asbuilt.furniture_dropped:${it.id}`, title: "Furniture left out", status: "warn", message: `${roomLabel(ctx, room)}: the ${humanType(it.type)} was left out to keep a 3 ft path between the doors.`, element_ids: [it.id] });
+  // EN2-05: an optional piece that gives way to a walking path is left out quietly (the defining ones never are)
+  warn(`walking path: ${it.type} in ${it.room} left out to keep a 3 ft path between the doors`);
 }
 
 /** For checks: every room cluster's entries and which of them a 3 ft path does not reach. */

@@ -7,6 +7,7 @@ import { NoteLog } from "../core/notes";
 import { clamp, warn } from "../core/util";
 import { DOOR_TYPES, type LevelM, type OpeningM, type PlanModel, type RoomM, type Side } from "../plan/model";
 import { ensureStairChain, layoutStairs, reconcileTower, type StairLayout, type TowerDoor } from "./stairs-plan";
+import { openingName } from "./labels";
 export type { Flight, StairLayout, TowerDoor } from "./stairs-plan";
 
 export const EXT_T = 0.75;
@@ -304,7 +305,7 @@ export class StructureModel {
       const named = op.between.filter((b) => b && b !== "exterior");
       const other = named.map((id) => plan.room(id)).filter((r): r is RoomM => !!r && r.level !== op.level);
       if (other.length) {
-        this.skipOpening(op, `${op.id} joins ${other.map((r) => r.name).join(", ")} on another floor; openings only join rooms on the same floor, so it was not built.`);
+        this.skipOpening(op, `${this.openingLabel(op)} joins the ${other.map((r) => `${r.name} on the ${r.lv.name.toLowerCase()}`).join(", ")}; openings only join rooms on the same floor, so it was not built.`);
         continue;
       }
       const known = named.filter((id) => plan.room(id));
@@ -326,7 +327,11 @@ export class StructureModel {
       if (!best) {
         // openings on porch/deck edges are simply open; anything else is reported
         const onEdge = this.edges.some((e) => e.level.id === op.level && distToEdge(e, op.at) < 1.5);
-        if (!onEdge) this.skipOpening(op, `${op.id} is not on the wall between ${op.between.map((b) => plan.room(b)?.name ?? b).join(" and ")}, so it was not built.`);
+        // EN2-05: between rooms that are open to each other there is no wall to cut: the edge is walkable already
+        const rs = known.map((id) => plan.room(id) ?? null);
+        const openPlan = rs.length === 2 && plan.isOpen(rs[0], rs[1]);
+        if (openPlan) warn(`opening ${op.id}: ${op.between.join(" / ")} are open-plan; no wall to cut, skipped`);
+        else if (!onEdge) this.skipOpening(op, `${this.openingLabel(op)} is not on a wall between the ${op.between.map((b) => (b === "exterior" ? "outside" : plan.room(b)?.name ?? "room")).join(" and the ")}, so it was not built.`);
         continue;
       }
       const run = best.run;
@@ -533,20 +538,7 @@ export class StructureModel {
 
   /** "The main door", "The Kitchen window", "The door between the Kitchen and the Dining": for as-built notes. */
   openingLabel(op: OpeningM): string {
-    const names = op.between.map((b) => (b === "exterior" ? null : this.plan.room(b)?.name ?? null)).filter((n): n is string => !!n);
-    const kind = op.type === "main_door" ? "main door" : op.type === "double_door" ? "double door" : op.type === "sliding_door" ? "sliding door" : op.type === "garage_door" ? "garage door" : op.type === "arch" ? "arch" : op.type === "ventilator" ? "ventilator" : DOOR_TYPES.includes(op.type) ? "door" : "window";
-    if (op.type === "main_door") return "The main door";
-    if (op.id === "roof_mumty_door") return "The roof door";
-    // EN-07: name the floor when a room name repeats on another floor ("Stair Hall" on every storey)
-    const lv = this.plan.levelById.get(op.level);
-    const twin = op.between.some((b) => {
-      const r = this.plan.room(b);
-      return !!r && this.plan.rooms.some((q) => q !== r && q.level !== r.level && q.name.trim().toLowerCase() === r.name.trim().toLowerCase());
-    });
-    const on = twin && lv ? ` on the ${lv.name.toLowerCase()}` : "";
-    if (names.length >= 2) return `The ${kind} between the ${names[0]} and the ${names[1]}${on}`;
-    if (names.length === 1) return `The ${names[0]} ${kind}${on}`;
-    return `The ${kind} ${op.id}`;
+    return openingName(this.plan, op);
   }
 
   /** B.3.5: the 3 x 3 ft inside the roof door must be floor, never the stairwell. */
