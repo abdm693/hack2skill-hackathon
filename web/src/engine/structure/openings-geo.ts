@@ -69,7 +69,7 @@ export function buildOpenings(ctx: BuildCtx, m: OpeningMats): void {
       console.warn("[naqsha/engine] opening failed", po.op.id, e);
       continue;
     }
-    const room = plan.room(po.op.between[0]) ?? po.run.neg ?? po.run.pos;
+    const room = plan.room(po.op.between[0]) ?? po.neg ?? po.pos;
     const kind = t === "window" || t === "corner_window" || t === "ventilator" ? "window" : t === "arch" ? "arch" : "door";
     const label = `${room?.name ?? "Room"} ${t.replace("_", " ")}`;
     const group = kit.build();
@@ -143,7 +143,7 @@ function windowGeo(kit: Kit, glassKit: Kit, po: PlacedOpening, m: OpeningMats, v
     // lintel band (subtle relief)
     if (!vent) F.box(kit, m.ext, u0 - 0.28, u1 + 0.28, wOut, wOut + out * 0.035, top, top + 0.42, { w: [wOut] });
     // interior window board
-    const inRoom = out > 0 ? run.neg : run.pos;
+    const inRoom = out > 0 ? po.neg : po.pos;
     if (inRoom && inRoom.cat === "enclosed" && !vent) F.box(kit, m.board, u0 - 0.08, u1 + 0.08, wc - (out * fd) / 2, wIn - out * 0.07, b - 0.03, b + 0.045);
   } else if (!vent) {
     // interior window: boards both sides
@@ -162,7 +162,7 @@ function linings(kit: Kit, po: PlacedOpening, mat: THREE.Material, arch: boolean
   F.box(kit, mat, u0, u1, wN, wP, top - lw, top, { h: [top] });
   // architraves on faces that look into enclosed rooms
   const aw = 0.24, ap = 0.07;
-  for (const [room, w, dir] of [[run.neg, run.c - run.t / 2, -1], [run.pos, run.c + run.t / 2, 1]] as const) {
+  for (const [room, w, dir] of [[po.neg, run.c - run.t / 2, -1], [po.pos, run.c + run.t / 2, 1]] as const) {
     if (!room || room.cat !== "enclosed") continue;
     const wa = w, wb = w + dir * ap;
     F.box(kit, mat, u0 - aw, u0 + 0.02, wa, wb, b, top + aw, { w: [wa], h: [b] });

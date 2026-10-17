@@ -41,6 +41,8 @@ export interface RoomM {
   ceilH: number;
   /** synthesized rooms (mumty) */
   synthetic?: boolean;
+  /** EN-F3: an upper-floor open space over a court below: no floor, no slab, open to the sky (cat "outdoor") */
+  void?: boolean;
 }
 
 export interface OpeningM {
@@ -240,6 +242,20 @@ export class PlanModel {
       this.rooms.push(room);
       this.roomById.set(room.id, room);
     }
+    // EN-F3: an open space on an upper floor that sits over a court (a ground-floor open space or courtyard, or a void
+    // over one) for more than half its area is a VOID: no floor, no slab, no privacy screens, the court below open to
+    // the sky, and its edges against terraces or floors guarded like any drop. One over enclosed rooms stays a floored
+    // light court (a deck, B.9).
+    for (const r of [...this.rooms].sort((a, b) => a.lv.i - b.lv.i)) {
+      if (r.lv === this.ground || r.lv.isRoof || (r.type !== "open_space" && r.type !== "courtyard")) continue;
+      const below = this.levels[r.lv.i - 1];
+      const court = (b: RoomM) => b.level === below.id && (b.void || (b.lv === this.ground && (b.type === "open_space" || b.type === "courtyard")));
+      const over = this.rooms.filter(court).reduce((a, b) => a + overlapArea(r.rect, b.rect), 0);
+      if (over > 0.5 * r.rect.w * r.rect.d) {
+        r.cat = "outdoor";
+        r.void = true;
+      }
+    }
     // symmetric open_to
     for (const r of this.rooms) for (const o of r.open) this.roomById.get(o)?.open.add(r.id);
 
@@ -420,6 +436,10 @@ export class PlanModel {
   isOpen(a: RoomM | null, b: RoomM | null): boolean {
     return !!a && !!b && (a.open.has(b.id) || b.open.has(a.id));
   }
+}
+
+function overlapArea(a: Rect, b: Rect): number {
+  return Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.d, b.y + b.d) - Math.max(a.y, b.y));
 }
 
 /** Cluster nearby coordinates (within tol) and return a snapping function to each cluster's most common value. */

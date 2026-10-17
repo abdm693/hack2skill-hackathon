@@ -108,9 +108,9 @@ function entriesOf(ctx: BuildCtx, rooms: RoomM[]): { x: number; y: number; what:
   const level = rooms[0].level;
   for (const o of ctx.model.openings) {
     if (!o.isDoor || o.op.level !== level) continue;
-    for (const [r, into] of [[o.run.neg, -1], [o.run.pos, 1]] as const) {
+    for (const [r, into] of [[o.neg, -1], [o.pos, 1]] as const) {
       if (!r || !set.has(r)) continue;
-      const other = into < 0 ? o.run.pos : o.run.neg;
+      const other = into < 0 ? o.pos : o.neg;
       if (other && set.has(other)) continue;
       const u = (o.u0 + o.u1) / 2, c = o.run.c + into * 1.5;
       out.push(o.run.axis === "x" ? { x: u, y: c, what: o.op.id, room: r } : { x: c, y: u, what: o.op.id, room: r });
@@ -223,7 +223,7 @@ const WIN_NEAR = 2.5;
 const BED_SIDE = REACH + 0.6;
 
 const isBed = (it: { type: string }) => it.type.startsWith("bed_");
-/** fixtures the path repair may still move (never leave out) when a door is cut off altogether */
+/** fixtures the path repair may still move (never leave out) when a door is cut off or joined by less than 3 ft */
 const MOVABLE_FIXED = new Set(["fridge", "washing_machine"]);
 /** light pieces one pushes aside to get by (a desk chair, a dining chair, a pouf): not in the way of the squeeze */
 const PUSHED_ASIDE = new Set(["desk_chair", "dining_chair", "ottoman"]);
@@ -244,7 +244,7 @@ function windowTargets(ctx: BuildCtx, g: Grid, rooms: RoomM[]): Target[] {
     if (!HABITABLE.has(room.type)) continue;
     for (const o of ctx.model.openingsOfRoom(room)) {
       if (o.isDoor || o.op.type === "ventilator" || o.u1 - o.u0 < 1.5) continue;
-      const into = o.run.neg === room ? -1 : 1;
+      const into = o.neg === room ? -1 : 1;
       const face = o.run.c + (into * o.run.t) / 2;
       const cells: number[] = [];
       const r = room.rect;
@@ -401,7 +401,9 @@ function repairCluster(ctx: BuildCtx, rooms: RoomM[]): void {
     for (let iter = 0; iter < 16; iter++) {
       const cur = ev();
       if (cur.total === 0) return;
-      const fixed = (it: PlacedItem) => FIXED.has(it.type) && !(cur.lost.length && MOVABLE_FIXED.has(it.type));
+      // (EN-F4: also when a door is joined only by less than 3 ft: a washing machine wedged beside a door moves rather
+      // than leave a tight walking path)
+      const fixed = (it: PlacedItem) => FIXED.has(it.type) && !((cur.lost.length || cur.blocked.length) && MOVABLE_FIXED.has(it.type));
       // the piece whose removal helps most (smaller pieces first on ties)
       let culprit: { it: PlacedItem; gain: number; area: number } | null = null;
       for (const it of obstacles()) {
@@ -510,7 +512,7 @@ function trace(ctx: BuildCtx, msg: () => string): void {
 function entryLabel(ctx: BuildCtx, e: { what: string; room?: RoomM }): string {
   if (/ (foot|top)$/.test(e.what)) return "stair";
   const o = ctx.model.openings.find((x) => x.op.id === e.what);
-  const other = o ? (o.run.neg === e.room ? o.run.pos : o.run.neg) : null;
+  const other = o ? (o.neg === e.room ? o.pos : o.neg) : null;
   const T: Record<string, string> = { bath: "bath", powder: "bath", dressing: "dressing room", balcony: "balcony", terrace: "terrace", stair: "stair" };
   return (other && T[other.type]) || "door";
 }
@@ -521,9 +523,9 @@ function doorName(ctx: BuildCtx, e: { what: string; room?: RoomM }): string {
   const o = ctx.model.openings.find((x) => x.op.id === e.what);
   if (!o) return "a door";
   if (o.op.type === "main_door") return "the main door";
-  const other = o.run.neg === e.room ? o.run.pos : o.run.neg;
+  const other = o.neg === e.room ? o.pos : o.neg;
   const kind = o.op.type === "sliding_door" ? "sliding door" : o.op.type === "arch" ? "arch" : o.op.type === "double_door" ? "double door" : "door";
-  return other ? `the ${kind} to the ${other.name}` : `the ${kind} to the outside`;
+  return other ? `the ${kind} to ${roomLabel(ctx, other)}` : `the ${kind} to the outside`;
 }
 
 /** EN3-01: how much a room needs a piece (the least-needed is left out first); Infinity: never left out (what the room
@@ -549,7 +551,7 @@ function leaveOut(ctx: BuildCtx, it: PlacedItem, what: string): void {
     id: `asbuilt.furniture_left_out:${room.id}:${it.type}`,
     title: "Furniture left out to keep the way clear",
     status: "warn",
-    message: `${roomLabel(ctx, room)}: the ${humanType(it.type)} was left out to keep ${way} clear.`,
+    message: `The ${humanType(it.type)} in ${roomLabel(ctx, room)} was left out to keep ${way} clear.`,
     element_ids: [room.id],
   });
 }
@@ -566,9 +568,8 @@ function reachNotes(ctx: BuildCtx, rooms: RoomM[], M: ReturnType<typeof reachMod
   const tight = fin.blocked.filter((k) => !fin.lost.includes(k));
   if (tight.length) {
     const cut = [...new Set(tight.map((k) => entries[k].room).filter((r): r is RoomM => !!r))];
-    const named = (cut.length ? cut : rooms).map((r) => r.name);
-    const floor = rooms[0].lv.name.toLowerCase();
-    ctx.notes.set({ id: key, title: "Tight walking path", status: "warn", message: `${named.join(" and ")} (${floor}): furniture leaves less than 3 ft in front of some doors or the stair.`, element_ids: rooms.map((r) => r.id) });
+    const named = (cut.length ? cut : rooms).map((r) => roomLabel(ctx, r));
+    ctx.notes.set({ id: key, title: "Tight walking path", status: "warn", message: `Furniture leaves less than 3 ft in front of a door or the stair in ${named.join(" and ")}.`, element_ids: rooms.map((r) => r.id) });
   } else ctx.notes.remove(key);
   const want = new Set<string>();
   for (const k of fin.lost) {
@@ -580,7 +581,7 @@ function reachNotes(ctx: BuildCtx, rooms: RoomM[], M: ReturnType<typeof reachMod
       id,
       title: `A door in the ${room.name} can't be reached`,
       status: "fail",
-      message: `${roomLabel(ctx, room)}: furniture closes off ${doorName(ctx, e)}; there is no way to it from the room's other doors, not even sideways. Move or remove a piece of furniture, or make the room larger.`,
+      message: `Furniture in ${roomLabel(ctx, room)} closes off ${doorName(ctx, e)}: there's no way to it from the room's other doors.`,
       element_ids: [room.id, e.what],
     });
   }

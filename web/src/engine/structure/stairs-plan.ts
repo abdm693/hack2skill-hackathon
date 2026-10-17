@@ -95,8 +95,9 @@ export function ensureStairChain(plan: PlanModel, notes: NoteLog): void {
     notes.add({
       id: `asbuilt.roof_stair_added:${s.id}`,
       title: to.isRoof ? "Stair to the roof added" : "Missing stair added",
-      status: "warn",
-      message: `The plan had no stair from the ${from.name} to the ${to.name}; the engine continued ${stairLabel(below)} up to it.`,
+      // EN-F4: an addition the engine guarantees, not a problem (pass: never counted or listed as a note)
+      status: "pass",
+      message: `The engine continued ${stairLabel(below)} up to the ${to.name.toLowerCase()}, which the plan's stairs didn't reach.`,
       element_ids: [s.id],
     });
   }
@@ -181,7 +182,7 @@ export function layoutStairs(plan: PlanModel, notes: NoteLog): StairLayout[] {
         id: `asbuilt.stair_turned:${st[0].id}`,
         title: "Stair turned to clear a door",
         status: "warn",
-        message: `${cap(stairLabel(st[0]))} was ${v.flipSign ? "turned around" : "mirrored"}${v.flipSign && v.flipArrive ? " and mirrored" : ""} so that no flight or landing passes over a door below it.`,
+        message: `${cap(stairLabel(st[0]))} was ${v.flipSign ? "turned around" : "mirrored"}${v.flipSign && v.flipArrive ? " and mirrored" : ""} so no flight or landing passes over a door.`,
         element_ids: st.map((s) => s.id),
       });
     for (const b of blockedDoors(plan, lays))
@@ -190,8 +191,8 @@ export function layoutStairs(plan: PlanModel, notes: NoteLog): StairLayout[] {
         title: "Stair landing blocks a door",
         status: "fail",
         message: b.under
-          ? `Stair landing blocks ${openingNameLow(plan, b.op)}: ${stairLabel(b.lay.stair)} passes ${Math.max(0, b.clear).toFixed(1)} ft above the floor in front of it (7 ft needed). Move the door, or turn the stair so its landing is not over it.`
-          : `${openingName(plan, b.op)} opens onto the stairwell of ${stairLabel(b.lay.stair)} on the ${b.lay.stair.to.name}. Move the door to the landing side of the stair.`,
+          ? `${cap(stairLabel(b.lay.stair))} passes only ${Math.max(0, b.clear).toFixed(1)} ft above the floor in front of ${openingNameLow(plan, b.op)}; it needs 7 ft.`
+          : `${openingName(plan, b.op)} opens onto the stairwell of ${stairLabel(b.lay.stair)}.`,
         element_ids: [b.op.id, b.lay.stair.id],
       });
     out.push(...lays);
@@ -285,7 +286,7 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flip
       id: `asbuilt.stair_kind:${base.id}`,
       title: "Stair built as a straight flight",
       status: "warn",
-      message: `${cap(stairLabel(base))} is only ${breadth.toFixed(1)} ft wide, too narrow for a ${base.kind === "dogleg" ? "dog-leg (needs 4.9 ft)" : "L-shaped stair"}; it was built as a straight flight.`,
+      message: `${cap(stairLabel(base))} is only ${breadth.toFixed(1)} ft wide, too narrow for a ${base.kind === "dogleg" ? "dog-leg" : "turn"}, so it was built as a straight flight.`,
       element_ids: stack.map((s) => s.id),
     });
   let T = Math.max(...stack.map((s) => Math.max(s.tread_in, 10) / 12));
@@ -341,11 +342,11 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flip
       len = Number.isFinite(total) ? clamp(planLen, need, total - STRIP) : Math.max(planLen, need);
     } else if (total - STRIP >= need3) {
       len = total - STRIP;
-      fail(`${cap(stairLabel(base))}: the mid-landing is ${(len - (n1max - 1) * T).toFixed(1)} ft deep, less than the ${wf.toFixed(1)} ft flight width; the stair room is ${(need + STRIP - total).toFixed(1)} ft too short.`, "warn");
+      fail(`The mid-landing of ${stairLabel(base)} is ${(len - (n1max - 1) * T).toFixed(1)} ft deep, under its ${wf.toFixed(1)} ft width: the stair room is ${(need + STRIP - total).toFixed(1)} ft too short.`, "warn");
     } else if (total - 2.0 >= need3) {
       len = need3;
       strip = total - len;
-      fail(`${cap(stairLabel(base))} needs ${(need3 + STRIP).toFixed(1)} ft along its run (treads, landing and 3 ft clear at its foot); the room gives ${total.toFixed(1)} ft, so only ${strip.toFixed(1)} ft is clear at its foot.`);
+      fail(`${cap(stairLabel(base))} has only ${strip.toFixed(1)} ft clear at its foot: the stair room is ${(need3 + STRIP - total).toFixed(1)} ft too short.`);
     } else {
       // last resort: shallower treads (reported, never silent)
       const Tmin = 9.5 / 12;
@@ -354,7 +355,7 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flip
       T = Math.min(T, T2);
       len = (n1max - 1) * T + (kind === "dogleg" ? 3.0 : wf);
       strip = Math.max(0.3, total - len);
-      fail(`${cap(stairLabel(base))} needs ${(need3 + STRIP).toFixed(1)} ft along its run; the stair room gives ${total.toFixed(1)} ft. Built with ${(T * 12).toFixed(1)} in treads (code: ${(was * 12).toFixed(0)} in), a 3 ft landing and ${strip.toFixed(1)} ft clear at its foot. Make the stair room longer.`);
+      fail(`${cap(stairLabel(base))} was built with ${(T * 12).toFixed(1)} in treads (code: ${(was * 12).toFixed(0)} in): the stair room is ${(need3 + STRIP - total).toFixed(1)} ft too short.`);
     }
     if (sign > 0) {
       A0 = Number.isFinite(lo) ? clamp(pA0, lo + strip, Number.isFinite(hi) ? Math.max(lo + strip, hi - GAP - len) : Infinity) : pA0;
@@ -380,8 +381,8 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flip
         const was = T;
         T = T2;
         len = (Nmax - 1) * T;
-        fail(`${cap(stairLabel(base))} (a straight flight) needs ${(run + 2 * STRIP).toFixed(1)} ft including 3 ft landings at both ends; the room gives ${(avail + 2 * STRIP).toFixed(1)} ft. Built with ${(T * 12).toFixed(1)} in treads (code: ${(was * 12).toFixed(0)} in).`);
-      } else fail(`${cap(stairLabel(base))} (a straight flight): its landings are shorter than 3 ft; the room is ${(run - avail).toFixed(1)} ft too short.`);
+        fail(`${cap(stairLabel(base))} was built with ${(T * 12).toFixed(1)} in treads (code: ${(was * 12).toFixed(0)} in): the stair room is ${(run - avail).toFixed(1)} ft too short.`);
+      } else fail(`The landings of ${stairLabel(base)} are under 3 ft: the stair room is ${(run - avail).toFixed(1)} ft too short.`);
     }
     const s0 = sign > 0 ? pA0 : pA1;
     let st: number;
@@ -436,7 +437,7 @@ function layoutStack(plan: PlanModel, stack: StairM[], notes: NoteLog, v: { flip
       if ((n2 - 1) * T2 + wf > breadth) {
         const was = T2;
         T2 = Math.max(9.5 / 12, (breadth - wf) / Math.max(1, n2 - 1));
-        notes.add({ id: `asbuilt.stair_fit:${s.id}:l`, title: "Stair does not fit its room", status: "fail", message: `${cap(stairLabel(s))} (L-shaped): its second flight needs ${((n2 - 1) * was + wf).toFixed(1)} ft but the stair is ${breadth.toFixed(1)} ft wide; built with ${(T2 * 12).toFixed(1)} in treads.`, element_ids: [s.id] });
+        notes.add({ id: `asbuilt.stair_fit:${s.id}:l`, title: "Stair does not fit its room", status: "fail", message: `The second flight of ${stairLabel(s)} was built with ${(T2 * 12).toFixed(1)} in treads: the stair is only ${breadth.toFixed(1)} ft wide.`, element_ids: [s.id] });
       }
       const f1c: [number, number] = arriveHigh ? [C0, C0 + wf] : [C1 - wf, C1];
       flights.push({ axis, sign, c0: f1c[0], c1: f1c[1], s0: startA, n: n1, riser: r, tread: T, h0 });
@@ -513,7 +514,7 @@ export function reconcileTower(
       open: new Set(), floorFinish: "marble", floorH: 0, ceilH: 0, synthetic: true,
     };
     plan.addRoom(tower);
-    notes.add({ id: "asbuilt.mumty_added", title: "Stair tower added", status: "warn", message: "The plan had no mumty over the roof stair; the engine built one around the stair and its top landing.", element_ids: [lay.stair.id] });
+    notes.add({ id: "asbuilt.mumty_added", title: "Stair tower added", status: "pass", message: "The engine built a stair tower (mumty) over the roof stair and its top landing.", element_ids: [lay.stair.id] });
   }
   const T = tower;
   const last = lay.flights[lay.flights.length - 1];
@@ -672,7 +673,7 @@ export function reconcileTower(
     const strip = endAxis === "x" ? mk("x", u - 1.5, u + 1.5, o0, o0 + fs * 3) : mk("y", u - 1.5, u + 1.5, o0, o0 + fs * 3);
     const onTank = !!tank && overlapArea(strip, { x: Number(tank.x) || 0, y: Number(tank.y) || 0, w: Number(tank.w) || 0, d: Number(tank.d) || 0 }) > 0.01;
     if (!clear || onTank)
-      notes.add({ id: "asbuilt.roof_door", title: "Roof door has no clear roof outside", status: "fail", message: "No wall of the stair tower touching the top landing opens onto clear roof (party wall, tank or roof edge); the door was put at the top landing anyway.", element_ids: [T.id] });
+      notes.add({ id: "asbuilt.roof_door", title: "Roof door has no clear roof outside", status: "fail", message: "The roof door opens toward a party wall, the tank or the roof edge: no wall at the top landing faces clear roof.", element_ids: [T.id] });
     warn("stair tower: no candidate wall for the roof door at the top landing; door at the step-off end");
     return { room: T, at: endAxis === "x" ? [u, endC] : [endC, u], side: sideOf(endAxis, fs), width: 3 };
   }
@@ -683,7 +684,7 @@ export function reconcileTower(
       id: "asbuilt.roof_door_moved",
       title: "Roof door moved to the top landing",
       status: "warn",
-      message: `The plan put the mumty door on its ${planDoorSide} side, away from where the stair arrives; it was built on the ${pick.side} side, at the top landing.`,
+      message: `The roof door was built on the stair tower's ${pick.side} side, at the top landing, not on its ${planDoorSide} side as drawn.`,
       element_ids: [T.id],
     });
   return { room: T, at: pick.axis === "x" ? [u, pick.c] : [pick.c, u], side: pick.side, width: W };

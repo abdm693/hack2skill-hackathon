@@ -13,6 +13,7 @@ import { blocksWindow, isTall, keepOut, solidIntervals, spareWindows, type Zone 
 import { ceilingSpot } from "../lights";
 import { onWalkwayRect, parking, replanParking, type Parking } from "./parking";
 import { subtract } from "../structure/cover";
+import { roomPhrase } from "../structure/labels";
 
 const SIDES: Side[] = ["front", "back", "left", "right"];
 const ROT: Record<Side, number> = { front: 0, back: 180, left: -90, right: 90 };
@@ -203,7 +204,7 @@ export function ensureDefining(ctx: BuildCtx, run?: (fn: () => void) => Promise<
             id: `asbuilt.furniture_missing:${room.id}:${d.label.toLowerCase()}`,
             title: `No ${d.label} in the ${room.name}`,
             status: "fail",
-            message: `${roomLabel(ctx, room)}: there is no place for a ${d.label} that keeps every doorway and the 3 ft in front of it clear. Make the room larger or move a door.`,
+            message: `There's no place for a ${d.label} in ${roomLabel(ctx, room)} that keeps its doorways clear.`,
             element_ids: [room.id],
           });
       }
@@ -216,7 +217,7 @@ export function ensureDefining(ctx: BuildCtx, run?: (fn: () => void) => Promise<
 function doorWall(ctx: BuildCtx, room: RoomM): Side | null {
   const d = ctx.model.openingsOfRoom(room).filter((o) => o.isDoor).sort((a, b) => b.u1 - b.u0 - (a.u1 - a.u0))[0];
   if (!d) return null;
-  const into = d.run.neg === room ? -1 : 1;
+  const into = d.neg === room ? -1 : 1;
   return d.run.axis === "x" ? (into > 0 ? "front" : "back") : into > 0 ? "left" : "right";
 }
 
@@ -242,7 +243,7 @@ function tvFrameZones(ctx: BuildCtx, room: RoomM): Zone[] {
   for (const o of ctx.model.openingsOfRoom(room)) {
     if (!o.isDoor) continue;
     const run = o.run;
-    const into = run.neg === room ? -1 : 1;
+    const into = o.neg === room ? -1 : 1;
     const c0 = run.c + (into * run.t) / 2, c1 = c0 + into * 1.5;
     const z = run.axis === "x" ? { x0: o.u0 - 1.5, x1: o.u1 + 1.5, y0: Math.min(c0, c1), y1: Math.max(c0, c1) } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: o.u0 - 1.5, y1: o.u1 + 1.5 };
     out.push({ ...z, kind: "door", core: { ...z }, id: o.op.id });
@@ -251,8 +252,8 @@ function tvFrameZones(ctx: BuildCtx, room: RoomM): Zone[] {
 }
 
 /** The wall of `room` an opening is in. */
-function wallOf(room: RoomM, o: { run: { neg: RoomM | null; axis: "x" | "y" } }): Side {
-  const into = o.run.neg === room ? -1 : 1;
+function wallOf(room: RoomM, o: { neg: RoomM | null; run: { axis: "x" | "y" } }): Side {
+  const into = o.neg === room ? -1 : 1;
   // the room lies on the `into` side of the wall: a wall at the room's low edge is its front/left wall
   return o.run.axis === "x" ? (into > 0 ? "front" : "back") : into > 0 ? "left" : "right";
 }
@@ -264,12 +265,12 @@ function stepsFromMainDoor(ctx: BuildCtx): Map<string, number> {
   const dist = new Map<string, number>();
   const main = ctx.model.openings.find((o) => o.op.type === "main_door");
   const q: RoomM[] = [];
-  for (const r of main ? [main.run.neg, main.run.pos] : []) if (r && !dist.has(r.id)) { dist.set(r.id, 0); q.push(r); }
+  for (const r of main ? [main.neg, main.pos] : []) if (r && !dist.has(r.id)) { dist.set(r.id, 0); q.push(r); }
   while (q.length) {
     const r = q.shift()!;
     const d = dist.get(r.id)!;
     const next: RoomM[] = [];
-    for (const o of ctx.model.openingsOfRoom(r)) if (o.isDoor) next.push(...[o.run.neg, o.run.pos].filter((x): x is RoomM => !!x && x !== r));
+    for (const o of ctx.model.openingsOfRoom(r)) if (o.isDoor) next.push(...[o.neg, o.pos].filter((x): x is RoomM => !!x && x !== r));
     for (const id of r.open) {
       const x = ctx.plan.room(id);
       if (x && x.level === r.level) next.push(x);
@@ -295,7 +296,7 @@ function entranceWalls(ctx: BuildCtx, room: RoomM): Side[] {
   const out = new Set<Side>();
   for (const o of ops) {
     if (!o.isDoor) continue;
-    const other = o.run.neg === room ? o.run.pos : o.run.neg;
+    const other = o.neg === room ? o.pos : o.neg;
     if (!other || !["lobby", "porch", "corridor"].includes(other.type)) continue;
     const d = dist.get(other.id);
     if (d !== undefined && d < d0) out.add(wallOf(room, o));
@@ -355,7 +356,7 @@ function mirrorMedia(ctx: BuildCtx, room: RoomM, S: Side): void {
     else if (it.against === O) it.against = S;
     Object.assign(it, b);
   }
-  ctx.notes.add({ id: `asbuilt.tv_wall:${room.id}`, title: "TV moved off the entrance wall", status: "warn", message: `${roomLabel(ctx, room)}: the TV and its seating were turned to face the ${O} wall, away from the door the room is entered through.`, element_ids: [room.id] });
+  ctx.notes.add({ id: `asbuilt.tv_wall:${room.id}`, title: "TV moved off the entrance wall", status: "warn", message: `The TV in ${roomLabel(ctx, room)} was turned to the ${O} wall, away from the door the room is entered by.`, element_ids: [room.id] });
 }
 
 /** Take a piece out again (it gave way to a fixture), with whatever stands on it. */
@@ -374,10 +375,9 @@ function evict(ctx: BuildCtx, it: PlacedItem, forType: string): void {
 }
 
 /** A room's name for notes, with its floor when another room on another floor has the same name (EN-07). */
+/** EN-F4: a room as notes name it mid-sentence: "the dirty kitchen", "the stair hall on the first floor". */
 export function roomLabel(ctx: BuildCtx, room: RoomM | null | undefined): string {
-  if (!room) return "A room";
-  const twin = ctx.plan.rooms.some((r) => r !== room && r.name.trim().toLowerCase() === room.name.trim().toLowerCase());
-  return twin ? `${room.name} (${room.lv.name.toLowerCase()})` : room.name;
+  return room ? roomPhrase(ctx.plan, room) : "a room";
 }
 
 const alongOf = (side: Side, it: { x0: number; x1: number; y0: number; y1: number }): [number, number] => (side === "front" || side === "back" ? [it.x0, it.x1] : [it.y0, it.y1]);
@@ -560,6 +560,11 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   const def: ItemDef = ITEMS[type];
   const room = findRoom(ctx, o?.room);
   if (!room) return { group };
+  // EN-F3: a void (an upper open space over a court) has no floor to stand anything on
+  if (room.void) {
+    warn(`furnish: ${room.id} is open to the floor below (no floor); ${type} skipped`);
+    return { group };
+  }
   const inner = innerRect(ctx, room);
   const isOpenRoom = room.cat !== "enclosed";
   // an open-plan side (no wall at all) is no boundary: furniture may reach 1.5 ft into the neighbouring space
@@ -581,7 +586,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
   // keep-out zones for floor items: doors, open-plan gates, stairs, roof door, tank, solar area; windows for tall items
   const zones: Zone[] = (def.cls === "floor" || def.cls === "top") && ctx.structureBuilt ? keepOut(ctx, room).filter((z) => z.kind !== "window" || blocksWindow(type, h, z)) : [];
   // EN2-02: the windows a tall piece may still stand in front of as a last resort (never a habitable room's only one)
-  const spare = isTall(type, h) && zones.some((z) => z.kind === "window") ? spareWindows(ctx, room) : "all";
+  const spare = isTall(type, h) && zones.some((z) => z.kind === "window") ? spareWindows(ctx, room, type) : "all";
   let anyWindow = false; // (probe: would a spot exist if every window could be blocked?)
   const mayBlock = (z: Zone) => anyWindow || spare === "all" || spare.has(z.id ?? "");
   // EN-08: a TV unit keeps 1.5 ft from every door and arch frame (never wedged between two openings)
@@ -613,7 +618,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
     // a kitchen's fridge) is reported by the defining pass at the end of the build if it still has no place (EN-03).
     // EN2-02: a piece left out because its only spot was across the room's window is worth telling the family.
     if (keptWindow && !isDefining(room, type))
-      ctx.notes.add({ id: `asbuilt.window_kept_clear:${room.id}:${type}`, title: "Furniture left out to keep a window clear", status: "warn", message: `${roomLabel(ctx, room)}: the ${humanType(type)} was left out to keep the window clear.`, element_ids: [room.id] });
+      ctx.notes.add({ id: `asbuilt.window_kept_clear:${room.id}:${type}`, title: "Furniture left out to keep a window clear", status: "warn", message: `The ${humanType(type)} in ${roomLabel(ctx, room)} was left out to keep the window clear.`, element_ids: [room.id] });
     warn(`furnish ${type} in ${room.id}: ${why}; left out`);
     const dbg = (ctx as unknown as { dropLog?: unknown[] }).dropLog ?? ((ctx as unknown as { dropLog?: unknown[] }).dropLog = []);
     dbg.push({ type, room: room.id, cx, cy, w, d, rot, against, bounds, zones });
@@ -641,7 +646,7 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
         id: "asbuilt.car_dropped",
         title: "Car left out",
         status: "fail",
-        message: `Only ${nParked} of ${m} cars ${nParked === 1 ? "fits" : "fit"} in the ${room.name.toLowerCase()} while keeping a 3 ft walkway from the gate to the main door. Make the porch wider or deeper (about 9 ft wide and 18 ft deep per car, plus the walkway).`,
+        message: `Only ${nParked} of ${m} cars ${nParked === 1 ? "fits" : "fit"} in ${roomLabel(ctx, room)} with a 3 ft walkway kept from the gate to the main door.`,
         element_ids: [room.id],
       });
       return { group };
@@ -868,14 +873,20 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
         fp = footprint(cx, cy, w, d, rot);
       }
     }
-    if (!flanked && !free(fp)) {
+    // EN-F5: a TV unit stands against a real wall (its TV hangs on it): asked against an open-plan side, it looks for
+    // a wall like any piece that is in the way
+    const needsWall = type === "tv_unit" && !!against && ctx.structureBuilt;
+    const wallBehind = (side: Side, u: number, ww: number) =>
+      ctx.model.roomWalls(room, side).some((wl) => u - ww / 2 >= wl.a - 0.3 && u + ww / 2 <= wl.b + 0.3);
+    const unbacked = needsWall && !wallBehind(against!, wallInfo ? (wallInfo.axis === "x" ? cx : cy) : 0, w);
+    if (!flanked && (!free(fp) || unbacked)) {
       const start = { side: against, rot, w, cx, cy };
       let found: { x: number; y: number; side: Side | null; rot: number; w: number } | null = null;
       let keptWindow = false;
       // an item that stands against a wall only moves to stretches where a wall really stands behind it
       const backed = (side: Side, u: number, ww: number) => {
         const ws = ctx.model.roomWalls(room, side).map((wl) => [wl.a, wl.b] as [number, number]).sort((p, q) => p[0] - q[0]);
-        if (!ws.length) return side === start.side;
+        if (!ws.length) return side === start.side && !needsWall;
         const merged: [number, number][] = [];
         for (const sp of ws) {
           const last = merged[merged.length - 1];
@@ -1056,6 +1067,19 @@ function furnishInner(ctx: BuildCtx, itemIn: FurnitureType, o: FurnishOptions, s
           const askedLen = num((o?.size as { d_ft?: number } | undefined)?.d_ft, NaN);
           const sz = smaller.size ? { ...(o?.size ?? {}), ...smaller.size } : smaller.type !== type ? (type.startsWith("bed_") && askedLen < ITEMS[smaller.type].dims[1] ? { d_ft: askedLen } : undefined) : o?.size;
           return furnishInner(ctx, smaller.type, { ...o, size: sz, ...(smaller.variant ? { variant: smaller.variant } : {}), _smaller: lvl + 1 } as FurnishOptions, style);
+        }
+        // EN-F5: a wardrobe or a bookshelf whose only spot stands across the window it must keep clear is built low, under
+        // the sill (a chest-height unit), before it is left out
+        const lowOpt = o as { _low?: boolean };
+        if (keptWindow && !lowOpt._low && (type === "wardrobe" || type === "bookshelf")) {
+          const sill = Math.min(...keepOut(ctx, room).filter((z) => z.kind === "window" && z.op !== "ventilator").map((z) => z.sill ?? 3));
+          // (its top just under the sill: nothing of the glass is covered)
+          const lowH = Math.min(h - 0.5, sill - 0.1);
+          if (Number.isFinite(lowH) && lowH >= 2.4) {
+            group.removeFromParent();
+            warn(`furnish ${type} in ${room.id}: its only spot stands across the window; built ${lowH.toFixed(1)} ft tall, under the sill`);
+            return furnishInner(ctx, type, { ...o, size: { ...(o?.size ?? {}), h_ft: lowH }, _low: true } as FurnishOptions, style);
+          }
         }
         return dropped(keptWindow ? "its only spot would stand across a window" : "there is no place for it that keeps doors, stairs and walkways clear", keptWindow);
       }

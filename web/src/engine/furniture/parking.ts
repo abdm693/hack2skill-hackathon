@@ -91,9 +91,9 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
   if (doorZone) doorZones.push(doorZone);
   for (const o of ctx.structureBuilt ? ctx.model.openings : []) {
     if (!o.isDoor || o.op.level !== g.id) continue;
-    const pr = [o.run.neg, o.run.pos].find((r) => r && porches.includes(r));
+    const pr = [o.neg, o.pos].find((r) => r && porches.includes(r));
     if (!pr) continue;
-    const into = o.run.neg === pr ? -1 : 1;
+    const into = o.neg === pr ? -1 : 1;
     const c0 = o.run.c + (into * o.run.t) / 2, c1 = c0 + into * 3;
     doorZones.push(o.run.axis === "x" ? { x: o.u0 - 0.5, y: Math.min(c0, c1), w: o.u1 - o.u0 + 1, d: 3 } : { x: Math.min(c0, c1), y: o.u0 - 0.5, w: 3, d: o.u1 - o.u0 + 1 });
   }
@@ -242,12 +242,12 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
     const poses: { len: number; out: number; slot: number }[] = [];
     for (const slot of slots) poses.push({ len: bl, out: outBy, slot });
     if (!tandem) for (let ob = Math.max(outBy, 0) + 0.5; ob <= 4 + 1e-6; ob += 0.5) poses.push({ len: bl, out: ob, slot: 0 });
-    const singles = (bw: number): C[] => {
+    const singles = (bw: number, outward: boolean): C[] => {
       const out: C[] = [];
       const us: number[] = [];
       for (let u = lo; u + bw <= lo + width + 1e-6; u += 0.5) us.push(u);
       if (width - bw > 0.01) us.push(lo + width - bw);
-      for (const ps of poses)
+      for (const ps of poses.filter((q) => outward || q.out <= outBy + 1e-6))
         for (const u of us) {
           const c0 = edgeC - inward * ps.out + inward * ps.slot * ps.len, c1 = c0 + inward * ps.len;
           const rect: R = alongX ? { x: u, y: Math.min(c0, c1), w: bw, d: ps.len } : { x: Math.min(c0, c1), y: u, w: ps.len, d: bw };
@@ -264,8 +264,8 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
     };
     const feasible = (arr: R[]) => reachable(blockedBy([...chosen, ...arr], 1.5));
     /** the best arrangement of k bays of width bw that keeps the walkway open (exhaustive for 1 and 2 bays, then greedy) */
-    const arrange = (k: number, bw: number): C[] | null => {
-      const cs = singles(bw).sort((a, b) => b.score - a.score);
+    const arrange = (k: number, bw: number, outward: boolean): C[] | null => {
+      const cs = singles(bw, outward).sort((a, b) => b.score - a.score);
       if (!cs.length) return null;
       if (k === 1) return cs.find((c) => feasible([c.rect])) ? [cs.find((c) => feasible([c.rect]))!] : null;
       if (k === 2) {
@@ -279,16 +279,18 @@ function computeParking(ctx: BuildCtx, want?: number): Parking {
         }
         return null;
       }
-      const base = arrange(k - 1, bw);
+      const base = arrange(k - 1, bw, outward);
       if (!base) return null;
       const extra = cs.find((c) => !base.some((b) => ov(b.rect, c.rect)) && feasible([...base.map((b) => b.rect), c.rect]));
       return extra ? [...base, extra] : null;
     };
     const fitAcross = Math.max(1, Math.floor((width + 0.01) / BAY_W[BAY_W.length - 1])) * slots.length;
+    // (EN-F5: every car under the porch roof, at the narrower 8.5 ft bay if need be, before one stands out over the
+    // drive-in edge into the driveway)
     for (let k = Math.min(n, fitAcross); k >= 1; k--) {
-      for (const bw of BAY_W) {
+      for (const [bw, outward] of [...BAY_W.map((b) => [b, false] as const), ...BAY_W.map((b) => [b, true] as const)]) {
         if (bw > width + 1e-6) continue;
-        const arr = arrange(k, bw);
+        const arr = arrange(k, bw, outward);
         if (!arr) continue;
         for (const c of arr.sort((a, b) => a.slot - b.slot || a.u - b.u)) {
           chosen.push(c.rect);

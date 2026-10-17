@@ -15,9 +15,13 @@
  *  8. headroom: every cell inside a stair's footprint a walker can stand in has 6′8″ clear to the soffit above
  *     (anything lower is boxed in as under-stair storage);
  *  9. windows: every curtain pair hangs centred on a window or sliding door (never over a door), and no tall piece
- *     (wardrobe, bookshelf, fridge, TV unit) stands in front of a window in a habitable room (zones.HABITABLE);
+ *     (wardrobe, bookshelf, fridge, TV unit) stands in front of a window in a habitable room (zones.HABITABLE), nor in
+ *     front of the only window of any other room (a dressing, a store: EN-F5; a kitchen's fridge excepted);
  * 10. door reach (EN3-01): in every room, BFS on the furnished masks from its doors: every door reaches every other
  *     (3 ft, else at least a 1.8 ft squeeze), and a long side of every bed and the approach to every window are reached.
+ * 11. outdoor reach (EN-F1): a 3 ft route from the gates, between the walls and everything standing on the open ground
+ *     lower than 7 ft (trees and planters as the walkthrough sees them: their whole box), reaches every exterior door
+ *     and every outdoor room; a court the plan itself gives no way into is only listed.
  */
 import * as THREE from "three";
 import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
@@ -27,12 +31,14 @@ import { resolveHit } from "../core/tags";
 import { rectContains } from "../core/grid";
 import { subtract } from "../structure/cover";
 import { HEADROOM, openingsOnEdge } from "../structure/stairs-geo";
-import { blocksWindow, doorClearance, HABITABLE, intrudes, isTall, keepOut, solidIntervals } from "../furniture/zones";
+import { blocksWindow, doorClearance, HABITABLE, intrudes, isTall, keepOut, onlyWindowKept, solidIntervals } from "../furniture/zones";
 import { carWays, openPoints, parking, onWalkwayRect } from "../furniture/parking";
 import { floorBelow } from "../facade";
 import { pathReport, reachReport } from "../furniture/paths";
 import { ITEMS } from "../furniture/items";
 import { colliderMesh, walk } from "./walktest";
+import { CLEAR_H, outdoorModel, outdoorReach, type Box } from "../outdoor";
+import { openingNameLow, sentenceName } from "../structure/labels";
 
 export interface Check {
   id: string;
@@ -62,6 +68,7 @@ export function runChecks(res: BuildResult): Check[] {
   out.push(checkStairs(ctx));
   out.push(checkHeadroom(ctx, res, col));
   out.push(checkWindows(ctx));
+  out.push(checkOutdoorReach(ctx, res));
   return out;
 }
 
@@ -156,31 +163,49 @@ function checkGuards(ctx: BuildCtx, res: BuildResult): Check {
 }
 
 function checkFalls(ctx: BuildCtx, col: THREE.Mesh): Check {
-  // push a walker at every stairwell edge (outside the arrival opening): it must be stopped, not fall
-  const edges = edgesToGuard(ctx).filter((e) => e.hole && e.b - e.a > 0.6);
+  // push a walker at every stairwell edge (outside the arrival opening) and, EN-F3, across every other open slab edge
+  // (terraces over a court or a void, balconies) every 6 ft: it must be stopped, not fall
+  const pushes: { e: ReturnType<typeof edgesToGuard>[number]; u: number }[] = [];
+  for (const e of edgesToGuard(ctx)) {
+    if (e.b - e.a <= 0.6) continue;
+    if (e.hole) pushes.push({ e, u: (e.a + e.b) / 2 });
+    else {
+      // (only rims no wall or parapet stands on: a window in an outer wall is not an edge to push anyone over, and
+      // this crude walker climbs sills)
+      const runs = ctx.model.runsByLevel.get(e.level) ?? [];
+      const n = Math.max(1, Math.round((e.b - e.a) / 6));
+      for (let k = 0; k < n; k++) {
+        const u = e.a + ((e.b - e.a) * (k + 0.5)) / n;
+        if (runs.some((r) => r.axis === e.axis && Math.abs(r.c - e.c) < r.t / 2 + 0.5 && u >= r.ea - 0.1 && u <= r.eb + 0.1)) continue;
+        pushes.push({ e, u });
+      }
+    }
+  }
   const spots: Check["spots"] = [];
-  let falls = 0;
-  for (const e of edges) {
-    const mid = (e.a + e.b) / 2;
+  let falls = 0, holes = 0, rims = 0;
+  for (const { e, u: mid } of pushes) {
     const back = [2.6, 1.6, 1.1].find((b) => {
       const v = e.c - e.floorSide * b;
       const [x, y] = e.axis === "x" ? [mid, v] : [v, mid];
       return standable(ctx, e.level, x, y);
     });
     if (back === undefined) continue;
+    if (e.hole) holes++;
+    else rims++;
     const s = e.c - e.floorSide * back, t = e.c + e.floorSide * 2.5;
     const [sx, sy] = e.axis === "x" ? [mid, s] : [s, mid];
     const [tx, ty] = e.axis === "x" ? [mid, t] : [t, mid];
     const start = new THREE.Vector3(sx * FT, e.elev * FT + 0.05, -sy * FT);
     const r = walk(col, start, [new THREE.Vector3(tx * FT, e.elev * FT, -ty * FT)], 4);
     const drop = e.elev - r.feet.y / FT;
-    if (drop > 1.0) {
+    // (a stairwell counts any fall; an outer edge a drop past the 30 in that needs a guard)
+    if (drop > (e.hole ? 1.0 : 2.5)) {
       falls++;
       const [px, py] = e.axis === "x" ? [mid, e.c] : [e.c, mid];
-      spots.push({ level: e.level, x: +px.toFixed(1), y: +py.toFixed(1), note: `fell ${drop.toFixed(1)} ft` });
+      spots.push({ level: e.level, x: +px.toFixed(1), y: +py.toFixed(1), note: `fell ${drop.toFixed(1)} ft${e.hole ? " (stairwell)" : ""}` });
     }
   }
-  return { id: "falls", title: "Walker stopped at stairwells", status: falls ? "fail" : "pass", detail: falls ? `${falls} of ${edges.length} pushes fell through` : `${edges.length} pushes toward stairwell edges: none fell`, spots };
+  return { id: "falls", title: "Walker stopped at stairwells and open edges", status: falls ? "fail" : "pass", detail: falls ? `${falls} of ${holes + rims} pushes fell through` : `${holes} pushes toward stairwell edges and ${rims} across terrace, balcony and roof edges: none fell`, spots };
 }
 
 // ── 2. stair to the roof, door at the top landing ──────────────────────────────────────────────────────────
@@ -191,11 +216,11 @@ function checkRoof(ctx: BuildCtx, res: BuildResult, col: THREE.Mesh): Check {
   for (let k = 0; k + 1 < chain.length; k++) if (!ctx.model.stairs.some((l) => l.stair.from === chain[k] && l.stair.to.elev >= chain[k + 1].elev - 0.01)) missing.push(`${chain[k].name} → ${chain[k + 1].name}`);
   if (!ctx.model.stairs.length) return { id: "roof", title: "Stair reaches the roof door", status: chain.length > 2 ? "fail" : "warn", detail: "no stairs in the plan" };
   const tw = ctx.model.tower;
-  const door = tw ? ctx.model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.run.neg === tw.room || o.run.pos === tw.room)) : null;
+  const door = tw ? ctx.model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.neg === tw.room || o.pos === tw.room)) : null;
   if (missing.length || !door || !tw) return { id: "roof", title: "Stair reaches the roof door", status: "fail", detail: missing.length ? `no stair ${missing.join(", ")}` : "no roof door" };
   const top = ctx.model.stairs.find((l) => l.holeLevel === plan.roof.id)!;
   const sill = door.bottom - (plan.roof.elev - 0.04);
-  const into = door.run.neg === tw.room ? -1 : 1;
+  const into = door.neg === tw.room ? -1 : 1;
   const u = (door.u0 + door.u1) / 2;
   const pIn = door.run.c + into * 1.6, pOut = door.run.c - into * 3.0;
   const inside: [number, number] = door.run.axis === "x" ? [u, pIn] : [pIn, u];
@@ -324,7 +349,10 @@ function checkWalkway(ctx: BuildCtx, res: BuildResult, col: THREE.Mesh): Check {
   // EN3-02: facade members (frames, fin rails, louvre posts...) lower than 7 ft count as obstacles: none on the walkway
   // and none in a parking bay or the way its car drives in
   // (only the part of a member out in the open counts: a skin on the house wall is not in anyone's way)
-  const low = ctx.facadeBlocks.filter((b) => b.h0 < floorBelow(ctx, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, b.h0 + 0.5) + 7).map((b) => ({ ...b, pts: openPoints(ctx, b) }));
+  // (low over the GROUND the walkway and the car ways run on: a fin standing on a balcony 13 ft up is over people's
+  // heads, however low it is on that balcony)
+  const groundLv = ctx.plan.levels[0].elev + 0.6;
+  const low = ctx.facadeBlocks.filter((b) => b.h0 < floorBelow(ctx, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, Math.min(b.h0 + 0.5, groundLv)) + 7).map((b) => ({ ...b, pts: openPoints(ctx, b) }));
   const ways = carWays(P, ctx.plan.plotW, ctx.plan.plotD);
   const facWalk = low.filter((b) => b.pts.some(([x, y]) => P.onWalkway(x, y)));
   const facBay = low.filter((b) => b.pts.some(([x, y]) => ways.some((w) => x > w.x0 + 0.02 && x < w.x1 - 0.02 && y > w.y0 + 0.02 && y < w.y1 - 0.02)));
@@ -395,17 +423,23 @@ function checkDoorReach(ctx: BuildCtx): Check {
 function checkOpenings(ctx: BuildCtx): Check {
   const wrong: string[] = [];
   for (const o of ctx.model.openings) {
-    const ids = [o.run.neg?.id, o.run.pos?.id];
+    const ids = [o.neg?.id, o.pos?.id];
     const named = o.op.between.filter((b) => b && b !== "exterior" && ctx.plan.room(b));
     if (!named.every((id) => ids.includes(id))) wrong.push(o.op.id);
     if (o.op.between.includes("exterior") && o.run.out === 0) wrong.push(o.op.id);
   }
   const skipped = ctx.model.notes.list.filter((n) => n.id.startsWith("asbuilt.opening_skipped"));
+  // EN-F2: a door, arch or sliding door the plan draws but the engine leaves out is a fail (nobody can walk through it)
+  const doorTypes = ["main_door", "door", "double_door", "sliding_door", "arch", "garage_door"];
+  const doorsSkipped = skipped.filter((n) => {
+    const op = ctx.plan.openings.find((o) => o.id === n.element_ids?.[0]);
+    return op ? doorTypes.includes(op.type) : n.status === "fail";
+  });
   return {
     id: "openings",
     title: "Openings only in the right wall",
-    status: wrong.length ? "fail" : skipped.length ? "warn" : "pass",
-    detail: `${ctx.model.openings.length} openings built, ${wrong.length ? `${wrong.length} in the wrong wall (${wrong.join(", ")})` : "each between the rooms it names"}${skipped.length ? `; ${skipped.length} not built: ${skipped.map((n) => n.element_ids?.[0]).join(", ")}` : ""}`,
+    status: wrong.length || doorsSkipped.length ? "fail" : skipped.length ? "warn" : "pass",
+    detail: `${ctx.model.openings.length} openings built, ${wrong.length ? `${wrong.length} in the wrong wall (${wrong.join(", ")})` : "each between the rooms it names"}${skipped.length ? `; ${skipped.length} not built: ${skipped.map((n) => n.element_ids?.[0]).join(", ")}${doorsSkipped.length ? ` (${doorsSkipped.length} of them doors)` : ""}` : ""}`,
   };
 }
 
@@ -502,7 +536,10 @@ function checkWindows(ctx: BuildCtx): Check {
       }
       continue;
     }
-    if (it.cls !== "floor" || !HABITABLE.has(room.type) || !isTall(it.type, it.h1 - it.h0)) continue;
+    if (it.cls !== "floor" || !isTall(it.type, it.h1 - it.h0)) continue;
+    // EN-F5: in a habitable room every window; in any other room (a dressing, a kitchen) its only window
+    const real = keepOut(ctx, room).filter((z) => z.kind === "window" && z.op !== "ventilator");
+    if (!HABITABLE.has(room.type) && (real.length !== 1 || !onlyWindowKept(room, it.type))) continue;
     for (const z of keepOut(ctx, room)) {
       if (!blocksWindow(it.type, it.h1 - it.h0, z) || z.op === "ventilator") continue;
       if (it.x0 < z.x1 - 0.05 && z.x0 < it.x1 - 0.05 && it.y0 < z.y1 - 0.05 && z.y0 < it.y1 - 0.05) {
@@ -517,6 +554,54 @@ function checkWindows(ctx: BuildCtx): Check {
     title: "Curtains on glazing, windows kept clear",
     status: bad.length ? "fail" : "pass",
     detail: bad.length ? `${bad.length} problems: ${bad.slice(0, 8).join("; ")}` : `${pairs} curtain pairs, each centred on a window or sliding door; no tall piece in front of a window (${tall} found)`,
+    spots,
+  };
+}
+
+// ── 11. outdoor reach ───────────────────────────────────────────────────────────────────────────────────────
+function checkOutdoorReach(ctx: BuildCtx, res: BuildResult): Check {
+  const g = ctx.plan.levels[0].id;
+  const SOLID = /(^|:)(tree|planter|hedge|swing|bench|fountain|bbq|kiosk|generator|ac_outdoor)$/;
+  const FLAT = /(^|:)(rug|carpet|prayer_mat|mat|doormat)$/;
+  const solids: Box[] = [];
+  for (const o of res.summary.objects) {
+    const kind = o.kind ?? "";
+    if (/(^|:)(context|vehicle)($|:)/.test(kind) || !o.bbox_ft) continue;
+    const furniture = o.layer === "furniture" && !FLAT.test(kind);
+    if (!furniture && !SOLID.test(kind)) continue;
+    const [x0, y0, h0] = o.bbox_ft.min, [x1, y1, h1] = o.bbox_ft.max;
+    if (h0 > ctx.plan.grade + CLEAR_H || h1 - h0 < 0.25) continue;
+    const r = ctx.plan.roomAt(g, (x0 + x1) / 2, (y0 + y1) / 2);
+    if (r && r.cat === "enclosed") continue;
+    solids.push({ x0, x1, y0, y1 });
+  }
+  const rep = outdoorReach(ctx, solids);
+  const om = outdoorModel(ctx);
+  const opName = (id: string) => {
+    const op = ctx.plan.openings.find((o) => o.id === id);
+    return op ? openingNameLow(ctx.plan, op) : id;
+  };
+  const cut = [...rep.doors.filter((d) => !d.reached && d.bare).map((d) => opName(d.id)), ...rep.rooms.filter((r) => !r.reached && r.bare).map((r) => `the ${sentenceName(r.room.name)}`)];
+  const planDoors = rep.doors.filter((d) => !d.bare).map((d) => opName(d.id));
+  // a court no door opens onto and no open ground leads to (a light court seen from its windows) is not a way anyone walks
+  const courts = rep.rooms.filter((r) => !r.bare).map((r) => `the ${sentenceName(r.room.name)}`);
+  const spots: Check["spots"] = [];
+  for (const d of rep.doors.filter((q) => !q.reached && q.bare)) {
+    const z = om.zones.find((q) => q.id === d.id);
+    if (z) spots.push({ level: g, x: +((z.approach.x0 + z.approach.x1) / 2).toFixed(1), y: +((z.approach.y0 + z.approach.y1) / 2).toFixed(1), note: "door cut off by planting or furniture" });
+  }
+  const nDoors = rep.doors.length, nRooms = rep.rooms.length;
+  const status = !rep.starts || cut.length ? "fail" : planDoors.length ? "warn" : "pass";
+  return {
+    id: "outdoor_reach",
+    title: "Outdoor reach: a 3 ft way from the gate",
+    status,
+    detail: !rep.starts
+      ? "no gate opens onto a 3 ft way into the plot"
+      : `${nDoors - rep.doors.filter((d) => !d.reached).length} of ${nDoors} exterior doors and ${nRooms - rep.rooms.filter((r) => !r.reached).length} of ${nRooms} outdoor rooms reached by a 3 ft way from the gate, around ${solids.length} trees, planters and outdoor pieces` +
+        (cut.length ? `; CUT OFF by planting or furniture: ${cut.join(", ")}` : "") +
+        (planDoors.length ? `; the plan itself gives no 3 ft way to ${planDoors.join(", ")}` : "") +
+        (courts.length ? `; ${courts.join(", ")} ${courts.length === 1 ? "is a court" : "are courts"} with no way in (seen from windows)` : ""),
     spots,
   };
 }

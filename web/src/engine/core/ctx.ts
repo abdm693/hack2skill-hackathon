@@ -76,6 +76,8 @@ export class BuildCtx {
   readonly facadeSurfs: { side: string; plane: number; u0: number; u1: number; h0: number; h1: number }[] = [];
   /** EN3-02: every walk-colliding facade member as built (plan ft box, absolute heights), for the walkway checks */
   readonly facadeBlocks: { kind: string; x0: number; x1: number; y0: number; y1: number; h0: number; h1: number }[] = [];
+  /** EN-F1: the footprints (plan ft) of the trees, planters and hedges planted so far, below 7 ft: what a walker meets */
+  readonly plantings: { x0: number; x1: number; y0: number; y1: number }[] = [];
   /** callbacks run at the end of the current section (e.g. auto dining chairs) */
   readonly endOfSection: (() => void)[] = [];
   /** structure options remembered for later sections */
