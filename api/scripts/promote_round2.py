@@ -1,0 +1,143 @@
+"""Round 2 sample fixes, promoted in place (the samples keep their ids, so the landing and every untouched guest copy pick them
+up: a copy made before the sample's new updated_at is refreshed on its next open). Dry run by default; --apply writes.
+
+    uv run python scripts/promote_round2.py concept SAMPLE CONCEPT_ID DAY.png NIGHT.png [--apply]
+        BE2-02: upload the new day/night images under new names and point the concept at them (same id, same title).
+    uv run python scripts/promote_round2.py version SAMPLE STAGING_PID VERSION_ID [--apply]
+        BE2-03: copy a passing version from a staging copy of SAMPLE into SAMPLE and make it current (its compliance is
+        rechecked with today's rules first; refuses a version with any LDA or livable fail).
+    uv run python scripts/promote_round2.py chat SAMPLE [--apply]
+        BE2-03: the setup reply in the current voice, the "Here's what I understood" card rebuilt from the brief, and
+        corner_stated on the brief (both sample messages say "mid-row").
+    uv run python scripts/promote_round2.py verify SAMPLE
+
+Only projects in the samples workspace are touched; nothing is deleted (old images and versions stay for rollback).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+from app.agents import intake
+from app.compliance import lda
+from app.store import blobs, db
+
+APPLY = "--apply" in sys.argv
+ARGS = [a for a in sys.argv[1:] if a != "--apply"]
+
+
+def say(*a):
+    print(("APPLY " if APPLY else "DRY   ") + " ".join(str(x) for x in a))
+
+
+async def sample(pid: str) -> dict:
+    p = await db.get_project(pid)
+    if not p or p.get("owner") != db.SAMPLES_OWNER:
+        raise SystemExit(f"{pid}: not a sample")
+    return p
+
+
+async def concept(pid: str, cid: str, day: str, night: str):
+    p = await sample(pid)
+    cs = p.get("concepts") or []
+    c = next((c for c in cs if c["id"] == cid), None)
+    if not c:
+        raise SystemExit(f"{cid}: no such concept on {pid}")
+    folder = c["url"].removeprefix("/api/assets/").rsplit("/", 1)[0]
+    day_path, night_path = f"{folder}/{cid}-r2.png", f"{folder}/{cid}-r2-night.png"
+    say("concept", cid, c.get("title"), ":", c["url"], "->", f"/api/assets/{day_path}")
+    say("        night:", c.get("night_url"), "->", f"/api/assets/{night_path}")
+    if not APPLY:
+        return
+    day_url = await blobs.put(day_path, Path(day).read_bytes(), "image/png")
+    night_url = await blobs.put(night_path, Path(night).read_bytes(), "image/png")
+    new = {**c, "url": day_url, "night_url": night_url, "previous_url": c["url"], "previous_night_url": c.get("night_url"),
+           "edited": "mid-row: neighbours built against both side walls, one road in front (round 2)"}
+    fields = {"concepts": [new if x["id"] == cid else x for x in cs]}
+    if p.get("thumbnail_url") == c["url"]:
+        fields["thumbnail_url"] = day_url
+    await db.update_project(pid, **fields)
+    say("done; selected concept is still", p.get("selected_concept_id"))
+
+
+async def version(pid: str, staging: str, vid: str):
+    p = await sample(pid)
+    s = await db.get_project(staging)
+    if not s or s.get("cloned_from") != pid:
+        raise SystemExit(f"{staging}: not a copy of {pid}")
+    v = await db.get_version(staging, vid)
+    if not v:
+        raise SystemExit(f"{vid}: no such version on {staging}")
+    rep = lda.check(v["plan"], p.get("brief"))
+    fails = [c["id"] for c in rep["checks"] if c["status"] == "fail"]
+    say("version", vid, f"v{v.get('n')}", "recheck", lda.counts(rep), "fails", fails)
+    if fails:
+        raise SystemExit("refusing a version with failures")
+    known = {x["id"] for x in p.get("versions") or []}
+    n = max([x.get("n") or 0 for x in p.get("versions") or []] + [0]) + 1
+    entry = next((x for x in s.get("versions") or [] if x["id"] == vid), None) or {"id": vid}
+    c = lda.counts(rep)
+    words = [x for x in (entry.get("summary") or "").split(" · ") if x and "LDA" not in x and "livable" not in x
+             and "review note" not in x]
+    counts = f"{c['lda']['pass']}/{c['lda']['total']} LDA · {c['livable']['pass']}/{c['livable']['total']} livable"
+    entry = {**entry, "n": n, "summary": " · ".join(words + [counts])}
+    say("sample", pid, p["name"], ": versions", [x["id"] for x in p.get("versions") or []], "+", entry)
+    if not APPLY:
+        return
+    await db.save_version(pid, {**v, "n": n, "compliance": rep, "promoted_from": staging})
+    fields = {"versions": [x for x in p.get("versions") or [] if x["id"] != vid] + [entry], "current_version_id": vid,
+              "stage": "ready", "brief_changed": False}
+    if v.get("thumbnail_url"):
+        fields["thumbnail_url"] = v["thumbnail_url"]
+    await db.update_project(pid, **fields)
+    say("done:", pid, "current", vid, "(was", p.get("current_version_id"), ")", "already had it" if vid in known else "")
+
+
+async def chat(pid: str):
+    p = await sample(pid)
+    brief = {**(p.get("brief") or {})}
+    msgs = await db.list_messages(pid)
+    first_user = next((m for m in msgs if m["role"] == "user"), {})
+    said_corner = any(w in (first_user.get("text") or "").lower() for w in ("mid-row", "midrow", "mid row", "corner"))
+    if said_corner and brief.get("corner_stated") is not True:
+        brief["corner_stated"] = True
+        brief["auto_filled"] = [a for a in brief.get("auto_filled") or [] if a != "corner"]
+        say("brief: corner_stated -> True")
+    reply = next((m for m in msgs if m["role"] == "assistant" and m.get("understood")), None)
+    if not reply:
+        raise SystemExit("no setup reply with a card")
+    text = intake._complete_text({}, brief)
+    sugg = intake._complete_suggestions({}, brief)
+    card = intake.understood(brief)
+    say("reply", reply["id"], ":", json.dumps(reply.get("text")), "->", json.dumps(text))
+    say("suggestions", reply.get("suggestions"), "->", sugg)
+    say("card assumptions", card["assumptions"], "| preferences", card["preferences"][:4], "…")
+    if not APPLY:
+        return
+    await db.put_message(pid, {**reply, "text": text, "suggestions": sugg, "understood": card})
+    if brief != p.get("brief"):
+        await db.update_project(pid, brief=brief)
+    else:
+        await db.update_project(pid)  # bump updated_at so untouched copies refresh
+    say("done")
+
+
+async def verify(pid: str):
+    p = await sample(pid)
+    v = await db.get_version(pid, p["current_version_id"])
+    rep = lda.check(v["plan"], p.get("brief"))
+    print(json.dumps({"id": pid, "name": p["name"], "current": p["current_version_id"], "n": v.get("n"),
+                      "stored": lda.counts(v["compliance"]), "recheck": lda.counts(rep),
+                      "stored_equals_recheck": lda.counts(v["compliance"]) == lda.counts(rep),
+                      "fails": [c["id"] for c in rep["checks"] if c["status"] == "fail"],
+                      "warns": [c["id"] for c in rep["checks"] if c["status"] == "warn"],
+                      "concepts": [(c["id"], c.get("title"), c["url"], c.get("night_url")) for c in p.get("concepts") or []],
+                      "corner_stated": (p.get("brief") or {}).get("corner_stated")}, indent=1, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    cmd = ARGS[0]
+    fn = {"concept": concept, "version": version, "chat": chat, "verify": verify}[cmd]
+    asyncio.run(fn(*ARGS[1:]))
