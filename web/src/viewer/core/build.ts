@@ -66,6 +66,28 @@ const DROP_M: Record<Layer, number> = { structure: 0.85, facade: 0.6, interior: 
 /** Finished builds kept besides the one on screen (instant before/after and version flips). */
 const MAX_CACHED = 2;
 
+/** During the first build the browser must paint at least this often, so the progress card visibly advances. */
+const PAINT_EVERY_MS = 50;
+
+/**
+ * Resolves once the browser has rendered a frame: rAF runs just before the paint, the task queued from it runs just
+ * after. The engine's own yield between sections is a MessageChannel task, which never guarantees a paint. Capped so a
+ * throttled page (an occluded or background window where rAF stalls) never stalls the build.
+ */
+function painted(capMs = 120): Promise<void> {
+  return new Promise((res) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(cap);
+      res();
+    };
+    const cap = setTimeout(finish, capMs);
+    requestAnimationFrame(() => setTimeout(finish, 0));
+  });
+}
+
 export class BuildManager {
   displayed: Displayed | null = null;
   private cache = new Map<string, Displayed>();
@@ -174,6 +196,20 @@ export class BuildManager {
 
     ctrl.setBuildState({ phase: "building", done: 0, total, current: sections[0]?.name, error: undefined, failed: 0, ...(offscreen ? { first: false } : {}) });
 
+    // The first build shows the progress card over an empty sky: let the browser paint it before the engine's
+    // synchronous work starts, then at least every PAINT_EVERY_MS between sections, so the card is there from the
+    // first frame and its bar moves. Hidden tabs skip this (no frames there; timers are throttled to 1 s).
+    const firstBuild = !offscreen && ctrl.store.getState().build.first;
+    let lastPaint = 0;
+    const letPaint = async () => {
+      if (!firstBuild || document.hidden || stale()) return;
+      if (performance.now() - lastPaint < PAINT_EVERY_MS) return;
+      await painted();
+      lastPaint = performance.now();
+    };
+    await letPaint();
+    if (stale()) return;
+
     const swapIn = (root: THREE.Group) => {
       if (st.swapped || stale()) return;
       st.swapped = true;
@@ -216,7 +252,10 @@ export class BuildManager {
         ctrl.onSectionApplied(root, r);
       }
       report();
-      if (st.swapped && !known && !quiet()) await sleep(PACE_MS[r.layer] ?? 200);
+      if (st.swapped && !known && !quiet()) {
+        await sleep(PACE_MS[r.layer] ?? 200);
+        lastPaint = performance.now(); // an idle pause of ≥ 150 ms has painted several frames
+      } else await letPaint();
       // After the last section the engine consolidates meshes (bakes world transforms into merged geometry):
       // every drop-in must be back at rest by then, or merged walls would keep their mid-air offset.
       if (st.done >= total) await this.settle(2500);
