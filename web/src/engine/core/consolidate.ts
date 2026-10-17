@@ -37,7 +37,10 @@ function eligible(m: THREE.Mesh): boolean {
   if (Object.keys(g.morphAttributes).length) return false;
   for (const k of Object.keys(g.attributes)) if (k !== "position" && k !== "normal" && k !== "uv") return false;
   if ((g.getAttribute("position") as unknown as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute) return false;
-  if (g.groups.length > 1) return false;
+  // geometry groups (BoxGeometry has 6, CylinderGeometry 3, ExtrudeGeometry 2) only pick materials from an array;
+  // with one material the renderer draws the whole index (drawRange), so the groups do not matter. Design code builds
+  // its arches, roofs and grilles from these primitives: skipping them left hundreds of loose meshes (EN-09).
+  if (g.drawRange.start !== 0 || Number.isFinite(g.drawRange.count)) return false;
   return true;
 }
 

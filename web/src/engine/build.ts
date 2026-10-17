@@ -14,9 +14,11 @@ import { createSDK, lenientThree } from "./sdk";
 import { addSun, sunDirection } from "./lights";
 import { floorBelow } from "./facade";
 import { ensurePaths } from "./furniture/paths";
+import { ensureDefining } from "./furniture/place";
 import { parking } from "./furniture/parking";
 import { ITEMS } from "./furniture/items";
 import { solarRect } from "./furniture/zones";
+import { NoteLog, type EngineNote } from "./core/notes";
 
 const LAYERS: Layer[] = ["structure", "facade", "interior", "furniture", "landscape", "lighting", "custom"];
 
@@ -137,6 +139,17 @@ export async function buildHouseImpl(
     await yieldNow();
   };
 
+  // EN-04: how many cars the design parks (explicit furnish calls; an auto-furnished porch parks one), so the
+  // parking layout makes room for all of them from the start
+  {
+    const carRe = /furnish\s*\(\s*["'`](car_sedan|car_suv|car|suv|sedan)["'`]/g;
+    let n = 0;
+    for (const s of sections) n += (s.body.match(carRe) ?? []).length;
+    const porches = plan.rooms.filter((r) => r.lv.i === 0 && (r.type === "porch" || r.type === "garage"));
+    const named = porches.reduce((a, r) => a + (Number(/(\d)\s*-?\s*car/i.exec(r.name)?.[1]) || 0), 0);
+    ctx.carsWanted = Math.max(n, named, porches.length ? 1 : 0);
+  }
+
   // structure first even if Argon put it later; it must exist for everything else
   const ordered = [...sections].sort((a, b) => (a.name === "structure" ? -1 : b.name === "structure" ? 1 : 0));
   for (const s of ordered) {
@@ -146,6 +159,8 @@ export async function buildHouseImpl(
     await runSection(s.name, s.layer, s.body);
   }
   if (!ctx.structureBuilt) await runSection("structure_auto", "structure", () => buildStructure(ctx, {}));
+  // EN-03: every bedroom has its bed, every bath its WC, every kitchen its fridge and hob, every dressing its wardrobe
+  if (ctx.structureBuilt) await ensureDefining(ctx, (fn) => runSection("furnish_essentials", "furniture", fn));
   let hasSun = false;
   ctx.root.traverse((o) => {
     if (o.userData.kind === "sun") hasSun = true;
@@ -179,7 +194,7 @@ export async function buildHouseImpl(
   const summary: AsBuiltSummary = {
     objects: cons.summary,
     section_errors: results.filter((r) => !r.ok).map((r) => ({ section: r.name, error: r.error ?? "error" })),
-    checks: [...(ctx.structureBuilt ? ctx.model.notes.list : []), ...ctx.notes.list],
+    checks: mergeNotes([...(ctx.structureBuilt ? ctx.model.notes.list : []), ...ctx.notes.list]),
   };
   const root = ctx.root;
   root.userData.stats = { mergedMeshes: cons.mergedMeshes, meshesBefore, meshesAfter };
@@ -354,6 +369,13 @@ function roofChecks(ctx: BuildCtx, objects: AsBuiltSummary["objects"]): void {
 }
 
 const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** EN-07: one line per fact across the structure and furnishing logs (same id or same message → merged). */
+function mergeNotes(list: EngineNote[]): EngineNote[] {
+  const log = new NoteLog();
+  for (const n of list) log.add({ ...n, element_ids: n.element_ids ? [...n.element_ids] : undefined });
+  return log.list;
+}
 
 /** Does the segment (x0,y0)-(x1,y1) cross the box? (slab test) */
 function segHitsBox(x0: number, y0: number, x1: number, y1: number, bx0: number, bx1: number, by0: number, by1: number): boolean {

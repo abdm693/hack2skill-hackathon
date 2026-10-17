@@ -42,6 +42,18 @@ export function parking(ctx: BuildCtx): Parking {
   return p;
 }
 
+/**
+ * Lay the bays out again for `n` cars (the design asked for more cars than were counted up front). Returns the new
+ * layout; the caller moves the cars already parked into its bays (in order). Null when it gives no more bays.
+ */
+export function replanParking(ctx: BuildCtx, n: number): Parking | null {
+  const old = parking(ctx);
+  const next = computeParking(ctx, n);
+  if (next.bays.length <= old.bays.length) return null;
+  cache.set(ctx, next);
+  return next;
+}
+
 function mainDoor(ctx: BuildCtx): PlacedOpening | null {
   const ops = ctx.structureBuilt ? ctx.model.openings : [];
   const g = ctx.plan.levels[0].id;
@@ -52,7 +64,7 @@ function mainDoor(ctx: BuildCtx): PlacedOpening | null {
   );
 }
 
-function computeParking(ctx: BuildCtx): Parking {
+function computeParking(ctx: BuildCtx, want?: number): Parking {
   const plan = ctx.plan;
   const g = plan.levels[0];
   const door = mainDoor(ctx);
@@ -185,9 +197,17 @@ function computeParking(ctx: BuildCtx): Parking {
   // ── bays ───────────────────────────────────────────────────────────────────────────────────────────────
   const bays: Bay[] = [];
   const chosen: R[] = [];
+  const ov = (a: R, b: R) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.d - 0.01 && b.y < a.y + a.d - 0.01;
+  // EN-04: lay out as many bays as the design parks cars (at least one per porch), side by side, on either side of
+  // the walkway, or one behind the other (tandem) in a deep porch; narrower bays (down to the car's own 6.1 ft)
+  // before a car is left out
+  let wanted = Math.max(1, want ?? ctx.carsWanted ?? 1);
   for (const pr of porches) {
+    const placed = porchBays(pr, Math.max(1, wanted));
+    wanted = Math.max(0, wanted - placed);
+  }
+  function porchBays(pr: RoomM, n: number): number {
     const r = pr.rect;
-    // the edge the car drives in over: the side facing a driveway, else the road side, else the car gate side
     type E = { side: "front" | "back" | "left" | "right"; score: number };
     const edges: E[] = (["front", "back", "left", "right"] as const).map((side) => {
       const mx = side === "left" ? r.x - 0.5 : side === "right" ? r.x + r.w + 0.5 : r.x + r.w / 2;
@@ -200,42 +220,85 @@ function computeParking(ctx: BuildCtx): Parking {
     });
     edges.sort((a, b) => b.score - a.score);
     const e = edges[0];
-    if (e.score < 0) continue;
+    if (e.score < 0) return 0;
     const alongX = e.side === "front" || e.side === "back";
     const width = alongX ? r.w : r.d;
     const depth = alongX ? r.d : r.w;
     const inward = e.side === "front" || e.side === "left" ? 1 : -1;
     const edgeC = e.side === "front" ? r.y : e.side === "back" ? r.y + r.d : e.side === "left" ? r.x : r.x + r.w;
     const lo = alongX ? r.x : r.y;
-    const bl = Math.max(CAR.l + 0.5, Math.min(18, depth));
-    const outBy = Math.min(4, Math.max(0, bl - depth)); // a short porch: the car's tail may stand in the driveway
-    const maxBays = Math.max(1, Math.floor((width + 0.01) / 9));
-    for (let n = 0; n < maxBays; n++) {
-      let best: { rect: R; score: number } | null = null;
-      for (const bw of [9, 8.5, 8, 7.5]) {
-        if (bw > width + 1e-6) continue;
-        for (let u = lo; u + bw <= lo + width + 1e-6; u += 0.5) {
-          const c0 = edgeC - inward * outBy, c1 = c0 + inward * bl;
-          const rect: R = alongX ? { x: u, y: Math.min(c0, c1), w: bw, d: bl } : { x: Math.min(c0, c1), y: u, w: bl, d: bw };
+    // depth slots: one bay deep, or two (tandem) when the porch is deep enough for two cars nose to tail
+    const tandem = depth >= 2 * (CAR.l + 0.5) - 0.01;
+    const bl = tandem ? Math.min(18, depth / 2) : Math.max(CAR.l + 0.5, Math.min(18, depth));
+    const outBy = tandem ? 0 : Math.min(4, Math.max(0, bl - depth)); // a short porch: the car's tail may stand in the driveway
+    const slots = tandem ? [0, 1] : [0];
+    const rot = alongX ? (inward > 0 ? 0 : 180) : inward > 0 ? -90 : 90;
+    type C = { rect: R; score: number; slot: number; u: number };
+    // a bay may also be the car's own length (16.3 ft) and stand up to 4 ft out over the open drive-in edge, so it
+    // keeps clear of a door at the back of the porch
+    const poses: { len: number; out: number; slot: number }[] = [];
+    for (const slot of slots) poses.push({ len: bl, out: outBy, slot });
+    if (!tandem) {
+      const short = CAR.l + 0.5;
+      for (const len of bl > short + 0.01 ? [bl, short] : [bl])
+        for (let ob = Math.max(outBy, 0.5); ob <= 4 + 1e-6; ob += 0.5) poses.push({ len, out: ob, slot: 0 });
+    }
+    const singles = (bw: number): C[] => {
+      const out: C[] = [];
+      const us: number[] = [];
+      for (let u = lo; u + bw <= lo + width + 1e-6; u += 0.5) us.push(u);
+      if (width - bw > 0.01) us.push(lo + width - bw);
+      for (const ps of poses)
+        for (const u of us) {
+          const c0 = edgeC - inward * ps.out + inward * ps.slot * ps.len, c1 = c0 + inward * ps.len;
+          const rect: R = alongX ? { x: u, y: Math.min(c0, c1), w: bw, d: ps.len } : { x: Math.min(c0, c1), y: u, w: ps.len, d: bw };
           if (rect.x < -0.01 || rect.y < 0.3 || rect.x + rect.w > plan.plotW + 0.01) continue;
-          const ov = (a: R, b: R) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.d - 0.01 && b.y < a.y + a.d - 0.01;
-          if (doorZones.some((z) => ov(z, rect)) || chosen.some((z) => ov(z, rect))) continue;
-          if (enclosed.some((q) => ov(q.rect, rect))) continue;
-          if (!reachable(blockedBy([...chosen, rect], 1.5))) continue;
-          // far from the doors, wide bays first, close to the car gate's line
+          if (doorZones.some((z) => ov(z, rect)) || chosen.some((z) => ov(z, rect)) || enclosed.some((q) => ov(q.rect, rect))) continue;
+          // far from the doors, close to the car gate's line; under the porch roof before out on the driveway, the
+          // front slot before the tandem one
           const cx = rect.x + rect.w / 2, cy = rect.y + rect.d / 2;
           const dd = Math.min(30, ...doorZones.map((z) => Math.hypot(z.x + z.w / 2 - cx, z.y + z.d / 2 - cy)));
           const gate = carGate ? -Math.abs(Number(carGate.at?.[0]) - cx) * 0.15 : 0;
-          const score = dd + bw * 0.6 + gate;
-          if (!best || score > best.score) best = { rect, score };
+          out.push({ rect, score: dd + gate - ps.slot * 4 - (ps.out - outBy) * 1.5, slot: ps.slot, u });
         }
-        if (best) break;
+      return out;
+    };
+    const feasible = (arr: R[]) => reachable(blockedBy([...chosen, ...arr], 1.5));
+    /** the best arrangement of k bays of width bw that keeps the walkway open (exhaustive for 1 and 2 bays, then greedy) */
+    const arrange = (k: number, bw: number): C[] | null => {
+      const cs = singles(bw).sort((a, b) => b.score - a.score);
+      if (!cs.length) return null;
+      if (k === 1) return cs.find((c) => feasible([c.rect])) ? [cs.find((c) => feasible([c.rect]))!] : null;
+      if (k === 2) {
+        const pairs: [C, C, number][] = [];
+        for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) if (!ov(cs[i].rect, cs[j].rect)) pairs.push([cs[i], cs[j], cs[i].score + cs[j].score]);
+        pairs.sort((a, b) => b[2] - a[2]);
+        let tests = 0;
+        for (const [a, b] of pairs) {
+          if (++tests > 400) break;
+          if (feasible([a.rect, b.rect])) return [a, b];
+        }
+        return null;
       }
-      if (!best) break;
-      chosen.push(best.rect);
-      const rot = alongX ? (inward > 0 ? 0 : 180) : inward > 0 ? -90 : 90;
-      bays.push({ rect: best.rect, rot, room: pr.id, used: false, where: "porch" });
+      const base = arrange(k - 1, bw);
+      if (!base) return null;
+      const extra = cs.find((c) => !base.some((b) => ov(b.rect, c.rect)) && feasible([...base.map((b) => b.rect), c.rect]));
+      return extra ? [...base, extra] : null;
+    };
+    const fitAcross = Math.max(1, Math.floor((width + 0.01) / CAR.w)) * slots.length;
+    for (let k = Math.min(n, fitAcross); k >= 1; k--) {
+      for (const bw of [9, 8.5, 8, 7.5, 7, 6.6, CAR.w]) {
+        if (bw > width + 1e-6) continue;
+        const arr = arrange(k, bw);
+        if (!arr) continue;
+        for (const c of arr.sort((a, b) => a.slot - b.slot || a.u - b.u)) {
+          chosen.push(c.rect);
+          bays.push({ rect: c.rect, rot, room: pr.id, used: false, where: "porch" });
+        }
+        return arr.length;
+      }
     }
+    return 0;
   }
   // spare bays in the driveway (front setback) for further cars: nose toward the house, never on the walkway or
   // in front of a porch bay
@@ -243,11 +306,10 @@ function computeParking(ctx: BuildCtx): Parking {
     const r = dr.rect;
     const bl = CAR.l + 0.5, bw = 8.5;
     if (r.d < bl || r.w < bw) continue;
-    for (let n = 0; n < 2; n++) {
+    for (let n = 0, cap = Math.min(2, wanted); n < cap; n++) {
       let best: { rect: R; score: number } | null = null;
       for (let u = r.x; u + bw <= r.x + r.w + 1e-6; u += 0.5) {
         const rect: R = { x: u, y: r.y + r.d - bl, w: bw, d: bl };
-        const ov = (a: R, b: R) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.d - 0.01 && b.y < a.y + a.d - 0.01;
         if (chosen.some((z) => ov(z, rect)) || doorZones.some((z) => ov(z, rect))) continue;
         // not in front of a porch bay (that car must be able to drive out)
         if (bays.some((b) => b.where === "porch" && b.rect.x < rect.x + rect.w && rect.x < b.rect.x + b.rect.w)) continue;
@@ -259,6 +321,7 @@ function computeParking(ctx: BuildCtx): Parking {
       if (!best) break;
       chosen.push(best.rect);
       bays.push({ rect: best.rect, rot: 0, room: dr.id, used: false, where: "driveway" });
+      wanted--;
     }
   }
   const path = pathOn(blockedBy(chosen, 1.5)) ?? (approach ? [start, approach] : []);

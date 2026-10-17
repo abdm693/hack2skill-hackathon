@@ -14,6 +14,7 @@ import { expandRect, type R } from "../core/grid";
 import type { RoomM } from "../plan/model";
 import { innerRect } from "../interior";
 import { subtract, type Span } from "../structure/cover";
+import type { PlacedOpening } from "../structure/model";
 
 export interface Zone {
   x0: number;
@@ -62,7 +63,8 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
         const c1 = c0 + into * dep;
         return run.axis === "x" ? { x0: a, x1: b, y0: Math.min(c0, c1), y1: Math.max(c0, c1) } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: a, y1: b };
       };
-      const core = swing ? box(o.u0 - 0.15, o.u1 + 0.15, leaf + 0.15) : box(o.u0, o.u1, 2.0);
+      // EN-02: the part never touched is the full clear zone (opening width × 3 ft on this side) plus the leaf's sweep
+      const core = swing ? box(o.u0 - 0.15, o.u1 + 0.15, Math.max(3.0, leaf + 0.15)) : box(o.u0, o.u1, 3.0);
       out.push({ ...box(o.u0 - 0.5, o.u1 + 0.5, depth), kind: "door", id: o.op.id, core });
     } else {
       const c1 = c0 + into * 2.0;
@@ -136,6 +138,46 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
     }
   }
   return out;
+}
+
+type Box4 = { x0: number; x1: number; y0: number; y1: number };
+
+/**
+ * EN-02: the clear zone a door, arch or sliding door keeps on one side (`into` = -1 the run's neg side, +1 its pos
+ * side): the opening's width × 3 ft from the wall face, and, on the side a hinged leaf swings into, the quarter
+ * circles the leaves sweep (centre at the hinge, radius the leaf). Nothing may stand in it.
+ */
+export function doorClearance(o: PlacedOpening, into: -1 | 1): { rect: Box4; discs: { cx: number; cy: number; r: number; quad: Box4 }[] } {
+  const run = o.run;
+  const c0 = run.c + (into * run.t) / 2;
+  const toBox = (a: number, b: number, p: number, q: number): Box4 => (run.axis === "x" ? { x0: Math.min(a, b), x1: Math.max(a, b), y0: Math.min(p, q), y1: Math.max(p, q) } : { x0: Math.min(p, q), x1: Math.max(p, q), y0: Math.min(a, b), y1: Math.max(a, b) });
+  const rect = toBox(o.u0, o.u1, c0, c0 + into * 3);
+  const discs: { cx: number; cy: number; r: number; quad: Box4 }[] = [];
+  const hinged = o.op.type !== "sliding_door" && o.op.type !== "arch" && o.op.type !== "garage_door";
+  if (hinged && o.swingSide === into) {
+    const w = o.u1 - o.u0;
+    const hinges: [number, number][] = o.op.type === "double_door" ? [[o.u0, 1], [o.u1, -1]] : o.hingeAtA ? [[o.u0, 1]] : [[o.u1, -1]];
+    const r = o.op.type === "double_door" ? w / 2 : w;
+    for (const [u, dir] of hinges) {
+      const [cx, cy] = run.axis === "x" ? [u, c0] : [c0, u];
+      discs.push({ cx, cy, r, quad: toBox(u, u + dir * r, c0, c0 + into * r) });
+    }
+  }
+  return { rect, discs };
+}
+
+/** Does a footprint intrude into a door's clear zone (by more than `tol` ft)? */
+export function intrudes(f: Box4, z: ReturnType<typeof doorClearance>, tol = 0.05): boolean {
+  const ov = (a: Box4, b: Box4) => a.x0 < b.x1 - tol && b.x0 < a.x1 - tol && a.y0 < b.y1 - tol && b.y0 < a.y1 - tol;
+  if (ov(f, z.rect)) return true;
+  for (const d of z.discs) {
+    if (!ov(f, d.quad)) continue;
+    // nearest point of the footprint (clipped to the quadrant) to the hinge
+    const x0 = Math.max(f.x0, d.quad.x0), x1 = Math.min(f.x1, d.quad.x1), y0 = Math.max(f.y0, d.quad.y0), y1 = Math.min(f.y1, d.quad.y1);
+    const nx = Math.min(Math.max(d.cx, x0), x1), ny = Math.min(Math.max(d.cy, y0), y1);
+    if (Math.hypot(nx - d.cx, ny - d.cy) < d.r - tol) return true;
+  }
+  return false;
 }
 
 export function sharedEdge(a: R, b: R): { axis: "x" | "y"; c: number; a: number; b: number } | null {

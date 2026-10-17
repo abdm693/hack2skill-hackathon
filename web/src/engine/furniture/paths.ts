@@ -11,6 +11,8 @@ import { FT, DEG } from "../core/util";
 import type { RoomM } from "../plan/model";
 import { innerRect } from "../interior";
 import { keepOut } from "./zones";
+import { humanType } from "../core/notes";
+import { DECOR, roomLabel } from "./place";
 
 const CELL = 0.25;
 const FIXED = new Set(["kitchen_counter", "wc", "vanity", "shower", "bathtub", "tv_unit", "car_sedan", "car_suv", "fridge", "kitchen_island", "washing_machine", "oven"]);
@@ -87,8 +89,8 @@ function baseGrid(ctx: BuildCtx, rooms: RoomM[]): Grid {
   return { x0, y0, nx, ny, base };
 }
 
-function entriesOf(ctx: BuildCtx, rooms: RoomM[]): { x: number; y: number; what: string }[] {
-  const out: { x: number; y: number; what: string }[] = [];
+function entriesOf(ctx: BuildCtx, rooms: RoomM[]): { x: number; y: number; what: string; room?: RoomM }[] {
+  const out: { x: number; y: number; what: string; room?: RoomM }[] = [];
   const set = new Set(rooms);
   const level = rooms[0].level;
   for (const o of ctx.model.openings) {
@@ -98,7 +100,7 @@ function entriesOf(ctx: BuildCtx, rooms: RoomM[]): { x: number; y: number; what:
       const other = into < 0 ? o.run.pos : o.run.neg;
       if (other && set.has(other)) continue;
       const u = (o.u0 + o.u1) / 2, c = o.run.c + into * 1.5;
-      out.push(o.run.axis === "x" ? { x: u, y: c, what: o.op.id } : { x: c, y: u, what: o.op.id });
+      out.push(o.run.axis === "x" ? { x: u, y: c, what: o.op.id, room: r } : { x: c, y: u, what: o.op.id, room: r });
     }
   }
   for (const lay of ctx.model.stairs) {
@@ -249,10 +251,16 @@ function repairCluster(ctx: BuildCtx, rooms: RoomM[]): void {
       drop(ctx, culprit.it);
     }
   }
-  if (score(maskWith()).blocked.length) {
-    const names = rooms.map((r) => r.name).join(" + ");
-    ctx.notes.add({ id: `asbuilt.path_blocked:${rooms[0].id}`, title: "Tight walking path", status: "warn", message: `${names}: furniture leaves less than 3 ft between some doors or the stair.`, element_ids: rooms.map((r) => r.id) });
-  }
+  // EN-03/EN-07: one note per room group (whichever room started the repair), naming the floor; a later section
+  // that frees the path takes the note away again
+  const key = `asbuilt.path_blocked:${[...ids].sort()[0]}`;
+  const left = score(maskWith()).blocked;
+  if (left.length) {
+    const cut = [...new Set(left.map((k) => entries[k].room).filter((r): r is RoomM => !!r))];
+    const named = (cut.length ? cut : rooms).map((r) => r.name);
+    const floor = rooms[0].lv.name.toLowerCase();
+    ctx.notes.set({ id: key, title: "Tight walking path", status: "warn", message: `${named.join(" and ")} (${floor}): furniture leaves less than 3 ft in front of some doors or the stair.`, element_ids: rooms.map((r) => r.id) });
+  } else ctx.notes.remove(key);
 }
 
 /** Entries joined by a 3 ft path to the others they could reach on the bare floor (walls and stairs only); entries
@@ -391,7 +399,7 @@ function drop(ctx: BuildCtx, it: PlacedItem): void {
     if (k >= 0) ctx.items.splice(k, 1);
   }
   const room = ctx.plan.room(it.room);
-  ctx.notes.add({ id: `asbuilt.furniture_dropped:${it.id}`, title: "Furniture left out", status: "warn", message: `${room?.name ?? it.room}: the ${it.type.replace(/_/g, " ")} was left out to keep a 3 ft path between the doors.`, element_ids: [it.id] });
+  if (!DECOR.has(it.type)) ctx.notes.add({ id: `asbuilt.furniture_dropped:${it.id}`, title: "Furniture left out", status: "warn", message: `${roomLabel(ctx, room)}: the ${humanType(it.type)} was left out to keep a 3 ft path between the doors.`, element_ids: [it.id] });
 }
 
 /** For checks: every room cluster's entries and which of them a 3 ft path does not reach. */

@@ -293,23 +293,26 @@ class Layout {
         diningZone = { ...this.inner, y0: split };
       }
     }
-    // TV wall: longest solid stretch inside the living zone
+    // TV wall: longest solid stretch inside the living zone, 1.5 ft clear of every door and arch frame (EN-08), and
+    // not the wall the room is entered through while another wall can take it
     let tvBest: { s: Side; u: number; len: number } | null = null;
+    const tvCands: { s: Side; u: number; len: number }[] = [];
     for (const s of SIDES) {
       const ax = s === "front" || s === "back" ? "x" : "y";
       const zlo = ax === "x" ? zone.x0 : zone.y0, zhi = ax === "x" ? zone.x1 : zone.y1;
       const sideCoord = s === "front" ? this.inner.y0 : s === "back" ? this.inner.y1 : s === "left" ? this.inner.x0 : this.inner.x1;
       const inZone = ax === "x" ? sideCoord >= zone.y0 - 0.5 && sideCoord <= zone.y1 + 0.5 : sideCoord >= zone.x0 - 0.5 && sideCoord <= zone.x1 + 0.5;
       if (!inZone) continue;
-      for (const [a, b] of this.free(s, 7, 0.6)) {
+      for (const [a, b] of this.free(s, 7, 1.5)) {
         const p = Math.max(a, zlo), q = Math.min(b, zhi);
         if (q - p < 5.5) continue;
         const depth = ax === "x" ? zone.y1 - zone.y0 : zone.x1 - zone.x0;
         if (depth < 9) continue;
-        const score = q - p + (this.entry === s ? -3 : 0);
-        if (!tvBest || score > tvBest.len) tvBest = { s, u: (p + q) / 2, len: score };
+        tvCands.push({ s, u: (p + q) / 2, len: q - p });
       }
     }
+    const notEntry = tvCands.filter((c) => c.s !== this.entry);
+    for (const c of notEntry.length ? notEntry : tvCands) if (!tvBest || c.len > tvBest.len) tvBest = c;
     let livingCenter: [number, number] = this.at((zone.x0 + zone.x1) / 2, (zone.y0 + zone.y1) / 2);
     if (tvBest) {
       const s = tvBest.s;
