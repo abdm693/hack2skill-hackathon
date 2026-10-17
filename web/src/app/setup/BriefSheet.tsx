@@ -225,8 +225,13 @@ function EnvelopeFacts({ envelope, corner, authority }: { envelope: Envelope | n
   if (!envelope) return null;
   const r = envelope.buildable_rect;
   const perFloor = Math.min(r.w * r.d, envelope.max_ground_coverage_sqft);
-  // The corner-plot note matters most on a corner plot; never drop it (it used to be the fifth and hidden).
-  const notes = [...envelope.notes].sort((a, b) => Number(/corner|splay/i.test(b) && corner) - Number(/corner|splay/i.test(a) && corner));
+  // Only the notes the line and the facts grid don't already say: the corner splay and the authority's own notes. The
+  // envelope's generic lines (plot size, setbacks, coverage with a second per-floor figure, height) repeat them in
+  // jargon (lda.py envelope()).
+  const notes = envelope.notes
+    .filter((n) => !/^(Plot |Setbacks:|Ground coverage|Height up to)/.test(n.trim()))
+    // The corner-plot note matters most on a corner plot; never drop it.
+    .sort((a, b) => Number(/corner|splay/i.test(b) && corner) - Number(/corner|splay/i.test(a) && corner));
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: EASE_OUT }} className="mt-6">
       <h3 className="text-[15px] font-semibold text-ink">What {authority || envelope.authority || "LDA"} lets you build</h3>

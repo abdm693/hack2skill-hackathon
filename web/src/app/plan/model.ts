@@ -98,12 +98,17 @@ const TINY: Partial<Record<RoomType, string>> = {
   servant: "Serv.",
 };
 
-/** "Master Bedroom" → "Master bedroom" (keeps "TV", numbers and proper nouns that are all caps). */
+/**
+ * "Master Bedroom" → "Master bedroom" (keeps "TV", numbers and proper nouns that are all caps, also inside
+ * punctuation: "(LDA)", "LDA:").
+ */
 export function sentenceCase(name: string): string {
   const words = name.trim().split(/\s+/);
-  return words
-    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : /^[A-Z]{2,}$/.test(w) || /\d/.test(w) ? w : w.toLowerCase()))
-    .join(" ");
+  const keep = (w: string) => {
+    const letters = w.replace(/[^A-Za-z]/g, "");
+    return (letters.length >= 2 && letters === letters.toUpperCase()) || /\d/.test(w);
+  };
+  return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : keep(w) ? w : w.toLowerCase())).join(" ");
 }
 
 /**

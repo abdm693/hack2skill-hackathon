@@ -8,7 +8,6 @@ import {
   forwardRef,
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -23,6 +22,7 @@ import { X } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { useEscape as useShellEscape } from "@/app/lib/hooks";
 import { toast } from "@/app/store/toast";
+import { SegmentThumb } from "@/app/ui/SegmentThumb";
 
 export const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 export const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -188,18 +188,19 @@ export function Segmented<T extends string>({
   label: string;
   className?: string;
 }) {
-  const id = useId();
   return (
     <div
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "relative inline-flex shrink-0 items-center rounded-full p-[3px]",
+        "relative isolate inline-flex shrink-0 items-center rounded-full p-[3px]",
         size === "lg" ? "h-11" : size === "md" ? "h-9" : "h-8",
         tone === "light" ? "bg-surface-2" : "glass-hud",
         className,
       )}
     >
+      {/* The thumb slides under the labels, inside this control only (SegmentThumb). */}
+      <SegmentThumb index={options.findIndex((o) => o.value === value)} transition={SPRING} className={tone === "light" ? "bg-surface shadow-e1" : "bg-white"} />
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -213,19 +214,13 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              "hit-44 relative z-0 inline-flex h-full items-center gap-1.5 rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus disabled:opacity-40",
-              size === "sm" ? "px-3 text-[12px]" : "px-3.5 text-[13px]",
+              "hit-44 relative inline-flex h-full items-center rounded-full font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:shadow-focus disabled:opacity-40",
+              // lg is the phone HUD's icon-only size: a little narrower so the one-row HUD fits a 320px phone.
+              size === "sm" ? "px-3 text-[12px]" : size === "lg" ? "px-3 text-[13px]" : "px-3.5 text-[13px]",
               tone === "light" ? (active ? "text-ink" : "text-ink-3 hover:text-ink") : active ? "text-ink" : "text-hud-ink-2 hover:text-hud-ink",
             )}
           >
-            {active && (
-              <motion.span
-                layoutId={`seg-${id}`}
-                transition={SPRING}
-                className={cn("absolute inset-0 -z-10 rounded-full", tone === "light" ? "bg-surface shadow-e1" : "bg-white")}
-              />
-            )}
-            {o.label}
+            <span className="relative z-10 inline-flex items-center gap-1.5">{o.label}</span>
           </button>
         );
       })}

@@ -7,7 +7,7 @@ import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { cn } from "@/app/lib/utils";
-import { isTyping, usePhone } from "@/app/lib/hooks";
+import { isTyping, useMediaQuery, usePhone } from "@/app/lib/hooks";
 import { canEdit, defaultView, hasVersion, isViewId, LEGACY_VIEW, resolveVersion, roleOf, viewAvailable, VIEWS, type ViewId } from "@/app/lib/views";
 import { requireAccount, useAuth } from "@/app/store/auth";
 import { useMembers } from "@/app/store/members";
@@ -89,6 +89,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const phone = usePhone();
+  const touch = useMediaQuery("(pointer: coarse)");
   const ask = useAsk();
   const user = useAuth((s) => s.user);
   const signOut = useAuth((s) => s.signOut);
@@ -378,6 +379,8 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           else navigate(`/app/p/${project.id}/house?comment=${encodeURIComponent(c.id)}`);
         }}
         onApply={editor ? onApply : undefined}
+        // In the House, the Comment button is right there: say how to use it (touch has no C key).
+        emptyHint={view === "house" ? (touch ? "Tap Comment, then tap the house to pin a note." : "Click Comment (or press C), then click the house to pin a note.") : undefined}
       />
       {roleOf(project) === "owner" && <ShareDialog open={share} onClose={() => setShare(false)} project={project} />}
       <DetailsDialog open={details} onClose={() => setDetails(false)} project={project} />

@@ -230,6 +230,23 @@ function markSaved(pid: string) {
 }
 const failuresOf = (r: ComplianceReport) => r.checks.filter((c) => c.status === "fail").length;
 
+/**
+ * A design run's failures, one per plan attempt in the order they first ran ("3 → 2 → 1 → 2"). The architect re-sends
+ * the best attempt's compliance at the end (when a later round was worse): it replaces that attempt's own entry rather
+ * than adding a fifth value.
+ */
+export function failuresByAttempt(items: FeedItem[]): number[] {
+  const order: string[] = [];
+  const byAttempt = new Map<string, number>();
+  items.forEach((it, i) => {
+    if (it.kind !== "compliance") return;
+    const k = it.attempt != null ? `a${it.attempt}` : `i${i}`;
+    if (!byAttempt.has(k)) order.push(k);
+    byAttempt.set(k, failuresOf(it.report));
+  });
+  return order.map((k) => byAttempt.get(k)!);
+}
+
 export const useProject = create<ProjectState>((set, get) => {
   /** Ignore late events from a project the user already left. */
   const live = (pid: string) => get().pid === pid;
@@ -265,8 +282,10 @@ export const useProject = create<ProjectState>((set, get) => {
     compliance: ({ report, attempt }) => {
       if (!live(pid)) return;
       const k = key();
-      patchRun(k, { compliance: report, complianceAttempt: attempt, failures: [...get()[k].failures, failuresOf(report)] });
       pushItem(k, { kind: "compliance", report, attempt });
+      // Design: one value per plan attempt. Revise: every applied edit is checked as "attempt 1", so each one counts.
+      const failures = k === "design" ? failuresByAttempt(get()[k].items) : [...get()[k].failures, failuresOf(report)];
+      patchRun(k, { compliance: report, complianceAttempt: attempt, failures });
     },
     section: ({ section, index }) => {
       if (!live(pid)) return;

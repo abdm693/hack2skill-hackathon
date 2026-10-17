@@ -218,6 +218,7 @@ export function FloorsEditor({
   onChange: (p: Program, storeys: number) => void;
 }) {
   const levels = levelsFor(storeys);
+  const tabsId = useId(); // one underline per editor: it never slides over from another one
   const [tab, setTab] = useState<LevelId>(levels.includes("first") ? "first" : "ground");
   const active = levels.includes(tab) ? tab : levels[0];
   const marla = brief?.plot?.area_marla || 10;
@@ -277,7 +278,7 @@ export function FloorsEditor({
             >
               {LEVEL_LABEL[l]}
               {over && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-warn align-middle" />}
-              {l === active && <motion.span layoutId="floors-tab" transition={SPRING} className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-ink" />}
+              {l === active && <motion.span layoutId={`floors-tab-${tabsId}`} transition={SPRING} className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-ink" />}
             </button>
           );
         })}

@@ -9,6 +9,7 @@ import type { BuildingPlan, ComplianceCheck, ComplianceReport } from "@contracts
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { EASE_OUT, Meter } from "@/app/design/kit";
 import { LDA_SECTIONS, ldaSection, notesLine, summarize, tallyLine, valueLine, type Tally } from "./compliance";
+import { sentenceCase } from "./model";
 
 export function ComplianceChip({ ref, report, plan, asBuilt, onClick, active }: { ref?: Ref<HTMLButtonElement>; report: ComplianceReport; plan?: BuildingPlan; asBuilt?: ComplianceReport | null; onClick: () => void; active?: boolean }) {
   const s = useMemo(() => summarize(report, plan, asBuilt), [report, plan, asBuilt]);
@@ -263,7 +264,7 @@ function Row({ c, selected, onSelect, onFix, always }: { c: ComplianceCheck; sel
       >
         <StatusMark status={c.status} className="mt-0.5" />
         <span className="min-w-0 flex-1">
-          <span className="block text-[13.5px] leading-snug text-ink">{c.title}</span>
+          <span className="block text-[13.5px] leading-snug text-ink">{sentenceCase(c.title)}</span>
           {v && <span className="mt-0.5 block font-mono text-[12px] tabular-nums text-ink-2">{v}</span>}
           {(expanded || !v) && c.message && (!v || c.status !== "pass" || always) && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{c.message}</span>}
           {selected && target && <span className="mt-1 block text-[12px] font-medium text-accent">Shown on the plan</span>}

@@ -23,15 +23,30 @@ export function useStatusLine(project: Project): string {
   const versions = useProject((s) => s.versions);
   const asBuilt = useProject((s) => s.asBuilt);
   const saveState = useProject((s) => s.saveState);
+  // While a design run is going, its own stage says where it is (the stored project stage isn't refreshed until the
+  // build starts, so it would still read "Concepts" while Naqsha plans).
+  const runStage = useProject((s) => {
+    const r = s.design;
+    if (s.pid !== project.id || r.status !== "running") return null;
+    for (let i = r.items.length - 1; i >= 0; i--) {
+      const it = r.items[i];
+      if (it.kind === "stage" && it.stage !== "wait") return it.stage;
+    }
+    return "plan";
+  });
   const shownId = resolveVersion(project, params.get("v")).id;
   const current = project.versions.find((v) => v.id === shownId);
   const counts = complianceCounts(project, versions, asBuilt, shownId);
   const bits: string[] = [];
   if (current) bits.push(`v${current.n}${current.id !== project.current_version_id ? " (earlier)" : ""}`);
   if (counts) bits.push(countsLine(counts));
-  if (saveState === "saving") bits.push("Saving…");
+  if (runStage) bits.push(runStage === "build" || runStage === "save" ? "Building in 3D" : "Planning");
+  else if (saveState === "saving") bits.push("Saving…");
   else if (saveState === "saved") bits.push("Saved");
-  else if (!current) bits.push(project.stage === "setup" ? "Brief" : project.concepts.length ? "Concepts" : "Draft");
+  else if (!current) {
+    const s = project.stage;
+    bits.push(s === "setup" ? "Brief" : s === "planning" ? "Planning" : s === "building" ? "Building in 3D" : project.concepts.length ? "Concepts" : "Draft");
+  }
   return bits.join(" · ");
 }
 
