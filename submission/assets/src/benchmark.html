@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Naqsha prototype benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=block" rel="stylesheet">
+<link rel="stylesheet" href="diagram.css">
+<style>
+  /* 1280 x 580 CSS px, placed 664 pt wide: 18 px = 9.3 pt. No outer padding.
+     Timings: Cloud Run request logs for POST /intake, /concepts, /concepts/night, /render, /revise and /design
+     on revisions naqsha-00007..00009 (17 Oct 2026). Quality: every version-1 design in Firestore, 16-17 Oct. */
+  html, body { width: 1280px; height: 580px; position: relative; }
+  .abs { position: absolute; }
+  h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
+  .src { font-size: 17px; color: var(--ink-3); margin-top: 2px; }
+  h5 { font-size: 18px; font-weight: 600; color: var(--ink-2); }
+  h5 em { font-style: normal; font-weight: 400; color: var(--ink-3); }
+
+  .chart { position: absolute; left: 0; width: 780px; }
+  .row { position: relative; height: 34px; display: flex; align-items: center; }
+  .row .lab { width: 300px; font-size: 18px; color: var(--ink); white-space: nowrap; }
+  .row .lab small { font-size: 17px; color: var(--ink-3); margin-left: 6px; }
+  .track { position: absolute; left: 300px; top: 0; height: 34px; width: 360px; }
+  .bar { position: absolute; top: 10px; height: 14px; border-radius: 4px; background: var(--accent-light); }
+  .bar.solid { background: var(--accent); }
+  .med { position: absolute; top: 6px; width: 3px; height: 22px; background: var(--accent-ink); border-radius: 2px; }
+  .dot { position: absolute; top: 11px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 2.5px var(--accent); }
+  .val { position: absolute; top: 50%; transform: translateY(-50%); font-size: 18px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .val small { font-weight: 400; color: var(--ink-3); font-size: 17px; }
+  .grid { position: absolute; left: 300px; width: 360px; top: 0; bottom: 0; }
+  .grid i { position: absolute; top: 0; bottom: 0; width: 1px; background: #ECECEF; }
+  .axis { position: relative; margin-left: 300px; width: 360px; height: 22px; border-top: 1.5px solid var(--line-2); }
+  .axis span { position: absolute; top: 2px; transform: translateX(-50%); font-size: 17px; color: var(--ink-3); white-space: nowrap; }
+
+  .total { position: absolute; left: 0; width: 780px; border-radius: 12px; background: var(--accent-soft); padding: 8px 14px;
+           font-size: 18px; line-height: 1.25; color: var(--ink-2); }
+  .total b { color: var(--accent-ink); font-weight: 600; }
+
+  .right { position: absolute; left: 812px; width: 468px; }
+  .samples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .s { border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--line-2); padding: 10px 14px; }
+  .s h4 { font-size: 18px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+  .s .big { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin-top: 6px; }
+  .s .big small { font-size: 17px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; margin-left: 4px; }
+  .meter { height: 6px; border-radius: 3px; background: var(--pass); margin: 7px 0 6px; }
+  .s .liv { font-size: 17px; color: var(--ink-2); white-space: nowrap; }
+  .s .liv b { color: var(--ink); font-weight: 600; }
+
+  .batch { margin-top: 10px; border-radius: 14px; background: var(--pass-soft); padding: 10px 14px; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: center; }
+  .batch .big { font-size: 34px; font-weight: 600; color: var(--pass); letter-spacing: -0.02em; line-height: 1; }
+  .batch p { font-size: 18px; color: var(--ink); line-height: 1.22; }
+  .batch .foot { grid-column: 1 / 3; font-size: 17px; color: var(--ink-2); line-height: 1.22; }
+
+  .loop { margin-top: 10px; border-radius: 14px; background: var(--fill); padding: 10px 14px; display: grid; grid-template-columns: 200px 1fr; gap: 12px; align-items: end; }
+  .loop h4 { font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .loop p { font-size: 17px; color: var(--ink-2); margin-top: 3px; line-height: 1.22; }
+  .cols { display: flex; align-items: flex-end; gap: 18px; height: 92px; padding-bottom: 22px; position: relative; border-bottom: 1.5px solid var(--line-2); }
+  .col { width: 56px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .col .b { width: 22px; background: var(--fail); border-radius: 4px 4px 0 0; }
+  .col .n { font-size: 19px; font-weight: 600; margin-bottom: 3px; }
+  .col .x { position: absolute; bottom: -22px; font-size: 17px; color: var(--ink-3); white-space: nowrap; }
+  .col.pass .n { color: var(--pass); }
+
+  .strip { position: absolute; left: 0; right: 0; top: 522px; height: 58px; display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; gap: 10px; }
+  .t { border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--line); padding: 0 12px; display: flex; align-items: center; gap: 10px; }
+  .t b { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .t span { font-size: 17px; color: var(--ink-2); line-height: 1.18; }
+</style>
+</head>
+<body>
+  <div class="abs" style="left:0; top:0;">
+    <h2>Time to result, measured live</h2>
+    <div class="src">Cloud Run request logs · revisions 00007–00009 · 17 Oct 2026 · n = runs</div>
+  </div>
+
+  <!-- seconds -->
+  <div class="chart" style="top:56px;">
+    <h5>Interactive steps <em>· seconds · bar = range, tick = median</em></h5>
+    <div style="position:relative; margin-top:4px;">
+      <div class="grid"><i style="left:0"></i><i style="left:72px"></i><i style="left:144px"></i><i style="left:216px"></i><i style="left:288px"></i><i style="left:360px"></i></div>
+      <div class="row"><div class="lab">Setup agent turn<small>n 9</small></div>
+        <div class="track"><div class="bar solid" style="left:3.6px; width:8.2px"></div><div class="val" style="left:22px">2.6 s <small>(1.5–4.9)</small></div></div></div>
+      <div class="row"><div class="lab">Four concepts<small>n 6</small></div>
+        <div class="track"><div class="bar" style="left:30.5px; width:25.4px"></div><div class="med" style="left:40.3px"></div>
+          <div class="val" style="left:64px">17 s <small>(13–23)</small></div>
+          <div class="dot" style="left:265px"></div><div class="val" style="left:282px; font-weight:500; font-variant-numeric: normal;"><small>113 s once, on a 429</small></div></div></div>
+      <div class="row"><div class="lab">Night versions of all four<small>n 6</small></div>
+        <div class="track"><div class="bar" style="left:35.5px; width:125.1px"></div><div class="med" style="left:42.2px"></div><div class="val" style="left:170px">18 s <small>(15–67)</small></div></div></div>
+      <div class="row"><div class="lab">“Render this view”<small>n 2</small></div>
+        <div class="track"><div class="bar solid" style="left:21.4px; width:3.6px"></div><div class="val" style="left:34px">9–10 s</div></div></div>
+      <div class="row"><div class="lab">A revision from comments<small>n 4</small></div>
+        <div class="track"><div class="bar" style="left:165.1px; width:166.1px"></div><div class="med" style="left:170.1px"></div><div class="val" style="left:340px">71 s <small>(69–138)</small></div></div></div>
+    </div>
+    <div class="axis"><span style="left:0">0</span><span style="left:72px">30</span><span style="left:144px">60</span><span style="left:216px">90</span><span style="left:288px">120</span><span style="left:360px">150 s</span></div>
+  </div>
+
+  <!-- minutes -->
+  <div class="chart" style="top:306px;">
+    <h5>Full design, plan to walkable 3D <em>· minutes · includes fix loop and self-review</em></h5>
+    <div style="position:relative; margin-top:4px;">
+      <div class="grid"><i style="left:0"></i><i style="left:60px"></i><i style="left:120px"></i><i style="left:180px"></i><i style="left:240px"></i><i style="left:300px"></i><i style="left:360px"></i></div>
+      <div class="row"><div class="lab">10 marla home<small>n 2</small></div>
+        <div class="track"><div class="bar solid" style="left:138px; width:18px"></div><div class="val" style="left:166px">4.6–5.2 min</div></div></div>
+      <div class="row"><div class="lab">1 kanal home<small>n 6</small></div>
+        <div class="track"><div class="bar" style="left:192px; width:111px"></div><div class="med" style="left:244.5px"></div><div class="val" style="left:312px">8.2 min <small>(6.4–10.1)</small></div></div></div>
+    </div>
+    <div class="axis"><span style="left:0">0</span><span style="left:60px">2</span><span style="left:120px">4</span><span style="left:180px">6</span><span style="left:240px">8</span><span style="left:300px">10</span><span style="left:360px">12 min</span></div>
+  </div>
+
+  <div class="total" style="top:446px;"><b>End to end, 10 marla:</b> 5.3 min of AI time from the first message to a walkable home (setup&nbsp;3&nbsp;s, concepts&nbsp;23&nbsp;s, night&nbsp;17&nbsp;s, plan to 3D 4.6&nbsp;min). Today: weeks.</div>
+
+  <!-- quality -->
+  <div class="right" style="top:0;">
+    <h2>Rules passed</h2>
+    <div class="src">Deterministic checks on what the agents delivered</div>
+    <div class="samples">
+      <div class="s"><h4>10 marla modern home</h4><div class="big">37/37<small>LDA</small></div><div class="meter"></div><div class="liv"><b>10/10</b> livable · 0 warnings</div></div>
+      <div class="s"><h4>1 kanal Spanish villa</h4><div class="big">43/43<small>LDA</small></div><div class="meter"></div><div class="liv"><b>10/10</b> livable · 0 warnings</div></div>
+    </div>
+    <div class="batch">
+      <div class="big">8&nbsp;→&nbsp;0</div>
+      <p>Rule failures fell from a median of 8 on the first try to 0 delivered, fixed by the AI&nbsp;architect</p>
+      <div class="foot">All first designs saved in Firestore, 16–17 Oct.</div>
+    </div>
+    <div class="loop">
+      <div><h4>Loop A at work</h4><p>Rule failures per try on a 1&nbsp;kanal brief; the AI architect fixed them.</p></div>
+      <div class="cols">
+        <div class="col"><span class="n">15</span><div class="b" style="height:56px"></div><span class="x">try 1</span></div>
+        <div class="col"><span class="n">5</span><div class="b" style="height:19px"></div><span class="x">try 2</span></div>
+        <div class="col pass"><span class="n">✓ 0</span><div class="b" style="height:0"></div><span class="x">try 3</span></div>
+      </div>
+    </div>
+    <div style="margin-top:10px; font-size:17px; line-height:1.24; color:var(--ink-2);"><b style="color:var(--ink); font-weight:600;">For scale:</b> an AI floor-plan tool we tested took ~6 min and 8 actions to draw one floor in 2D, with no stairs and no rule checks.</div>
+  </div>
+
+  <div class="strip">
+    <div class="t"><b>~200</b><span>issues found and fixed in development by 8 AI tester agents over 3 rounds</span></div>
+    <div class="t"><b>123</b><span>API tests, incl. rules engine</span></div>
+    <div class="t"><b>6 tries</b><span>backoff on 429 and 5xx</span></div>
+    <div class="t"><b>3</b><span>image models in the fallback chain</span></div>
+  </div>
+</body>
+</html>

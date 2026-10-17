@@ -1,0 +1,164 @@
+[
+  {
+    "text": "You",
+    "start": 0.11,
+    "end": 0.21,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.21,
+    "end": 0.48,
+    "id": "w1"
+  },
+  {
+    "text": "also",
+    "start": 0.48,
+    "end": 0.7,
+    "id": "w2"
+  },
+  {
+    "text": "walk",
+    "start": 0.7,
+    "end": 0.98,
+    "id": "w3"
+  },
+  {
+    "text": "through",
+    "start": 0.98,
+    "end": 1.48,
+    "id": "w4"
+  },
+  {
+    "text": "it",
+    "start": 1.48,
+    "end": 1.62,
+    "id": "w5"
+  },
+  {
+    "text": "like",
+    "start": 1.62,
+    "end": 1.87,
+    "id": "w6"
+  },
+  {
+    "text": "a",
+    "start": 1.91,
+    "end": 1.97,
+    "id": "w7"
+  },
+  {
+    "text": "game,",
+    "start": 1.97,
+    "end": 2.4,
+    "id": "w8"
+  },
+  {
+    "text": "look",
+    "start": 2.44,
+    "end": 2.66,
+    "id": "w9"
+  },
+  {
+    "text": "around",
+    "start": 2.66,
+    "end": 3.06,
+    "id": "w10"
+  },
+  {
+    "text": "the",
+    "start": 3.06,
+    "end": 3.26,
+    "id": "w11"
+  },
+  {
+    "text": "lounge,",
+    "start": 3.26,
+    "end": 3.78,
+    "id": "w12"
+  },
+  {
+    "text": "jump",
+    "start": 3.88,
+    "end": 4.02,
+    "id": "w13"
+  },
+  {
+    "text": "to",
+    "start": 4.02,
+    "end": 4.11,
+    "id": "w14"
+  },
+  {
+    "text": "the",
+    "start": 4.2,
+    "end": 4.32,
+    "id": "w15"
+  },
+  {
+    "text": "master",
+    "start": 4.32,
+    "end": 4.64,
+    "id": "w16"
+  },
+  {
+    "text": "bedroom,",
+    "start": 4.64,
+    "end": 5.28,
+    "id": "w17"
+  },
+  {
+    "text": "take",
+    "start": 5.28,
+    "end": 5.6,
+    "id": "w18"
+  },
+  {
+    "text": "the",
+    "start": 5.6,
+    "end": 5.84,
+    "id": "w19"
+  },
+  {
+    "text": "stairs",
+    "start": 5.84,
+    "end": 6.19,
+    "id": "w20"
+  },
+  {
+    "text": "and",
+    "start": 6.44,
+    "end": 6.45,
+    "id": "w21"
+  },
+  {
+    "text": "step",
+    "start": 6.55,
+    "end": 6.72,
+    "id": "w22"
+  },
+  {
+    "text": "out",
+    "start": 6.72,
+    "end": 6.87,
+    "id": "w23"
+  },
+  {
+    "text": "onto",
+    "start": 6.94,
+    "end": 7.12,
+    "id": "w24"
+  },
+  {
+    "text": "the",
+    "start": 7.12,
+    "end": 7.28,
+    "id": "w25"
+  },
+  {
+    "text": "roof.",
+    "start": 7.28,
+    "end": 7.68,
+    "id": "w26"
+  }
+]

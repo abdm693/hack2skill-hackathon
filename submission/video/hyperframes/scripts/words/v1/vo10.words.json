@@ -1,0 +1,350 @@
+[
+  {
+    "text": "Select",
+    "start": 0.18,
+    "end": 0.43,
+    "id": "w0"
+  },
+  {
+    "text": "the",
+    "start": 0.57,
+    "end": 0.84,
+    "id": "w1"
+  },
+  {
+    "text": "notes",
+    "start": 0.84,
+    "end": 1.31,
+    "id": "w2"
+  },
+  {
+    "text": "and",
+    "start": 1.43,
+    "end": 1.59,
+    "id": "w3"
+  },
+  {
+    "text": "press",
+    "start": 1.83,
+    "end": 2.06,
+    "id": "w4"
+  },
+  {
+    "text": "Revise.",
+    "start": 2.06,
+    "end": 2.72,
+    "id": "w5"
+  },
+  {
+    "text": "A",
+    "start": 2.72,
+    "end": 2.92,
+    "id": "w6"
+  },
+  {
+    "text": "Google",
+    "start": 2.92,
+    "end": 3.45,
+    "id": "w7"
+  },
+  {
+    "text": "ADK",
+    "start": 3.45,
+    "end": 3.76,
+    "id": "w8"
+  },
+  {
+    "text": "agent",
+    "start": 3.92,
+    "end": 4.28,
+    "id": "w9"
+  },
+  {
+    "text": "on",
+    "start": 4.28,
+    "end": 4.36,
+    "id": "w10"
+  },
+  {
+    "text": "Gemini",
+    "start": 4.55,
+    "end": 4.91,
+    "id": "w11"
+  },
+  {
+    "text": "4",
+    "start": 4.91,
+    "end": 5.19,
+    "id": "w12"
+  },
+  {
+    "text": "Argon",
+    "start": 5.6,
+    "end": 6,
+    "id": "w13"
+  },
+  {
+    "text": "with",
+    "start": 6,
+    "end": 6.4,
+    "id": "w14"
+  },
+  {
+    "text": "nine",
+    "start": 6.49,
+    "end": 6.82,
+    "id": "w15"
+  },
+  {
+    "text": "tools",
+    "start": 6.82,
+    "end": 7.35,
+    "id": "w16"
+  },
+  {
+    "text": "reads",
+    "start": 7.39,
+    "end": 7.81,
+    "id": "w17"
+  },
+  {
+    "text": "each",
+    "start": 7.92,
+    "end": 8.11,
+    "id": "w18"
+  },
+  {
+    "text": "note,",
+    "start": 8.16,
+    "end": 8.67,
+    "id": "w19"
+  },
+  {
+    "text": "edits",
+    "start": 8.88,
+    "end": 9.16,
+    "id": "w20"
+  },
+  {
+    "text": "the",
+    "start": 9.29,
+    "end": 9.44,
+    "id": "w21"
+  },
+  {
+    "text": "plan,",
+    "start": 9.44,
+    "end": 9.98,
+    "id": "w22"
+  },
+  {
+    "text": "and",
+    "start": 9.98,
+    "end": 10.25,
+    "id": "w23"
+  },
+  {
+    "text": "reruns",
+    "start": 10.25,
+    "end": 10.79,
+    "id": "w24"
+  },
+  {
+    "text": "every",
+    "start": 10.79,
+    "end": 11.11,
+    "id": "w25"
+  },
+  {
+    "text": "check.",
+    "start": 11.6,
+    "end": 12,
+    "id": "w26"
+  },
+  {
+    "text": "The",
+    "start": 12.16,
+    "end": 12.23,
+    "id": "w27"
+  },
+  {
+    "text": "window",
+    "start": 12.24,
+    "end": 12.71,
+    "id": "w28"
+  },
+  {
+    "text": "grows,",
+    "start": 12.71,
+    "end": 13.28,
+    "id": "w29"
+  },
+  {
+    "text": "the",
+    "start": 13.28,
+    "end": 13.49,
+    "id": "w30"
+  },
+  {
+    "text": "kitchen",
+    "start": 13.49,
+    "end": 13.97,
+    "id": "w31"
+  },
+  {
+    "text": "widens,",
+    "start": 13.98,
+    "end": 14.43,
+    "id": "w32"
+  },
+  {
+    "text": "and",
+    "start": 14.56,
+    "end": 14.72,
+    "id": "w33"
+  },
+  {
+    "text": "when",
+    "start": 14.88,
+    "end": 14.93,
+    "id": "w34"
+  },
+  {
+    "text": "a",
+    "start": 14.93,
+    "end": 14.97,
+    "id": "w35"
+  },
+  {
+    "text": "request",
+    "start": 15.03,
+    "end": 15.36,
+    "id": "w36"
+  },
+  {
+    "text": "would",
+    "start": 15.36,
+    "end": 15.65,
+    "id": "w37"
+  },
+  {
+    "text": "break",
+    "start": 15.65,
+    "end": 15.94,
+    "id": "w38"
+  },
+  {
+    "text": "the",
+    "start": 15.94,
+    "end": 16.12,
+    "id": "w39"
+  },
+  {
+    "text": "law,",
+    "start": 16.12,
+    "end": 16.5,
+    "id": "w40"
+  },
+  {
+    "text": "it",
+    "start": 16.5,
+    "end": 16.68,
+    "id": "w41"
+  },
+  {
+    "text": "says",
+    "start": 16.68,
+    "end": 17.04,
+    "id": "w42"
+  },
+  {
+    "text": "so.",
+    "start": 17.04,
+    "end": 17.52,
+    "id": "w43"
+  },
+  {
+    "text": "The",
+    "start": 17.68,
+    "end": 17.75,
+    "id": "w44"
+  },
+  {
+    "text": "porch",
+    "start": 17.76,
+    "end": 18.13,
+    "id": "w45"
+  },
+  {
+    "text": "can't",
+    "start": 18.13,
+    "end": 18.51,
+    "id": "w46"
+  },
+  {
+    "text": "cross",
+    "start": 18.51,
+    "end": 18.89,
+    "id": "w47"
+  },
+  {
+    "text": "the",
+    "start": 18.95,
+    "end": 19.11,
+    "id": "w48"
+  },
+  {
+    "text": "10-foot",
+    "start": 19.35,
+    "end": 19.89,
+    "id": "w49"
+  },
+  {
+    "text": "LDA",
+    "start": 20.02,
+    "end": 20.16,
+    "id": "w50"
+  },
+  {
+    "text": "front",
+    "start": 20.4,
+    "end": 20.55,
+    "id": "w51"
+  },
+  {
+    "text": "setback,",
+    "start": 20.55,
+    "end": 21.19,
+    "id": "w52"
+  },
+  {
+    "text": "so",
+    "start": 21.29,
+    "end": 21.39,
+    "id": "w53"
+  },
+  {
+    "text": "it",
+    "start": 21.39,
+    "end": 21.49,
+    "id": "w54"
+  },
+  {
+    "text": "offers",
+    "start": 21.5,
+    "end": 21.85,
+    "id": "w55"
+  },
+  {
+    "text": "an",
+    "start": 21.85,
+    "end": 21.87,
+    "id": "w56"
+  },
+  {
+    "text": "alternative.",
+    "start": 21.99,
+    "end": 22.8,
+    "id": "w57"
+  }
+]

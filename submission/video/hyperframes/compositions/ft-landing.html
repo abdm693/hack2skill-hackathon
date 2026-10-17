@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body>
+<template id="ft-landing-template">
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Noto Nastaliq Urdu"; src: url("assets/fonts/NotoNastaliqUrdu.ttf") format("truetype"); font-weight: 400 700; font-style: normal; }
+
+#ft-landing { position:absolute; inset:0; width:100%; height:100%; font-family:"Geist", sans-serif; color:#111113; }
+#ft-landing .topbar { position:absolute; left:128px; top:34px; width:1664px; height:66px; display:flex; align-items:center; gap:16px; }
+#ft-landing .chip { display:flex; align-items:center; gap:14px; height:60px; padding:0 26px 0 22px; border-radius:999px; background:#111113; color:#F5F5F7; font-size:32px; font-weight:600; letter-spacing:0.01em; box-shadow:0 10px 30px -12px rgba(17,17,19,.5); white-space:nowrap; }
+#ft-landing .chip .dot { width:16px; height:16px; border-radius:50%; background:#FF453A; box-shadow:0 0 0 5px rgba(255,69,58,.22); }
+#ft-landing .chip .muted { color:#C9C9D1; font-weight:500; }
+#ft-landing .bslot { position:relative; width:430px; height:60px; }
+#ft-landing .badge { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#2747F5; color:#fff; font-size:32px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-landing .badge.rt { background:#0E7A55; }
+#ft-landing .badge.sl { background:#46464B; }
+#ft-landing .badge svg, #ft-landing .clock svg { width:30px; height:30px; flex:none; }
+#ft-landing .cslot { position:relative; width:370px; height:60px; }
+#ft-landing .clock { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:32px; font-weight:600; border:2px solid #CFCFC8; white-space:nowrap; opacity:0; }
+#ft-landing .clock .cv { font-family:"Geist Mono", monospace; font-variant-numeric:tabular-nums; font-weight:600; }
+#ft-landing .clock .cl { color:#46464B; font-weight:500; }
+#ft-landing .chap { margin-left:auto; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-landing .win { position:absolute; left:128px; top:118px; width:1664px; height:936px; border-radius:28px; overflow:hidden; background:#F6F6F3; box-shadow:0 0 0 2px rgba(17,17,19,.07), 0 40px 90px -30px rgba(17,17,19,.42); transform-origin:50% 50%; }
+#ft-landing .cam { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; will-change:transform; }
+#ft-landing .vid { position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; }
+#ft-landing .ring { position:absolute; border:5px solid #2747F5; border-radius:16px; box-shadow:0 0 0 8px rgba(39,71,245,.16); opacity:0; }
+#ft-landing .lower { position:absolute; max-width:1180px; padding:26px 34px 28px; border-radius:22px; background:rgba(17,17,19,.86); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-landing .lower .ai-tag { display:inline-flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#9DB0FF; margin-bottom:8px; }
+#ft-landing .lower .ai-tag svg { width:30px; height:30px; }
+#ft-landing .lower .lt-title { font-size:44px; font-weight:650; letter-spacing:-0.02em; line-height:1.12; }
+#ft-landing .lower .lt-sub { font-size:32px; font-weight:450; color:#C9C9D1; margin-top:8px; line-height:1.25; }
+#ft-landing .callout { position:absolute; display:flex; align-items:flex-start; gap:18px; max-width:1100px; padding:22px 30px 24px 26px; border-radius:20px; background:#FFFFFF; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-landing .callout .cdot { width:18px; height:18px; border-radius:50%; margin-top:14px; flex:none; box-shadow:0 0 0 6px rgba(39,71,245,.14); }
+#ft-landing .callout .c-text { font-size:38px; font-weight:620; letter-spacing:-0.015em; line-height:1.18; }
+#ft-landing .callout .c-sub { font-size:32px; font-weight:450; color:#46464B; margin-top:6px; line-height:1.25; }
+#ft-landing .callout.t-fail { box-shadow:0 0 0 3px rgba(200,40,30,.55), 0 26px 60px -22px rgba(17,17,19,.45); }
+#ft-landing .callout.t-fail .c-text { color:#A3241B; }
+#ft-landing .callout.t-pass .c-text { color:#0B6446; }
+#ft-landing .stat { position:absolute; padding:26px 40px 30px; border-radius:26px; background:#2747F5; color:#fff; box-shadow:0 30px 70px -24px rgba(39,71,245,.6); opacity:0; transform-origin:100% 100%; }
+#ft-landing .stat .s-big { font-size:124px; font-weight:700; letter-spacing:-0.05em; line-height:0.95; font-variant-numeric:tabular-nums; }
+#ft-landing .stat .s-label { font-size:34px; font-weight:500; color:#DCE3FF; margin-top:10px; }
+#ft-landing .log { position:absolute; width:720px; padding:24px 28px 18px; border-radius:22px; background:rgba(17,17,19,.88); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); opacity:0; }
+#ft-landing .log .lg-title { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; color:#9DB0FF; margin-bottom:12px; }
+#ft-landing .log .lg-title svg { width:30px; height:30px; }
+#ft-landing .log .lg-line { display:flex; align-items:flex-start; gap:14px; font-size:32px; line-height:1.25; padding:6px 0; opacity:0; }
+#ft-landing .log .lg-dot { width:14px; height:14px; border-radius:50%; background:#7D93FF; margin-top:13px; flex:none; }
+#ft-landing .rules { position:absolute; padding:24px 28px 14px; border-radius:22px; background:#FFFFFF; color:#111113; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-landing .rules .ru-head { display:flex; align-items:center; gap:10px; font-size:36px; font-weight:650; letter-spacing:-0.015em; }
+#ft-landing .rules .ru-head svg { width:30px; height:30px; color:#2747F5; }
+#ft-landing .rules .ru-tag { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:30px; font-weight:500; }
+#ft-landing .rules .ru-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 0; border-top:2px solid #ECECE8; margin-top:10px; }
+#ft-landing .rules .ru-k { font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-landing .rules .ru-vs { position:relative; display:block; flex:1; height:42px; }
+#ft-landing .rules .ru-v { position:absolute; right:0; top:0; font-family:"Geist Mono", monospace; font-size:31px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-landing .mask { position:absolute; display:flex; align-items:center; gap:12px; padding:0 20px 0 78px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:26px; font-weight:620; letter-spacing:-0.01em; white-space:nowrap; box-shadow:0 0 0 2px rgba(17,17,19,.10), 0 8px 22px -10px rgba(17,17,19,.45); opacity:0; }
+#ft-landing .mask .mk-dot { width:12px; height:12px; border-radius:50%; background:#2747F5; flex:none; }
+#ft-landing .callout .c-tag { display:inline-block; margin:2px 0 8px; padding:3px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:28px; font-weight:500; }
+#ft-landing .log .lg-tool { font-family:"Geist Mono", monospace; font-size:28px; color:#9DB0FF; margin-top:2px; }
+#ft-landing .steps { position:absolute; left:36px; top:36px; display:flex; gap:10px; opacity:0; }
+#ft-landing .steps .sp { display:flex; align-items:center; gap:10px; height:56px; padding:0 20px 0 12px; border-radius:999px; border:2px solid #DADAD4; background:#FFFFFF; color:#6E6E73; font-size:30px; font-weight:600; white-space:nowrap; box-shadow:0 10px 26px -14px rgba(17,17,19,.45); }
+#ft-landing .steps .sp-n { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(17,17,19,.08); font-family:"Geist Mono", monospace; font-size:24px; }
+#ft-landing .quote { position:absolute; padding:24px 32px 26px; border-radius:22px; background:rgba(17,17,19,.9); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-landing .quote .q-tag { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:30px; color:#9DB0FF; }
+#ft-landing .quote .q-tag svg { width:28px; height:28px; }
+#ft-landing .quote .q-title { font-size:40px; font-weight:650; letter-spacing:-0.02em; margin-top:6px; }
+#ft-landing .quote .q-body { font-size:34px; line-height:1.28; color:#FFFFFF; margin-top:12px; padding-left:20px; border-left:4px solid #7D93FF; }
+#ft-landing .quote .q-foot { font-size:30px; color:#C9C9D1; margin-top:10px; }
+#ft-landing .statement { position:absolute; left:0; right:0; bottom:0; padding:60px 64px 56px; background:linear-gradient(180deg, rgba(17,17,19,0) 0%, rgba(17,17,19,.78) 55%); opacity:0; }
+#ft-landing .statement .st-text { font-size:84px; font-weight:650; letter-spacing:-0.035em; color:#fff; line-height:1.02; }
+</style>
+<div id="ft-landing" data-composition-id="ft-landing" data-width="1920" data-height="1080" data-duration="5.3">
+  <div class="topbar">
+    <div class="chip" id="ft-landing-chip"><span class="dot" id="ft-landing-live"></span><span>LIVE</span><span class="muted">· real product</span></div>
+    <div class="bslot"></div>
+    <div class="cslot"></div>
+    <div class="chap" id="ft-landing-chap">Naqsha · live on Cloud Run</div>
+  </div>
+  <div class="win" id="ft-landing-win">
+    <div class="cam" id="ft-landing-cam" data-layout-allow-overflow>
+      <video id="ft-landing-v0" src="assets/footage/a_landing_hero_to_portal.mp4" data-start="0.0" data-duration="2.5" data-media-start="0.4" data-track-index="0" data-hf-media-start-basis="local" muted playsinline class="vid"></video>
+<video id="ft-landing-v1" src="assets/footage/a_landing_hero_to_portal.mp4" data-start="2.5" data-duration="2.8" data-media-start="41.4" data-track-index="1" data-hf-media-start-basis="local" muted playsinline class="vid"></video>
+      
+    </div>
+    <div class="callout t-ink" id="ft-landing-o0" style="left:36px;bottom:36px;max-width:1040px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">For families planning a home</div><div class="c-sub">a home they can walk through and share before they build</div></div></div><div class="callout t-ink" id="ft-landing-o1" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">For architects and builders</div><div class="c-sub">a checked, walkable design for the first client meeting</div></div></div>
+  </div>
+</div>
+<script>
+(function(){
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#ft-landing-win", {scale:1.035}, {scale:1, duration:0.7, ease:"power3.out"}, 0);
+tl.fromTo("#ft-landing-chip", {scale:0.94}, {scale:1, duration:0.35, ease:"back.out(1.7)"}, 0);
+tl.fromTo("#ft-landing-chap", {opacity:0, x:20}, {opacity:1, x:0, duration:0.4, ease:"power3.out"}, 0.25);
+tl.fromTo("#ft-landing-live", {opacity:1}, {opacity:0.35, duration:0.6, repeat:7, yoyo:true, ease:"sine.inOut"}, 0);
+const cam = document.getElementById("ft-landing-cam");
+tl.set(cam, {x:-416.0, y:-46.8, scale:1.56, transformOrigin:"0 0"}, 0);
+tl.set(cam, {x:-416.0, y:-46.8, scale:1.56}, 0.0);
+tl.to(cam, {x:-433.42, y:-63.96, scale:1.612, duration:2.45, ease:"none"}, 0.02);
+tl.set(cam, {x:-416.0, y:-198.9, scale:1.3}, 2.5);
+tl.to(cam, {x:-482.56, y:-234.47, scale:1.36933, duration:2.7500000000000044, ease:"none"}, 2.52);
+tl.fromTo("#ft-landing-o0", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 0.25);
+tl.to("#ft-landing-o0", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 2.23);
+tl.fromTo("#ft-landing-o1", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 2.7);
+tl.to("#ft-landing-o1", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 5.03);
+window.__timelines["ft-landing"] = tl;
+})();
+</script>
+</template>
+</body></html>

@@ -1,0 +1,54 @@
+/* Shared tokens for the submission diagrams. Render each page at 2x with render.sh. */
+:root {
+  --ink: #111113;
+  --ink-2: #46464B;
+  --ink-3: #6E6E73;
+  --line: #E4E4E7;
+  --line-2: #D4D4D8;
+  --fill: #F6F6F7;
+  --fill-2: #EEEEF0;
+  --accent: #2747F5;
+  --accent-ink: #1F3AD0;
+  --accent-soft: #EDF0FF;
+  --accent-line: #C3CCFC;
+  --accent-light: #A9B6FB;
+  --hud: #18181B;
+  --hud-ink: #F5F5F7;
+  --hud-2: #C2C2CB;
+  --hud-accent: #A3B3FF;
+  --pass: #0E7A55;
+  --pass-soft: #E3F3EC;
+  --warn: #A35A00;
+  --warn-soft: #FFF3DD;
+  --fail: #C8281E;
+  --fail-soft: #FDECEA;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #FFFFFF;
+  color: var(--ink);
+  font-family: "Google Sans Flex", "Inter", "Geist", system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.28;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  overflow: hidden;
+  font-optical-sizing: auto;
+}
+
+.mono { font-family: "Google Sans Code", ui-monospace, "SF Mono", monospace; font-variant-numeric: tabular-nums; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 12px; border-radius: 10px;
+  background: var(--fill-2); color: var(--ink);
+  font-size: 18px; font-weight: 500; white-space: nowrap;
+}
+.chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
+.chip.dark { background: var(--hud); color: var(--hud-ink); }
+.chip.pass { background: var(--pass-soft); color: var(--pass); }
+.chip.outline { background: #fff; box-shadow: inset 0 0 0 1.5px var(--line-2); }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex: none; }

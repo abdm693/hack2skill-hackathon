@@ -1,0 +1,35 @@
+{
+  "name": "g2_client_link_comment",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/g2_client_link_comment.mp4",
+  "frames": 2097,
+  "span": 40,
+  "wall": 40,
+  "duration": 40,
+  "cut": 0,
+  "marks": [
+    {
+      "t": 0.3,
+      "label": "client opens the link (second browser, no account): Shared with you · You can comment"
+    },
+    {
+      "t": 10.2,
+      "label": "client sees the house with the owner's 2 pins"
+    },
+    {
+      "t": 17.1,
+      "label": "client walks in"
+    },
+    {
+      "t": 23.7,
+      "label": "room navigator: Open kitchen"
+    },
+    {
+      "t": 29.7,
+      "label": "press C: note in the kitchen; name asked once"
+    },
+    {
+      "t": 35.9,
+      "label": "client note posted as Ammi"
+    }
+  ]
+}

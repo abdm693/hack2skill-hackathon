@@ -1,0 +1,57 @@
+[
+ {
+  "id": "vo01",
+  "text": "In Pakistan, a new home still starts as a sketch on paper. Then come weeks of drafts, site visits... and plans rejected for breaking LDA bylaws.",
+  "style": "slower, reflective, a hint of gravity"
+ },
+ {
+  "id": "vo02",
+  "text": "Meet Naqsha: an agentic home-design studio, built on Google Cloud. Describe your plot once, and walk through your home before the first brick is laid.",
+  "style": "bright, confident reveal"
+ },
+ {
+  "id": "vo03",
+  "text": "It starts with a single message. A Google ADK agent, running Gemini 3.8 Flash, replies in about four seconds with what it understood: the brief floor by floor, a solar-ready roof, the water tank, and the exact envelope LDA lets you build on this plot."
+ },
+ {
+  "id": "vo04",
+  "text": "Next, Gemini 3.1 Flash Image draws four exterior directions, all from the same camera and light. All four arrive in about twenty-three seconds, and one tap gives you every concept at night."
+ },
+ {
+  "id": "vo05",
+  "text": "Pick one, and Gemini 4 Argon becomes your architect. It lays out every floor as structured data. Our deterministic rules engine checks the plan against LDA bylaws and ten livable-home rules, and Argon fixes what fails: fifteen issues, then five, then zero. Then it reviews a drawing of its own plan, the way an architect would."
+ },
+ {
+  "id": "vo06",
+  "text": "This real run took four and a half minutes. Out comes a dimensioned plan that passes every LDA check, with the evidence on screen, and a print-ready drawing set at one to one hundred."
+ },
+ {
+  "id": "vo07",
+  "text": "Argon then writes the house in 3D, as code. Twenty-eight sections, streamed and assembled right in the browser. Orbit it, and the neighbours ghost out of the way. Switch to night, cut away a floor, or press Render this view, for a photoreal AI render of that exact angle in under ten seconds."
+ },
+ {
+  "id": "vo08",
+  "text": "Then walk it, like a game. Look around, jump to any room with the navigator, take the stairs past the glass guard, and step out through the roof door onto the terrace."
+ },
+ {
+  "id": "vo09",
+  "text": "Pin a note to anything in 3D. Share a client link, and family can comment without an account. Here, Ammi asks for a bigger kitchen, and her note reaches the owner live."
+ },
+ {
+  "id": "vo10",
+  "text": "Select the notes, and press Revise. A Google ADK agent on Gemini 4 Argon, with nine tools, reads each note, edits the plan, and re-runs every check. The window grows, the kitchen widens, and when a request would break the law, it says so: the porch can't cross the ten-foot LDA front setback, so it offers an alternative."
+ },
+ {
+  "id": "vo11",
+  "text": "You can also just type what you want. Version five: a bigger kitchen, thirty-seven of thirty-seven LDA checks, and ten of ten livable."
+ },
+ {
+  "id": "vo12",
+  "text": "Under the hood, one Cloud Run service runs the API and the app, and streams the long agent runs. Firestore keeps projects, versions and comments; Cloud Storage holds the images; Firebase Authentication signs people in; and Gemini runs on Vertex AI, orchestrated with Google ADK."
+ },
+ {
+  "id": "vo13",
+  "text": "Naqsha turns weeks of drafts and rejections into one agentic session, changing how Pakistan designs its homes. Try it live.",
+  "style": "warm, conclusive, confident sign-off"
+ }
+]

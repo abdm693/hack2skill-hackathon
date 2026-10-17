@@ -1,0 +1,59 @@
+{
+  "name": "f_walk_like_a_game",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/f_walk_like_a_game.mp4",
+  "frames": 6483,
+  "span": 111.6,
+  "wall": 111.7,
+  "duration": 111.7,
+  "cut": 0,
+  "marks": [
+    {
+      "t": 4.6,
+      "label": "Walk: the camera flies down to the front door"
+    },
+    {
+      "t": 9.1,
+      "label": "look around at the entrance (drag to look)"
+    },
+    {
+      "t": 23.3,
+      "label": "walk in (W)"
+    },
+    {
+      "t": 25.9,
+      "label": "look around the TV lounge"
+    },
+    {
+      "t": 48.9,
+      "label": "room navigator (M): type 'master bed'"
+    },
+    {
+      "t": 51.4,
+      "label": "glide to the master bedroom (first floor)"
+    },
+    {
+      "t": 56.9,
+      "label": "look around the master bedroom"
+    },
+    {
+      "t": 72.8,
+      "label": "room navigator: Stair (glide down to the foot of the stair)"
+    },
+    {
+      "t": 79.7,
+      "label": "stair with handrail and glass guard"
+    },
+    {
+      "t": 85.7,
+      "label": "room navigator: Roof (glide up the stairs and out of the roof door)"
+    },
+    {
+      "t": 92.2,
+      "label": "on the roof: turn around to the roof door and stair tower"
+    },
+    {
+      "t": 107.1,
+      "label": "walk out across the roof (W)"
+    }
+  ]
+}

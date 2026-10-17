@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body>
+<template id="ft-setup-template">
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Noto Nastaliq Urdu"; src: url("assets/fonts/NotoNastaliqUrdu.ttf") format("truetype"); font-weight: 400 700; font-style: normal; }
+
+#ft-setup { position:absolute; inset:0; width:100%; height:100%; font-family:"Geist", sans-serif; color:#111113; }
+#ft-setup .topbar { position:absolute; left:128px; top:34px; width:1664px; height:66px; display:flex; align-items:center; gap:16px; }
+#ft-setup .chip { display:flex; align-items:center; gap:14px; height:60px; padding:0 26px 0 22px; border-radius:999px; background:#111113; color:#F5F5F7; font-size:32px; font-weight:600; letter-spacing:0.01em; box-shadow:0 10px 30px -12px rgba(17,17,19,.5); white-space:nowrap; }
+#ft-setup .chip .dot { width:16px; height:16px; border-radius:50%; background:#FF453A; box-shadow:0 0 0 5px rgba(255,69,58,.22); }
+#ft-setup .chip .muted { color:#C9C9D1; font-weight:500; }
+#ft-setup .bslot { position:relative; width:430px; height:60px; }
+#ft-setup .badge { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#2747F5; color:#fff; font-size:32px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-setup .badge.rt { background:#0E7A55; }
+#ft-setup .badge.sl { background:#46464B; }
+#ft-setup .badge svg, #ft-setup .clock svg { width:30px; height:30px; flex:none; }
+#ft-setup .cslot { position:relative; width:370px; height:60px; }
+#ft-setup .clock { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:32px; font-weight:600; border:2px solid #CFCFC8; white-space:nowrap; opacity:0; }
+#ft-setup .clock .cv { font-family:"Geist Mono", monospace; font-variant-numeric:tabular-nums; font-weight:600; }
+#ft-setup .clock .cl { color:#46464B; font-weight:500; }
+#ft-setup .chap { margin-left:auto; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-setup .win { position:absolute; left:128px; top:118px; width:1664px; height:936px; border-radius:28px; overflow:hidden; background:#F6F6F3; box-shadow:0 0 0 2px rgba(17,17,19,.07), 0 40px 90px -30px rgba(17,17,19,.42); transform-origin:50% 50%; }
+#ft-setup .cam { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; will-change:transform; }
+#ft-setup .vid { position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; }
+#ft-setup .ring { position:absolute; border:5px solid #2747F5; border-radius:16px; box-shadow:0 0 0 8px rgba(39,71,245,.16); opacity:0; }
+#ft-setup .lower { position:absolute; max-width:1180px; padding:26px 34px 28px; border-radius:22px; background:rgba(17,17,19,.86); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-setup .lower .ai-tag { display:inline-flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#9DB0FF; margin-bottom:8px; }
+#ft-setup .lower .ai-tag svg { width:30px; height:30px; }
+#ft-setup .lower .lt-title { font-size:44px; font-weight:650; letter-spacing:-0.02em; line-height:1.12; }
+#ft-setup .lower .lt-sub { font-size:32px; font-weight:450; color:#C9C9D1; margin-top:8px; line-height:1.25; }
+#ft-setup .callout { position:absolute; display:flex; align-items:flex-start; gap:18px; max-width:1100px; padding:22px 30px 24px 26px; border-radius:20px; background:#FFFFFF; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-setup .callout .cdot { width:18px; height:18px; border-radius:50%; margin-top:14px; flex:none; box-shadow:0 0 0 6px rgba(39,71,245,.14); }
+#ft-setup .callout .c-text { font-size:38px; font-weight:620; letter-spacing:-0.015em; line-height:1.18; }
+#ft-setup .callout .c-sub { font-size:32px; font-weight:450; color:#46464B; margin-top:6px; line-height:1.25; }
+#ft-setup .callout.t-fail { box-shadow:0 0 0 3px rgba(200,40,30,.55), 0 26px 60px -22px rgba(17,17,19,.45); }
+#ft-setup .callout.t-fail .c-text { color:#A3241B; }
+#ft-setup .callout.t-pass .c-text { color:#0B6446; }
+#ft-setup .stat { position:absolute; padding:26px 40px 30px; border-radius:26px; background:#2747F5; color:#fff; box-shadow:0 30px 70px -24px rgba(39,71,245,.6); opacity:0; transform-origin:100% 100%; }
+#ft-setup .stat .s-big { font-size:124px; font-weight:700; letter-spacing:-0.05em; line-height:0.95; font-variant-numeric:tabular-nums; }
+#ft-setup .stat .s-label { font-size:34px; font-weight:500; color:#DCE3FF; margin-top:10px; }
+#ft-setup .log { position:absolute; width:720px; padding:24px 28px 18px; border-radius:22px; background:rgba(17,17,19,.88); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); opacity:0; }
+#ft-setup .log .lg-title { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; color:#9DB0FF; margin-bottom:12px; }
+#ft-setup .log .lg-title svg { width:30px; height:30px; }
+#ft-setup .log .lg-line { display:flex; align-items:flex-start; gap:14px; font-size:32px; line-height:1.25; padding:6px 0; opacity:0; }
+#ft-setup .log .lg-dot { width:14px; height:14px; border-radius:50%; background:#7D93FF; margin-top:13px; flex:none; }
+#ft-setup .rules { position:absolute; padding:24px 28px 14px; border-radius:22px; background:#FFFFFF; color:#111113; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-setup .rules .ru-head { display:flex; align-items:center; gap:10px; font-size:36px; font-weight:650; letter-spacing:-0.015em; }
+#ft-setup .rules .ru-head svg { width:30px; height:30px; color:#2747F5; }
+#ft-setup .rules .ru-tag { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:30px; font-weight:500; }
+#ft-setup .rules .ru-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 0; border-top:2px solid #ECECE8; margin-top:10px; }
+#ft-setup .rules .ru-k { font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-setup .rules .ru-vs { position:relative; display:block; flex:1; height:42px; }
+#ft-setup .rules .ru-v { position:absolute; right:0; top:0; font-family:"Geist Mono", monospace; font-size:31px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-setup .mask { position:absolute; display:flex; align-items:center; gap:12px; padding:0 20px 0 78px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:26px; font-weight:620; letter-spacing:-0.01em; white-space:nowrap; box-shadow:0 0 0 2px rgba(17,17,19,.10), 0 8px 22px -10px rgba(17,17,19,.45); opacity:0; }
+#ft-setup .mask .mk-dot { width:12px; height:12px; border-radius:50%; background:#2747F5; flex:none; }
+#ft-setup .callout .c-tag { display:inline-block; margin:2px 0 8px; padding:3px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:28px; font-weight:500; }
+#ft-setup .log .lg-tool { font-family:"Geist Mono", monospace; font-size:28px; color:#9DB0FF; margin-top:2px; }
+#ft-setup .steps { position:absolute; left:36px; top:36px; display:flex; gap:10px; opacity:0; }
+#ft-setup .steps .sp { display:flex; align-items:center; gap:10px; height:56px; padding:0 20px 0 12px; border-radius:999px; border:2px solid #DADAD4; background:#FFFFFF; color:#6E6E73; font-size:30px; font-weight:600; white-space:nowrap; box-shadow:0 10px 26px -14px rgba(17,17,19,.45); }
+#ft-setup .steps .sp-n { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(17,17,19,.08); font-family:"Geist Mono", monospace; font-size:24px; }
+#ft-setup .quote { position:absolute; padding:24px 32px 26px; border-radius:22px; background:rgba(17,17,19,.9); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-setup .quote .q-tag { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:30px; color:#9DB0FF; }
+#ft-setup .quote .q-tag svg { width:28px; height:28px; }
+#ft-setup .quote .q-title { font-size:40px; font-weight:650; letter-spacing:-0.02em; margin-top:6px; }
+#ft-setup .quote .q-body { font-size:34px; line-height:1.28; color:#FFFFFF; margin-top:12px; padding-left:20px; border-left:4px solid #7D93FF; }
+#ft-setup .quote .q-foot { font-size:30px; color:#C9C9D1; margin-top:10px; }
+#ft-setup .statement { position:absolute; left:0; right:0; bottom:0; padding:60px 64px 56px; background:linear-gradient(180deg, rgba(17,17,19,0) 0%, rgba(17,17,19,.78) 55%); opacity:0; }
+#ft-setup .statement .st-text { font-size:84px; font-weight:650; letter-spacing:-0.035em; color:#fff; line-height:1.02; }
+</style>
+<div id="ft-setup" data-composition-id="ft-setup" data-width="1920" data-height="1080" data-duration="17.376">
+  <div class="topbar">
+    <div class="chip" id="ft-setup-chip"><span class="dot" id="ft-setup-live"></span><span>LIVE</span><span class="muted">· real product</span></div>
+    <div class="bslot"><div class="badge" id="ft-setup-b0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 5×</span></div><div class="badge rt" id="ft-setup-b1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg><span>real time</span></div><div class="badge" id="ft-setup-b2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.5×</span></div><div class="badge" id="ft-setup-b3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 1.9×</span></div><div class="badge" id="ft-setup-b4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 4×</span></div></div>
+    <div class="cslot"><div class="clock" id="ft-setup-c0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg><span class="cv" id="ft-setup-c0-v">0:00</span><span class="cl">reply</span></div></div>
+    <div class="chap" id="ft-setup-chap">01 · Setup agent</div>
+  </div>
+  <div class="win" id="ft-setup-win">
+    <div class="cam" id="ft-setup-cam" data-layout-allow-overflow>
+      <video id="ft-setup-v0" src="assets/footage/b_setup_one_message.mp4" data-start="0.0" data-duration="2.88" data-media-start="4.0" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="5.0" class="vid"></video>
+<video id="ft-setup-v1" src="assets/footage/b_setup_one_message.mp4" data-start="2.88" data-duration="5.0" data-media-start="18.4" data-track-index="1" data-hf-media-start-basis="local" muted playsinline class="vid"></video>
+<video id="ft-setup-v2" src="assets/footage/b_setup_one_message.mp4" data-start="7.88" data-duration="2.28" data-media-start="33.8" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.5" class="vid"></video>
+<video id="ft-setup-v3" src="assets/footage/b_setup_one_message.mp4" data-start="10.16" data-duration="5.316" data-media-start="39.5" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="1.9" class="vid"></video>
+<video id="ft-setup-v4" src="assets/footage/b_setup_one_message.mp4" data-start="15.476" data-duration="1.9" data-media-start="49.8" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="4.0" class="vid"></video>
+      <div class="ring" id="ft-setup-o1" style="left:14px;top:495px;width:420px;height:225px;border-color:#2747F5;"></div><div class="ring" id="ft-setup-o3" style="left:1300px;top:245px;width:420px;height:185px;border-color:#2747F5;"></div><div class="ring" id="ft-setup-o4" style="left:870px;top:170px;width:245px;height:415px;border-color:#2747F5;"></div><div class="ring" id="ft-setup-o5" style="left:1300px;top:735px;width:410px;height:215px;border-color:#2747F5;"></div>
+    </div>
+    <div class="lower ai" id="ft-setup-o0" style="left:36px;bottom:36px;"><div class="lt-in"><span class="ai-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.9 2.6 7.6 7.8 8.6v.8c-5.2 1-7.2 3.7-7.8 8.6h-.8c-.6-4.9-2.6-7.6-7.8-8.6v-.8c5.2-1 7.2-3.7 7.8-8.6z"/></svg>Agent at work</span><div class="lt-title">Google ADK setup agent · Gemini 3.8 Flash</div><div class="lt-sub">reads one message, then calls update_brief, the envelope tool and present_understanding</div></div></div><div class="callout t-ink" id="ft-setup-o2" style="right:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-tag">Prototype rules: LDA, Lahore</div><div class="c-text">Guaranteed: the rules Argon must pass</div><div class="c-sub">bylaws and livability, set by the setup agent</div></div></div><div class="callout t-ink" id="ft-setup-o6" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Blue plastic tank · roof kept clear for solar</div></div></div><div class="callout t-ink" id="ft-setup-o7" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-tag">Prototype rules: LDA, Lahore</div><div class="c-text">Buildable area worked out: 30′ × 48′</div><div class="c-sub">up to 70% coverage, from the authority’s bylaws</div></div></div><div class="callout t-ink" id="ft-setup-o8" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Rooms on each floor, editable</div></div></div>
+  </div>
+</div>
+<script>
+(function(){
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#ft-setup-win", {scale:1.035}, {scale:1, duration:0.7, ease:"power3.out"}, 0);
+tl.fromTo("#ft-setup-chip", {scale:0.94}, {scale:1, duration:0.35, ease:"back.out(1.7)"}, 0);
+tl.fromTo("#ft-setup-chap", {opacity:0, x:20}, {opacity:1, x:0, duration:0.4, ease:"power3.out"}, 0.25);
+tl.fromTo("#ft-setup-live", {opacity:1}, {opacity:0.35, duration:0.6, repeat:27, yoyo:true, ease:"sine.inOut"}, 0);
+const cam = document.getElementById("ft-setup-cam");
+tl.set(cam, {x:-338.78, y:0.0, scale:1.64667, transformOrigin:"0 0"}, 0);
+tl.set(cam, {x:-338.78, y:0.0, scale:1.64667}, 0.0);
+tl.set(cam, {x:-338.78, y:0.0, scale:1.64667}, 2.88);
+tl.to(cam, {x:0.0, y:0.0, scale:0.86667, duration:0.7, ease:"power2.inOut"}, 3.03);
+tl.to(cam, {x:0.0, y:-205.4, scale:1.60333, duration:0.9, ease:"power2.inOut"}, 6.08);
+tl.set(cam, {x:0.0, y:-381.33, scale:1.51667}, 7.88);
+tl.to(cam, {x:-1414.4, y:-61.1, scale:1.60333, duration:0.8, ease:"power2.inOut"}, 10.76);
+tl.to(cam, {x:-497.47, y:-162.93, scale:1.12667, duration:0.9, ease:"power2.inOut"}, 12.844);
+tl.set(cam, {x:-582.4, y:0.0, scale:1.47333}, 15.476);
+tl.fromTo("#ft-setup-b0", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 0.0);
+tl.to("#ft-setup-b0", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 2.7199999999999998);
+tl.fromTo("#ft-setup-b1", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 2.88);
+tl.to("#ft-setup-b1", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 7.72);
+tl.fromTo("#ft-setup-b2", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 7.88);
+tl.to("#ft-setup-b2", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 10.0);
+tl.fromTo("#ft-setup-b3", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 10.16);
+tl.to("#ft-setup-b3", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 15.316);
+tl.fromTo("#ft-setup-b4", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 15.476);
+tl.to("#ft-setup-b4", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 17.216);
+(function(){ const el=document.getElementById("ft-setup-c0-v"); const mp=[[2.88, 0.0], [6.48, 3.6]]; const fmt="sec";
+  const f=(x)=>{ let v; if(x<=mp[0][0]) v=mp[0][1]; else if(x>=mp[mp.length-1][0]) v=mp[mp.length-1][1]; else { for(let i=0;i<mp.length-1;i++){ if(x>=mp[i][0]&&x<=mp[i+1][0]){ const u=(x-mp[i][0])/(mp[i+1][0]-mp[i][0]); v=mp[i][1]+u*(mp[i+1][1]-mp[i][1]); break; } } }
+    if(fmt==="sec") return v.toFixed(1)+" s"; const s=Math.round(v); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+  const p={t:0}; tl.fromTo(p,{t:0},{t:17.376, duration:17.376, ease:"none", onUpdate:()=>{ el.textContent=f(p.t); }},0); })();
+tl.fromTo("#ft-setup-c0", {opacity:0, x:-12}, {opacity:1, x:0, duration:0.25, ease:"power3.out"}, 2.88);
+tl.to("#ft-setup-c0", {opacity:0, duration:0.2}, 7.68);
+tl.fromTo("#ft-setup-o0", {clipPath:"inset(0 100% 0 0 round 22px)", x:-24}, {clipPath:"inset(0 0% 0 0 round 22px)", x:0, duration:0.55, ease:"power3.out"}, 2.84);
+tl.fromTo("#ft-setup-o0 .lt-in > *", {opacity:0, y:14}, {opacity:1, y:0, duration:0.4, stagger:0.08, ease:"power2.out"}, 2.9899999999999998);
+tl.to("#ft-setup-o0", {clipPath:"inset(0 0% 100% 0 round 22px)", duration:0.35, ease:"power2.in"}, 7.33);
+tl.fromTo("#ft-setup-o1", {opacity:0, scale:1.08}, {opacity:1, scale:1, duration:0.35, ease:"power3.out"}, 7.98);
+tl.to("#ft-setup-o1", {opacity:0, duration:0.2}, 9.91);
+tl.fromTo("#ft-setup-o2", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 8.08);
+tl.to("#ft-setup-o2", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 9.889999999999999);
+tl.fromTo("#ft-setup-o3", {opacity:0, scale:1.08}, {opacity:1, scale:1, duration:0.35, ease:"power3.out"}, 10.86);
+tl.to("#ft-setup-o3", {opacity:0, duration:0.2}, 12.592);
+tl.fromTo("#ft-setup-o4", {opacity:0, scale:1.08}, {opacity:1, scale:1, duration:0.35, ease:"power3.out"}, 13.002);
+tl.to("#ft-setup-o4", {opacity:0, duration:0.2}, 15.276000000000002);
+tl.fromTo("#ft-setup-o5", {opacity:0, scale:1.08}, {opacity:1, scale:1, duration:0.35, ease:"power3.out"}, 13.002);
+tl.to("#ft-setup-o5", {opacity:0, duration:0.2}, 15.276000000000002);
+tl.fromTo("#ft-setup-o6", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 10.91);
+tl.to("#ft-setup-o6", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 12.572);
+tl.fromTo("#ft-setup-o7", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 13.002);
+tl.to("#ft-setup-o7", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 15.256);
+tl.fromTo("#ft-setup-o8", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 15.676);
+tl.to("#ft-setup-o8", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 17.056);
+window.__timelines["ft-setup"] = tl;
+})();
+</script>
+</template>
+</body></html>

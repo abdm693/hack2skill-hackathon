@@ -1,0 +1,530 @@
+[
+  {
+    "text": "Pick",
+    "start": 0.3,
+    "end": 0.57,
+    "id": "w0"
+  },
+  {
+    "text": "one,",
+    "start": 0.57,
+    "end": 1.13,
+    "id": "w1"
+  },
+  {
+    "text": "and",
+    "start": 1.13,
+    "end": 1.33,
+    "id": "w2"
+  },
+  {
+    "text": "Gemini",
+    "start": 1.33,
+    "end": 1.69,
+    "id": "w3"
+  },
+  {
+    "text": "4",
+    "start": 1.79,
+    "end": 1.93,
+    "id": "w4"
+  },
+  {
+    "text": "Argon",
+    "start": 1.93,
+    "end": 2.28,
+    "id": "w5"
+  },
+  {
+    "text": "starts",
+    "start": 2.28,
+    "end": 2.64,
+    "id": "w6"
+  },
+  {
+    "text": "work",
+    "start": 2.78,
+    "end": 2.92,
+    "id": "w7"
+  },
+  {
+    "text": "as",
+    "start": 2.98,
+    "end": 3.08,
+    "id": "w8"
+  },
+  {
+    "text": "the",
+    "start": 3.09,
+    "end": 3.28,
+    "id": "w9"
+  },
+  {
+    "text": "architect.",
+    "start": 3.28,
+    "end": 4.18,
+    "id": "w10"
+  },
+  {
+    "text": "It",
+    "start": 4.19,
+    "end": 4.32,
+    "id": "w11"
+  },
+  {
+    "text": "lays",
+    "start": 4.48,
+    "end": 4.57,
+    "id": "w12"
+  },
+  {
+    "text": "out",
+    "start": 4.66,
+    "end": 4.85,
+    "id": "w13"
+  },
+  {
+    "text": "every",
+    "start": 4.85,
+    "end": 4.89,
+    "id": "w14"
+  },
+  {
+    "text": "floor,",
+    "start": 5.27,
+    "end": 5.74,
+    "id": "w15"
+  },
+  {
+    "text": "room",
+    "start": 5.74,
+    "end": 6.04,
+    "id": "w16"
+  },
+  {
+    "text": "by",
+    "start": 6.04,
+    "end": 6.19,
+    "id": "w17"
+  },
+  {
+    "text": "room,",
+    "start": 6.19,
+    "end": 6.68,
+    "id": "w18"
+  },
+  {
+    "text": "a",
+    "start": 6.68,
+    "end": 6.74,
+    "id": "w19"
+  },
+  {
+    "text": "rules",
+    "start": 6.74,
+    "end": 7.08,
+    "id": "w20"
+  },
+  {
+    "text": "engine",
+    "start": 7.08,
+    "end": 7.5,
+    "id": "w21"
+  },
+  {
+    "text": "checks",
+    "start": 7.5,
+    "end": 7.77,
+    "id": "w22"
+  },
+  {
+    "text": "the",
+    "start": 7.81,
+    "end": 7.89,
+    "id": "w23"
+  },
+  {
+    "text": "plan",
+    "start": 8.08,
+    "end": 8.18,
+    "id": "w24"
+  },
+  {
+    "text": "against",
+    "start": 8.29,
+    "end": 8.52,
+    "id": "w25"
+  },
+  {
+    "text": "the",
+    "start": 8.52,
+    "end": 8.57,
+    "id": "w26"
+  },
+  {
+    "text": "building",
+    "start": 8.58,
+    "end": 8.75,
+    "id": "w27"
+  },
+  {
+    "text": "bylaws",
+    "start": 8.89,
+    "end": 9.39,
+    "id": "w28"
+  },
+  {
+    "text": "and",
+    "start": 9.39,
+    "end": 9.59,
+    "id": "w29"
+  },
+  {
+    "text": "a",
+    "start": 9.59,
+    "end": 9.97,
+    "id": "w30"
+  },
+  {
+    "text": "set",
+    "start": 9.97,
+    "end": 9.99,
+    "id": "w31"
+  },
+  {
+    "text": "of",
+    "start": 9.99,
+    "end": 10.16,
+    "id": "w32"
+  },
+  {
+    "text": "livability",
+    "start": 10.16,
+    "end": 11,
+    "id": "w33"
+  },
+  {
+    "text": "rules.",
+    "start": 11.02,
+    "end": 11.74,
+    "id": "w34"
+  },
+  {
+    "text": "Every",
+    "start": 12.04,
+    "end": 12.05,
+    "id": "w35"
+  },
+  {
+    "text": "bedroom",
+    "start": 12.05,
+    "end": 12.44,
+    "id": "w36"
+  },
+  {
+    "text": "has",
+    "start": 12.44,
+    "end": 12.83,
+    "id": "w37"
+  },
+  {
+    "text": "its",
+    "start": 12.83,
+    "end": 12.87,
+    "id": "w38"
+  },
+  {
+    "text": "own",
+    "start": 12.87,
+    "end": 13.06,
+    "id": "w39"
+  },
+  {
+    "text": "way",
+    "start": 13.06,
+    "end": 13.25,
+    "id": "w40"
+  },
+  {
+    "text": "in,",
+    "start": 13.25,
+    "end": 13.43,
+    "id": "w41"
+  },
+  {
+    "text": "the",
+    "start": 13.53,
+    "end": 13.67,
+    "id": "w42"
+  },
+  {
+    "text": "stairs",
+    "start": 13.68,
+    "end": 14.05,
+    "id": "w43"
+  },
+  {
+    "text": "reach",
+    "start": 14.05,
+    "end": 14.36,
+    "id": "w44"
+  },
+  {
+    "text": "the",
+    "start": 14.36,
+    "end": 14.55,
+    "id": "w45"
+  },
+  {
+    "text": "roof",
+    "start": 14.55,
+    "end": 14.8,
+    "id": "w46"
+  },
+  {
+    "text": "and",
+    "start": 14.8,
+    "end": 14.99,
+    "id": "w47"
+  },
+  {
+    "text": "every",
+    "start": 14.99,
+    "end": 15.3,
+    "id": "w48"
+  },
+  {
+    "text": "drop",
+    "start": 15.3,
+    "end": 15.45,
+    "id": "w49"
+  },
+  {
+    "text": "has",
+    "start": 15.64,
+    "end": 15.74,
+    "id": "w50"
+  },
+  {
+    "text": "a",
+    "start": 15.74,
+    "end": 15.85,
+    "id": "w51"
+  },
+  {
+    "text": "railing.",
+    "start": 15.85,
+    "end": 16.76,
+    "id": "w52"
+  },
+  {
+    "text": "Argon",
+    "start": 16.76,
+    "end": 17.06,
+    "id": "w53"
+  },
+  {
+    "text": "fixes",
+    "start": 17.06,
+    "end": 17.32,
+    "id": "w54"
+  },
+  {
+    "text": "whatever",
+    "start": 17.32,
+    "end": 17.47,
+    "id": "w55"
+  },
+  {
+    "text": "fails.",
+    "start": 17.85,
+    "end": 18.26,
+    "id": "w56"
+  },
+  {
+    "text": "On",
+    "start": 18.27,
+    "end": 18.4,
+    "id": "w57"
+  },
+  {
+    "text": "this",
+    "start": 18.56,
+    "end": 18.65,
+    "id": "w58"
+  },
+  {
+    "text": "run,",
+    "start": 18.74,
+    "end": 18.97,
+    "id": "w59"
+  },
+  {
+    "text": "it",
+    "start": 19.09,
+    "end": 19.23,
+    "id": "w60"
+  },
+  {
+    "text": "went",
+    "start": 19.35,
+    "end": 19.53,
+    "id": "w61"
+  },
+  {
+    "text": "from",
+    "start": 19.53,
+    "end": 19.83,
+    "id": "w62"
+  },
+  {
+    "text": "15",
+    "start": 19.83,
+    "end": 20.28,
+    "id": "w63"
+  },
+  {
+    "text": "issues",
+    "start": 20.28,
+    "end": 20.62,
+    "id": "w64"
+  },
+  {
+    "text": "to",
+    "start": 20.75,
+    "end": 20.88,
+    "id": "w65"
+  },
+  {
+    "text": "5,",
+    "start": 20.88,
+    "end": 21.25,
+    "id": "w66"
+  },
+  {
+    "text": "then",
+    "start": 21.25,
+    "end": 21.55,
+    "id": "w67"
+  },
+  {
+    "text": "to",
+    "start": 21.55,
+    "end": 21.7,
+    "id": "w68"
+  },
+  {
+    "text": "none.",
+    "start": 21.7,
+    "end": 22.24,
+    "id": "w69"
+  },
+  {
+    "text": "It",
+    "start": 22.31,
+    "end": 22.41,
+    "id": "w70"
+  },
+  {
+    "text": "then",
+    "start": 22.6,
+    "end": 22.63,
+    "id": "w71"
+  },
+  {
+    "text": "looks",
+    "start": 22.63,
+    "end": 22.91,
+    "id": "w72"
+  },
+  {
+    "text": "at",
+    "start": 22.91,
+    "end": 23,
+    "id": "w73"
+  },
+  {
+    "text": "a",
+    "start": 23,
+    "end": 23.39,
+    "id": "w74"
+  },
+  {
+    "text": "drawing",
+    "start": 23.39,
+    "end": 23.46,
+    "id": "w75"
+  },
+  {
+    "text": "of",
+    "start": 23.46,
+    "end": 23.57,
+    "id": "w76"
+  },
+  {
+    "text": "its",
+    "start": 23.57,
+    "end": 23.73,
+    "id": "w77"
+  },
+  {
+    "text": "own",
+    "start": 23.73,
+    "end": 23.89,
+    "id": "w78"
+  },
+  {
+    "text": "plan",
+    "start": 23.89,
+    "end": 24.11,
+    "id": "w79"
+  },
+  {
+    "text": "and",
+    "start": 24.11,
+    "end": 24.27,
+    "id": "w80"
+  },
+  {
+    "text": "critiques",
+    "start": 24.27,
+    "end": 24.66,
+    "id": "w81"
+  },
+  {
+    "text": "it",
+    "start": 24.79,
+    "end": 24.88,
+    "id": "w82"
+  },
+  {
+    "text": "the",
+    "start": 24.88,
+    "end": 24.94,
+    "id": "w83"
+  },
+  {
+    "text": "way",
+    "start": 25.08,
+    "end": 25.2,
+    "id": "w84"
+  },
+  {
+    "text": "an",
+    "start": 25.2,
+    "end": 25.31,
+    "id": "w85"
+  },
+  {
+    "text": "architect",
+    "start": 25.31,
+    "end": 25.81,
+    "id": "w86"
+  },
+  {
+    "text": "would.",
+    "start": 25.81,
+    "end": 26.24,
+    "id": "w87"
+  }
+]

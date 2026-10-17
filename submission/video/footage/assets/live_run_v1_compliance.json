@@ -1,0 +1,703 @@
+{
+ "authority": "LDA",
+ "metrics": {
+  "storeys": 2,
+  "plot_area_sqft": 2275,
+  "far": 1.05,
+  "total_floor_area_sqft": 2399,
+  "height_ft": 27,
+  "covered_area_sqft": 1440,
+  "coverage_pct": 63.3
+ },
+ "band": "10 marla and above but less than 1 kanal",
+ "envelope": {
+  "setbacks_ft": {
+   "left": 0,
+   "rear": 7,
+   "front": 10,
+   "right": 5
+  },
+  "max_storeys": 3,
+  "max_height_ft": 45,
+  "max_coverage_pct": 70,
+  "buildable_rect": {
+   "x": 0,
+   "d": 48,
+   "w": 30,
+   "y": 10
+  }
+ },
+ "ok": true,
+ "checks": [
+  {
+   "status": "pass",
+   "message": "Front open space 10′ (minimum 10′).",
+   "category": "lda",
+   "limit": 10,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "setback.front",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Front setback (building line)",
+   "value": 10
+  },
+  {
+   "status": "pass",
+   "message": "Rear open space 7′ (minimum 7′).",
+   "category": "lda",
+   "limit": 7,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "setback.rear",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Rear setback",
+   "value": 7
+  },
+  {
+   "status": "pass",
+   "message": "A 5′ side space is required on one side; 1 side provided.",
+   "category": "lda",
+   "limit": 1,
+   "unit": "sides",
+   "element_ids": [],
+   "id": "setback.side",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Side space",
+   "value": 1
+  },
+  {
+   "status": "pass",
+   "message": "All rooms, porches and balconies sit inside the building line.",
+   "category": "lda",
+   "limit": null,
+   "element_ids": [],
+   "id": "setback.envelope",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Building within setbacks",
+   "value": null
+  },
+  {
+   "status": "pass",
+   "message": "Covered 1,440 sq ft = 63.3% of the plot (max 70%).",
+   "category": "lda",
+   "limit": 70,
+   "unit": "%",
+   "element_ids": [],
+   "id": "coverage",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Ground coverage",
+   "value": 63.3
+  },
+  {
+   "status": "pass",
+   "message": "Total floor area 2,399 sq ft gives an FAR of 1.05 (max 2.8).",
+   "category": "lda",
+   "limit": 2.8,
+   "element_ids": [],
+   "id": "far",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Floor area ratio",
+   "value": 1.05
+  },
+  {
+   "status": "pass",
+   "message": "Top of parapet at 27′ above road crown (max 45′, stair tower excluded).",
+   "category": "lda",
+   "limit": 45,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "height",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Building height",
+   "value": 27
+  },
+  {
+   "status": "pass",
+   "message": "2 storeys above ground (max 3, basement excluded).",
+   "category": "lda",
+   "limit": 3,
+   "unit": "storeys",
+   "element_ids": [],
+   "id": "storeys",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026) §2.7.1(a)",
+   "title": "Number of storeys",
+   "value": 2
+  },
+  {
+   "status": "pass",
+   "message": "Stair tower (mumty) 9′ (max 9′6″, excluded from building height).",
+   "category": "lda",
+   "limit": 9.5,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "mumty",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Mumty (stair tower) height",
+   "value": 9
+  },
+  {
+   "status": "pass",
+   "message": "Parapet 3′6″ (minimum 2′9″ for safety).",
+   "category": "lda",
+   "limit": 2.75,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "parapet",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Roof parapet",
+   "value": 3.5
+  },
+  {
+   "status": "pass",
+   "message": "Tallest boundary wall 7′ (max 7′ above plinth).",
+   "category": "lda",
+   "limit": 7,
+   "unit": "ft",
+   "element_ids": [],
+   "id": "boundary_wall",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Boundary wall height",
+   "value": 7
+  },
+  {
+   "status": "pass",
+   "message": "Drawing Room is 17′ × 18′ = 306 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_drawing"
+   ],
+   "id": "room.size:g_drawing",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Drawing Room size",
+   "value": 306
+  },
+  {
+   "status": "pass",
+   "message": "55 sq ft of windows for 24 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 24.5,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_drawing"
+   ],
+   "id": "room.light:g_drawing",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Drawing Room daylight",
+   "value": 55
+  },
+  {
+   "status": "pass",
+   "message": "TV Lounge & Dining is 22′ × 14′9″ = 324 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_lounge"
+   ],
+   "id": "room.size:g_lounge",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "TV Lounge & Dining size",
+   "value": 324
+  },
+  {
+   "status": "pass",
+   "message": "60 sq ft of windows for 26 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 26,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_lounge"
+   ],
+   "id": "room.light:g_lounge",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "TV Lounge & Dining daylight",
+   "value": 60
+  },
+  {
+   "status": "pass",
+   "message": "Parents' Bedroom is 12′ × 15′3″ = 183 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_bed1"
+   ],
+   "id": "room.size:g_bed1",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Parents' Bedroom size",
+   "value": 183
+  },
+  {
+   "status": "pass",
+   "message": "27 sq ft of windows for 15 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 14.6,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_bed1"
+   ],
+   "id": "room.light:g_bed1",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Parents' Bedroom daylight",
+   "value": 27
+  },
+  {
+   "status": "pass",
+   "message": "Has 3.8 sq ft of opening to the outside (min 2 sq ft).",
+   "category": "lda",
+   "limit": 2,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_bath1"
+   ],
+   "id": "room.vent:g_bath1",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Parents' Bath ventilation",
+   "value": 3.8
+  },
+  {
+   "status": "pass",
+   "message": "Open Kitchen is 12′ × 9′3″ = 111 sq ft (min 50 sq ft and 6′ wide).",
+   "category": "lda",
+   "limit": 50,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_kitchen"
+   ],
+   "id": "room.size:g_kitchen",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Open Kitchen size",
+   "value": 111
+  },
+  {
+   "status": "pass",
+   "message": "18 sq ft of windows for 9 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 8.9,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_kitchen"
+   ],
+   "id": "room.light:g_kitchen",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Open Kitchen daylight",
+   "value": 18
+  },
+  {
+   "status": "pass",
+   "message": "Dirty Kitchen is 12′ × 6′ = 72 sq ft (min 50 sq ft and 6′ wide).",
+   "category": "lda",
+   "limit": 50,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_dirty"
+   ],
+   "id": "room.size:g_dirty",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Dirty Kitchen size",
+   "value": 72
+  },
+  {
+   "status": "pass",
+   "message": "20 sq ft of windows for 6 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 5.8,
+   "unit": "sq ft",
+   "element_ids": [
+    "g_dirty"
+   ],
+   "id": "room.light:g_dirty",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Dirty Kitchen daylight",
+   "value": 20
+  },
+  {
+   "status": "pass",
+   "message": "Bedroom 2 is 9′ × 13′ = 117 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bed2"
+   ],
+   "id": "room.size:f_bed2",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bedroom 2 size",
+   "value": 117
+  },
+  {
+   "status": "pass",
+   "message": "22 sq ft of windows for 9 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 9.4,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bed2"
+   ],
+   "id": "room.light:f_bed2",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bedroom 2 daylight",
+   "value": 22.5
+  },
+  {
+   "status": "pass",
+   "message": "Has 3.0 sq ft of opening to the outside (min 2 sq ft).",
+   "category": "lda",
+   "limit": 2,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bath2"
+   ],
+   "id": "room.vent:f_bath2",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bath 2 ventilation",
+   "value": 3
+  },
+  {
+   "status": "pass",
+   "message": "Master Bedroom is 10′ × 14′ = 140 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_master"
+   ],
+   "id": "room.size:f_master",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Master Bedroom size",
+   "value": 140
+  },
+  {
+   "status": "pass",
+   "message": "52 sq ft of windows for 11 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 11.2,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_master"
+   ],
+   "id": "room.light:f_master",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Master Bedroom daylight",
+   "value": 52.5
+  },
+  {
+   "status": "pass",
+   "message": "Has 3.8 sq ft of opening to the outside (min 2 sq ft).",
+   "category": "lda",
+   "limit": 2,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_master_bath"
+   ],
+   "id": "room.vent:f_master_bath",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Master Bath ventilation",
+   "value": 3.8
+  },
+  {
+   "status": "pass",
+   "message": "Family Lounge is 22′ × 14′9″ = 324 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_lounge"
+   ],
+   "id": "room.size:f_lounge",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Family Lounge size",
+   "value": 324
+  },
+  {
+   "status": "pass",
+   "message": "66 sq ft of windows for 26 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 26,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_lounge"
+   ],
+   "id": "room.light:f_lounge",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Family Lounge daylight",
+   "value": 66
+  },
+  {
+   "status": "pass",
+   "message": "Bedroom 3 is 12′ × 15′3″ = 183 sq ft (min 100 sq ft and 8′ wide).",
+   "category": "lda",
+   "limit": 100,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bed3"
+   ],
+   "id": "room.size:f_bed3",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bedroom 3 size",
+   "value": 183
+  },
+  {
+   "status": "pass",
+   "message": "27 sq ft of windows for 15 sq ft needed (8% of the floor area).",
+   "category": "lda",
+   "limit": 14.6,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bed3"
+   ],
+   "id": "room.light:f_bed3",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bedroom 3 daylight",
+   "value": 27
+  },
+  {
+   "status": "pass",
+   "message": "Has 3.8 sq ft of opening to the outside (min 2 sq ft).",
+   "category": "lda",
+   "limit": 2,
+   "unit": "sq ft",
+   "element_ids": [
+    "f_bath3"
+   ],
+   "id": "room.vent:f_bath3",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Bath 3 ventilation",
+   "value": 3.8
+  },
+  {
+   "status": "pass",
+   "message": "19 risers of 6.95 in, 3′6″ wide, 10 in treads, 2 flights of up to 10 risers.",
+   "category": "lda",
+   "limit": 15,
+   "unit": "risers per flight",
+   "element_ids": [
+    "stair_g_f"
+   ],
+   "id": "stair:stair_g_f",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Ground → first stair",
+   "value": 10
+  },
+  {
+   "status": "pass",
+   "message": "19 risers of 6.95 in, 3′6″ wide, 10 in treads, 2 flights of up to 10 risers.",
+   "category": "lda",
+   "limit": 15,
+   "unit": "risers per flight",
+   "element_ids": [
+    "stair_f_r"
+   ],
+   "id": "stair:stair_f_r",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "First → roof stair",
+   "value": 10
+  },
+  {
+   "status": "pass",
+   "message": "Overhead water tank on the roof.",
+   "category": "lda",
+   "limit": null,
+   "element_ids": [],
+   "id": "services.water_tank",
+   "rule_ref": "LDA B&ZR 2019 (consolidated 09-02-2026)",
+   "title": "Overhead water tank",
+   "value": null
+  },
+  {
+   "status": "warn",
+   "message": "Parents' Bath is a long, narrow 6′ × 15′3″; part of it is wasted corridor.",
+   "category": "livable",
+   "id": "plan.room.bath_shape:g_bath1",
+   "element_ids": [
+    "g_bath1"
+   ],
+   "rule_ref": "Naqsha planning rule P-28",
+   "title": "Bath shape",
+   "fix": "Keep baths roughly 5 × 8 to 6 × 10 ft and give the spare length to a wardrobe or the bedroom."
+  },
+  {
+   "status": "warn",
+   "message": "Bath 3 is a long, narrow 6′ × 15′3″; part of it is wasted corridor.",
+   "category": "livable",
+   "id": "plan.room.bath_shape:f_bath3",
+   "element_ids": [
+    "f_bath3"
+   ],
+   "rule_ref": "Naqsha planning rule P-28",
+   "title": "Bath shape",
+   "fix": "Keep baths roughly 5 × 8 to 6 × 10 ft and give the spare length to a wardrobe or the bedroom."
+  },
+  {
+   "limit": 55,
+   "message": "64% kept clear (min 55%): about 762 sq ft for panels, roughly 11 kW.",
+   "category": "livable",
+   "status": "pass",
+   "element_ids": [],
+   "unit": "%",
+   "id": "plan.roof.solar",
+   "rule_ref": "Naqsha planning rule P-24",
+   "title": "Roof kept clear for solar",
+   "value": 64,
+   "fix": "Keep the stair tower and tank in one corner and the rest of the roof clear: no domes, minarets or pergolas."
+  },
+  {
+   "status": "warn",
+   "message": "Bath 2 sits over Drawing Room: leaks and drain pipes would run through its ceiling.",
+   "category": "livable",
+   "id": "plan.structure.wet_over_dry:f_bath2",
+   "element_ids": [
+    "f_bath2",
+    "g_drawing"
+   ],
+   "rule_ref": "Naqsha planning rule P-26",
+   "title": "Bath over a dry room",
+   "fix": "Move f_bath2 over a bath, the kitchen, a store, laundry or the stair hall below (or swap it with a room that sits over one)."
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Rooms are independent",
+   "element_ids": [],
+   "message": "Bedrooms open only onto a corridor, lobby, lounge, balcony or their own bath; no two bedrooms share a balcony; a dressing opens only into its own bedroom; baths have one door.",
+   "id": "plan.rule.independence"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Every room has a proper way in",
+   "element_ids": [],
+   "message": "Every room is reached through circulation, never through a bedroom or bath, and the family reaches the lounge without crossing the drawing room.",
+   "id": "plan.rule.circulation"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Stairs reach every floor and the roof",
+   "element_ids": [],
+   "message": "One stacked stair climbs to every floor and the roof, with a 3 ft landing at the foot and the top.",
+   "id": "plan.rule.stairs"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "The roof door is at the top of the stair",
+   "element_ids": [],
+   "message": "The stair tower covers the stair and its top landing, and its door opens beside that landing.",
+   "id": "plan.rule.roof_door"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Doors and windows fit their walls",
+   "element_ids": [],
+   "message": "Every door and window sits on a wall the two rooms share, on the same floor, and fits inside it.",
+   "id": "plan.rule.openings"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Rooms match your brief",
+   "element_ids": [],
+   "message": "The bedrooms, baths and rooms on each floor follow the brief.",
+   "id": "plan.rule.brief"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Every stair edge and void has a railing",
+   "element_ids": [
+    "stair_g_f",
+    "stair_f_r"
+   ],
+   "message": "A 3′6″ railing is built along every stair edge, void and balcony.",
+   "id": "livable.railings"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "Doors are clear of furniture",
+   "element_ids": [],
+   "message": "Furniture keeps out of every door swing.",
+   "id": "livable.doors"
+  },
+  {
+   "status": "pass",
+   "rule_ref": "Naqsha planning rule",
+   "category": "livable",
+   "title": "A clear 3 ft path to every door",
+   "element_ids": [],
+   "message": "Every passage is at least 3 ft wide.",
+   "id": "livable.paths"
+  },
+  {
+   "status": "warn",
+   "message": "Bedroom 2 is only 9′ wide while a 9′ × 5′ passage serves no other room and wastes valuable floor area.",
+   "category": "livable",
+   "id": "review.1",
+   "element_ids": [
+    "f_bed2",
+    "f_corr",
+    "f_bed2_dress"
+   ],
+   "severity": "major",
+   "rule_ref": "Naqsha architect's review of the drawings",
+   "title": "Architect's review: needs a change",
+   "fix": "Move dressing 2 into the 9′ × 5′ passage space and shift bedroom 2's left wall 5′ to the left so bedroom 2 becomes a comfortable 14′ × 13′."
+  },
+  {
+   "status": "warn",
+   "message": "The master bedroom is only 10′ × 14′, making it narrower and smaller than bedroom 3 at the back.",
+   "category": "livable",
+   "id": "review.2",
+   "element_ids": [
+    "f_master",
+    "f_bed3"
+   ],
+   "severity": "major",
+   "rule_ref": "Naqsha architect's review of the drawings",
+   "title": "Architect's review: needs a change",
+   "fix": "Swap the master bedroom suite with bedroom 3 and bath 3 at the back, or shift the wall between master bedroom and bedroom 2 by 2′ to give the master bedroom a 12′ width."
+  },
+  {
+   "status": "warn",
+   "message": "Guests in the drawing room or TV lounge & dining have no toilet access without walking through the parents' bedroom.",
+   "category": "livable",
+   "id": "review.3",
+   "element_ids": [
+    "g_lounge",
+    "g_bed1",
+    "g_drawing"
+   ],
+   "severity": "major",
+   "rule_ref": "Naqsha architect's review of the drawings",
+   "title": "Architect's review: needs a change",
+   "fix": "Partition the front 6′ × 5′ of the 15′3″-long parents' bath into a separate powder room opening onto the TV lounge & dining."
+  },
+  {
+   "status": "warn",
+   "message": "The main entrance from the car porch opens straight into the TV lounge & dining with a direct sightline to the parents' bedroom door.",
+   "category": "livable",
+   "id": "review.4",
+   "element_ids": [
+    "g_lounge",
+    "g_porch",
+    "g_bed1"
+   ],
+   "severity": "minor",
+   "rule_ref": "Naqsha architect's review of the drawings",
+   "title": "Architect's review",
+   "fix": "Add a 4′ wide privacy screen wall inside the TV lounge & dining to the left of the car porch entrance door, or shift the parents' bedroom door 3′ to the left into the stair hall."
+  }
+ ]
+}

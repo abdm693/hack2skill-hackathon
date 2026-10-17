@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Naqsha technology stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&family=Google+Sans+Code:wght@400;500;600&display=block" rel="stylesheet">
+<link rel="stylesheet" href="diagram.css">
+<style>
+  html, body { width: 1600px; height: 720px; }
+  .grid {
+    position: absolute; inset: 22px 24px 22px 24px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto 1fr; gap: 16px;
+  }
+  .g { border-radius: 18px; padding: 18px 20px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--line-2); display: flex; flex-direction: column; }
+  .g header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .g h3 { font-size: 23px; font-weight: 600; letter-spacing: -0.015em; white-space: nowrap; }
+  .g header span { font-size: 18px; color: var(--ink-3); text-align: right; line-height: 1.2; }
+
+  .rows { display: flex; flex-direction: column; gap: 7px; }
+  .row { display: grid; grid-template-columns: 168px 1fr; gap: 12px; align-items: baseline; font-size: 19px; padding: 7px 12px; border-radius: 10px; background: var(--fill); line-height: 1.22; }
+  .row b { font-weight: 600; color: var(--ink); }
+  .row span { color: var(--ink-2); }
+
+  .g.ai { background: var(--hud); box-shadow: none; color: var(--hud-ink); }
+  .g.ai header span { color: var(--hud-2); }
+  .g.ai .row { background: rgba(255,255,255,0.08); grid-template-columns: 208px 1fr; }
+  .g.ai .row b { color: #fff; }
+  .g.ai .row span { color: var(--hud-2); }
+
+  .g.gc { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+  .g.gc h3 { color: var(--accent-ink); }
+  .g.gc .row { background: #fff; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 12px 10px; }
+  .chips .chip { height: 46px; font-size: 21px; padding: 0 16px; border-radius: 12px; background: var(--fill); }
+  .chips .chip em { font-style: normal; color: var(--ink-3); font-weight: 400; }
+  .g.ip { box-shadow: inset 0 0 0 2px var(--ink); }
+  .g.ip .chip { background: var(--fill-2); }
+</style>
+</head>
+<body>
+<div class="grid">
+  <section class="g ai">
+    <header><h3>Gemini models</h3><span>Vertex AI · global endpoint</span></header>
+    <div class="rows">
+      <div class="row"><b>Gemini 4 Argon</b><span>plan, 3D code, revisions</span></div>
+      <div class="row"><b>Gemini 3.8 Flash</b><span>setup agent</span></div>
+      <div class="row"><b>Gemini 3.1 Flash Image</b><span>concepts, renders</span></div>
+      <div class="row"><b>Nano Banana 2.1</b><span>image fallback 1</span></div>
+      <div class="row"><b>Gemini 3 Pro Image</b><span>image fallback 2</span></div>
+    </div>
+  </section>
+
+  <section class="g">
+    <header><h3>Agents</h3><span>tools + guardrails</span></header>
+    <div class="rows">
+      <div class="row"><b>Google ADK 2.12</b><span>2 agents, 14 tools</span></div>
+      <div class="row"><b>google-genai 2.31</b><span>streaming, JSON, image edits</span></div>
+      <div class="row"><b>Fix loop</b><span>fix until the rules pass</span></div>
+      <div class="row"><b>Self-review</b><span>Argon critiques its drawing</span></div>
+      <div class="row"><b>Retries</b><span>6 tries, 4–60 s backoff</span></div>
+    </div>
+  </section>
+
+  <section class="g gc">
+    <header><h3>Google Cloud</h3><span>one project</span></header>
+    <div class="rows">
+      <div class="row"><b>Cloud Run</b><span>API + React app, one service</span></div>
+      <div class="row"><b>Firestore</b><span>projects, versions, comments</span></div>
+      <div class="row"><b>Cloud Storage</b><span>images, renders, drawings</span></div>
+      <div class="row"><b>Firebase Auth</b><span>email sign-in, ID tokens</span></div>
+      <div class="row"><b>Cloud Build</b><span>builds on deploy</span></div>
+    </div>
+  </section>
+
+  <section class="g">
+    <header><h3>Backend</h3><span>api/</span></header>
+    <div class="chips">
+      <span class="chip">Python 3.13</span>
+      <span class="chip">FastAPI</span>
+      <span class="chip">Server-Sent Events</span>
+      <span class="chip">Pydantic</span>
+      <span class="chip">Pillow <em>plan drawings</em></span>
+      <span class="chip">pytest <em>123 tests</em></span>
+      <span class="chip">uv</span>
+      <span class="chip">Docker</span>
+    </div>
+  </section>
+
+  <section class="g">
+    <header><h3>Frontend and 3D</h3><span>web/</span></header>
+    <div class="chips">
+      <span class="chip">React 19</span>
+      <span class="chip">TypeScript</span>
+      <span class="chip">Vite</span>
+      <span class="chip">Tailwind CSS 4</span>
+      <span class="chip">three.js r186</span>
+      <span class="chip">react-three-fiber + drei</span>
+      <span class="chip">three-mesh-bvh <em>walk physics</em></span>
+      <span class="chip">N8AO <em>soft shadows</em></span>
+    </div>
+  </section>
+
+  <section class="g ip">
+    <header><h3>Built by us</h3><span>domain IP</span></header>
+    <div class="chips">
+      <span class="chip">House SDK <em>44 materials, 57 furniture types</em></span>
+      <span class="chip">LDA rules as data <em>09-02-2026 text</em></span>
+      <span class="chip">10 livable-home rules</span>
+      <span class="chip">As-built setback check</span>
+      <span class="chip">1:100 print sheets</span>
+    </div>
+  </section>
+</div>
+</body>
+</html>

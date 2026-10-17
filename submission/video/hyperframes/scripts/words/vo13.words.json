@@ -1,0 +1,308 @@
+[
+  {
+    "text": "On",
+    "start": 0.14,
+    "end": 0.24,
+    "id": "w0"
+  },
+  {
+    "text": "Google",
+    "start": 0.24,
+    "end": 0.58,
+    "id": "w1"
+  },
+  {
+    "text": "Cloud,",
+    "start": 0.58,
+    "end": 0.96,
+    "id": "w2"
+  },
+  {
+    "text": "one",
+    "start": 1.23,
+    "end": 1.35,
+    "id": "w3"
+  },
+  {
+    "text": "Cloud",
+    "start": 1.35,
+    "end": 1.73,
+    "id": "w4"
+  },
+  {
+    "text": "Run",
+    "start": 1.73,
+    "end": 1.96,
+    "id": "w5"
+  },
+  {
+    "text": "service",
+    "start": 1.96,
+    "end": 2.37,
+    "id": "w6"
+  },
+  {
+    "text": "hosts",
+    "start": 2.54,
+    "end": 2.96,
+    "id": "w7"
+  },
+  {
+    "text": "the",
+    "start": 3.04,
+    "end": 3.2,
+    "id": "w8"
+  },
+  {
+    "text": "app",
+    "start": 3.2,
+    "end": 3.28,
+    "id": "w9"
+  },
+  {
+    "text": "and",
+    "start": 3.4,
+    "end": 3.52,
+    "id": "w10"
+  },
+  {
+    "text": "streams",
+    "start": 3.52,
+    "end": 4,
+    "id": "w11"
+  },
+  {
+    "text": "the",
+    "start": 4,
+    "end": 4.16,
+    "id": "w12"
+  },
+  {
+    "text": "agent",
+    "start": 4.16,
+    "end": 4.51,
+    "id": "w13"
+  },
+  {
+    "text": "runs.",
+    "start": 4.51,
+    "end": 4.8,
+    "id": "w14"
+  },
+  {
+    "text": "Firestore",
+    "start": 5.04,
+    "end": 5.37,
+    "id": "w15"
+  },
+  {
+    "text": "stores",
+    "start": 5.37,
+    "end": 5.74,
+    "id": "w16"
+  },
+  {
+    "text": "projects,",
+    "start": 5.74,
+    "end": 6.35,
+    "id": "w17"
+  },
+  {
+    "text": "versions,",
+    "start": 6.43,
+    "end": 7.01,
+    "id": "w18"
+  },
+  {
+    "text": "and",
+    "start": 7.01,
+    "end": 7.17,
+    "id": "w19"
+  },
+  {
+    "text": "comments.",
+    "start": 7.22,
+    "end": 7.76,
+    "id": "w20"
+  },
+  {
+    "text": "Cloud",
+    "start": 8,
+    "end": 8.06,
+    "id": "w21"
+  },
+  {
+    "text": "Storage",
+    "start": 8.06,
+    "end": 8.48,
+    "id": "w22"
+  },
+  {
+    "text": "keeps",
+    "start": 8.48,
+    "end": 8.72,
+    "id": "w23"
+  },
+  {
+    "text": "the",
+    "start": 8.72,
+    "end": 8.99,
+    "id": "w24"
+  },
+  {
+    "text": "images.",
+    "start": 8.99,
+    "end": 9.52,
+    "id": "w25"
+  },
+  {
+    "text": "Firebase",
+    "start": 9.52,
+    "end": 9.98,
+    "id": "w26"
+  },
+  {
+    "text": "Authentication",
+    "start": 9.98,
+    "end": 10.71,
+    "id": "w27"
+  },
+  {
+    "text": "signs",
+    "start": 10.8,
+    "end": 11.19,
+    "id": "w28"
+  },
+  {
+    "text": "people",
+    "start": 11.19,
+    "end": 11.66,
+    "id": "w29"
+  },
+  {
+    "text": "in.",
+    "start": 11.66,
+    "end": 11.84,
+    "id": "w30"
+  },
+  {
+    "text": "And",
+    "start": 11.84,
+    "end": 12.08,
+    "id": "w31"
+  },
+  {
+    "text": "Gemini",
+    "start": 12.08,
+    "end": 12.57,
+    "id": "w32"
+  },
+  {
+    "text": "runs",
+    "start": 12.57,
+    "end": 12.8,
+    "id": "w33"
+  },
+  {
+    "text": "on",
+    "start": 12.8,
+    "end": 13.07,
+    "id": "w34"
+  },
+  {
+    "text": "Vertex",
+    "start": 13.07,
+    "end": 13.54,
+    "id": "w35"
+  },
+  {
+    "text": "AI.",
+    "start": 13.54,
+    "end": 14,
+    "id": "w36"
+  },
+  {
+    "text": "The",
+    "start": 14,
+    "end": 14.24,
+    "id": "w37"
+  },
+  {
+    "text": "setup",
+    "start": 14.24,
+    "end": 14.49,
+    "id": "w38"
+  },
+  {
+    "text": "agent",
+    "start": 14.49,
+    "end": 14.8,
+    "id": "w39"
+  },
+  {
+    "text": "and",
+    "start": 14.8,
+    "end": 14.95,
+    "id": "w40"
+  },
+  {
+    "text": "the",
+    "start": 14.95,
+    "end": 15.23,
+    "id": "w41"
+  },
+  {
+    "text": "revision",
+    "start": 15.23,
+    "end": 15.65,
+    "id": "w42"
+  },
+  {
+    "text": "agent",
+    "start": 15.65,
+    "end": 16,
+    "id": "w43"
+  },
+  {
+    "text": "are",
+    "start": 16,
+    "end": 16.15,
+    "id": "w44"
+  },
+  {
+    "text": "built",
+    "start": 16.15,
+    "end": 16.37,
+    "id": "w45"
+  },
+  {
+    "text": "with",
+    "start": 16.42,
+    "end": 16.57,
+    "id": "w46"
+  },
+  {
+    "text": "Google's",
+    "start": 16.63,
+    "end": 16.96,
+    "id": "w47"
+  },
+  {
+    "text": "Agent",
+    "start": 17.04,
+    "end": 17.25,
+    "id": "w48"
+  },
+  {
+    "text": "Development",
+    "start": 17.25,
+    "end": 17.81,
+    "id": "w49"
+  },
+  {
+    "text": "Kit.",
+    "start": 17.81,
+    "end": 18.16,
+    "id": "w50"
+  }
+]

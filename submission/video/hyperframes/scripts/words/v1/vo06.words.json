@@ -1,0 +1,200 @@
+[
+  {
+    "text": "This",
+    "start": 0.18,
+    "end": 0.28,
+    "id": "w0"
+  },
+  {
+    "text": "real",
+    "start": 0.28,
+    "end": 0.56,
+    "id": "w1"
+  },
+  {
+    "text": "run",
+    "start": 0.56,
+    "end": 0.77,
+    "id": "w2"
+  },
+  {
+    "text": "took",
+    "start": 0.77,
+    "end": 1.05,
+    "id": "w3"
+  },
+  {
+    "text": "four",
+    "start": 1.05,
+    "end": 1.33,
+    "id": "w4"
+  },
+  {
+    "text": "and",
+    "start": 1.33,
+    "end": 1.54,
+    "id": "w5"
+  },
+  {
+    "text": "a",
+    "start": 1.54,
+    "end": 1.61,
+    "id": "w6"
+  },
+  {
+    "text": "half",
+    "start": 1.61,
+    "end": 1.89,
+    "id": "w7"
+  },
+  {
+    "text": "minutes.",
+    "start": 1.89,
+    "end": 2.58,
+    "id": "w8"
+  },
+  {
+    "text": "Out",
+    "start": 2.58,
+    "end": 2.73,
+    "id": "w9"
+  },
+  {
+    "text": "comes",
+    "start": 2.84,
+    "end": 3.06,
+    "id": "w10"
+  },
+  {
+    "text": "a",
+    "start": 3.06,
+    "end": 3.12,
+    "id": "w11"
+  },
+  {
+    "text": "dimension",
+    "start": 3.12,
+    "end": 3.68,
+    "id": "w12"
+  },
+  {
+    "text": "plan",
+    "start": 3.68,
+    "end": 4.15,
+    "id": "w13"
+  },
+  {
+    "text": "that",
+    "start": 4.3,
+    "end": 4.32,
+    "id": "w14"
+  },
+  {
+    "text": "passes",
+    "start": 4.32,
+    "end": 4.84,
+    "id": "w15"
+  },
+  {
+    "text": "every",
+    "start": 4.99,
+    "end": 5.28,
+    "id": "w16"
+  },
+  {
+    "text": "LDA",
+    "start": 5.28,
+    "end": 5.84,
+    "id": "w17"
+  },
+  {
+    "text": "check",
+    "start": 6.03,
+    "end": 6.19,
+    "id": "w18"
+  },
+  {
+    "text": "with",
+    "start": 6.26,
+    "end": 6.55,
+    "id": "w19"
+  },
+  {
+    "text": "the",
+    "start": 6.55,
+    "end": 6.75,
+    "id": "w20"
+  },
+  {
+    "text": "evidence",
+    "start": 6.82,
+    "end": 7.42,
+    "id": "w21"
+  },
+  {
+    "text": "on",
+    "start": 7.42,
+    "end": 7.53,
+    "id": "w22"
+  },
+  {
+    "text": "screen",
+    "start": 7.62,
+    "end": 8,
+    "id": "w23"
+  },
+  {
+    "text": "and",
+    "start": 8,
+    "end": 8.21,
+    "id": "w24"
+  },
+  {
+    "text": "a",
+    "start": 8.21,
+    "end": 8.42,
+    "id": "w25"
+  },
+  {
+    "text": "print-ready",
+    "start": 8.42,
+    "end": 9.22,
+    "id": "w26"
+  },
+  {
+    "text": "drawing",
+    "start": 9.22,
+    "end": 9.77,
+    "id": "w27"
+  },
+  {
+    "text": "set",
+    "start": 9.77,
+    "end": 9.99,
+    "id": "w28"
+  },
+  {
+    "text": "at",
+    "start": 10.14,
+    "end": 10.17,
+    "id": "w29"
+  },
+  {
+    "text": "1",
+    "start": 10.17,
+    "end": 10.41,
+    "id": "w30"
+  },
+  {
+    "text": "to",
+    "start": 10.41,
+    "end": 10.57,
+    "id": "w31"
+  },
+  {
+    "text": "100.",
+    "start": 10.57,
+    "end": 11.6,
+    "id": "w32"
+  }
+]

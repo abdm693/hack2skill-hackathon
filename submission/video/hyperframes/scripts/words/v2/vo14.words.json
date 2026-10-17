@@ -1,0 +1,302 @@
+[
+  {
+    "text": "Families",
+    "start": 0.29,
+    "end": 0.76,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.9,
+    "end": 1.22,
+    "id": "w1"
+  },
+  {
+    "text": "see",
+    "start": 1.22,
+    "end": 1.51,
+    "id": "w2"
+  },
+  {
+    "text": "and",
+    "start": 1.59,
+    "end": 1.74,
+    "id": "w3"
+  },
+  {
+    "text": "walk",
+    "start": 1.74,
+    "end": 2,
+    "id": "w4"
+  },
+  {
+    "text": "through",
+    "start": 2,
+    "end": 2.07,
+    "id": "w5"
+  },
+  {
+    "text": "their",
+    "start": 2.2,
+    "end": 2.53,
+    "id": "w6"
+  },
+  {
+    "text": "home",
+    "start": 2.53,
+    "end": 2.75,
+    "id": "w7"
+  },
+  {
+    "text": "before",
+    "start": 2.87,
+    "end": 3.22,
+    "id": "w8"
+  },
+  {
+    "text": "they",
+    "start": 3.22,
+    "end": 3.48,
+    "id": "w9"
+  },
+  {
+    "text": "build",
+    "start": 3.49,
+    "end": 3.84,
+    "id": "w10"
+  },
+  {
+    "text": "it,",
+    "start": 3.84,
+    "end": 4,
+    "id": "w11"
+  },
+  {
+    "text": "and",
+    "start": 4.18,
+    "end": 4.2,
+    "id": "w12"
+  },
+  {
+    "text": "architects",
+    "start": 4.29,
+    "end": 4.91,
+    "id": "w13"
+  },
+  {
+    "text": "and",
+    "start": 4.91,
+    "end": 5.12,
+    "id": "w14"
+  },
+  {
+    "text": "builders",
+    "start": 5.21,
+    "end": 5.7,
+    "id": "w15"
+  },
+  {
+    "text": "start",
+    "start": 5.7,
+    "end": 5.99,
+    "id": "w16"
+  },
+  {
+    "text": "from",
+    "start": 5.99,
+    "end": 6.22,
+    "id": "w17"
+  },
+  {
+    "text": "a",
+    "start": 6.22,
+    "end": 6.27,
+    "id": "w18"
+  },
+  {
+    "text": "design",
+    "start": 6.27,
+    "end": 6.64,
+    "id": "w19"
+  },
+  {
+    "text": "that",
+    "start": 6.64,
+    "end": 6.75,
+    "id": "w20"
+  },
+  {
+    "text": "has",
+    "start": 6.87,
+    "end": 7.01,
+    "id": "w21"
+  },
+  {
+    "text": "already",
+    "start": 7.01,
+    "end": 7.37,
+    "id": "w22"
+  },
+  {
+    "text": "been",
+    "start": 7.39,
+    "end": 7.6,
+    "id": "w23"
+  },
+  {
+    "text": "checked.",
+    "start": 7.6,
+    "end": 8,
+    "id": "w24"
+  },
+  {
+    "text": "Because",
+    "start": 8.29,
+    "end": 8.61,
+    "id": "w25"
+  },
+  {
+    "text": "the",
+    "start": 8.61,
+    "end": 8.76,
+    "id": "w26"
+  },
+  {
+    "text": "agents",
+    "start": 8.9,
+    "end": 9.39,
+    "id": "w27"
+  },
+  {
+    "text": "read",
+    "start": 9.39,
+    "end": 9.74,
+    "id": "w28"
+  },
+  {
+    "text": "bylaws",
+    "start": 9.74,
+    "end": 10.26,
+    "id": "w29"
+  },
+  {
+    "text": "as",
+    "start": 10.26,
+    "end": 10.43,
+    "id": "w30"
+  },
+  {
+    "text": "data,",
+    "start": 10.43,
+    "end": 11,
+    "id": "w31"
+  },
+  {
+    "text": "adding",
+    "start": 11,
+    "end": 11.42,
+    "id": "w32"
+  },
+  {
+    "text": "a",
+    "start": 11.42,
+    "end": 11.47,
+    "id": "w33"
+  },
+  {
+    "text": "new",
+    "start": 11.49,
+    "end": 11.67,
+    "id": "w34"
+  },
+  {
+    "text": "city",
+    "start": 11.7,
+    "end": 11.9,
+    "id": "w35"
+  },
+  {
+    "text": "starts",
+    "start": 11.9,
+    "end": 12.25,
+    "id": "w36"
+  },
+  {
+    "text": "with",
+    "start": 12.25,
+    "end": 12.36,
+    "id": "w37"
+  },
+  {
+    "text": "adding",
+    "start": 12.36,
+    "end": 12.58,
+    "id": "w38"
+  },
+  {
+    "text": "its",
+    "start": 12.58,
+    "end": 12.69,
+    "id": "w39"
+  },
+  {
+    "text": "rules.",
+    "start": 12.72,
+    "end": 12.92,
+    "id": "w40"
+  },
+  {
+    "text": "We're",
+    "start": 13.11,
+    "end": 13.45,
+    "id": "w41"
+  },
+  {
+    "text": "starting",
+    "start": 13.45,
+    "end": 14.1,
+    "id": "w42"
+  },
+  {
+    "text": "in",
+    "start": 14.21,
+    "end": 14.35,
+    "id": "w43"
+  },
+  {
+    "text": "Pakistan",
+    "start": 14.35,
+    "end": 15.06,
+    "id": "w44"
+  },
+  {
+    "text": "and",
+    "start": 15.07,
+    "end": 15.34,
+    "id": "w45"
+  },
+  {
+    "text": "Nakhsha",
+    "start": 15.34,
+    "end": 15.97,
+    "id": "w46"
+  },
+  {
+    "text": "is",
+    "start": 15.97,
+    "end": 16.04,
+    "id": "w47"
+  },
+  {
+    "text": "live",
+    "start": 16.2,
+    "end": 16.49,
+    "id": "w48"
+  },
+  {
+    "text": "today.",
+    "start": 16.5,
+    "end": 17,
+    "id": "w49"
+  }
+]

@@ -1,0 +1,72 @@
+{
+ "name": "e_alt_take1_night_orbit_render",
+ "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/e_sample_orbit_night_render.mp4",
+ "frames": 5385,
+ "span": 222.5,
+ "wall": 224.7,
+ "duration": 149.4,
+ "cut": 75.3,
+ "marks": [
+  {
+   "t": 0.4,
+   "label": "10 marla sample (copy): house view loads, Assembling your home"
+  },
+  {
+   "t": 9.2,
+   "label": "house built (hero view)"
+  },
+  {
+   "t": 11,
+   "label": "slow 360 orbit: neighbours ghost as the camera passes"
+  },
+  {
+   "t": 37.6,
+   "label": "orbit complete"
+  },
+  {
+   "t": 41.8,
+   "label": "View menu"
+  },
+  {
+   "t": 45.9,
+   "label": "Night"
+  },
+  {
+   "t": 52.9,
+   "label": "night: gentle orbit"
+  },
+  {
+   "t": 76.3,
+   "label": "back to Day"
+  },
+  {
+   "t": 87.6,
+   "label": "Cut away on: see inside"
+  },
+  {
+   "t": 94.6,
+   "label": "Cut at slider raised: first floor interiors"
+  },
+  {
+   "t": 103.9,
+   "label": "Cut away off"
+  },
+  {
+   "t": 108.8,
+   "label": "Render this view: AI photoreal render of this exact viewport"
+  },
+  {
+   "t": 120.1,
+   "label": "render arrives"
+  },
+  {
+   "t": 126.9,
+   "label": "drag the compare line: 3D view vs AI render"
+  },
+  {
+   "t": 147.6,
+   "label": "close render"
+  }
+ ],
+ "note": "Alternate take: the 360 orbit here is at NIGHT (light was still set to night); jump cuts at pause points; render comparison framing is better (porch + facade visible)."
+}

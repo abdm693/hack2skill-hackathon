@@ -1,0 +1,55 @@
+{
+  "name": "g1_owner_pin_comment_and_share",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/g1_owner_pin_comment_and_share.mp4",
+  "frames": 3558,
+  "span": 116.7,
+  "wall": 118.5,
+  "duration": 64.8,
+  "cut": 53.7,
+  "marks": [
+    {
+      "t": 1.5,
+      "label": "walk: room navigator to Bedroom 3"
+    },
+    {
+      "t": 9.3,
+      "label": "look at the window"
+    },
+    {
+      "t": 13.2,
+      "label": "press C: note pinned on 'Window glass in bedroom 3, first floor'"
+    },
+    {
+      "t": 17.7,
+      "label": "note posted"
+    },
+    {
+      "t": 24.6,
+      "label": "back to Orbit"
+    },
+    {
+      "t": 32.1,
+      "label": "Comment mode in orbit: click anywhere to pin"
+    },
+    {
+      "t": 38.6,
+      "label": "pinned on: Floor on the car porch, ground floor"
+    },
+    {
+      "t": 43,
+      "label": "porch note posted"
+    },
+    {
+      "t": 49.2,
+      "label": "Share dialog"
+    },
+    {
+      "t": 54.1,
+      "label": "Client link ON"
+    },
+    {
+      "t": 58.5,
+      "label": "Copy link"
+    }
+  ]
+}

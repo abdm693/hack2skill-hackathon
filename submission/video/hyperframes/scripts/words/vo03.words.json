@@ -1,0 +1,80 @@
+[
+  {
+    "text": "Its",
+    "start": 0.15,
+    "end": 0.22,
+    "id": "w0"
+  },
+  {
+    "text": "agents",
+    "start": 0.27,
+    "end": 0.67,
+    "id": "w1"
+  },
+  {
+    "text": "design",
+    "start": 0.75,
+    "end": 1.15,
+    "id": "w2"
+  },
+  {
+    "text": "the",
+    "start": 1.15,
+    "end": 1.37,
+    "id": "w3"
+  },
+  {
+    "text": "home",
+    "start": 1.37,
+    "end": 1.67,
+    "id": "w4"
+  },
+  {
+    "text": "and",
+    "start": 1.78,
+    "end": 1.96,
+    "id": "w5"
+  },
+  {
+    "text": "check",
+    "start": 2.12,
+    "end": 2.27,
+    "id": "w6"
+  },
+  {
+    "text": "it",
+    "start": 2.29,
+    "end": 2.31,
+    "id": "w7"
+  },
+  {
+    "text": "against",
+    "start": 2.34,
+    "end": 2.56,
+    "id": "w8"
+  },
+  {
+    "text": "the",
+    "start": 2.7,
+    "end": 2.8,
+    "id": "w9"
+  },
+  {
+    "text": "local",
+    "start": 2.8,
+    "end": 3.07,
+    "id": "w10"
+  },
+  {
+    "text": "building",
+    "start": 3.07,
+    "end": 3.5,
+    "id": "w11"
+  },
+  {
+    "text": "bylaws.",
+    "start": 3.5,
+    "end": 3.9,
+    "id": "w12"
+  }
+]

@@ -1,0 +1,170 @@
+[
+  {
+    "text": "You",
+    "start": 0.01,
+    "end": 0.18,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.32,
+    "end": 0.36,
+    "id": "w1"
+  },
+  {
+    "text": "also",
+    "start": 0.36,
+    "end": 0.6,
+    "id": "w2"
+  },
+  {
+    "text": "type",
+    "start": 0.6,
+    "end": 0.84,
+    "id": "w3"
+  },
+  {
+    "text": "a",
+    "start": 0.84,
+    "end": 0.9,
+    "id": "w4"
+  },
+  {
+    "text": "change",
+    "start": 0.9,
+    "end": 1.26,
+    "id": "w5"
+  },
+  {
+    "text": "in",
+    "start": 1.26,
+    "end": 1.31,
+    "id": "w6"
+  },
+  {
+    "text": "plain",
+    "start": 1.42,
+    "end": 1.68,
+    "id": "w7"
+  },
+  {
+    "text": "words.",
+    "start": 1.68,
+    "end": 2.11,
+    "id": "w8"
+  },
+  {
+    "text": "Version",
+    "start": 2.52,
+    "end": 2.63,
+    "id": "w9"
+  },
+  {
+    "text": "5",
+    "start": 2.63,
+    "end": 2.8,
+    "id": "w10"
+  },
+  {
+    "text": "has",
+    "start": 2.87,
+    "end": 2.99,
+    "id": "w11"
+  },
+  {
+    "text": "the",
+    "start": 2.99,
+    "end": 3.11,
+    "id": "w12"
+  },
+  {
+    "text": "bigger",
+    "start": 3.18,
+    "end": 3.53,
+    "id": "w13"
+  },
+  {
+    "text": "kitchen",
+    "start": 3.54,
+    "end": 4,
+    "id": "w14"
+  },
+  {
+    "text": "and",
+    "start": 4,
+    "end": 4.15,
+    "id": "w15"
+  },
+  {
+    "text": "passes",
+    "start": 4.15,
+    "end": 4.76,
+    "id": "w16"
+  },
+  {
+    "text": "37",
+    "start": 4.76,
+    "end": 5.32,
+    "id": "w17"
+  },
+  {
+    "text": "of",
+    "start": 5.32,
+    "end": 5.46,
+    "id": "w18"
+  },
+  {
+    "text": "37",
+    "start": 5.51,
+    "end": 5.97,
+    "id": "w19"
+  },
+  {
+    "text": "by-law",
+    "start": 6.02,
+    "end": 6.24,
+    "id": "w20"
+  },
+  {
+    "text": "checks",
+    "start": 6.32,
+    "end": 6.8,
+    "id": "w21"
+  },
+  {
+    "text": "and",
+    "start": 6.8,
+    "end": 6.89,
+    "id": "w22"
+  },
+  {
+    "text": "10",
+    "start": 7.05,
+    "end": 7.25,
+    "id": "w23"
+  },
+  {
+    "text": "of",
+    "start": 7.25,
+    "end": 7.29,
+    "id": "w24"
+  },
+  {
+    "text": "10",
+    "start": 7.38,
+    "end": 7.58,
+    "id": "w25"
+  },
+  {
+    "text": "livability",
+    "start": 7.58,
+    "end": 8,
+    "id": "w26"
+  },
+  {
+    "text": "checks.",
+    "start": 8,
+    "end": 8.38,
+    "id": "w27"
+  }
+]

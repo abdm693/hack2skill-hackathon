@@ -1,0 +1,194 @@
+[
+  {
+    "text": "Then",
+    "start": 0.14,
+    "end": 0.37,
+    "id": "w0"
+  },
+  {
+    "text": "walk",
+    "start": 0.37,
+    "end": 0.73,
+    "id": "w1"
+  },
+  {
+    "text": "it",
+    "start": 0.73,
+    "end": 0.79,
+    "id": "w2"
+  },
+  {
+    "text": "like",
+    "start": 1,
+    "end": 1.27,
+    "id": "w3"
+  },
+  {
+    "text": "a",
+    "start": 1.3,
+    "end": 1.38,
+    "id": "w4"
+  },
+  {
+    "text": "game,",
+    "start": 1.38,
+    "end": 1.96,
+    "id": "w5"
+  },
+  {
+    "text": "look",
+    "start": 2,
+    "end": 2.29,
+    "id": "w6"
+  },
+  {
+    "text": "around,",
+    "start": 2.29,
+    "end": 2.92,
+    "id": "w7"
+  },
+  {
+    "text": "jump",
+    "start": 2.96,
+    "end": 3.12,
+    "id": "w8"
+  },
+  {
+    "text": "to",
+    "start": 3.21,
+    "end": 3.29,
+    "id": "w9"
+  },
+  {
+    "text": "any",
+    "start": 3.29,
+    "end": 3.48,
+    "id": "w10"
+  },
+  {
+    "text": "room",
+    "start": 3.48,
+    "end": 3.76,
+    "id": "w11"
+  },
+  {
+    "text": "with",
+    "start": 3.76,
+    "end": 3.84,
+    "id": "w12"
+  },
+  {
+    "text": "the",
+    "start": 3.94,
+    "end": 4.12,
+    "id": "w13"
+  },
+  {
+    "text": "navigator,",
+    "start": 4.12,
+    "end": 4.8,
+    "id": "w14"
+  },
+  {
+    "text": "take",
+    "start": 4.94,
+    "end": 5.12,
+    "id": "w15"
+  },
+  {
+    "text": "the",
+    "start": 5.12,
+    "end": 5.36,
+    "id": "w16"
+  },
+  {
+    "text": "stairs",
+    "start": 5.36,
+    "end": 5.83,
+    "id": "w17"
+  },
+  {
+    "text": "past",
+    "start": 5.83,
+    "end": 6.15,
+    "id": "w18"
+  },
+  {
+    "text": "the",
+    "start": 6.15,
+    "end": 6.36,
+    "id": "w19"
+  },
+  {
+    "text": "glass",
+    "start": 6.39,
+    "end": 6.41,
+    "id": "w20"
+  },
+  {
+    "text": "guard,",
+    "start": 6.8,
+    "end": 7.29,
+    "id": "w21"
+  },
+  {
+    "text": "and",
+    "start": 7.29,
+    "end": 7.45,
+    "id": "w22"
+  },
+  {
+    "text": "step",
+    "start": 7.45,
+    "end": 7.46,
+    "id": "w23"
+  },
+  {
+    "text": "out",
+    "start": 7.76,
+    "end": 7.83,
+    "id": "w24"
+  },
+  {
+    "text": "through",
+    "start": 7.83,
+    "end": 8.2,
+    "id": "w25"
+  },
+  {
+    "text": "the",
+    "start": 8.2,
+    "end": 8.36,
+    "id": "w26"
+  },
+  {
+    "text": "roof",
+    "start": 8.36,
+    "end": 8.57,
+    "id": "w27"
+  },
+  {
+    "text": "door",
+    "start": 8.57,
+    "end": 8.8,
+    "id": "w28"
+  },
+  {
+    "text": "onto",
+    "start": 8.8,
+    "end": 9.11,
+    "id": "w29"
+  },
+  {
+    "text": "the",
+    "start": 9.11,
+    "end": 9.27,
+    "id": "w30"
+  },
+  {
+    "text": "terrace.",
+    "start": 9.27,
+    "end": 9.84,
+    "id": "w31"
+  }
+]

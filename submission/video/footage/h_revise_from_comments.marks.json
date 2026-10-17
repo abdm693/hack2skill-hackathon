@@ -1,0 +1,67 @@
+{
+  "name": "h_revise_from_comments",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/h_revise_from_comments.mp4",
+  "frames": 20508,
+  "span": 590.2,
+  "wall": 590.6,
+  "duration": 416.5,
+  "cut": 174.1,
+  "marks": [
+    {
+      "t": 5,
+      "label": "Revise with 3 comments: owner chooses which notes to apply"
+    },
+    {
+      "t": 10.6,
+      "label": "all 3 ticked, including the client's note (Ammi)"
+    },
+    {
+      "t": 14.6,
+      "label": "Revise: Google ADK agent (Gemini 4 Argon, 9 tools) starts"
+    },
+    {
+      "t": 332.8,
+      "label": "new version saved (v4)"
+    },
+    {
+      "t": 342,
+      "label": "Your changes: the agent's feed (look, dry-run checks, redraw, save) and Changes"
+    },
+    {
+      "t": 349.8,
+      "label": "What changed: revisions page (v4)"
+    },
+    {
+      "t": 356.3,
+      "label": "close conversation: Version 4 page"
+    },
+    {
+      "t": 360.3,
+      "label": "How Naqsha made it: timed agent feed incl. 'All 47 checks pass', Done / Not possible / Done"
+    },
+    {
+      "t": 364.6,
+      "label": "wipe the plan: before vs after (Bedroom 3 window)"
+    },
+    {
+      "t": 376.8,
+      "label": "ground floor: open kitchen widened 7'6\" -> 9'"
+    },
+    {
+      "t": 391,
+      "label": "What changed: window 6' -> 9' wide; porch kept behind the 10' LDA line; kitchen +23 sq ft with room deltas"
+    },
+    {
+      "t": 399.6,
+      "label": "Your comments: threaded resolutions from Naqsha"
+    },
+    {
+      "t": 403.2,
+      "label": "REFUSAL: 'Not possible' citing the LDA 10' front setback, with an alternative"
+    },
+    {
+      "t": 411,
+      "label": "Ammi (Client): kitchen widened to 9' x 15'3\" (Done)"
+    }
+  ]
+}

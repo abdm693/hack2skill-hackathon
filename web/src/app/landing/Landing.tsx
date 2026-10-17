@@ -2,9 +2,9 @@
  * The landing page (/): what Naqsha does for a family or a builder, in plain business language, with the
  * house-under-construction animation, and a separate Portal button into the app (/app).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { Project } from "@contracts/api-types";
 import { api, assetUrl } from "@/api/client";
@@ -18,17 +18,17 @@ import { Construction } from "./Construction";
 
 // Hyphenated compounds use U+2011 (a non-breaking hyphen) so "approval‑ready" never splits across lines.
 const benefits = (counts: SampleCounts | null): { title: string; line: string }[] => [
-  { title: "Plot to approval‑ready plan the same afternoon", line: "Tell Naqsha the plot and the family. Get dimensioned floor plans before the chai goes cold, not after weeks of back and forth." },
+  { title: "Plot to a checked floor plan the same afternoon", line: "Tell Naqsha the plot and the family, and get dimensioned floor plans before the chai goes cold." },
   {
-    title: "Checked against LDA, every time",
+    title: "Checked against the bylaws, every time",
     // The counts are the 10 marla sample's own (they move when the rules do); without them, no number is promised.
     line: counts
-      ? `Every LDA bylaw that applies to your plot (${counts.lda} checks on a 10 marla) and ${counts.livable} livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.`
-      : "Every LDA bylaw that applies to your plot, and the livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.",
+      ? `Every bylaw that applies to your plot (LDA in this prototype: ${counts.lda} checks on a 10 marla) and ${counts.livable} livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.`
+      : "Every bylaw that applies to your plot (LDA in this prototype), and the livable rules: setbacks, coverage, height, stairs to the roof, railings at every drop.",
   },
   { title: "Walk your home before you build it", line: "Room by room, on any laptop or phone. Find the cramped bedroom while it costs nothing to fix." },
   { title: "Share with family and your architect", line: "Invite your team to design, or send your client a link. Everyone comments in one place, with their name on it." },
-  { title: "Revisions in minutes, not weeks", line: "Pin a note on a wall. Naqsha returns the next version, still compliant, and answers every note in its thread." },
+  { title: "Change it by asking", line: "Pin a note on a wall or type what you want. Naqsha returns the next version, still compliant, and answers every note in its thread." },
   { title: "Drawings your contractor can use", line: "Print every floor to scale with a title block, area schedule and compliance sheet, on A3 or A4, or save it as a PDF." },
 ];
 
@@ -109,41 +109,61 @@ export function Landing() {
 
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-[1280px] px-4 pt-28 sm:px-8 sm:pt-36 lg:pt-40" aria-labelledby="hero-title">
-          <motion.h1
-            id="hero-title"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: ease.out }}
-            className="max-w-[12ch] text-[clamp(2.5rem,7.5vw,7rem)] font-semibold leading-[.95] tracking-[-.045em] text-ink"
-          >
-            Walk through your home before the first brick.
-          </motion.h1>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: ease.out, delay: 0.08 }}
-            className="mt-6 flex flex-col gap-8 sm:mt-8 lg:flex-row lg:items-end lg:justify-between"
-          >
-            <p className="max-w-[34rem] text-body-lg text-ink-2 sm:text-[19px] sm:leading-[30px]">
-              Naqsha turns your plot and your family's wishes into an LDA‑ready design and a 3D home you can walk, share and change, in one sitting.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row lg:shrink-0">
+        <section
+          className="mx-auto grid max-w-[1280px] grid-cols-1 items-center gap-12 px-4 pt-28 sm:px-8 sm:pt-32 lg:min-h-[min(860px,100svh)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16 lg:pb-8 lg:pt-28"
+          aria-labelledby="hero-title"
+        >
+          <div>
+            <motion.h1
+              id="hero-title"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: ease.out }}
+              className="max-w-[12ch] text-[clamp(2.75rem,5.6vw,5.75rem)] font-semibold leading-[.96] tracking-[-.045em] text-ink"
+            >
+              Walk through your home before the <span className="text-accent">first brick.</span>
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: ease.out, delay: 0.08 }}
+              className="mt-6 max-w-[33rem] text-body-lg text-ink-2 sm:mt-8 sm:text-[19px] sm:leading-[30px]"
+            >
+              Describe your plot and your family in plain words. Naqsha designs the home like an experienced architect, checks it against your authority's bylaws, and builds it in 3D you can walk through, in minutes.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: ease.out, delay: 0.14 }}
+              className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row"
+            >
               <Button variant="primary" size="lg" trailing={<ArrowRight className="size-4" strokeWidth={2} />} onClick={() => navigate("/app")}>
                 Start your home
               </Button>
               <Button variant="secondary" size="lg" loading={opening === "hero" || (!!hero && opening === hero.id)} onClick={() => void sample()}>
                 Explore a sample home
               </Button>
-            </div>
-          </motion.div>
+            </motion.div>
+            <motion.ul
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, ease: ease.out, delay: 0.24 }}
+              className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[14px] text-ink-3 sm:mt-10"
+            >
+              {["Design by conversation", "Bylaw‑checked", "Walk every room"].map((t) => (
+                <li key={t} className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+                  {t}
+                </li>
+              ))}
+            </motion.ul>
+          </div>
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: ease.out, delay: 0.16 }}
-            className="mt-12 sm:mt-16"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.9, ease: ease.out, delay: 0.1 }}
           >
-            <Construction counts={counts} />
+            <HeroMedia counts={counts} />
           </motion.div>
         </section>
 
@@ -286,6 +306,76 @@ export function Landing() {
         <p className="mt-10 text-[13px] text-ink-3">© 2026 Naqsha · Made in Lahore</p>
       </footer>
     </div>
+  );
+}
+
+/**
+ * The hero frame: Naqsha's 2D drawing of a home (plot, structure, walls, render, night) plays first, then hands over
+ * to the 3D film of a sample home being built in the viewer (a real capture, looped).
+ */
+function HeroMedia({ counts }: { counts: SampleCounts | null }) {
+  const reduce = useReducedMotion();
+  const [stage, setStage] = useState<"draw" | "build">(reduce ? "build" : "draw");
+  const film = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (stage !== "build" || reduce) return;
+    const v = film.current;
+    if (!v) return;
+    v.currentTime = 0;
+    void v.play().catch(() => {});
+  }, [stage, reduce]);
+
+  const label = "A sample home being built in 3D by Naqsha, from the plot to the finished house at night";
+  return (
+    <figure className="relative mx-auto w-full max-w-[640px]">
+      <div className="relative aspect-square overflow-hidden rounded-media bg-surface shadow-e3">
+        {reduce ? (
+          <img src="/hero/naqsha-build-poster.jpg" alt={label} className="size-full object-cover" />
+        ) : (
+          <>
+            <video
+              ref={film}
+              className={cn("absolute inset-0 size-full object-cover transition-opacity duration-1000 ease-out", stage === "build" ? "opacity-100" : "opacity-0")}
+              muted
+              loop
+              playsInline
+              preload="auto"
+              poster="/hero/naqsha-build-poster.jpg"
+              aria-label={label}
+            >
+              <source src="/hero/naqsha-build-720.mp4" type="video/mp4" media="(max-width: 767px)" />
+              <source src="/hero/naqsha-build.webm" type="video/webm" />
+              <source src="/hero/naqsha-build.mp4" type="video/mp4" />
+            </video>
+            <div
+              className={cn(
+                "absolute inset-0 flex items-center bg-surface transition-opacity duration-1000 ease-out",
+                stage === "draw" ? "opacity-100" : "pointer-events-none opacity-0",
+              )}
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgb(17 17 19 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(17 17 19 / .045) 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+              }}
+              aria-hidden={stage !== "draw"}
+            >
+              <Construction className="w-full rounded-none bg-transparent shadow-none" counts={counts} hideReplay onDone={() => setStage("build")} />
+            </div>
+          </>
+        )}
+        <div className="pointer-events-none absolute inset-0 rounded-media ring-1 ring-inset ring-black/5" aria-hidden />
+      </div>
+      <figcaption
+        className={cn(
+          "absolute left-4 top-4 flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 text-[13px] font-medium text-ink shadow-e1 backdrop-blur transition-opacity duration-700 sm:left-5 sm:top-5",
+          stage === "build" ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+        A sample home, built in 3D by Naqsha
+      </figcaption>
+    </figure>
   );
 }
 

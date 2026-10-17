@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body>
+<template id="ft-outro-template">
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Noto Nastaliq Urdu"; src: url("assets/fonts/NotoNastaliqUrdu.ttf") format("truetype"); font-weight: 400 700; font-style: normal; }
+
+#ft-outro { position:absolute; inset:0; width:100%; height:100%; font-family:"Geist", sans-serif; color:#111113; }
+#ft-outro .topbar { position:absolute; left:128px; top:34px; width:1664px; height:66px; display:flex; align-items:center; gap:16px; }
+#ft-outro .chip { display:flex; align-items:center; gap:14px; height:60px; padding:0 26px 0 22px; border-radius:999px; background:#111113; color:#F5F5F7; font-size:32px; font-weight:600; letter-spacing:0.01em; box-shadow:0 10px 30px -12px rgba(17,17,19,.5); white-space:nowrap; }
+#ft-outro .chip .dot { width:16px; height:16px; border-radius:50%; background:#FF453A; box-shadow:0 0 0 5px rgba(255,69,58,.22); }
+#ft-outro .chip .muted { color:#C9C9D1; font-weight:500; }
+#ft-outro .bslot { position:relative; width:430px; height:60px; }
+#ft-outro .badge { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#2747F5; color:#fff; font-size:32px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-outro .badge.rt { background:#0E7A55; }
+#ft-outro .badge.sl { background:#46464B; }
+#ft-outro .badge svg, #ft-outro .clock svg { width:30px; height:30px; flex:none; }
+#ft-outro .cslot { position:relative; width:370px; height:60px; }
+#ft-outro .clock { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:32px; font-weight:600; border:2px solid #CFCFC8; white-space:nowrap; opacity:0; }
+#ft-outro .clock .cv { font-family:"Geist Mono", monospace; font-variant-numeric:tabular-nums; font-weight:600; }
+#ft-outro .clock .cl { color:#46464B; font-weight:500; }
+#ft-outro .chap { margin-left:auto; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-outro .win { position:absolute; left:128px; top:118px; width:1664px; height:936px; border-radius:28px; overflow:hidden; background:#F6F6F3; box-shadow:0 0 0 2px rgba(17,17,19,.07), 0 40px 90px -30px rgba(17,17,19,.42); transform-origin:50% 50%; }
+#ft-outro .cam { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; will-change:transform; }
+#ft-outro .vid { position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; }
+#ft-outro .ring { position:absolute; border:5px solid #2747F5; border-radius:16px; box-shadow:0 0 0 8px rgba(39,71,245,.16); opacity:0; }
+#ft-outro .lower { position:absolute; max-width:1180px; padding:26px 34px 28px; border-radius:22px; background:rgba(17,17,19,.86); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-outro .lower .ai-tag { display:inline-flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#9DB0FF; margin-bottom:8px; }
+#ft-outro .lower .ai-tag svg { width:30px; height:30px; }
+#ft-outro .lower .lt-title { font-size:44px; font-weight:650; letter-spacing:-0.02em; line-height:1.12; }
+#ft-outro .lower .lt-sub { font-size:32px; font-weight:450; color:#C9C9D1; margin-top:8px; line-height:1.25; }
+#ft-outro .callout { position:absolute; display:flex; align-items:flex-start; gap:18px; max-width:1100px; padding:22px 30px 24px 26px; border-radius:20px; background:#FFFFFF; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-outro .callout .cdot { width:18px; height:18px; border-radius:50%; margin-top:14px; flex:none; box-shadow:0 0 0 6px rgba(39,71,245,.14); }
+#ft-outro .callout .c-text { font-size:38px; font-weight:620; letter-spacing:-0.015em; line-height:1.18; }
+#ft-outro .callout .c-sub { font-size:32px; font-weight:450; color:#46464B; margin-top:6px; line-height:1.25; }
+#ft-outro .callout.t-fail { box-shadow:0 0 0 3px rgba(200,40,30,.55), 0 26px 60px -22px rgba(17,17,19,.45); }
+#ft-outro .callout.t-fail .c-text { color:#A3241B; }
+#ft-outro .callout.t-pass .c-text { color:#0B6446; }
+#ft-outro .stat { position:absolute; padding:26px 40px 30px; border-radius:26px; background:#2747F5; color:#fff; box-shadow:0 30px 70px -24px rgba(39,71,245,.6); opacity:0; transform-origin:100% 100%; }
+#ft-outro .stat .s-big { font-size:124px; font-weight:700; letter-spacing:-0.05em; line-height:0.95; font-variant-numeric:tabular-nums; }
+#ft-outro .stat .s-label { font-size:34px; font-weight:500; color:#DCE3FF; margin-top:10px; }
+#ft-outro .log { position:absolute; width:720px; padding:24px 28px 18px; border-radius:22px; background:rgba(17,17,19,.88); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); opacity:0; }
+#ft-outro .log .lg-title { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; color:#9DB0FF; margin-bottom:12px; }
+#ft-outro .log .lg-title svg { width:30px; height:30px; }
+#ft-outro .log .lg-line { display:flex; align-items:flex-start; gap:14px; font-size:32px; line-height:1.25; padding:6px 0; opacity:0; }
+#ft-outro .log .lg-dot { width:14px; height:14px; border-radius:50%; background:#7D93FF; margin-top:13px; flex:none; }
+#ft-outro .rules { position:absolute; padding:24px 28px 14px; border-radius:22px; background:#FFFFFF; color:#111113; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-outro .rules .ru-head { display:flex; align-items:center; gap:10px; font-size:36px; font-weight:650; letter-spacing:-0.015em; }
+#ft-outro .rules .ru-head svg { width:30px; height:30px; color:#2747F5; }
+#ft-outro .rules .ru-tag { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:30px; font-weight:500; }
+#ft-outro .rules .ru-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 0; border-top:2px solid #ECECE8; margin-top:10px; }
+#ft-outro .rules .ru-k { font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-outro .rules .ru-vs { position:relative; display:block; flex:1; height:42px; }
+#ft-outro .rules .ru-v { position:absolute; right:0; top:0; font-family:"Geist Mono", monospace; font-size:31px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-outro .mask { position:absolute; display:flex; align-items:center; gap:12px; padding:0 20px 0 78px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:26px; font-weight:620; letter-spacing:-0.01em; white-space:nowrap; box-shadow:0 0 0 2px rgba(17,17,19,.10), 0 8px 22px -10px rgba(17,17,19,.45); opacity:0; }
+#ft-outro .mask .mk-dot { width:12px; height:12px; border-radius:50%; background:#2747F5; flex:none; }
+#ft-outro .callout .c-tag { display:inline-block; margin:2px 0 8px; padding:3px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:28px; font-weight:500; }
+#ft-outro .log .lg-tool { font-family:"Geist Mono", monospace; font-size:28px; color:#9DB0FF; margin-top:2px; }
+#ft-outro .steps { position:absolute; left:36px; top:36px; display:flex; gap:10px; opacity:0; }
+#ft-outro .steps .sp { display:flex; align-items:center; gap:10px; height:56px; padding:0 20px 0 12px; border-radius:999px; border:2px solid #DADAD4; background:#FFFFFF; color:#6E6E73; font-size:30px; font-weight:600; white-space:nowrap; box-shadow:0 10px 26px -14px rgba(17,17,19,.45); }
+#ft-outro .steps .sp-n { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(17,17,19,.08); font-family:"Geist Mono", monospace; font-size:24px; }
+#ft-outro .quote { position:absolute; padding:24px 32px 26px; border-radius:22px; background:rgba(17,17,19,.9); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-outro .quote .q-tag { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:30px; color:#9DB0FF; }
+#ft-outro .quote .q-tag svg { width:28px; height:28px; }
+#ft-outro .quote .q-title { font-size:40px; font-weight:650; letter-spacing:-0.02em; margin-top:6px; }
+#ft-outro .quote .q-body { font-size:34px; line-height:1.28; color:#FFFFFF; margin-top:12px; padding-left:20px; border-left:4px solid #7D93FF; }
+#ft-outro .quote .q-foot { font-size:30px; color:#C9C9D1; margin-top:10px; }
+#ft-outro .statement { position:absolute; left:0; right:0; bottom:0; padding:60px 64px 56px; background:linear-gradient(180deg, rgba(17,17,19,0) 0%, rgba(17,17,19,.78) 55%); opacity:0; }
+#ft-outro .statement .st-text { font-size:84px; font-weight:650; letter-spacing:-0.035em; color:#fff; line-height:1.02; }
+</style>
+<div id="ft-outro" data-composition-id="ft-outro" data-width="1920" data-height="1080" data-duration="19.45">
+  <div class="topbar">
+    <div class="chip" id="ft-outro-chip"><span class="dot" id="ft-outro-live"></span><span>LIVE</span><span class="muted">· real product</span></div>
+    <div class="bslot"><div class="badge" id="ft-outro-b0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2×</span></div><div class="badge" id="ft-outro-b1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.2×</span></div><div class="badge" id="ft-outro-b2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 3×</span></div><div class="badge" id="ft-outro-b3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 4×</span></div></div>
+    <div class="cslot"></div>
+    <div class="chap" id="ft-outro-chap">Who it helps</div>
+  </div>
+  <div class="win" id="ft-outro-win">
+    <div class="cam" id="ft-outro-cam" data-layout-allow-overflow>
+      <video id="ft-outro-v0" src="assets/footage/y_bonus_after_revision_walk.mp4" data-start="0.0" data-duration="3.0" data-media-start="4.5" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.0" class="vid"></video>
+<video id="ft-outro-v1" src="assets/footage/y_bonus_after_revision_walk.mp4" data-start="3.0" data-duration="3.0" data-media-start="22.5" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.2" class="vid"></video>
+<video id="ft-outro-v2" src="assets/footage/x_bonus_villa_orbit_day_night.mp4" data-start="6.0" data-duration="4.0" data-media-start="50.8" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="3.2" class="vid"></video>
+<video id="ft-outro-v3" src="assets/footage/x_bonus_villa_orbit_day_night.mp4" data-start="10.0" data-duration="9.45" data-media-start="16.7" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="4.0" class="vid"></video>
+      <div class="mask" id="ft-outro-o0" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · Version 5</div><div class="mask" id="ft-outro-o1" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · Version 5</div><div class="mask" id="ft-outro-o2" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample villa · 1 kanal</div><div class="mask" id="ft-outro-o3" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample villa · 1 kanal</div>
+    </div>
+    <div class="callout t-ink" id="ft-outro-o4" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">For families</div><div class="c-sub">walk through the home before it is built</div></div></div><div class="callout t-ink" id="ft-outro-o5" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">For architects</div><div class="c-sub">a checked, walkable design in the first client meeting</div></div></div><div class="callout t-ink" id="ft-outro-o6" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">For builders</div><div class="c-sub">a 1:100 drawing set that passes the local bylaw checks</div></div></div><div class="log" id="ft-outro-o7" style="right:36px;top:36px;width:820px;"><div class="lg-title"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.9 2.6 7.6 7.8 8.6v.8c-5.2 1-7.2 3.7-7.8 8.6h-.8c-.6-4.9-2.6-7.6-7.8-8.6v-.8c5.2-1 7.2-3.7 7.8-8.6z"/></svg>Bylaws as data</div><div class="lg-line" id="ft-outro-o7-l0"><span class="lg-dot"></span><div>LDA, Lahore · the prototype’s rules</div></div><div class="lg-line" id="ft-outro-o7-l1"><span class="lg-dot"></span><div>More development authorities in Pakistan · next</div></div><div class="lg-line" id="ft-outro-o7-l2"><span class="lg-dot"></span><div>Other countries · after that</div></div></div>
+  </div>
+</div>
+<script>
+(function(){
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#ft-outro-win", {scale:1.035}, {scale:1, duration:0.7, ease:"power3.out"}, 0);
+tl.fromTo("#ft-outro-chip", {scale:0.94}, {scale:1, duration:0.35, ease:"back.out(1.7)"}, 0);
+tl.fromTo("#ft-outro-chap", {opacity:0, x:20}, {opacity:1, x:0, duration:0.4, ease:"power3.out"}, 0.25);
+tl.fromTo("#ft-outro-live", {opacity:1}, {opacity:0.35, duration:0.6, repeat:31, yoyo:true, ease:"sine.inOut"}, 0);
+const cam = document.getElementById("ft-outro-cam");
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667, transformOrigin:"0 0"}, 0);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 0.0);
+tl.to(cam, {x:-41.6, y:-23.4, scale:0.91, duration:2.95, ease:"none"}, 0.02);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 3.0);
+tl.to(cam, {x:-41.6, y:-23.4, scale:0.91, duration:2.9500000000000006, ease:"none"}, 3.02);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 6.0);
+tl.to(cam, {x:-41.6, y:-23.4, scale:0.91, duration:3.950000000000001, ease:"none"}, 6.02);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 10.0);
+tl.to(cam, {x:-41.6, y:-23.4, scale:0.91, duration:9.400000000000016, ease:"none"}, 10.02);
+tl.fromTo("#ft-outro-b0", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 0.0);
+tl.to("#ft-outro-b0", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 2.84);
+tl.fromTo("#ft-outro-b1", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 3.0);
+tl.to("#ft-outro-b1", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 5.84);
+tl.fromTo("#ft-outro-b2", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 6.0);
+tl.to("#ft-outro-b2", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 9.84);
+tl.fromTo("#ft-outro-b3", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 10.0);
+tl.to("#ft-outro-b3", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 19.29);
+tl.set("#ft-outro-o0", {opacity:1}, 0.0);
+tl.set("#ft-outro-o0", {opacity:0}, 3.0);
+tl.set("#ft-outro-o1", {opacity:1}, 3.0);
+tl.set("#ft-outro-o1", {opacity:0}, 6.0);
+tl.set("#ft-outro-o2", {opacity:1}, 6.0);
+tl.set("#ft-outro-o2", {opacity:0}, 10.0);
+tl.set("#ft-outro-o3", {opacity:1}, 10.0);
+tl.set("#ft-outro-o3", {opacity:0}, 19.45);
+tl.fromTo("#ft-outro-o4", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 0.57);
+tl.to("#ft-outro-o4", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 3.23);
+tl.fromTo("#ft-outro-o5", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 3.63);
+tl.to("#ft-outro-o5", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 5.91);
+tl.fromTo("#ft-outro-o6", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 6.28);
+tl.to("#ft-outro-o6", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 9.28);
+tl.fromTo("#ft-outro-o7", {opacity:0, x:30}, {opacity:1, x:0, duration:0.45, ease:"power3.out"}, 9.43);
+tl.fromTo("#ft-outro-o7-l0", {opacity:0, x:18}, {opacity:1, x:0, duration:0.3, ease:"power2.out"}, 10.22);
+tl.fromTo("#ft-outro-o7-l1", {opacity:0, x:18}, {opacity:1, x:0, duration:0.3, ease:"power2.out"}, 14.68);
+tl.fromTo("#ft-outro-o7-l2", {opacity:0, x:18}, {opacity:1, x:0, duration:0.3, ease:"power2.out"}, 17.31);
+tl.to("#ft-outro-o7", {opacity:0, x:20, duration:0.25, ease:"power2.in"}, 19.2);
+window.__timelines["ft-outro"] = tl;
+})();
+</script>
+</template>
+</body></html>

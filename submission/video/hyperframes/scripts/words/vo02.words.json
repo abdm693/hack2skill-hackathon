@@ -1,0 +1,68 @@
+[
+  {
+    "text": "Nakhsha",
+    "start": 0.09,
+    "end": 0.4,
+    "id": "w0"
+  },
+  {
+    "text": "is",
+    "start": 0.61,
+    "end": 0.78,
+    "id": "w1"
+  },
+  {
+    "text": "an",
+    "start": 0.78,
+    "end": 0.95,
+    "id": "w2"
+  },
+  {
+    "text": "agentic",
+    "start": 0.95,
+    "end": 1.56,
+    "id": "w3"
+  },
+  {
+    "text": "home",
+    "start": 1.56,
+    "end": 1.84,
+    "id": "w4"
+  },
+  {
+    "text": "design",
+    "start": 1.92,
+    "end": 2.44,
+    "id": "w5"
+  },
+  {
+    "text": "studio",
+    "start": 2.44,
+    "end": 2.97,
+    "id": "w6"
+  },
+  {
+    "text": "built",
+    "start": 3.14,
+    "end": 3.34,
+    "id": "w7"
+  },
+  {
+    "text": "on",
+    "start": 3.38,
+    "end": 3.5,
+    "id": "w8"
+  },
+  {
+    "text": "Google",
+    "start": 3.5,
+    "end": 3.89,
+    "id": "w9"
+  },
+  {
+    "text": "Cloud.",
+    "start": 3.89,
+    "end": 4.3,
+    "id": "w10"
+  }
+]

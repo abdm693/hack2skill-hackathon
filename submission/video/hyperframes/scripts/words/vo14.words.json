@@ -1,0 +1,356 @@
+[
+  {
+    "text": "Families",
+    "start": 0.42,
+    "end": 0.5,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.5,
+    "end": 0.68,
+    "id": "w1"
+  },
+  {
+    "text": "walk",
+    "start": 0.68,
+    "end": 0.83,
+    "id": "w2"
+  },
+  {
+    "text": "through",
+    "start": 0.97,
+    "end": 1.27,
+    "id": "w3"
+  },
+  {
+    "text": "their",
+    "start": 1.48,
+    "end": 1.68,
+    "id": "w4"
+  },
+  {
+    "text": "home",
+    "start": 1.68,
+    "end": 1.96,
+    "id": "w5"
+  },
+  {
+    "text": "before",
+    "start": 1.96,
+    "end": 2.36,
+    "id": "w6"
+  },
+  {
+    "text": "they",
+    "start": 2.36,
+    "end": 2.59,
+    "id": "w7"
+  },
+  {
+    "text": "build",
+    "start": 2.59,
+    "end": 2.78,
+    "id": "w8"
+  },
+  {
+    "text": "it.",
+    "start": 2.89,
+    "end": 3,
+    "id": "w9"
+  },
+  {
+    "text": "Architects",
+    "start": 3.43,
+    "end": 3.64,
+    "id": "w10"
+  },
+  {
+    "text": "can",
+    "start": 3.64,
+    "end": 3.83,
+    "id": "w11"
+  },
+  {
+    "text": "show",
+    "start": 3.83,
+    "end": 4.08,
+    "id": "w12"
+  },
+  {
+    "text": "a",
+    "start": 4.08,
+    "end": 4.14,
+    "id": "w13"
+  },
+  {
+    "text": "checked",
+    "start": 4.14,
+    "end": 4.59,
+    "id": "w14"
+  },
+  {
+    "text": "design",
+    "start": 4.59,
+    "end": 5,
+    "id": "w15"
+  },
+  {
+    "text": "in",
+    "start": 5,
+    "end": 5.11,
+    "id": "w16"
+  },
+  {
+    "text": "the",
+    "start": 5.11,
+    "end": 5.28,
+    "id": "w17"
+  },
+  {
+    "text": "first",
+    "start": 5.28,
+    "end": 5.57,
+    "id": "w18"
+  },
+  {
+    "text": "meeting",
+    "start": 5.57,
+    "end": 5.78,
+    "id": "w19"
+  },
+  {
+    "text": "and",
+    "start": 6.03,
+    "end": 6.18,
+    "id": "w20"
+  },
+  {
+    "text": "builders",
+    "start": 6.43,
+    "end": 6.65,
+    "id": "w21"
+  },
+  {
+    "text": "get",
+    "start": 6.65,
+    "end": 6.83,
+    "id": "w22"
+  },
+  {
+    "text": "drawings",
+    "start": 6.83,
+    "end": 7.27,
+    "id": "w23"
+  },
+  {
+    "text": "that",
+    "start": 7.49,
+    "end": 7.54,
+    "id": "w24"
+  },
+  {
+    "text": "pass",
+    "start": 7.54,
+    "end": 7.78,
+    "id": "w25"
+  },
+  {
+    "text": "the",
+    "start": 7.78,
+    "end": 7.96,
+    "id": "w26"
+  },
+  {
+    "text": "local",
+    "start": 7.96,
+    "end": 8.26,
+    "id": "w27"
+  },
+  {
+    "text": "by-law",
+    "start": 8.26,
+    "end": 8.6,
+    "id": "w28"
+  },
+  {
+    "text": "checks.",
+    "start": 8.6,
+    "end": 9,
+    "id": "w29"
+  },
+  {
+    "text": "Because",
+    "start": 9.28,
+    "end": 9.3,
+    "id": "w30"
+  },
+  {
+    "text": "the",
+    "start": 9.43,
+    "end": 9.6,
+    "id": "w31"
+  },
+  {
+    "text": "agents",
+    "start": 9.6,
+    "end": 9.83,
+    "id": "w32"
+  },
+  {
+    "text": "read",
+    "start": 9.97,
+    "end": 10.2,
+    "id": "w33"
+  },
+  {
+    "text": "by-laws",
+    "start": 10.2,
+    "end": 10.62,
+    "id": "w34"
+  },
+  {
+    "text": "as",
+    "start": 10.62,
+    "end": 10.74,
+    "id": "w35"
+  },
+  {
+    "text": "data,",
+    "start": 10.74,
+    "end": 11.12,
+    "id": "w36"
+  },
+  {
+    "text": "adding",
+    "start": 11.12,
+    "end": 11.49,
+    "id": "w37"
+  },
+  {
+    "text": "a",
+    "start": 11.49,
+    "end": 11.55,
+    "id": "w38"
+  },
+  {
+    "text": "new",
+    "start": 11.55,
+    "end": 11.73,
+    "id": "w39"
+  },
+  {
+    "text": "city",
+    "start": 11.73,
+    "end": 11.87,
+    "id": "w40"
+  },
+  {
+    "text": "starts",
+    "start": 12.27,
+    "end": 12.49,
+    "id": "w41"
+  },
+  {
+    "text": "with",
+    "start": 12.49,
+    "end": 12.82,
+    "id": "w42"
+  },
+  {
+    "text": "adding",
+    "start": 12.82,
+    "end": 13.2,
+    "id": "w43"
+  },
+  {
+    "text": "its",
+    "start": 13.32,
+    "end": 13.56,
+    "id": "w44"
+  },
+  {
+    "text": "rules.",
+    "start": 13.56,
+    "end": 14,
+    "id": "w45"
+  },
+  {
+    "text": "We're",
+    "start": 14,
+    "end": 14.3,
+    "id": "w46"
+  },
+  {
+    "text": "starting",
+    "start": 14.43,
+    "end": 14.78,
+    "id": "w47"
+  },
+  {
+    "text": "with",
+    "start": 14.78,
+    "end": 15.02,
+    "id": "w48"
+  },
+  {
+    "text": "Pakistan's",
+    "start": 15.02,
+    "end": 15.62,
+    "id": "w49"
+  },
+  {
+    "text": "development",
+    "start": 15.62,
+    "end": 16.29,
+    "id": "w50"
+  },
+  {
+    "text": "authorities.",
+    "start": 16.29,
+    "end": 17,
+    "id": "w51"
+  },
+  {
+    "text": "Then",
+    "start": 17.06,
+    "end": 17.22,
+    "id": "w52"
+  },
+  {
+    "text": "other",
+    "start": 17.42,
+    "end": 17.49,
+    "id": "w53"
+  },
+  {
+    "text": "countries.",
+    "start": 17.49,
+    "end": 18,
+    "id": "w54"
+  },
+  {
+    "text": "Nakhsha",
+    "start": 18,
+    "end": 18.3,
+    "id": "w55"
+  },
+  {
+    "text": "is",
+    "start": 18.43,
+    "end": 18.48,
+    "id": "w56"
+  },
+  {
+    "text": "live",
+    "start": 18.48,
+    "end": 18.7,
+    "id": "w57"
+  },
+  {
+    "text": "today.",
+    "start": 18.7,
+    "end": 19,
+    "id": "w58"
+  }
+]

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Naqsha process flow and agent loops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=block" rel="stylesheet">
+<link rel="stylesheet" href="diagram.css">
+<style>
+  /* 1280 x 580 CSS px is placed 664 pt wide on the slide: 18 px = 9.3 pt. No outer padding. */
+  html, body { width: 1280px; height: 580px; position: relative; }
+  .abs { position: absolute; }
+
+  /* ---------- pipeline ---------- */
+  .pipe { position: absolute; left: 0; top: 0; width: 1280px; height: 192px;
+          display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 14px;
+          grid-template-rows: 32px 30px 1fr; row-gap: 8px; }
+  .hd { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hd .n { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+           background: var(--accent); color: #fff; font-weight: 600; font-size: 17px; }
+  .hd h3 { font-size: 21px; font-weight: 600; letter-spacing: -0.015em; white-space: nowrap; }
+  .hd .ln { flex: 1; height: 2px; background: var(--line-2); position: relative; min-width: 14px; margin-right: -10px; }
+  .hd .ln::after { content: ""; position: absolute; right: -1px; top: -4px; width: 8px; height: 8px;
+                   border-top: 2px solid var(--line-2); border-right: 2px solid var(--line-2); transform: rotate(45deg); }
+  .tm { display: flex; align-items: center; }
+  .tm .chip { height: 28px; font-size: 17px; padding: 0 10px; border-radius: 9px; }
+  .tm.span { grid-column: 3 / 5; position: relative; justify-content: center; }
+  .tm.span::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--accent-line); }
+  .tm.span .chip { position: relative; }
+  .card { background: var(--fill); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column;
+          justify-content: space-between; gap: 6px; }
+  .card .you { font-size: 18px; line-height: 1.24; color: var(--ink); }
+  .card .ai { font-size: 17px; line-height: 1.22; color: var(--accent-ink); font-weight: 500; }
+  .card .ai.plain { color: var(--ink-2); }
+
+  /* ---------- loop panels ---------- */
+  .panel { position: absolute; top: 208px; height: 372px; border-radius: 18px; background: #fff;
+           box-shadow: inset 0 0 0 1.5px var(--line-2); }
+  .ph { position: absolute; left: 16px; right: 16px; top: 12px; display: flex; align-items: center; gap: 10px; }
+  .badge { font-size: 17px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 8px; padding: 2px 9px; white-space: nowrap; }
+  .ph h4 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .ph span.sub { font-size: 17px; color: var(--ink-3); white-space: nowrap; }
+
+  .node { position: absolute; width: 137px; height: 108px; border-radius: 12px; background: var(--hud); color: var(--hud-ink);
+          padding: 9px 11px; display: flex; flex-direction: column; gap: 3px; }
+  .node b { font-size: 18px; font-weight: 600; line-height: 1.15; }
+  .node span { font-size: 17px; line-height: 1.2; color: var(--hud-2); }
+  .node.rule { background: var(--accent); }
+  .node.rule span { color: #E4E8FF; }
+  .node.end { background: var(--pass-soft); color: var(--pass); box-shadow: inset 0 0 0 1.5px #BFE3D2; }
+  .node.end span { color: var(--ink-2); }
+  .lbl { position: absolute; font-size: 17px; line-height: 1.2; color: var(--accent-ink); font-weight: 500; background: #fff; padding: 0 6px; white-space: nowrap; }
+  .band { position: absolute; left: 16px; right: 16px; border-radius: 12px; background: var(--accent-soft);
+          box-shadow: inset 0 0 0 1.5px var(--accent-line); padding: 8px 14px; font-size: 17px; line-height: 1.25; color: var(--ink-2); }
+  .band b { color: var(--accent-ink); font-weight: 600; }
+  .band strong { color: var(--ink); font-weight: 600; }
+  .tags { position: absolute; left: 16px; right: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { font-size: 17px; font-weight: 500; height: 26px; display: inline-flex; align-items: center; padding: 0 9px;
+               border-radius: 8px; background: var(--fill-2); color: var(--ink); white-space: nowrap; }
+
+  .step { position: absolute; left: 16px; right: 16px; height: 34px; border-radius: 10px; background: var(--fill);
+          display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 18px; color: var(--ink); white-space: nowrap; }
+  .step i { font-style: normal; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 14px;
+            font-weight: 600; display: grid; place-items: center; flex: none; }
+  .br { position: absolute; height: 72px; border-radius: 10px; padding: 7px 11px; font-size: 17px; line-height: 1.22; }
+  .br.ok { background: var(--pass-soft); color: var(--ink); }
+  .br.no { background: var(--fail-soft); color: var(--ink); }
+  .br b { font-weight: 600; }
+  .br.ok b { color: var(--pass); }
+  .br.no b { color: var(--fail); }
+  .adkpill { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px 0 6px; border-radius: 8px;
+             background: #E8F0FE; box-shadow: inset 0 0 0 1.5px #AECBFA; color: #1967D2;
+             font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .adkpill img { width: 20px; height: 20px; }
+  svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+</style>
+</head>
+<body>
+<!-- ================= the six steps ================= -->
+<div class="pipe">
+  <div class="hd"><span class="n">1</span><h3>Brief</h3><span class="ln"></span></div>
+  <div class="hd"><span class="n">2</span><h3>Concepts</h3><span class="ln"></span></div>
+  <div class="hd"><span class="n">3</span><h3>Plan</h3><span class="ln"></span></div>
+  <div class="hd"><span class="n">4</span><h3>3D house</h3><span class="ln"></span></div>
+  <div class="hd"><span class="n">5</span><h3>Walk &amp; share</h3><span class="ln"></span></div>
+  <div class="hd"><span class="n">6</span><h3>Revise</h3></div>
+
+  <div class="tm"><span class="chip">~3 s a turn</span></div>
+  <div class="tm"><span class="chip">~20 s for 4</span></div>
+  <div class="tm span"><span class="chip accent">4.6–5.2 min for a 10 marla home</span></div>
+  <div class="tm"><span class="chip">instant</span></div>
+  <div class="tm"><span class="chip">~70 s a version</span></div>
+
+  <div class="card"><div class="you">Describe the plot in one message.</div><div class="ai">Google ADK agent · Gemini 3.8 Flash</div></div>
+  <div class="card"><div class="you">Choose a photoreal look, day or night.</div><div class="ai">Gemini 3.1 Flash Image</div></div>
+  <div class="card"><div class="you">A plan the agent checks and fixes.</div><div class="ai">Gemini 4 Argon<br>loop A ↓</div></div>
+  <div class="card"><div class="you">Watch the house build, part by part.</div><div class="ai">Writes it as code<br>loop A ↓</div></div>
+  <div class="card"><div class="you">Walk it like a game; share a link.</div><div class="ai plain">three.js; Gemini renders any view</div></div>
+  <div class="card"><div class="you">Pin comments, get the next version.</div><div class="ai">Google ADK agent<br>loop B ↓</div></div>
+</div>
+
+<!-- ================= loop A: the architect ================= -->
+<div class="panel" style="left:0; width:800px;">
+  <div class="ph"><span class="badge">Loop A</span><h4>Architect pipeline · Gemini 4 Argon</h4><span class="sub">steps 3–4 · checks itself before you see it</span></div>
+
+  <div class="node" style="left:16px; top:84px;"><b>Plan</b><span>every floor as JSON</span></div>
+  <div class="node rule" style="left:173px; top:84px;"><b>Rules check</b><span>a tool call:<br><span style="white-space:nowrap;color:inherit">36–43 LDA</span> + 10 livable</span></div>
+  <div class="node" style="left:330px; top:84px;"><b>Self-review</b><span>looks at its own drawings</span></div>
+  <div class="node" style="left:487px; top:84px;"><b>Write code</b><span>design.js, ~25 parts, streamed</span></div>
+  <div class="node end" style="left:644px; top:84px;"><b>As-built</b><span>setbacks measured on the 3D model</span></div>
+
+  <svg width="800" height="372">
+    <defs>
+      <marker id="f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#111113"/></marker>
+      <marker id="b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#2747F5"/></marker>
+    </defs>
+    <g stroke="#111113" stroke-width="2" fill="none">
+      <path d="M154 136 H171" marker-end="url(#f)"/>
+      <path d="M311 136 H328" marker-end="url(#f)"/>
+      <path d="M468 136 H485" marker-end="url(#f)"/>
+      <path d="M625 136 H642" marker-end="url(#f)"/>
+    </g>
+    <g stroke="#2747F5" stroke-width="2.5" fill="none">
+      <!-- fix loop: rules check back to plan, below -->
+      <path d="M241 194 C241 230, 84 230, 84 196" marker-end="url(#b)"/>
+      <!-- review loop: self-review back to plan, above -->
+      <path d="M398 82 C398 48, 84 48, 84 80" marker-end="url(#b)"/>
+    </g>
+  </svg>
+  <div class="lbl" style="left:118px; top:46px;">critique → revise → re-check</div>
+  <div class="lbl" style="left:40px; top:228px;">fails → fix → re-check (15 → 5 → 0)</div>
+
+  <div class="band" style="top:262px;"><b>Rules engine:</b> each authority’s bylaws as deterministic code (LDA 2026 in the prototype), plus <strong>10 livable-home rules</strong>. The same engine draws the envelope (1) and dry-runs edits (6).</div>
+  <div class="tags" style="top:330px;"><span>tool use</span><span>self-correction</span><span>multimodal self-review</span><span>code generation</span><span>rules as guardrails</span></div>
+</div>
+
+<!-- ================= loop B: the revision agent ================= -->
+<div class="panel" style="left:816px; width:464px;">
+  <div class="ph" style="flex-direction:column; align-items:flex-start; gap:2px;">
+    <div style="display:flex; align-items:center; gap:10px;"><span class="badge">Loop B</span><h4>Revision agent · Gemini 4 Argon</h4></div>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:3px;"><span class="adkpill"><img src="../icons/adk/agent-development-kit.png" alt="ADK">Agentic harness: Google ADK</span><span class="sub">step 6 · 9 tools</span></div>
+  </div>
+  <div class="step" style="top:84px;"><i>1</i>Reads the comments and their 3D snapshots</div>
+  <div class="step" style="top:126px;"><i>2</i>Opens only the rooms and code it needs</div>
+  <div class="step" style="top:168px;"><i>3</i>Dry-runs each edit against the rules</div>
+  <div class="br ok" style="left:16px; width:211px; top:210px;"><b>Passes:</b> rewrites those parts and answers the comment</div>
+  <div class="br no" style="left:237px; width:211px; top:210px;"><b>Breaks a rule:</b> names it and offers an alternative</div>
+  <div class="step" style="top:292px; background:var(--accent-soft); color:var(--accent-ink); font-weight:500;"><i style="background:var(--accent)">4</i>Owner picks what goes in: next version</div>
+  <div class="tags" style="top:334px;"><span>tool use</span><span>refuses with the rule</span><span>human approval</span></div>
+</div>
+</body>
+</html>

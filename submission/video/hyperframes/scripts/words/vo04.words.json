@@ -1,0 +1,308 @@
+[
+  {
+    "text": "You",
+    "start": 0.15,
+    "end": 0.24,
+    "id": "w0"
+  },
+  {
+    "text": "start",
+    "start": 0.24,
+    "end": 0.55,
+    "id": "w1"
+  },
+  {
+    "text": "with",
+    "start": 0.68,
+    "end": 0.95,
+    "id": "w2"
+  },
+  {
+    "text": "one",
+    "start": 0.95,
+    "end": 1.19,
+    "id": "w3"
+  },
+  {
+    "text": "message",
+    "start": 1.19,
+    "end": 1.75,
+    "id": "w4"
+  },
+  {
+    "text": "about",
+    "start": 1.75,
+    "end": 1.99,
+    "id": "w5"
+  },
+  {
+    "text": "your",
+    "start": 2.02,
+    "end": 2.28,
+    "id": "w6"
+  },
+  {
+    "text": "plot",
+    "start": 2.28,
+    "end": 2.5,
+    "id": "w7"
+  },
+  {
+    "text": "and",
+    "start": 2.66,
+    "end": 2.74,
+    "id": "w8"
+  },
+  {
+    "text": "your",
+    "start": 2.74,
+    "end": 2.92,
+    "id": "w9"
+  },
+  {
+    "text": "family.",
+    "start": 2.99,
+    "end": 3.64,
+    "id": "w10"
+  },
+  {
+    "text": "A",
+    "start": 3.64,
+    "end": 3.79,
+    "id": "w11"
+  },
+  {
+    "text": "Google",
+    "start": 3.79,
+    "end": 4.11,
+    "id": "w12"
+  },
+  {
+    "text": "ADK",
+    "start": 4.11,
+    "end": 4.3,
+    "id": "w13"
+  },
+  {
+    "text": "agent",
+    "start": 4.32,
+    "end": 4.64,
+    "id": "w14"
+  },
+  {
+    "text": "on",
+    "start": 4.64,
+    "end": 4.77,
+    "id": "w15"
+  },
+  {
+    "text": "Gemini",
+    "start": 4.77,
+    "end": 5.18,
+    "id": "w16"
+  },
+  {
+    "text": "3.8",
+    "start": 5.18,
+    "end": 5.78,
+    "id": "w17"
+  },
+  {
+    "text": "Flash",
+    "start": 5.78,
+    "end": 6.14,
+    "id": "w18"
+  },
+  {
+    "text": "replies",
+    "start": 6.3,
+    "end": 6.48,
+    "id": "w19"
+  },
+  {
+    "text": "in",
+    "start": 6.48,
+    "end": 6.56,
+    "id": "w20"
+  },
+  {
+    "text": "about",
+    "start": 6.56,
+    "end": 6.83,
+    "id": "w21"
+  },
+  {
+    "text": "4",
+    "start": 6.83,
+    "end": 6.91,
+    "id": "w22"
+  },
+  {
+    "text": "seconds",
+    "start": 7.21,
+    "end": 7.64,
+    "id": "w23"
+  },
+  {
+    "text": "with",
+    "start": 7.64,
+    "end": 7.92,
+    "id": "w24"
+  },
+  {
+    "text": "the",
+    "start": 7.92,
+    "end": 8.06,
+    "id": "w25"
+  },
+  {
+    "text": "brief.",
+    "start": 8.14,
+    "end": 8.48,
+    "id": "w26"
+  },
+  {
+    "text": "Flow",
+    "start": 8.63,
+    "end": 8.82,
+    "id": "w27"
+  },
+  {
+    "text": "by",
+    "start": 8.86,
+    "end": 9.02,
+    "id": "w28"
+  },
+  {
+    "text": "flow,",
+    "start": 9.02,
+    "end": 9.58,
+    "id": "w29"
+  },
+  {
+    "text": "including",
+    "start": 9.58,
+    "end": 10.19,
+    "id": "w30"
+  },
+  {
+    "text": "the",
+    "start": 10.2,
+    "end": 10.4,
+    "id": "w31"
+  },
+  {
+    "text": "water",
+    "start": 10.4,
+    "end": 10.74,
+    "id": "w32"
+  },
+  {
+    "text": "tank,",
+    "start": 10.74,
+    "end": 11.15,
+    "id": "w33"
+  },
+  {
+    "text": "a",
+    "start": 11.15,
+    "end": 11.2,
+    "id": "w34"
+  },
+  {
+    "text": "roof",
+    "start": 11.2,
+    "end": 11.4,
+    "id": "w35"
+  },
+  {
+    "text": "kept",
+    "start": 11.48,
+    "end": 11.66,
+    "id": "w36"
+  },
+  {
+    "text": "ready",
+    "start": 11.66,
+    "end": 11.75,
+    "id": "w37"
+  },
+  {
+    "text": "for",
+    "start": 12.04,
+    "end": 12.12,
+    "id": "w38"
+  },
+  {
+    "text": "solar,",
+    "start": 12.33,
+    "end": 12.56,
+    "id": "w39"
+  },
+  {
+    "text": "and",
+    "start": 12.71,
+    "end": 12.75,
+    "id": "w40"
+  },
+  {
+    "text": "the",
+    "start": 12.75,
+    "end": 12.9,
+    "id": "w41"
+  },
+  {
+    "text": "exact",
+    "start": 12.94,
+    "end": 13.26,
+    "id": "w42"
+  },
+  {
+    "text": "area",
+    "start": 13.26,
+    "end": 13.52,
+    "id": "w43"
+  },
+  {
+    "text": "the",
+    "start": 13.52,
+    "end": 13.71,
+    "id": "w44"
+  },
+  {
+    "text": "local",
+    "start": 13.71,
+    "end": 14.03,
+    "id": "w45"
+  },
+  {
+    "text": "authority",
+    "start": 14.03,
+    "end": 14.59,
+    "id": "w46"
+  },
+  {
+    "text": "lets",
+    "start": 14.62,
+    "end": 14.87,
+    "id": "w47"
+  },
+  {
+    "text": "you",
+    "start": 14.87,
+    "end": 15.06,
+    "id": "w48"
+  },
+  {
+    "text": "build",
+    "start": 15.06,
+    "end": 15.38,
+    "id": "w49"
+  },
+  {
+    "text": "on.",
+    "start": 15.38,
+    "end": 15.75,
+    "id": "w50"
+  }
+]

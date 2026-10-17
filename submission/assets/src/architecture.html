@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Naqsha architecture on Google Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&family=Google+Sans+Code:wght@400;500&display=block" rel="stylesheet">
+<style>
+  /* Google Cloud reference-architecture style. 1280 x 580 CSS px, placed 664 pt wide: 1 px = 0.519 pt, 18 px = 9.3 pt.
+     Type floor 18 px; product names 21 px. Google Blue marks Google products and the numbered data flow; the Naqsha
+     accent (#2747F5 on #EDF0FF) marks code we wrote, as "Built by us" does on the technologies slide.
+     Icons: ../icons (official Google Cloud, Firebase, Gemini and ADK marks; Material Symbols). See ../ICON_SOURCES.md. */
+  :root {
+    --g-ink: #202124; --g-ink-2: #3C4043; --g-grey: #5F6368; --g-grey-2: #80868B; --g-line: #DADCE0;
+    --g-bg: #F1F3F4; --g-bg-2: #F8F9FA; --g-blue: #1A73E8; --g-blue-ink: #1967D2; --g-blue-soft: #E8F0FE; --g-blue-line: #AECBFA;
+    --nq: #2747F5; --nq-ink: #1F3AD0; --nq-soft: #EDF0FF; --nq-line: #C3CCFC;
+    --shadow: 0 1px 2px rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 580px; position: relative; overflow: hidden; background: #fff; color: var(--g-ink);
+    font-family: "Google Sans Flex", system-ui, sans-serif; font-size: 18px; line-height: 1.22; -webkit-font-smoothing: antialiased; }
+  img { display: block; }
+  .abs { position: absolute; }
+
+  /* users and browser */
+  .users { position: absolute; left: 0; top: 0; width: 196px; height: 158px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--g-line); }
+  .persona { position: absolute; left: 8px; width: 184px; height: 44px; display: flex; align-items: center; gap: 8px; }
+  .persona .ic { width: 36px; height: 36px; border-radius: 50%; background: var(--g-bg); display: grid; place-items: center; flex: none; }
+  .persona .ic img { width: 24px; height: 24px; }
+  .persona b { display: block; font-size: 19px; font-weight: 600; line-height: 1.1; }
+  .persona span { display: block; font-size: 18px; color: var(--g-grey); line-height: 1.15; white-space: nowrap; }
+
+  /* cards */
+  .card { position: absolute; background: #fff; border-radius: 8px; box-shadow: var(--shadow); padding: 9px 14px; }
+  .hd { display: flex; align-items: center; gap: 11px; }
+  .hd img { width: 32px; height: 32px; flex: none; }
+  .nm { font-size: 21px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; line-height: 1.2; }
+  .nm small { font-size: 18px; font-weight: 400; color: var(--g-grey); letter-spacing: 0; }
+  .ds { font-size: 18px; color: var(--g-grey); line-height: 1.22; white-space: nowrap; }
+  .tag { margin-left: auto; font-size: 18px; color: var(--g-grey); white-space: nowrap; }
+  .ours { background: var(--nq-soft); box-shadow: inset 0 0 0 1px var(--nq-line); }
+  .ours .nm { color: var(--nq-ink); }
+
+  /* project boundary, region, Cloud Run zone */
+  .gc { position: absolute; left: 240px; top: 0; width: 1040px; height: 580px; background: var(--g-bg); border-radius: 10px; }
+  .gc-head { position: absolute; left: 254px; top: 10px; height: 26px; display: flex; align-items: center; gap: 13px;
+    font-size: 18px; color: var(--g-grey); white-space: nowrap; }
+  .gc-head img { height: 24px; }
+  .gc-head .sep { width: 1px; height: 20px; background: #BDC1C6; }
+  .region { position: absolute; left: 252px; top: 46px; width: 1016px; height: 418px; border-radius: 10px; border: 1.5px dashed #9AA0A6; }
+  .region-tab { position: absolute; top: 35px; right: 26px; height: 22px; padding: 0 8px; background: var(--g-bg); font-size: 18px;
+    color: var(--g-grey); display: flex; align-items: center; white-space: nowrap; }
+  .region-tab b { color: var(--g-ink-2); font-weight: 600; margin-left: 5px; }
+  .zone { position: absolute; background: #fff; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--g-line); }
+
+  .adk { position: absolute; background: var(--g-blue-soft); border-radius: 8px; border: 1.5px dashed var(--g-blue); }
+  .adk-h { position: absolute; display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 18px; color: var(--g-blue-ink); }
+  .adk-h img { width: 24px; height: 24px; }
+  .adk-h b { font-weight: 600; }
+  .agent { padding: 7px 12px; }
+  .agent .hd { gap: 9px; }
+  .agent .hd img { width: 22px; height: 22px; }
+  .agent .m { font-size: 18px; font-weight: 500; color: var(--g-blue-ink); margin-top: 3px; white-space: nowrap; }
+
+  .pipe { display: flex; align-items: center; margin-top: 5px; }
+  .pipe span { height: 26px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 6px; background: #fff;
+    font-size: 18px; font-weight: 500; color: var(--g-ink-2); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--nq-line); }
+  .pipe span.hl { background: var(--nq); color: #fff; box-shadow: none; }
+  .pipe i { width: 20px; height: 26px; flex: none; position: relative; }
+  .pipe i::before { content: ""; position: absolute; left: 3px; right: 7px; top: 12px; height: 2px; background: var(--g-grey-2); }
+  .pipe i::after { content: ""; position: absolute; right: 2px; top: 8px; border: 5px solid transparent; border-left: 6px solid var(--g-grey-2); border-right: 0; }
+
+  .num { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--g-blue); color: #fff; font-size: 17px; font-weight: 600;
+    display: grid; place-items: center; transform: translate(-50%, -50%); box-shadow: 0 0 0 2.5px #fff; z-index: 3; }
+  .lbl { position: absolute; font-size: 18px; font-weight: 500; color: var(--g-grey); white-space: nowrap; z-index: 3; }
+
+  .legend { position: absolute; left: 0; top: 296px; width: 196px; }
+  .legend h5 { font-size: 18px; font-weight: 600; color: var(--g-grey); height: 24px; }
+  .legend div { display: flex; align-items: center; gap: 9px; height: 25px; font-size: 18px; color: var(--g-ink-2); white-space: nowrap; }
+  .legend i { font-style: normal; width: 24px; height: 24px; border-radius: 50%; background: var(--g-blue); color: #fff; font-size: 15px; font-weight: 600;
+    display: grid; place-items: center; flex: none; }
+  .legend i.sw { border-radius: 6px; background: var(--nq-soft); box-shadow: inset 0 0 0 1.5px var(--nq-line); }
+  svg.wires { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; }
+</style>
+</head>
+<body>
+  <!-- ============ users and browser (outside Google Cloud) ============ -->
+  <div class="users"></div>
+  <div class="persona" style="top:7px;"><div class="ic"><img src="../icons/derived/ms-family_restroom-grey.svg" alt=""></div>
+    <div><b>Owner</b><span>the family</span></div></div>
+  <div class="persona" style="top:57px;"><div class="ic"><img src="../icons/derived/ms-engineering-grey.svg" alt=""></div>
+    <div><b>Team</b><span>architect, builder</span></div></div>
+  <div class="persona" style="top:107px;"><div class="ic"><img src="../icons/derived/ms-person-grey.svg" alt=""></div>
+    <div><b>Client</b><span>via share link</span></div></div>
+
+  <div class="card" style="left:0; top:178px; width:196px; height:98px; padding:9px 14px;">
+    <div class="hd" style="gap:9px"><img src="../icons/derived/ms-web-grey.svg" alt="" style="width:28px;height:28px"><div class="nm">Browser</div></div>
+    <div class="ds" style="margin-top:4px">React 19 · three.js</div>
+    <div class="ds">runs screened code</div>
+  </div>
+
+  <div class="legend">
+    <h5>Data flow</h5>
+    <div><i>1</i>Sign in, ID token</div>
+    <div><i>2</i>HTTPS API + SSE</div>
+    <div><i>3</i>Calls to Gemini</div>
+    <div><i>4</i>Rules check (tool)</div>
+    <div><i>5</i>Edits dry-run first</div>
+    <div><i>6</i>Projects, versions</div>
+    <div><i>7</i>Images, drawings</div>
+    <div><i>8</i>Build the image</div>
+    <div><i>9</i>Deploy a revision</div>
+    <div><i class="sw"></i>Built by us</div>
+  </div>
+
+  <!-- ============ Google Cloud project boundary ============ -->
+  <div class="gc"></div>
+  <div class="gc-head"><img src="../icons/gcp/google-cloud-logo-fullcolor.svg" alt="Google Cloud"><span class="sep"></span>
+    <span>Project <b style="color:var(--g-ink-2);font-weight:600">Hack2skill-global-hackathon</b></span></div>
+
+  <!-- us-central1 region: Cloud Run, Firestore, Cloud Storage, Artifact Registry, Cloud Build -->
+  <div class="region"></div>
+  <div class="region-tab">Region<b>us-central1</b></div>
+
+  <!-- Cloud Run -->
+  <div class="zone" style="left:264px; top:64px; width:578px; height:390px;"></div>
+  <div class="abs hd" style="left:278px; top:70px; gap:10px;"><img src="../icons/gcp/cloud_run.svg" alt="" style="width:30px;height:30px">
+    <div class="nm">Cloud Run</div><div class="ds" style="margin-left:2px">service naqsha · FastAPI · verifies ID tokens</div></div>
+
+  <div class="adk" style="left:278px; top:106px; width:550px; height:100px;"></div>
+  <div class="adk-h" style="left:290px; top:110px;"><img src="../icons/adk/agent-development-kit.png" alt="ADK">
+    <span><b>Agentic harness:</b> Google ADK 2.12</span></div>
+
+  <div class="card agent" style="left:290px; top:137px; width:257px; height:61px;">
+    <div class="hd"><img src="../icons/gemini/gemini-sparkle.svg" alt=""><div class="nm">Setup agent</div></div>
+    <div class="m">Gemini 3.8 Flash · 5 tools</div>
+  </div>
+  <div class="card agent" style="left:559px; top:137px; width:257px; height:61px;">
+    <div class="hd"><img src="../icons/gemini/gemini-sparkle.svg" alt=""><div class="nm">Revision agent</div></div>
+    <div class="m">Gemini 4 Argon · 9 tools</div>
+  </div>
+
+  <div class="card ours" style="left:278px; top:246px; width:312px; height:130px; padding:9px 12px;">
+    <div class="hd" style="gap:9px"><img src="../icons/gemini/gemini-sparkle.svg" alt="" style="width:22px;height:22px">
+      <div class="nm">Architect pipeline</div></div>
+    <div class="ds" style="margin-top:2px; color:var(--g-ink-2)">Gemini 4 Argon · Gen AI SDK</div>
+    <div class="pipe" style="margin-top:7px"><span>Plan JSON</span><i></i><span class="hl">Rules fix loop</span><i></i></div>
+    <div class="pipe"><i></i><span>Self-review</span><i></i><span>design.js</span></div>
+  </div>
+
+  <div class="card ours" style="left:646px; top:246px; width:182px; height:130px; padding:12px 12px;">
+    <div class="hd" style="gap:7px"><img src="../icons/derived/ms-rule-grey.svg" alt="" style="width:24px;height:24px">
+      <div class="nm">Rules engine</div></div>
+    <div class="ds" style="margin-top:6px; color:var(--g-ink-2)">LDA 2026 rules</div>
+    <div class="ds" style="color:var(--g-ink-2)">+ 10 livable rules</div>
+    <div class="ds">pure Python, no AI</div>
+  </div>
+
+  <div class="card ours" style="left:278px; top:386px; width:550px; height:60px; padding:6px 12px;">
+    <div class="hd" style="gap:9px"><img src="../icons/gemini/gemini-sparkle.svg" alt="" style="width:22px;height:22px">
+      <div class="nm">Concepts and renders</div>
+      <div class="ds" style="margin-left:4px">Gemini 3.1 Flash Image</div></div>
+    <div class="ds" style="padding-left:31px; margin-top:1px">falls back to Nano Banana 2.1, then Gemini 3 Pro Image</div>
+  </div>
+
+  <!-- data and delivery, in the region -->
+  <div class="card" style="left:912px; top:64px; width:344px; height:68px;">
+    <div class="hd"><img src="../icons/gcp/firestore.svg" alt="">
+      <div><div class="nm">Firestore</div><div class="ds">projects, versions, comments</div></div></div>
+  </div>
+  <div class="card" style="left:912px; top:163px; width:344px; height:68px;">
+    <div class="hd"><img src="../icons/gcp/cloud_storage.svg" alt="">
+      <div><div class="nm">Cloud Storage</div><div class="ds">concepts, renders, drawings</div></div></div>
+  </div>
+  <div class="card" style="left:912px; top:262px; width:344px; height:68px;">
+    <div class="hd"><img src="../icons/gcp/artifact_registry.svg" alt="">
+      <div><div class="nm">Artifact Registry</div><div class="ds">the container image</div></div></div>
+  </div>
+  <div class="card" style="left:912px; top:378px; width:344px; height:68px;">
+    <div class="hd"><img src="../icons/gcp/cloud_build.svg" alt="">
+      <div><div class="nm">Cloud Build</div><div class="ds">builds it on every deploy</div></div></div>
+  </div>
+
+  <!-- global services, outside the region -->
+  <div class="card" style="left:264px; top:482px; width:500px; height:86px; padding:12px 14px;">
+    <div class="hd"><img src="../icons/firebase/firebase-logomark-full-color.svg" alt="">
+      <div style="flex:1;min-width:0"><div style="display:flex;align-items:baseline"><div class="nm">Firebase Authentication</div><span class="tag">global</span></div>
+      <div class="ds" style="margin-top:2px">Identity Platform · sign-in, ID tokens, roles</div></div></div>
+  </div>
+  <div class="card" style="left:850px; top:482px; width:406px; height:86px; padding:7px 14px;">
+    <div class="hd"><img src="../icons/gcp/vertexai.svg" alt="">
+      <div style="flex:1;min-width:0"><div class="nm" style="font-size:20px">Gemini Enterprise Agent Platform</div>
+      <div style="display:flex"><div class="ds">Vertex AI</div><span class="tag">global endpoint</span></div>
+      <div class="ds" style="color:var(--g-ink-2)">Gemini 4 Argon, 3.8 Flash, 3 image models</div></div></div>
+  </div>
+
+  <!-- ============ connectors (all network or in-process calls in Google grey) ============ -->
+  <svg class="wires" width="1280" height="580" viewBox="0 0 1280 580">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="#80868B"/></marker>
+    </defs>
+    <g stroke="#80868B" stroke-width="2" fill="none">
+      <path d="M98 159 V176" marker-end="url(#a)"/>                          <!-- users use the browser -->
+      <path d="M197 207 H262" marker-start="url(#a)" marker-end="url(#a)"/>   <!-- 2 browser <-> Cloud Run -->
+      <path d="M197 252 H218 V525 H262" marker-end="url(#a)"/>               <!-- 1 browser -> Firebase Auth -->
+      <path d="M420 199 V244" marker-end="url(#a)"/>                         <!-- brief: setup agent -> architect -->
+      <path d="M737 199 V244" marker-end="url(#a)"/>                         <!-- 5 revision agent -> rules engine -->
+      <path d="M591 311 H645" marker-start="url(#a)" marker-end="url(#a)"/>   <!-- 4 architect <-> rules engine -->
+      <path d="M800 455 V525 H848" marker-end="url(#a)"/>                    <!-- 3 Cloud Run -> Agent Platform -->
+      <path d="M843 98 H910" marker-start="url(#a)" marker-end="url(#a)"/>    <!-- 6 Cloud Run <-> Firestore -->
+      <path d="M843 197 H910" marker-start="url(#a)" marker-end="url(#a)"/>   <!-- 7 Cloud Run <-> Cloud Storage -->
+      <path d="M911 296 H844" marker-end="url(#a)"/>                         <!-- 9 Artifact Registry -> Cloud Run -->
+      <path d="M1084 377 V332" marker-end="url(#a)"/>                        <!-- 8 Cloud Build -> Artifact Registry -->
+    </g>
+  </svg>
+  <div class="lbl" style="left:430px; top:211px;">brief</div>
+
+  <div class="num" style="left:218px; top:400px;">1</div>
+  <div class="num" style="left:220px; top:207px;">2</div>
+  <div class="num" style="left:824px; top:525px;">3</div>
+  <div class="num" style="left:618px; top:311px;">4</div>
+  <div class="num" style="left:737px; top:226px;">5</div>
+  <div class="num" style="left:877px; top:98px;">6</div>
+  <div class="num" style="left:877px; top:197px;">7</div>
+  <div class="num" style="left:1084px; top:354px;">8</div>
+  <div class="num" style="left:877px; top:296px;">9</div>
+</body>
+</html>

@@ -1,0 +1,272 @@
+[
+  {
+    "text": "Under",
+    "start": 0.05,
+    "end": 0.36,
+    "id": "w0"
+  },
+  {
+    "text": "the",
+    "start": 0.36,
+    "end": 0.58,
+    "id": "w1"
+  },
+  {
+    "text": "hood,",
+    "start": 0.58,
+    "end": 1.01,
+    "id": "w2"
+  },
+  {
+    "text": "one",
+    "start": 1.07,
+    "end": 1.23,
+    "id": "w3"
+  },
+  {
+    "text": "Cloud",
+    "start": 1.23,
+    "end": 1.59,
+    "id": "w4"
+  },
+  {
+    "text": "Run",
+    "start": 1.59,
+    "end": 1.81,
+    "id": "w5"
+  },
+  {
+    "text": "service",
+    "start": 1.81,
+    "end": 2.3,
+    "id": "w6"
+  },
+  {
+    "text": "runs",
+    "start": 2.37,
+    "end": 2.79,
+    "id": "w7"
+  },
+  {
+    "text": "the",
+    "start": 2.79,
+    "end": 3.12,
+    "id": "w8"
+  },
+  {
+    "text": "API",
+    "start": 3.12,
+    "end": 3.44,
+    "id": "w9"
+  },
+  {
+    "text": "in",
+    "start": 3.47,
+    "end": 3.6,
+    "id": "w10"
+  },
+  {
+    "text": "the",
+    "start": 3.6,
+    "end": 3.81,
+    "id": "w11"
+  },
+  {
+    "text": "app",
+    "start": 3.81,
+    "end": 3.97,
+    "id": "w12"
+  },
+  {
+    "text": "and",
+    "start": 4.09,
+    "end": 4.26,
+    "id": "w13"
+  },
+  {
+    "text": "streams",
+    "start": 4.26,
+    "end": 4.78,
+    "id": "w14"
+  },
+  {
+    "text": "the",
+    "start": 4.78,
+    "end": 4.86,
+    "id": "w15"
+  },
+  {
+    "text": "long",
+    "start": 5.11,
+    "end": 5.29,
+    "id": "w16"
+  },
+  {
+    "text": "agent",
+    "start": 5.29,
+    "end": 5.63,
+    "id": "w17"
+  },
+  {
+    "text": "runs.",
+    "start": 5.65,
+    "end": 6.19,
+    "id": "w18"
+  },
+  {
+    "text": "Firestore",
+    "start": 6.25,
+    "end": 6.78,
+    "id": "w19"
+  },
+  {
+    "text": "keeps",
+    "start": 6.78,
+    "end": 7.01,
+    "id": "w20"
+  },
+  {
+    "text": "projects,",
+    "start": 7.27,
+    "end": 7.75,
+    "id": "w21"
+  },
+  {
+    "text": "versions,",
+    "start": 7.75,
+    "end": 8.44,
+    "id": "w22"
+  },
+  {
+    "text": "and",
+    "start": 8.44,
+    "end": 8.68,
+    "id": "w23"
+  },
+  {
+    "text": "comments.",
+    "start": 8.68,
+    "end": 9.59,
+    "id": "w24"
+  },
+  {
+    "text": "Cloud",
+    "start": 9.65,
+    "end": 9.97,
+    "id": "w25"
+  },
+  {
+    "text": "Storage",
+    "start": 9.98,
+    "end": 10.41,
+    "id": "w26"
+  },
+  {
+    "text": "holds",
+    "start": 10.67,
+    "end": 10.9,
+    "id": "w27"
+  },
+  {
+    "text": "the",
+    "start": 10.9,
+    "end": 11.13,
+    "id": "w28"
+  },
+  {
+    "text": "images.",
+    "start": 11.13,
+    "end": 11.84,
+    "id": "w29"
+  },
+  {
+    "text": "Firebase",
+    "start": 11.89,
+    "end": 12.4,
+    "id": "w30"
+  },
+  {
+    "text": "Authentication",
+    "start": 12.4,
+    "end": 13.4,
+    "id": "w31"
+  },
+  {
+    "text": "signs",
+    "start": 13.4,
+    "end": 13.75,
+    "id": "w32"
+  },
+  {
+    "text": "people",
+    "start": 13.75,
+    "end": 14.14,
+    "id": "w33"
+  },
+  {
+    "text": "in.",
+    "start": 14.21,
+    "end": 14.56,
+    "id": "w34"
+  },
+  {
+    "text": "And",
+    "start": 14.61,
+    "end": 14.83,
+    "id": "w35"
+  },
+  {
+    "text": "Gemini",
+    "start": 14.83,
+    "end": 15.36,
+    "id": "w36"
+  },
+  {
+    "text": "runs",
+    "start": 15.36,
+    "end": 15.73,
+    "id": "w37"
+  },
+  {
+    "text": "on",
+    "start": 15.73,
+    "end": 15.86,
+    "id": "w38"
+  },
+  {
+    "text": "Vertex",
+    "start": 15.91,
+    "end": 16.45,
+    "id": "w39"
+  },
+  {
+    "text": "AI",
+    "start": 16.45,
+    "end": 16.63,
+    "id": "w40"
+  },
+  {
+    "text": "orchestrated",
+    "start": 16.63,
+    "end": 17.72,
+    "id": "w41"
+  },
+  {
+    "text": "with",
+    "start": 17.72,
+    "end": 18.25,
+    "id": "w42"
+  },
+  {
+    "text": "Google",
+    "start": 18.25,
+    "end": 19.04,
+    "id": "w43"
+  },
+  {
+    "text": "ADK.",
+    "start": 19.04,
+    "end": 19.83,
+    "id": "w44"
+  }
+]

@@ -1,0 +1,81 @@
+{
+ "name": "d2_plan_compliance_print",
+ "source": "cd_concepts_design.mp4",
+ "segments": [
+  [
+   363.0,
+   407.6
+  ],
+  [
+   443.8,
+   483.3
+  ]
+ ],
+ "duration": 84.1,
+ "marks": [
+  {
+   "t": 1.1,
+   "label": "plan view tour starts (ground floor, dimensioned)"
+  },
+  {
+   "t": 6.5,
+   "label": "first floor plan"
+  },
+  {
+   "t": 11.4,
+   "label": "roof plan"
+  },
+  {
+   "t": 16.2,
+   "label": "ground floor again"
+  },
+  {
+   "t": 20.3,
+   "label": "compliance panel opens"
+  },
+  {
+   "t": 25.8,
+   "label": "expand LDA: Setbacks and envelope 11/11"
+  },
+  {
+   "t": 33.1,
+   "label": "scroll to Livable home group (10 pass, 3 to check)"
+  },
+  {
+   "t": 40.5,
+   "label": "click a livable point: shown on the plan"
+  },
+  {
+   "t": 49.5,
+   "label": "Print: options dialog"
+  },
+  {
+   "t": 55.5,
+   "label": "Print preview: 6 sheets at 1:100"
+  },
+  {
+   "t": 61.0,
+   "label": "print sheet 2 of 6"
+  },
+  {
+   "t": 65.0,
+   "label": "print sheet 3 of 6"
+  },
+  {
+   "t": 68.9,
+   "label": "print sheet 4 of 6"
+  },
+  {
+   "t": 72.8,
+   "label": "print sheet 5 of 6"
+  },
+  {
+   "t": 76.7,
+   "label": "print sheet 6 of 6"
+  },
+  {
+   "t": 82.2,
+   "label": "close preview"
+  }
+ ]
+}

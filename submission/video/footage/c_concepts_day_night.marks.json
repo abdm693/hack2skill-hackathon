@@ -1,0 +1,73 @@
+{
+ "name": "c_concepts_day_night",
+ "source": "cd_concepts_design.mp4",
+ "segments": [
+  [
+   0.0,
+   82.6
+  ]
+ ],
+ "duration": 82.6,
+ "marks": [
+  {
+   "t": 3.3,
+   "label": "click Show me concepts"
+  },
+  {
+   "t": 3.3,
+   "label": "concepts view: 4 drawing in real time"
+  },
+  {
+   "t": 16.4,
+   "label": "concept 1 of 4 arrives"
+  },
+  {
+   "t": 16.4,
+   "label": "concept 2 of 4 arrives"
+  },
+  {
+   "t": 16.9,
+   "label": "concept 3 of 4 arrives"
+  },
+  {
+   "t": 25.9,
+   "label": "concept 4 of 4 arrives"
+  },
+  {
+   "t": 31.9,
+   "label": "scroll: concepts C and D"
+  },
+  {
+   "t": 39.5,
+   "label": "toggle Night: night versions drawing"
+  },
+  {
+   "t": 47.7,
+   "label": "night images crossfade in"
+  },
+  {
+   "t": 54.5,
+   "label": "night: concepts C and D"
+  },
+  {
+   "t": 62.1,
+   "label": "back to Day"
+  },
+  {
+   "t": 67.0,
+   "label": "open concept A (lightbox)"
+  },
+  {
+   "t": 71.7,
+   "label": "lightbox: Night"
+  },
+  {
+   "t": 76.4,
+   "label": "lightbox: Day"
+  },
+  {
+   "t": 81.5,
+   "label": "SPLIT: click Plan this one -> real design run starts"
+  }
+ ]
+}

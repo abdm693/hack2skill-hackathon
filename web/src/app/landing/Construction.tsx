@@ -45,8 +45,23 @@ function a(kind: Anim, delay: number, dur = 0.5, ease = "cubic-bezier(.22,1,.36,
   return { animation: `nqc-${kind} ${dur}s ${ease} ${delay}s both` };
 }
 
-export function Construction({ className, counts }: { className?: string; /** The 10 marla sample's own check counts. */ counts?: { lda: number; livable: number } | null }) {
+export function Construction({
+  className,
+  counts,
+  onDone,
+  hideReplay,
+}: {
+  className?: string;
+  /** The 10 marla sample's own check counts. */
+  counts?: { lda: number; livable: number } | null;
+  /** Called once the timeline has finished (the night frame is showing). */
+  onDone?: () => void;
+  /** The hero hands over to the 3D film when the drawing ends, so it has no Replay button. */
+  hideReplay?: boolean;
+}) {
   const reduced = useReducedMotion();
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   const phone = usePhone();
   const root = useRef<HTMLDivElement>(null);
   const [run, setRun] = useState(0); // 0 = waiting to be seen
@@ -95,6 +110,10 @@ export function Construction({ className, counts }: { className?: string; /** Th
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [run]);
+
+  useEffect(() => {
+    if (done) onDoneRef.current?.();
+  }, [done]);
 
   const time = reduced ? T.end + 1 : now;
   const caption = [...CAPTIONS].reverse().find(([t]) => time >= t)?.[1] ?? CAPTIONS[0][1];
@@ -160,7 +179,7 @@ export function Construction({ className, counts }: { className?: string; /** Th
         </Chip>
       </div>
 
-      {!reduced && (
+      {!reduced && !hideReplay && (
         <button
           type="button"
           onClick={() => setRun((r) => r + 1)}

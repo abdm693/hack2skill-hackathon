@@ -1,0 +1,392 @@
+[
+  {
+    "text": "Argon",
+    "start": 0.37,
+    "end": 0.42,
+    "id": "w0"
+  },
+  {
+    "text": "then",
+    "start": 0.42,
+    "end": 0.75,
+    "id": "w1"
+  },
+  {
+    "text": "writes",
+    "start": 0.75,
+    "end": 1.25,
+    "id": "w2"
+  },
+  {
+    "text": "the",
+    "start": 1.25,
+    "end": 1.43,
+    "id": "w3"
+  },
+  {
+    "text": "house",
+    "start": 1.5,
+    "end": 1.92,
+    "id": "w4"
+  },
+  {
+    "text": "in",
+    "start": 1.92,
+    "end": 2.07,
+    "id": "w5"
+  },
+  {
+    "text": "3D",
+    "start": 2.09,
+    "end": 2.38,
+    "id": "w6"
+  },
+  {
+    "text": "as",
+    "start": 2.48,
+    "end": 2.66,
+    "id": "w7"
+  },
+  {
+    "text": "code,",
+    "start": 2.82,
+    "end": 3.37,
+    "id": "w8"
+  },
+  {
+    "text": "in",
+    "start": 3.43,
+    "end": 3.54,
+    "id": "w9"
+  },
+  {
+    "text": "28",
+    "start": 3.54,
+    "end": 4.02,
+    "id": "w10"
+  },
+  {
+    "text": "sections,",
+    "start": 4.18,
+    "end": 4.8,
+    "id": "w11"
+  },
+  {
+    "text": "from",
+    "start": 4.93,
+    "end": 5.06,
+    "id": "w12"
+  },
+  {
+    "text": "the",
+    "start": 5.06,
+    "end": 5.15,
+    "id": "w13"
+  },
+  {
+    "text": "structure",
+    "start": 5.21,
+    "end": 5.6,
+    "id": "w14"
+  },
+  {
+    "text": "and",
+    "start": 5.6,
+    "end": 6,
+    "id": "w15"
+  },
+  {
+    "text": "the",
+    "start": 6,
+    "end": 6.02,
+    "id": "w16"
+  },
+  {
+    "text": "facade",
+    "start": 6.39,
+    "end": 6.53,
+    "id": "w17"
+  },
+  {
+    "text": "to",
+    "start": 6.53,
+    "end": 6.7,
+    "id": "w18"
+  },
+  {
+    "text": "the",
+    "start": 6.7,
+    "end": 6.9,
+    "id": "w19"
+  },
+  {
+    "text": "furniture",
+    "start": 6.96,
+    "end": 7.71,
+    "id": "w20"
+  },
+  {
+    "text": "in",
+    "start": 7.71,
+    "end": 7.82,
+    "id": "w21"
+  },
+  {
+    "text": "every",
+    "start": 7.91,
+    "end": 8.3,
+    "id": "w22"
+  },
+  {
+    "text": "room.",
+    "start": 8.3,
+    "end": 8.92,
+    "id": "w23"
+  },
+  {
+    "text": "Your",
+    "start": 9.05,
+    "end": 9.09,
+    "id": "w24"
+  },
+  {
+    "text": "browser",
+    "start": 9.29,
+    "end": 9.67,
+    "id": "w25"
+  },
+  {
+    "text": "assembles",
+    "start": 9.67,
+    "end": 10.26,
+    "id": "w26"
+  },
+  {
+    "text": "it",
+    "start": 10.31,
+    "end": 10.35,
+    "id": "w27"
+  },
+  {
+    "text": "live.",
+    "start": 10.42,
+    "end": 10.9,
+    "id": "w28"
+  },
+  {
+    "text": "Orbit",
+    "start": 10.9,
+    "end": 11.29,
+    "id": "w29"
+  },
+  {
+    "text": "the",
+    "start": 11.29,
+    "end": 11.46,
+    "id": "w30"
+  },
+  {
+    "text": "outside",
+    "start": 11.46,
+    "end": 11.93,
+    "id": "w31"
+  },
+  {
+    "text": "or",
+    "start": 11.93,
+    "end": 12.05,
+    "id": "w32"
+  },
+  {
+    "text": "switch",
+    "start": 12.06,
+    "end": 12.46,
+    "id": "w33"
+  },
+  {
+    "text": "to",
+    "start": 12.46,
+    "end": 12.59,
+    "id": "w34"
+  },
+  {
+    "text": "night",
+    "start": 12.59,
+    "end": 12.9,
+    "id": "w35"
+  },
+  {
+    "text": "with",
+    "start": 12.98,
+    "end": 13.2,
+    "id": "w36"
+  },
+  {
+    "text": "the",
+    "start": 13.2,
+    "end": 13.3,
+    "id": "w37"
+  },
+  {
+    "text": "rooms",
+    "start": 13.4,
+    "end": 13.52,
+    "id": "w38"
+  },
+  {
+    "text": "lit",
+    "start": 13.75,
+    "end": 13.94,
+    "id": "w39"
+  },
+  {
+    "text": "inside.",
+    "start": 13.94,
+    "end": 14.59,
+    "id": "w40"
+  },
+  {
+    "text": "Cut",
+    "start": 14.6,
+    "end": 14.81,
+    "id": "w41"
+  },
+  {
+    "text": "away",
+    "start": 14.97,
+    "end": 15.1,
+    "id": "w42"
+  },
+  {
+    "text": "a",
+    "start": 15.1,
+    "end": 15.17,
+    "id": "w43"
+  },
+  {
+    "text": "floor",
+    "start": 15.17,
+    "end": 15.48,
+    "id": "w44"
+  },
+  {
+    "text": "to",
+    "start": 15.54,
+    "end": 15.67,
+    "id": "w45"
+  },
+  {
+    "text": "see",
+    "start": 15.67,
+    "end": 15.88,
+    "id": "w46"
+  },
+  {
+    "text": "every",
+    "start": 15.88,
+    "end": 16.24,
+    "id": "w47"
+  },
+  {
+    "text": "room",
+    "start": 16.24,
+    "end": 16.53,
+    "id": "w48"
+  },
+  {
+    "text": "furnished",
+    "start": 16.53,
+    "end": 17.18,
+    "id": "w49"
+  },
+  {
+    "text": "at",
+    "start": 17.18,
+    "end": 17.26,
+    "id": "w50"
+  },
+  {
+    "text": "its",
+    "start": 17.43,
+    "end": 17.53,
+    "id": "w51"
+  },
+  {
+    "text": "real",
+    "start": 17.53,
+    "end": 17.67,
+    "id": "w52"
+  },
+  {
+    "text": "size.",
+    "start": 18.03,
+    "end": 18.4,
+    "id": "w53"
+  },
+  {
+    "text": "Any",
+    "start": 18.4,
+    "end": 18.57,
+    "id": "w54"
+  },
+  {
+    "text": "view",
+    "start": 18.77,
+    "end": 18.8,
+    "id": "w55"
+  },
+  {
+    "text": "can",
+    "start": 18.8,
+    "end": 18.97,
+    "id": "w56"
+  },
+  {
+    "text": "become",
+    "start": 18.97,
+    "end": 19.28,
+    "id": "w57"
+  },
+  {
+    "text": "a",
+    "start": 19.34,
+    "end": 19.37,
+    "id": "w58"
+  },
+  {
+    "text": "photo-real",
+    "start": 19.37,
+    "end": 19.94,
+    "id": "w59"
+  },
+  {
+    "text": "render",
+    "start": 19.94,
+    "end": 20.2,
+    "id": "w60"
+  },
+  {
+    "text": "in",
+    "start": 20.29,
+    "end": 20.39,
+    "id": "w61"
+  },
+  {
+    "text": "about",
+    "start": 20.46,
+    "end": 20.69,
+    "id": "w62"
+  },
+  {
+    "text": "10",
+    "start": 20.69,
+    "end": 21,
+    "id": "w63"
+  },
+  {
+    "text": "seconds.",
+    "start": 21.22,
+    "end": 21.52,
+    "id": "w64"
+  }
+]

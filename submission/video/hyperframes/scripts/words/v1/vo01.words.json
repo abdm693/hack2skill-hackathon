@@ -1,0 +1,158 @@
+[
+  {
+    "text": "In",
+    "start": 0,
+    "end": 0.17,
+    "id": "w0"
+  },
+  {
+    "text": "Pakistan,",
+    "start": 0.31,
+    "end": 0.99,
+    "id": "w1"
+  },
+  {
+    "text": "a",
+    "start": 0.99,
+    "end": 1.08,
+    "id": "w2"
+  },
+  {
+    "text": "new",
+    "start": 1.08,
+    "end": 1.13,
+    "id": "w3"
+  },
+  {
+    "text": "home",
+    "start": 1.38,
+    "end": 1.67,
+    "id": "w4"
+  },
+  {
+    "text": "still",
+    "start": 1.67,
+    "end": 2.08,
+    "id": "w5"
+  },
+  {
+    "text": "starts",
+    "start": 2.09,
+    "end": 2.53,
+    "id": "w6"
+  },
+  {
+    "text": "as",
+    "start": 2.62,
+    "end": 2.76,
+    "id": "w7"
+  },
+  {
+    "text": "a",
+    "start": 2.76,
+    "end": 2.85,
+    "id": "w8"
+  },
+  {
+    "text": "sketch",
+    "start": 2.85,
+    "end": 3.24,
+    "id": "w9"
+  },
+  {
+    "text": "on",
+    "start": 3.37,
+    "end": 3.47,
+    "id": "w10"
+  },
+  {
+    "text": "paper,",
+    "start": 3.54,
+    "end": 4.09,
+    "id": "w11"
+  },
+  {
+    "text": "then",
+    "start": 4.48,
+    "end": 4.59,
+    "id": "w12"
+  },
+  {
+    "text": "come",
+    "start": 4.73,
+    "end": 4.97,
+    "id": "w13"
+  },
+  {
+    "text": "weeks",
+    "start": 5.02,
+    "end": 5.45,
+    "id": "w14"
+  },
+  {
+    "text": "of",
+    "start": 5.54,
+    "end": 5.69,
+    "id": "w15"
+  },
+  {
+    "text": "drafts,",
+    "start": 5.69,
+    "end": 6.3,
+    "id": "w16"
+  },
+  {
+    "text": "site",
+    "start": 6.52,
+    "end": 6.7,
+    "id": "w17"
+  },
+  {
+    "text": "visits,",
+    "start": 6.7,
+    "end": 7.2,
+    "id": "w18"
+  },
+  {
+    "text": "and",
+    "start": 7.2,
+    "end": 7.27,
+    "id": "w19"
+  },
+  {
+    "text": "plans",
+    "start": 7.6,
+    "end": 8.01,
+    "id": "w20"
+  },
+  {
+    "text": "rejected",
+    "start": 8.01,
+    "end": 8.79,
+    "id": "w21"
+  },
+  {
+    "text": "for",
+    "start": 8.94,
+    "end": 9.13,
+    "id": "w22"
+  },
+  {
+    "text": "breaking",
+    "start": 9.13,
+    "end": 9.95,
+    "id": "w23"
+  },
+  {
+    "text": "LDA",
+    "start": 9.95,
+    "end": 10.25,
+    "id": "w24"
+  },
+  {
+    "text": "by-laws.",
+    "start": 10.25,
+    "end": 10.65,
+    "id": "w25"
+  }
+]

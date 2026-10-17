@@ -44,3 +44,24 @@ api/.venv/
 
 # Agent worktrees
 .claude/worktrees/
+
+# narrator voice recordings (personal biometric audio) stay local
+submission/video/voice/
+
+# Submission media: the final video is hosted on Google Drive (link in submission/SUBMISSION.md);
+# footage, renders, audio and HyperFrames caches are too large for git
+submission/**/*.mp4
+submission/**/*.mov
+submission/**/*.wav
+submission/**/*.mp3
+submission/**/*.m4a
+submission/video/v2-backup/
+submission/video/hyperframes/node_modules/
+submission/video/hyperframes/.hyperframes/
+submission/video/hyperframes/.thumbnails/
+submission/video/hyperframes/.waveform-cache/
+submission/video/hyperframes/assets/footage/
+submission/video/hyperframes/assets/music/
+submission/video/hyperframes/assets/voice/
+submission/video/__pycache__/
+submission/**/critique*.md

@@ -1,0 +1,200 @@
+[
+  {
+    "text": "You",
+    "start": 0.21,
+    "end": 0.28,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.28,
+    "end": 0.42,
+    "id": "w1"
+  },
+  {
+    "text": "also",
+    "start": 0.42,
+    "end": 0.64,
+    "id": "w2"
+  },
+  {
+    "text": "type",
+    "start": 0.72,
+    "end": 0.98,
+    "id": "w3"
+  },
+  {
+    "text": "a",
+    "start": 0.98,
+    "end": 0.99,
+    "id": "w4"
+  },
+  {
+    "text": "change.",
+    "start": 1.05,
+    "end": 1.79,
+    "id": "w5"
+  },
+  {
+    "text": "Asked",
+    "start": 2.08,
+    "end": 2.12,
+    "id": "w6"
+  },
+  {
+    "text": "for",
+    "start": 2.12,
+    "end": 2.31,
+    "id": "w7"
+  },
+  {
+    "text": "a",
+    "start": 2.31,
+    "end": 2.37,
+    "id": "w8"
+  },
+  {
+    "text": "bigger",
+    "start": 2.37,
+    "end": 2.76,
+    "id": "w9"
+  },
+  {
+    "text": "kitchen.",
+    "start": 2.76,
+    "end": 3.28,
+    "id": "w10"
+  },
+  {
+    "text": "The",
+    "start": 3.28,
+    "end": 3.59,
+    "id": "w11"
+  },
+  {
+    "text": "same",
+    "start": 3.59,
+    "end": 3.79,
+    "id": "w12"
+  },
+  {
+    "text": "agent",
+    "start": 3.79,
+    "end": 4.06,
+    "id": "w13"
+  },
+  {
+    "text": "took",
+    "start": 4.15,
+    "end": 4.4,
+    "id": "w14"
+  },
+  {
+    "text": "a",
+    "start": 4.45,
+    "end": 4.47,
+    "id": "w15"
+  },
+  {
+    "text": "foot",
+    "start": 4.48,
+    "end": 4.64,
+    "id": "w16"
+  },
+  {
+    "text": "from",
+    "start": 4.8,
+    "end": 5,
+    "id": "w17"
+  },
+  {
+    "text": "the",
+    "start": 5,
+    "end": 5.1,
+    "id": "w18"
+  },
+  {
+    "text": "parents'",
+    "start": 5.31,
+    "end": 5.48,
+    "id": "w19"
+  },
+  {
+    "text": "bedroom",
+    "start": 5.61,
+    "end": 5.8,
+    "id": "w20"
+  },
+  {
+    "text": "and",
+    "start": 5.8,
+    "end": 5.92,
+    "id": "w21"
+  },
+  {
+    "text": "explained",
+    "start": 5.92,
+    "end": 6.19,
+    "id": "w22"
+  },
+  {
+    "text": "why.",
+    "start": 6.69,
+    "end": 6.8,
+    "id": "w23"
+  },
+  {
+    "text": "Version",
+    "start": 7.08,
+    "end": 7.39,
+    "id": "w24"
+  },
+  {
+    "text": "5",
+    "start": 7.39,
+    "end": 7.56,
+    "id": "w25"
+  },
+  {
+    "text": "still",
+    "start": 7.65,
+    "end": 8.06,
+    "id": "w26"
+  },
+  {
+    "text": "passes",
+    "start": 8.06,
+    "end": 8.49,
+    "id": "w27"
+  },
+  {
+    "text": "every",
+    "start": 8.81,
+    "end": 8.92,
+    "id": "w28"
+  },
+  {
+    "text": "by-law",
+    "start": 8.92,
+    "end": 9.3,
+    "id": "w29"
+  },
+  {
+    "text": "and",
+    "start": 9.3,
+    "end": 9.44,
+    "id": "w30"
+  },
+  {
+    "text": "livability",
+    "start": 9.49,
+    "end": 9.72,
+    "id": "w31"
+  },
+  {
+    "text": "check.",
+    "start": 10.19,
+    "end": 10.6,
+    "id": "w32"
+  }
+]

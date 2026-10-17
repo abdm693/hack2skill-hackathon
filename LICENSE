@@ -1,0 +1,45 @@
+Naqsha — Proprietary License
+
+Copyright (c) 2026 Pivot Analytix (Abdullah Moazzam, Saad Wali Muhammad Joiya,
+Usama Bin Maalik). All rights reserved.
+
+This repository, including all source code, prompts, rule sets, designs, images,
+video, documentation and other materials (together, the "Software"), is the
+confidential and proprietary property of Pivot Analytix.
+
+1. Limited permission to view and evaluate. The Software is published so that the
+   judges and organisers of the Google Cloud AI Builder Cup 2026 (Hack2skill) can
+   view, run and evaluate it for that competition. No other right or license is
+   granted, whether by implication, estoppel or otherwise.
+
+2. Restrictions. Without the prior written permission of Pivot Analytix, you may
+   not, in whole or in part:
+   a. copy, reproduce, modify, translate or create derivative works of the Software;
+   b. distribute, publish, sublicense, sell, rent, lease or otherwise make the
+      Software available to any third party;
+   c. use the Software, or any part of it, in any product, service or project,
+      whether commercial or non-commercial;
+   d. use the Software, or any part of it, to train, fine-tune or evaluate machine
+      learning or AI models, or include it in any dataset;
+   e. reverse engineer the deployed service, or remove or alter any copyright or
+      proprietary notice.
+
+3. Public hosting. That this repository is publicly visible does not place the
+   Software in the public domain or grant any open-source license. Any rights that
+   the hosting platform's terms of service grant to its users (such as viewing
+   the repository on the platform) are limited to those terms and do not extend
+   any further.
+
+4. Third-party components. Third-party libraries, fonts, icons and services used by
+   the Software remain under their own licenses. Nothing in this license restricts
+   rights granted by those licenses for those components.
+
+5. No warranty. The Software is provided "as is", without warranty of any kind,
+   express or implied. In no event shall Pivot Analytix be liable for any claim,
+   damages or other liability arising from or in connection with the Software.
+
+6. Termination. Any use that breaches this license ends the permission in
+   section 1 immediately and automatically.
+
+For permission requests or licensing enquiries, contact Pivot Analytix through
+the repository owner: https://github.com/abdm693

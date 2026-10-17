@@ -1,0 +1,146 @@
+[
+  {
+    "text": "This",
+    "start": 0.17,
+    "end": 0.32,
+    "id": "w0"
+  },
+  {
+    "text": "prototype",
+    "start": 0.32,
+    "end": 1.05,
+    "id": "w1"
+  },
+  {
+    "text": "uses",
+    "start": 1.06,
+    "end": 1.38,
+    "id": "w2"
+  },
+  {
+    "text": "Lahore's",
+    "start": 1.38,
+    "end": 2.02,
+    "id": "w3"
+  },
+  {
+    "text": "LDA",
+    "start": 2.02,
+    "end": 2.25,
+    "id": "w4"
+  },
+  {
+    "text": "bylaws",
+    "start": 2.26,
+    "end": 2.67,
+    "id": "w5"
+  },
+  {
+    "text": "and",
+    "start": 2.67,
+    "end": 3.04,
+    "id": "w6"
+  },
+  {
+    "text": "this",
+    "start": 3.04,
+    "end": 3.27,
+    "id": "w7"
+  },
+  {
+    "text": "plan",
+    "start": 3.38,
+    "end": 3.58,
+    "id": "w8"
+  },
+  {
+    "text": "passed",
+    "start": 3.58,
+    "end": 3.98,
+    "id": "w9"
+  },
+  {
+    "text": "all",
+    "start": 4.09,
+    "end": 4.2,
+    "id": "w10"
+  },
+  {
+    "text": "36",
+    "start": 4.2,
+    "end": 4.55,
+    "id": "w11"
+  },
+  {
+    "text": "checks.",
+    "start": 4.62,
+    "end": 5.1,
+    "id": "w12"
+  },
+  {
+    "text": "The",
+    "start": 5.37,
+    "end": 5.38,
+    "id": "w13"
+  },
+  {
+    "text": "drawing",
+    "start": 5.38,
+    "end": 5.8,
+    "id": "w14"
+  },
+  {
+    "text": "set",
+    "start": 5.8,
+    "end": 5.98,
+    "id": "w15"
+  },
+  {
+    "text": "is",
+    "start": 5.98,
+    "end": 6.06,
+    "id": "w16"
+  },
+  {
+    "text": "ready",
+    "start": 6.13,
+    "end": 6.4,
+    "id": "w17"
+  },
+  {
+    "text": "to",
+    "start": 6.4,
+    "end": 6.52,
+    "id": "w18"
+  },
+  {
+    "text": "print",
+    "start": 6.52,
+    "end": 6.82,
+    "id": "w19"
+  },
+  {
+    "text": "at",
+    "start": 6.82,
+    "end": 6.94,
+    "id": "w20"
+  },
+  {
+    "text": "1",
+    "start": 6.94,
+    "end": 7.12,
+    "id": "w21"
+  },
+  {
+    "text": "to",
+    "start": 7.12,
+    "end": 7.23,
+    "id": "w22"
+  },
+  {
+    "text": "100.",
+    "start": 7.23,
+    "end": 7.84,
+    "id": "w23"
+  }
+]

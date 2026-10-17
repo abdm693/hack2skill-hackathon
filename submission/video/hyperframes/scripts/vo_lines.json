@@ -1,0 +1,72 @@
+[
+ {
+  "id": "vo01",
+  "scene": "hook",
+  "text": "Most families in Pakistan build a house only once. The plan still goes back and forth for weeks, and the architect redraws it each time. One setback error can get it returned by the development authority. And until it's built, nobody can walk through the rooms."
+ },
+ {
+  "id": "vo02",
+  "scene": "title",
+  "text": "Naqsha is an agentic home design studio, built on Google Cloud."
+ },
+ {
+  "id": "vo03",
+  "scene": "landing",
+  "text": "Its agents design the home and check it against the local building bylaws."
+ },
+ {
+  "id": "vo04",
+  "scene": "setup",
+  "text": "You start with one message about your plot and your family. A Google ADK agent on Gemini 3.8 Flash replies in about four seconds with the brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on."
+ },
+ {
+  "id": "vo05",
+  "scene": "concepts",
+  "text": "Gemini 3.1 Flash Image then draws four exterior concepts from the same camera, so they're easy to compare. These four took twenty-three seconds, and one tap shows all of them at night."
+ },
+ {
+  "id": "vo06",
+  "scene": "argon + design run",
+  "text": "Pick one, and Gemini 4 Argon starts work as the architect. It lays out every floor, room by room. A rules engine checks the plan against the building bylaws and a set of livability rules: every bedroom has its own way in, the stairs reach the roof, and every drop has a railing. Argon fixes whatever fails. On this run it went from fifteen issues to five, then to none. It then looks at a drawing of its own plan and critiques it the way an architect would."
+ },
+ {
+  "id": "vo07",
+  "scene": "compliance + print",
+  "text": "This prototype uses Lahore's LDA bylaws. The plan passed all thirty-six checks, and Argon's own review left four notes for the architect to look at. The drawing set prints at one to one hundred."
+ },
+ {
+  "id": "vo08",
+  "scene": "3D as code + house (exterior and interior)",
+  "text": "Argon then writes the house in 3D as code, in twenty-eight sections, from the structure and the facade to the furniture in every room. Your browser assembles it live. Orbit the outside, or switch to night with the rooms lit inside. Cut away a floor to see every room furnished at its real size. Any view can become a photoreal render in about ten seconds."
+ },
+ {
+  "id": "vo09",
+  "scene": "walk",
+  "text": "You can also walk through it in first person. The lounge and dining room are already furnished. The room list takes you straight to the bedrooms upstairs. Then take the stairs, past the glass guard, out onto the roof."
+ },
+ {
+  "id": "vo10",
+  "scene": "comment + share",
+  "text": "Anyone can pin a note to the exact spot they mean. Share a link with your client or your family, and they can comment without an account. Here, Ammi asks for a bigger kitchen, and her note shows up for the owner right away."
+ },
+ {
+  "id": "vo11",
+  "scene": "revise from comments",
+  "text": "Choose the notes and press Revise. A second ADK agent, also on Argon, with nine tools, reads each note, edits the plan, and runs every check again. The bedroom window gets wider and the kitchen grows. Extending the porch would break the front setback, so the agent explains that and offers another option."
+ },
+ {
+  "id": "vo12",
+  "scene": "typed change",
+  "text": "You can also type a change. Asked for a bigger kitchen, the same agent took a foot from the parents' bedroom and explained why. Version five still passes every bylaw and livability check."
+ },
+ {
+  "id": "vo13",
+  "scene": "architecture",
+  "text": "On Google Cloud, one Cloud Run service hosts the app and streams the agent runs. Firestore stores projects, versions and comments, Cloud Storage keeps the images, Firebase Authentication signs people in, and Gemini runs on Vertex AI. The setup agent and the revision agent are built with Google's Agent Development Kit."
+ },
+ {
+  "id": "vo14",
+  "scene": "outro",
+  "text": "Families can walk through their home before they build it. Architects can show a checked design in the first meeting, and builders get drawings that pass the local bylaw checks. Because the agents read bylaws as data, adding a new city starts with adding its rules. We're starting with Pakistan's development authorities, then other countries. Naqsha is live today."
+ }
+]

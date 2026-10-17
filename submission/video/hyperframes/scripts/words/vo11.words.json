@@ -1,0 +1,320 @@
+[
+  {
+    "text": "Choose",
+    "start": 0.15,
+    "end": 0.42,
+    "id": "w0"
+  },
+  {
+    "text": "the",
+    "start": 0.42,
+    "end": 0.62,
+    "id": "w1"
+  },
+  {
+    "text": "notes",
+    "start": 0.62,
+    "end": 0.77,
+    "id": "w2"
+  },
+  {
+    "text": "and",
+    "start": 1.07,
+    "end": 1.21,
+    "id": "w3"
+  },
+  {
+    "text": "press",
+    "start": 1.21,
+    "end": 1.56,
+    "id": "w4"
+  },
+  {
+    "text": "revise.",
+    "start": 1.56,
+    "end": 2.4,
+    "id": "w5"
+  },
+  {
+    "text": "A",
+    "start": 2.4,
+    "end": 2.55,
+    "id": "w6"
+  },
+  {
+    "text": "second",
+    "start": 2.55,
+    "end": 3.02,
+    "id": "w7"
+  },
+  {
+    "text": "ADK",
+    "start": 3.09,
+    "end": 3.4,
+    "id": "w8"
+  },
+  {
+    "text": "agent,",
+    "start": 3.47,
+    "end": 4.03,
+    "id": "w9"
+  },
+  {
+    "text": "also",
+    "start": 4.03,
+    "end": 4.26,
+    "id": "w10"
+  },
+  {
+    "text": "on",
+    "start": 4.26,
+    "end": 4.32,
+    "id": "w11"
+  },
+  {
+    "text": "Argonne",
+    "start": 4.41,
+    "end": 4.8,
+    "id": "w12"
+  },
+  {
+    "text": "with",
+    "start": 4.8,
+    "end": 5.04,
+    "id": "w13"
+  },
+  {
+    "text": "9",
+    "start": 5.04,
+    "end": 5.3,
+    "id": "w14"
+  },
+  {
+    "text": "tools,",
+    "start": 5.38,
+    "end": 6.03,
+    "id": "w15"
+  },
+  {
+    "text": "reads",
+    "start": 6.03,
+    "end": 6.15,
+    "id": "w16"
+  },
+  {
+    "text": "each",
+    "start": 6.37,
+    "end": 6.53,
+    "id": "w17"
+  },
+  {
+    "text": "note,",
+    "start": 6.53,
+    "end": 6.88,
+    "id": "w18"
+  },
+  {
+    "text": "edits",
+    "start": 7.03,
+    "end": 7.25,
+    "id": "w19"
+  },
+  {
+    "text": "the",
+    "start": 7.27,
+    "end": 7.49,
+    "id": "w20"
+  },
+  {
+    "text": "plan",
+    "start": 7.49,
+    "end": 7.65,
+    "id": "w21"
+  },
+  {
+    "text": "and",
+    "start": 7.95,
+    "end": 8.03,
+    "id": "w22"
+  },
+  {
+    "text": "runs",
+    "start": 8.03,
+    "end": 8.34,
+    "id": "w23"
+  },
+  {
+    "text": "every",
+    "start": 8.34,
+    "end": 8.71,
+    "id": "w24"
+  },
+  {
+    "text": "check",
+    "start": 8.71,
+    "end": 8.98,
+    "id": "w25"
+  },
+  {
+    "text": "again.",
+    "start": 9.27,
+    "end": 9.76,
+    "id": "w26"
+  },
+  {
+    "text": "The",
+    "start": 9.91,
+    "end": 9.94,
+    "id": "w27"
+  },
+  {
+    "text": "bedroom",
+    "start": 9.94,
+    "end": 10.36,
+    "id": "w28"
+  },
+  {
+    "text": "window",
+    "start": 10.36,
+    "end": 10.53,
+    "id": "w29"
+  },
+  {
+    "text": "gets",
+    "start": 10.83,
+    "end": 10.96,
+    "id": "w30"
+  },
+  {
+    "text": "wider",
+    "start": 10.96,
+    "end": 11.28,
+    "id": "w31"
+  },
+  {
+    "text": "and",
+    "start": 11.28,
+    "end": 11.52,
+    "id": "w32"
+  },
+  {
+    "text": "the",
+    "start": 11.52,
+    "end": 11.66,
+    "id": "w33"
+  },
+  {
+    "text": "kitchen",
+    "start": 12.15,
+    "end": 12.18,
+    "id": "w34"
+  },
+  {
+    "text": "grows.",
+    "start": 12.31,
+    "end": 12.72,
+    "id": "w35"
+  },
+  {
+    "text": "Extending",
+    "start": 12.87,
+    "end": 13.17,
+    "id": "w36"
+  },
+  {
+    "text": "the",
+    "start": 13.17,
+    "end": 13.32,
+    "id": "w37"
+  },
+  {
+    "text": "porch",
+    "start": 13.32,
+    "end": 13.49,
+    "id": "w38"
+  },
+  {
+    "text": "would",
+    "start": 13.79,
+    "end": 13.82,
+    "id": "w39"
+  },
+  {
+    "text": "break",
+    "start": 13.82,
+    "end": 14.04,
+    "id": "w40"
+  },
+  {
+    "text": "the",
+    "start": 14.14,
+    "end": 14.22,
+    "id": "w41"
+  },
+  {
+    "text": "front",
+    "start": 14.22,
+    "end": 14.47,
+    "id": "w42"
+  },
+  {
+    "text": "setback.",
+    "start": 14.47,
+    "end": 14.88,
+    "id": "w43"
+  },
+  {
+    "text": "So",
+    "start": 14.88,
+    "end": 15.03,
+    "id": "w44"
+  },
+  {
+    "text": "the",
+    "start": 15.03,
+    "end": 15.15,
+    "id": "w45"
+  },
+  {
+    "text": "agent",
+    "start": 15.15,
+    "end": 15.43,
+    "id": "w46"
+  },
+  {
+    "text": "explains",
+    "start": 15.43,
+    "end": 15.65,
+    "id": "w47"
+  },
+  {
+    "text": "that",
+    "start": 15.95,
+    "end": 16.1,
+    "id": "w48"
+  },
+  {
+    "text": "and",
+    "start": 16.1,
+    "end": 16.2,
+    "id": "w49"
+  },
+  {
+    "text": "offers",
+    "start": 16.3,
+    "end": 16.59,
+    "id": "w50"
+  },
+  {
+    "text": "another",
+    "start": 16.59,
+    "end": 16.78,
+    "id": "w51"
+  },
+  {
+    "text": "option.",
+    "start": 16.98,
+    "end": 17.36,
+    "id": "w52"
+  }
+]

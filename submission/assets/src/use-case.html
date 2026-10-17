@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Naqsha use cases by actor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@500&display=block" rel="stylesheet">
+<link rel="stylesheet" href="diagram.css">
+<style>
+  html, body { width: 1600px; height: 580px; position: relative; }
+  .sys {
+    position: absolute; left: 24px; right: 24px; top: 22px; height: 84px;
+    background: var(--hud); color: var(--hud-ink); border-radius: 18px;
+    display: flex; align-items: center; gap: 22px; padding: 0 26px;
+  }
+  .sys .name { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; display: flex; align-items: center; gap: 12px; }
+  .sys .ur { font-family: "Noto Nastaliq Urdu", serif; font-size: 24px; font-weight: 500; opacity: 0.7; line-height: 1; transform: translateY(-4px); }
+  .sys .what { font-size: 20px; color: var(--hud-2); line-height: 1.25; flex: 1; }
+  .sys .what b { color: #fff; font-weight: 500; }
+  .sys .flow { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .sys .flow span { font-size: 18px; font-weight: 500; padding: 5px 10px; border-radius: 9px; background: rgba(255,255,255,0.10); }
+  .sys .flow i { width: 12px; height: 2px; background: rgba(255,255,255,0.35); }
+
+  .links { position: absolute; left: 24px; right: 24px; top: 106px; height: 30px; }
+  .links i { position: absolute; top: 0; height: 30px; width: 2px; background: var(--line-2); }
+
+  .cols { position: absolute; left: 24px; right: 24px; top: 136px; bottom: 22px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .a { border-radius: 18px; box-shadow: inset 0 0 0 1.5px var(--line-2); background: #fff; padding: 18px 18px 16px; display: flex; flex-direction: column; }
+  .a header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .a h3 { font-size: 24px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.12; }
+  .a .role { font-size: 18px; font-weight: 500; padding: 4px 10px; border-radius: 9px; background: var(--fill-2); white-space: nowrap; }
+  .a .role.next { background: #fff; box-shadow: inset 0 0 0 1.5px var(--line-2); color: var(--ink-2); }
+  .today { margin-top: 12px; font-size: 18px; color: var(--ink-3); line-height: 1.28; padding-bottom: 12px; border-bottom: 1.5px solid var(--line); min-height: 72px; }
+  .today b { color: var(--ink-2); font-weight: 600; }
+  .with { margin-top: 12px; font-size: 18px; font-weight: 600; color: var(--accent-ink); }
+  .uc { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .uc div { font-size: 19px; line-height: 1.24; padding: 9px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); }
+  .a.partner .uc div { background: var(--fill); }
+  .a.partner .with { color: var(--ink-2); }
+</style>
+</head>
+<body>
+  <div class="sys">
+    <div class="name">Naqsha <span class="ur">نقشہ</span></div>
+    <div class="what"><b>One shared home</b> that AI agents draft, check against LDA rules and revise. People make the decisions; a licensed architect stamps.</div>
+    <div class="flow"><span>Brief</span><i></i><span>Concepts</span><i></i><span>Plan</span><i></i><span>3D</span><i></i><span>Versions</span></div>
+  </div>
+  <div class="links">
+    <i style="left:187px"></i><i style="left:579px"></i><i style="left:971px"></i><i style="left:1363px"></i>
+  </div>
+
+  <div class="cols">
+    <section class="a">
+      <header><h3>Family</h3><span class="role">Owner</span></header>
+      <div class="today"><b>Today:</b> a paper sketch, a contractor’s guess and weeks of back-and-forth.</div>
+      <div class="with">With Naqsha</div>
+      <div class="uc">
+        <div>Describe the plot in one message</div>
+        <div>Pick a concept, by day or night</div>
+        <div>Walk the house before it is built</div>
+        <div>Choose which comments go into the next version</div>
+      </div>
+    </section>
+
+    <section class="a">
+      <header><h3>Architect, builder</h3><span class="role">Team</span></header>
+      <div class="today"><b>Today:</b> redraws every change by hand; rule breaks are found after submission.</div>
+      <div class="with">With Naqsha</div>
+      <div class="uc">
+        <div>Show a checked, walkable design in the first meeting</div>
+        <div>Revise by comment or by typing, in about 70 s</div>
+        <div>Print the 1:100 set with a compliance report</div>
+      </div>
+    </section>
+
+    <section class="a">
+      <header><h3>Client, relatives</h3><span class="role">Share link</span></header>
+      <div class="today"><b>Today:</b> waits for printouts and site visits to see the house.</div>
+      <div class="with">With Naqsha</div>
+      <div class="uc">
+        <div>Open a link, no account needed</div>
+        <div>Walk the house on a phone</div>
+        <div>Comment with their name, get an answer</div>
+        <div>Approve a version</div>
+      </div>
+    </section>
+
+    <section class="a partner">
+      <header><h3>PCATP architect</h3><span class="role next">Partner · next</span></header>
+      <div class="today"><b>Today:</b> stamps plans that may still break bylaws; refusals mean resubmission.</div>
+      <div class="with">With Naqsha</div>
+      <div class="uc">
+        <div>Receive an LDA pre-checked set at 1:100</div>
+        <div>Review, stamp and submit to LDA</div>
+        <div>Fewer refusals and repeat scrutiny fees</div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

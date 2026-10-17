@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body>
+<template id="ft-walk-template">
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Noto Nastaliq Urdu"; src: url("assets/fonts/NotoNastaliqUrdu.ttf") format("truetype"); font-weight: 400 700; font-style: normal; }
+
+#ft-walk { position:absolute; inset:0; width:100%; height:100%; font-family:"Geist", sans-serif; color:#111113; }
+#ft-walk .topbar { position:absolute; left:128px; top:34px; width:1664px; height:66px; display:flex; align-items:center; gap:16px; }
+#ft-walk .chip { display:flex; align-items:center; gap:14px; height:60px; padding:0 26px 0 22px; border-radius:999px; background:#111113; color:#F5F5F7; font-size:32px; font-weight:600; letter-spacing:0.01em; box-shadow:0 10px 30px -12px rgba(17,17,19,.5); white-space:nowrap; }
+#ft-walk .chip .dot { width:16px; height:16px; border-radius:50%; background:#FF453A; box-shadow:0 0 0 5px rgba(255,69,58,.22); }
+#ft-walk .chip .muted { color:#C9C9D1; font-weight:500; }
+#ft-walk .bslot { position:relative; width:430px; height:60px; }
+#ft-walk .badge { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#2747F5; color:#fff; font-size:32px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-walk .badge.rt { background:#0E7A55; }
+#ft-walk .badge.sl { background:#46464B; }
+#ft-walk .badge svg, #ft-walk .clock svg { width:30px; height:30px; flex:none; }
+#ft-walk .cslot { position:relative; width:370px; height:60px; }
+#ft-walk .clock { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:32px; font-weight:600; border:2px solid #CFCFC8; white-space:nowrap; opacity:0; }
+#ft-walk .clock .cv { font-family:"Geist Mono", monospace; font-variant-numeric:tabular-nums; font-weight:600; }
+#ft-walk .clock .cl { color:#46464B; font-weight:500; }
+#ft-walk .chap { margin-left:auto; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-walk .win { position:absolute; left:128px; top:118px; width:1664px; height:936px; border-radius:28px; overflow:hidden; background:#F6F6F3; box-shadow:0 0 0 2px rgba(17,17,19,.07), 0 40px 90px -30px rgba(17,17,19,.42); transform-origin:50% 50%; }
+#ft-walk .cam { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; will-change:transform; }
+#ft-walk .vid { position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; }
+#ft-walk .ring { position:absolute; border:5px solid #2747F5; border-radius:16px; box-shadow:0 0 0 8px rgba(39,71,245,.16); opacity:0; }
+#ft-walk .lower { position:absolute; max-width:1180px; padding:26px 34px 28px; border-radius:22px; background:rgba(17,17,19,.86); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-walk .lower .ai-tag { display:inline-flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#9DB0FF; margin-bottom:8px; }
+#ft-walk .lower .ai-tag svg { width:30px; height:30px; }
+#ft-walk .lower .lt-title { font-size:44px; font-weight:650; letter-spacing:-0.02em; line-height:1.12; }
+#ft-walk .lower .lt-sub { font-size:32px; font-weight:450; color:#C9C9D1; margin-top:8px; line-height:1.25; }
+#ft-walk .callout { position:absolute; display:flex; align-items:flex-start; gap:18px; max-width:1100px; padding:22px 30px 24px 26px; border-radius:20px; background:#FFFFFF; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-walk .callout .cdot { width:18px; height:18px; border-radius:50%; margin-top:14px; flex:none; box-shadow:0 0 0 6px rgba(39,71,245,.14); }
+#ft-walk .callout .c-text { font-size:38px; font-weight:620; letter-spacing:-0.015em; line-height:1.18; }
+#ft-walk .callout .c-sub { font-size:32px; font-weight:450; color:#46464B; margin-top:6px; line-height:1.25; }
+#ft-walk .callout.t-fail { box-shadow:0 0 0 3px rgba(200,40,30,.55), 0 26px 60px -22px rgba(17,17,19,.45); }
+#ft-walk .callout.t-fail .c-text { color:#A3241B; }
+#ft-walk .callout.t-pass .c-text { color:#0B6446; }
+#ft-walk .stat { position:absolute; padding:26px 40px 30px; border-radius:26px; background:#2747F5; color:#fff; box-shadow:0 30px 70px -24px rgba(39,71,245,.6); opacity:0; transform-origin:100% 100%; }
+#ft-walk .stat .s-big { font-size:124px; font-weight:700; letter-spacing:-0.05em; line-height:0.95; font-variant-numeric:tabular-nums; }
+#ft-walk .stat .s-label { font-size:34px; font-weight:500; color:#DCE3FF; margin-top:10px; }
+#ft-walk .log { position:absolute; width:720px; padding:24px 28px 18px; border-radius:22px; background:rgba(17,17,19,.88); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); opacity:0; }
+#ft-walk .log .lg-title { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; color:#9DB0FF; margin-bottom:12px; }
+#ft-walk .log .lg-title svg { width:30px; height:30px; }
+#ft-walk .log .lg-line { display:flex; align-items:flex-start; gap:14px; font-size:32px; line-height:1.25; padding:6px 0; opacity:0; }
+#ft-walk .log .lg-dot { width:14px; height:14px; border-radius:50%; background:#7D93FF; margin-top:13px; flex:none; }
+#ft-walk .rules { position:absolute; padding:24px 28px 14px; border-radius:22px; background:#FFFFFF; color:#111113; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-walk .rules .ru-head { display:flex; align-items:center; gap:10px; font-size:36px; font-weight:650; letter-spacing:-0.015em; }
+#ft-walk .rules .ru-head svg { width:30px; height:30px; color:#2747F5; }
+#ft-walk .rules .ru-tag { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:30px; font-weight:500; }
+#ft-walk .rules .ru-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 0; border-top:2px solid #ECECE8; margin-top:10px; }
+#ft-walk .rules .ru-k { font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-walk .rules .ru-vs { position:relative; display:block; flex:1; height:42px; }
+#ft-walk .rules .ru-v { position:absolute; right:0; top:0; font-family:"Geist Mono", monospace; font-size:31px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-walk .mask { position:absolute; display:flex; align-items:center; gap:12px; padding:0 20px 0 78px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:26px; font-weight:620; letter-spacing:-0.01em; white-space:nowrap; box-shadow:0 0 0 2px rgba(17,17,19,.10), 0 8px 22px -10px rgba(17,17,19,.45); opacity:0; }
+#ft-walk .mask .mk-dot { width:12px; height:12px; border-radius:50%; background:#2747F5; flex:none; }
+#ft-walk .callout .c-tag { display:inline-block; margin:2px 0 8px; padding:3px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:28px; font-weight:500; }
+#ft-walk .log .lg-tool { font-family:"Geist Mono", monospace; font-size:28px; color:#9DB0FF; margin-top:2px; }
+#ft-walk .steps { position:absolute; left:36px; top:36px; display:flex; gap:10px; opacity:0; }
+#ft-walk .steps .sp { display:flex; align-items:center; gap:10px; height:56px; padding:0 20px 0 12px; border-radius:999px; border:2px solid #DADAD4; background:#FFFFFF; color:#6E6E73; font-size:30px; font-weight:600; white-space:nowrap; box-shadow:0 10px 26px -14px rgba(17,17,19,.45); }
+#ft-walk .steps .sp-n { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(17,17,19,.08); font-family:"Geist Mono", monospace; font-size:24px; }
+#ft-walk .quote { position:absolute; padding:24px 32px 26px; border-radius:22px; background:rgba(17,17,19,.9); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-walk .quote .q-tag { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:30px; color:#9DB0FF; }
+#ft-walk .quote .q-tag svg { width:28px; height:28px; }
+#ft-walk .quote .q-title { font-size:40px; font-weight:650; letter-spacing:-0.02em; margin-top:6px; }
+#ft-walk .quote .q-body { font-size:34px; line-height:1.28; color:#FFFFFF; margin-top:12px; padding-left:20px; border-left:4px solid #7D93FF; }
+#ft-walk .quote .q-foot { font-size:30px; color:#C9C9D1; margin-top:10px; }
+#ft-walk .statement { position:absolute; left:0; right:0; bottom:0; padding:60px 64px 56px; background:linear-gradient(180deg, rgba(17,17,19,0) 0%, rgba(17,17,19,.78) 55%); opacity:0; }
+#ft-walk .statement .st-text { font-size:84px; font-weight:650; letter-spacing:-0.035em; color:#fff; line-height:1.02; }
+</style>
+<div id="ft-walk" data-composition-id="ft-walk" data-width="1920" data-height="1080" data-duration="17.92">
+  <div class="topbar">
+    <div class="chip" id="ft-walk-chip"><span class="dot" id="ft-walk-live"></span><span>LIVE</span><span class="muted">· real product</span></div>
+    <div class="bslot"><div class="badge" id="ft-walk-b0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.2×</span></div><div class="badge" id="ft-walk-b1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.5×</span></div><div class="badge" id="ft-walk-b2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 4×</span></div><div class="badge" id="ft-walk-b3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 3×</span></div><div class="badge" id="ft-walk-b4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.2×</span></div><div class="badge" id="ft-walk-b5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 1.9×</span></div><div class="badge" id="ft-walk-b6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.4×</span></div><div class="badge sl" id="ft-walk-b7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg><span>slow motion 0.4×</span></div><div class="badge" id="ft-walk-b8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.4×</span></div></div>
+    <div class="cslot"></div>
+    <div class="chap" id="ft-walk-chap">05 · Walk through · sample home</div>
+  </div>
+  <div class="win" id="ft-walk-win">
+    <div class="cam" id="ft-walk-cam" data-layout-allow-overflow>
+      <video id="ft-walk-v0" src="assets/footage/f_walk_like_a_game.mp4" data-start="0.0" data-duration="2.091" data-media-start="4.8" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.2" class="vid"></video>
+<video id="ft-walk-v1" src="assets/footage/f_walk_like_a_game.mp4" data-start="2.091" data-duration="2.0" data-media-start="24.0" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.5" class="vid"></video>
+<video id="ft-walk-v2" src="assets/footage/f_walk_like_a_game.mp4" data-start="4.091" data-duration="2.5" data-media-start="37.0" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="3.6" class="vid"></video>
+<video id="ft-walk-v3" src="assets/footage/f_walk_like_a_game.mp4" data-start="6.591" data-duration="2.0" data-media-start="48.6" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="3.4" class="vid"></video>
+<video id="ft-walk-v4" src="assets/footage/f_walk_like_a_game.mp4" data-start="8.591" data-duration="2.0" data-media-start="55.4" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.2" class="vid"></video>
+<video id="ft-walk-v5" src="assets/footage/g1_owner_pin_comment_and_share.mp4" data-start="10.591" data-duration="2.579" data-media-start="4.4" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="1.9" class="vid"></video>
+<video id="ft-walk-v6" src="assets/footage/f_walk_like_a_game.mp4" data-start="13.17" data-duration="0.929" data-media-start="87.6" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.4" class="vid"></video>
+<video id="ft-walk-v7" src="assets/footage/f_walk_like_a_game.mp4" data-start="14.099" data-duration="1.0" data-media-start="89.83" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="0.4" class="vid"></video>
+<video id="ft-walk-v8" src="assets/footage/f_walk_like_a_game.mp4" data-start="15.099" data-duration="0.821" data-media-start="90.23" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.4" class="vid"></video>
+<video id="ft-walk-v9" src="assets/footage/f_walk_like_a_game.mp4" data-start="15.92" data-duration="2.0" data-media-start="92.2" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.4" class="vid"></video>
+      <div class="mask" id="ft-walk-o0" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o1" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o2" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o3" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o4" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o5" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o6" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o7" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o8" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-walk-o9" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div>
+    </div>
+    <div class="callout t-ink" id="ft-walk-o10" style="left:380px;top:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">First-person walk</div><div class="c-sub">at eye height, room by room</div></div></div><div class="callout t-ink" id="ft-walk-o11" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">TV lounge and dining, furnished</div></div></div><div class="callout t-ink" id="ft-walk-o12" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Room list: “master bed”</div></div></div><div class="callout t-ink" id="ft-walk-o13" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Master bedroom</div><div class="c-sub">balcony doors, wood panelling</div></div></div><div class="callout t-ink" id="ft-walk-o14" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Bedroom 3, furnished</div><div class="c-sub">bed, side table, desk and chair</div></div></div><div class="callout t-ink" id="ft-walk-o15" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Room list: “roof”</div><div class="c-sub">up the stairs</div></div></div><div class="callout t-ink" id="ft-walk-o16" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Glass guard on the stair, family lounge upstairs</div><div class="c-sub">a railing at every drop is one of the livability checks</div></div></div><div class="callout t-ink" id="ft-walk-o17" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Out the roof door</div></div></div><div class="callout t-ink" id="ft-walk-o18" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">On the roof: stair tower and parapets</div></div></div>
+  </div>
+</div>
+<script>
+(function(){
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#ft-walk-win", {scale:1.035}, {scale:1, duration:0.7, ease:"power3.out"}, 0);
+tl.fromTo("#ft-walk-chip", {scale:0.94}, {scale:1, duration:0.35, ease:"back.out(1.7)"}, 0);
+tl.fromTo("#ft-walk-chap", {opacity:0, x:20}, {opacity:1, x:0, duration:0.4, ease:"power3.out"}, 0.25);
+tl.fromTo("#ft-walk-live", {opacity:1}, {opacity:0.35, duration:0.6, repeat:28, yoyo:true, ease:"sine.inOut"}, 0);
+const cam = document.getElementById("ft-walk-cam");
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667, transformOrigin:"0 0"}, 0);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 0.0);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:2.040909090909091, ease:"none"}, 0.02);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 2.091);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:1.95, ease:"none"}, 2.111);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 4.091);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:2.45, ease:"none"}, 4.111);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 6.591);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:1.949999999999999, ease:"none"}, 6.611);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 8.591);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:1.949999999999999, ease:"none"}, 8.611);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 10.591);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:2.5289473684210533, ease:"none"}, 10.611);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 13.17);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:0.8791666666666683, ease:"none"}, 13.19);
+tl.set(cam, {x:-49.92, y:-28.08, scale:0.91867}, 14.099);
+tl.to(cam, {x:-99.84, y:-75.57, scale:0.97067, duration:0.9500000000000142, ease:"none"}, 14.119);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 15.099);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:0.7708333333333328, ease:"none"}, 15.119);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 15.92);
+tl.to(cam, {x:-49.92, y:-28.08, scale:0.91867, duration:1.9499999999999988, ease:"none"}, 15.94);
+tl.fromTo("#ft-walk-b0", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 0.0);
+tl.to("#ft-walk-b0", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 1.9310000000000003);
+tl.fromTo("#ft-walk-b1", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 2.091);
+tl.to("#ft-walk-b1", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 3.931);
+tl.fromTo("#ft-walk-b2", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 4.091);
+tl.to("#ft-walk-b2", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 6.431);
+tl.fromTo("#ft-walk-b3", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 6.591);
+tl.to("#ft-walk-b3", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 8.431);
+tl.fromTo("#ft-walk-b4", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 8.591);
+tl.to("#ft-walk-b4", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 10.431);
+tl.fromTo("#ft-walk-b5", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 10.591);
+tl.to("#ft-walk-b5", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 13.01);
+tl.fromTo("#ft-walk-b6", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 13.17);
+tl.to("#ft-walk-b6", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 13.939);
+tl.fromTo("#ft-walk-b7", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 14.099);
+tl.to("#ft-walk-b7", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 14.939);
+tl.fromTo("#ft-walk-b8", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 15.099);
+tl.to("#ft-walk-b8", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 17.76);
+tl.set("#ft-walk-o0", {opacity:1}, 0.0);
+tl.set("#ft-walk-o0", {opacity:0}, 2.091);
+tl.set("#ft-walk-o1", {opacity:1}, 2.091);
+tl.set("#ft-walk-o1", {opacity:0}, 4.091);
+tl.set("#ft-walk-o2", {opacity:1}, 4.091);
+tl.set("#ft-walk-o2", {opacity:0}, 6.591);
+tl.set("#ft-walk-o3", {opacity:1}, 6.591);
+tl.set("#ft-walk-o3", {opacity:0}, 8.591);
+tl.set("#ft-walk-o4", {opacity:1}, 8.591);
+tl.set("#ft-walk-o4", {opacity:0}, 10.591);
+tl.set("#ft-walk-o5", {opacity:1}, 10.591);
+tl.set("#ft-walk-o5", {opacity:0}, 13.17);
+tl.set("#ft-walk-o6", {opacity:1}, 13.17);
+tl.set("#ft-walk-o6", {opacity:0}, 14.099);
+tl.set("#ft-walk-o7", {opacity:1}, 14.099);
+tl.set("#ft-walk-o7", {opacity:0}, 15.099);
+tl.set("#ft-walk-o8", {opacity:1}, 15.099);
+tl.set("#ft-walk-o8", {opacity:0}, 15.92);
+tl.set("#ft-walk-o9", {opacity:1}, 15.92);
+tl.set("#ft-walk-o9", {opacity:0}, 17.92);
+tl.fromTo("#ft-walk-o10", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 0.2);
+tl.to("#ft-walk-o10", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 3.0709999999999997);
+tl.fromTo("#ft-walk-o11", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 3.391);
+tl.to("#ft-walk-o11", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 6.321000000000001);
+tl.fromTo("#ft-walk-o12", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 6.791);
+tl.to("#ft-walk-o12", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 8.321);
+tl.fromTo("#ft-walk-o13", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 8.691);
+tl.to("#ft-walk-o13", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 10.321);
+tl.fromTo("#ft-walk-o14", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 10.691);
+tl.to("#ft-walk-o14", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 12.899999999999999);
+tl.fromTo("#ft-walk-o15", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 13.27);
+tl.to("#ft-walk-o15", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 13.828999999999999);
+tl.fromTo("#ft-walk-o16", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 14.119);
+tl.to("#ft-walk-o16", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 14.859);
+tl.fromTo("#ft-walk-o17", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 15.149);
+tl.to("#ft-walk-o17", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 15.649999999999999);
+tl.fromTo("#ft-walk-o18", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 16.02);
+tl.to("#ft-walk-o18", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 17.6);
+window.__timelines["ft-walk"] = tl;
+})();
+</script>
+</template>
+</body></html>

@@ -99,3 +99,7 @@ gcloud run deploy naqsha --source . --region us-central1 \
 ## Disclaimer
 
 Naqsha produces concept designs and a regulation pre-check. LDA requires building plans to be stamped by a PCATP-registered architect before submission.
+
+## License
+
+Copyright © 2026 Pivot Analytix. **All rights reserved.** This code is proprietary. It is public only so the AI Builder Cup 2026 judges can review and run it; see [LICENSE](LICENSE). No copying, reuse, redistribution or model training without written permission.

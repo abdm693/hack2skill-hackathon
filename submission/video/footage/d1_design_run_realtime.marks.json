@@ -1,0 +1,121 @@
+{
+ "name": "d1_design_run_realtime",
+ "source": "cd_concepts_design.mp4",
+ "segments": [
+  [
+   80.8,
+   364.3
+  ]
+ ],
+ "duration": 283.5,
+ "marks": [
+  {
+   "t": 0.7,
+   "label": "click Plan this one: the real design run starts"
+  },
+  {
+   "t": 3.1,
+   "label": "status: Laying out the floors"
+  },
+  {
+   "t": 54.1,
+   "label": "status: Fixing 15 issues"
+  },
+  {
+   "t": 104.6,
+   "label": "status: Fixing 5 issues Fixing 15 \u2192 5"
+  },
+  {
+   "t": 157.5,
+   "label": "status: Reviewing it like an architect Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 178.1,
+   "label": "status: Building the house in 3D \u00b7 2 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 180.4,
+   "label": "status: Building the house in 3D \u00b7 3 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 187.2,
+   "label": "status: Building the house in 3D \u00b7 4 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 194.1,
+   "label": "status: Building the house in 3D \u00b7 5 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 196.5,
+   "label": "status: Building the house in 3D \u00b7 6 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 205.7,
+   "label": "status: Building the house in 3D \u00b7 7 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 212.6,
+   "label": "status: Building the house in 3D \u00b7 9 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 217.2,
+   "label": "status: Building the house in 3D \u00b7 11 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 226.3,
+   "label": "status: Building the house in 3D \u00b7 12 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 228.6,
+   "label": "status: Building the house in 3D \u00b7 13 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 235.5,
+   "label": "status: Building the house in 3D \u00b7 15 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 237.7,
+   "label": "status: Building the house in 3D \u00b7 16 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 240.0,
+   "label": "status: Building the house in 3D \u00b7 17 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 244.7,
+   "label": "status: Building the house in 3D \u00b7 18 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 247.0,
+   "label": "status: Building the house in 3D \u00b7 19 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 249.3,
+   "label": "status: Building the house in 3D \u00b7 21 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 256.3,
+   "label": "status: Building the house in 3D \u00b7 22 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 258.5,
+   "label": "status: Building the house in 3D \u00b7 23 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 265.5,
+   "label": "status: Building the house in 3D \u00b7 24 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 267.8,
+   "label": "status: Building the house in 3D \u00b7 25 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 270.0,
+   "label": "status: Building the house in 3D \u00b7 26 parts Fixed 15 \u2192 5 \u2192 0"
+  },
+  {
+   "t": 277.2,
+   "label": "version saved (design done)"
+  }
+ ]
+}

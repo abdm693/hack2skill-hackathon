@@ -1,0 +1,531 @@
+{
+ "vo01": {
+  "id": "vo01",
+  "accepted_take": null,
+  "pass": true,
+  "duration": 13.24,
+  "final_check": {
+   "transcript": "For most families in Pakistan, a house is something you build once in a lifetime. The design still happens on paper, over weeks of revisions with a draftsman, and the plan can come back from the development authority over a single setback.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Natural delivery with an educated Pakistani accent.",
+   "blind_transcript": "For most families in Pakistan, a house is something you build once in a lifetime. The design still happens on paper over weeks of revisions with a draftsman, and the plan can come back from the development authority over a single setback.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo02": {
+  "id": "vo02",
+  "accepted_take": null,
+  "pass": true,
+  "duration": 4.36,
+  "final_check": {
+   "transcript": "Naqsha is an agentic home design studio, built on Google Cloud.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": "NUK-shah",
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear Pakistani-accented English with a calm, professional tone.",
+   "blind_transcript": "Naksha is an agentic home design studio built on Google Cloud.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": "NUK-shah"
+  }
+ },
+ "vo03": {
+  "id": "vo03",
+  "accepted_take": null,
+  "pass": true,
+  "duration": 4.622,
+  "final_check": {
+   "transcript": "It's for families planning a home, and for the architects and builders who work with them.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear, natural delivery with an educated Pakistani English accent.",
+   "blind_transcript": "It's for families planning a home, and for the architects and builders who work with them.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo04": {
+  "id": "vo04",
+  "accepted_take": 2,
+  "pass": false,
+  "duration": 15.873,
+  "final_check": {
+   "transcript": "You start with one message about your plot and your family. A Google ADK agent on Gemini three point eight Flash replies in about four seconds with the brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear Pakistani English accent with smooth, natural pacing.",
+   "blind_transcript": "You start with one message about your plot and your family. A Google ADK agent on Gemini 1.5 Flash replies in about four seconds with the brief: floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+   "similarity": 0.9524,
+   "word_diff": [
+    "replace: 'three point eight' -> 'one five'"
+   ],
+   "pass": false
+  },
+  "takes": [
+   {
+    "transcript": "You start with one message about your plot and your family. A Google RDK agent on Gemini three point eight Flash replies in about four seconds with the brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+    "missing_or_changed": [
+     "ADK replaced with RDK"
+    ],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear educated Pakistani English accent with steady, natural pacing.",
+    "blind_transcript": "You start with one message about your plot and your family. A Google RDK agent on Gemini 3.8 Flash replies in about four seconds with a brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+    "similarity": 0.9623,
+    "word_diff": [
+     "replace: 'adk' -> 'rdk'",
+     "replace: 'the' -> 'a'"
+    ],
+    "pass": false,
+    "take": 1,
+    "raw": "vo04.take1.wav",
+    "secs": 18.48
+   },
+   {
+    "transcript": "You start with one message about your plot and your family. A Google ADK agent on Gemini three point eight Flash replies in about four seconds with the brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Natural, clear modern Pakistani English accent with conversational pacing.",
+    "blind_transcript": "You start with one message about your plot and your family. A Google ADK agent on Gemini 3.8 Flash replies in about four seconds with the brief, floor by floor, including the water tank, a roof kept ready for solar, and the exact area the local authority lets you build on.",
+    "similarity": 1.0,
+    "word_diff": [],
+    "pass": true,
+    "take": 2,
+    "raw": "vo04.take2.wav",
+    "secs": 16.16
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo05": {
+  "id": "vo05",
+  "accepted_take": null,
+  "pass": true,
+  "duration": 11.172,
+  "final_check": {
+   "transcript": "Gemini three point one Flash Image then draws four exterior concepts from the same camera, so they're easy to compare. These four took twenty-three seconds, and one tap shows all of them at night.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear delivery with a mild educated Pakistani accent and steady pacing.",
+   "blind_transcript": "Gemini 3.1 Flash Image then draws four exterior concepts from the same camera, so they're easy to compare. These four took twenty-three seconds, and one tap shows all of them at night.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo06": {
+  "id": "vo06",
+  "accepted_take": null,
+  "pass": false,
+  "duration": 26.463,
+  "final_check": {
+   "transcript": "Pick one, and Gemini four Argon starts work as the architect. It lays out every floor, room by room. A rules engine checks the plan against the building bylaws and a set of livability rules: every bedroom has its own way in, the stairs reach the roof, and every drop has a railing. Argon fixes whatever fails. On this run, it went from fifteen issues to five, then to none. It then looks at a drawing of its own plan and critiques it the way an architect would.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear educated Pakistani accent with confident, natural pacing.",
+   "blind_transcript": "pick one, and Gemini 4 Argon starts work as the architect. It lays out every floor room by room. A rules engine checks the plan against the building bylaws and a set of liveability rules. Every bedroom has its own way in, the stairs reach the roof, and every drop has a railing. Argon fixes whatever fails. On this run, it went from 15 issues to five, then to none. It then looks at a drawing of its own plan and critiques it the way an architect would.",
+   "similarity": 0.9886,
+   "word_diff": [
+    "replace: 'livability' -> 'liveability'"
+   ],
+   "pass": false
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo07": {
+  "id": "vo07",
+  "accepted_take": 1,
+  "pass": true,
+  "duration": 8.075,
+  "final_check": {
+   "transcript": "This prototype uses Lahore's LDA bylaws, and this plan passed all thirty-six checks. The drawing set is ready to print, at one to one hundred.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear, educated Pakistani English accent with natural pacing and tone.",
+   "blind_transcript": "This prototype uses Lahore's LDA bylaws, and this plan passed all thirty-six checks. The drawing set is ready to print at one to one hundred.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [
+   {
+    "transcript": "This prototype uses Lahore's LDA bylaws, and this plan passed all thirty-six checks. The drawing set is ready to print at one to one hundred.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear, educated Pakistani English accent with smooth, natural pacing.",
+    "blind_transcript": "This prototype uses Lahore's LDA bylaws, and this plan passed all thirty-six checks. The drawing set is ready to print at one to one hundred.",
+    "similarity": 1.0,
+    "word_diff": [],
+    "pass": true,
+    "take": 1,
+    "raw": "vo07.take1.wav",
+    "secs": 8.44
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo08": {
+  "id": "vo08",
+  "accepted_take": null,
+  "pass": false,
+  "duration": 18.382,
+  "final_check": {
+   "transcript": "Argon then writes the house in three D as code in twenty-eight sections from the structure and the facade to the furniture in every room. Your browser assembles it live. Orbit the outside switch to night or cut away a floor to look into the furnished rooms. Any view can become a photoreal render in about ten seconds.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Delivered clearly with an educated Pakistani accent at a balanced, steady pace.",
+   "blind_transcript": "Argon then writes the house in 3D as code in twenty-eight sections, from the structure and the facade to the furniture in every room. Your browser assembles it live. Orbit the outside, switch to night, or cut away a floor to look into the furnished rooms. Any view can become a photo-real render in about ten seconds.",
+   "similarity": 0.9748,
+   "word_diff": [
+    "replace: 'photoreal' -> 'photo real'"
+   ],
+   "pass": false
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo09": {
+  "id": "vo09",
+  "accepted_take": null,
+  "pass": true,
+  "duration": 7.985,
+  "final_check": {
+   "transcript": "You can also walk through it like a game, look around the lounge, jump to the master bedroom, take the stairs, and step out onto the roof.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Natural, clear delivery with an educated Pakistani accent.",
+   "blind_transcript": "You can also walk through it like a game, look around the lounge, jump to the master bedroom, take the stairs, and step out onto the roof.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo10": {
+  "id": "vo10",
+  "accepted_take": null,
+  "pass": false,
+  "duration": 12.527,
+  "final_check": {
+   "transcript": "Anyone can pin a note to the exact spot they mean. Share a link with your client or your family, and they can comment without an account. Here, Ammi asks for a bigger kitchen, and her note shows up for the owner right away.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear, modern Pakistani English accent with smooth, natural pacing.",
+   "blind_transcript": "Anyone can pin a note to the exact spot they mean. Share a link with your client or your family, and they can comment without an account. Here, ammi asked for a bigger kitchen, and her note shows up for the owner right away.",
+   "similarity": 0.9773,
+   "word_diff": [
+    "replace: 'asks' -> 'asked'"
+   ],
+   "pass": false
+  },
+  "takes": [],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo11": {
+  "id": "vo11",
+  "accepted_take": 1,
+  "pass": true,
+  "duration": 17.529,
+  "final_check": {
+   "transcript": "Choose the notes and press Revise. A second ADK agent, also on Argon, with nine tools, reads each note, edits the plan, and runs every check again. The bedroom window gets wider, and the kitchen grows. Extending the porch would break the front setback, so the agent explains that and offers another option.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Natural and clear delivery with an educated Pakistani accent.",
+   "blind_transcript": "choose the notes, and press revise. A second ADK agent, also on Argon, with nine tools, reads each note, edits the plan, and runs every check again. The bedroom window gets wider, and the kitchen grows. Extending the porch would break the front setback, so the agent explains that and offers another option.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [
+   {
+    "transcript": "Choose the notes and press Revise. A second ADK agent, also on Argon, with nine tools, reads each note, edits the plan, and runs every check again. The bedroom window gets wider and the kitchen grows. Extending the porch would break the front setback, so the agent explains that and offers another option.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear, modern educated Pakistani accent with natural pacing and intonation.",
+    "blind_transcript": "Choose the notes and press revise. A second ADK agent, also on Argon with nine tools, reads each note, edits the plan, and runs every check again. The bedroom window gets wider, and the kitchen grows. Extending the porch would break the front setback, so the agent explains that and offers another option.",
+    "similarity": 1.0,
+    "word_diff": [],
+    "pass": true,
+    "take": 1,
+    "raw": "vo11.take1.wav",
+    "secs": 17.76
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo12": {
+  "id": "vo12",
+  "accepted_take": 2,
+  "pass": true,
+  "duration": 8.584,
+  "final_check": {
+   "transcript": "You can also type a change in plain words. Version five has the bigger kitchen and passes thirty-seven of thirty-seven bylaw checks and ten of ten livability checks.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Natural, clear delivery with an educated Pakistani English accent.",
+   "blind_transcript": "You can also type a change in plain words, version 5 has the bigger kitchen and passes thirty-seven of thirty-seven bylaw checks and ten of ten livability checks.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [
+   {
+    "transcript": "You can also type a change in plain words. A version five has the bigger kitchen, and passes thirty-seven of thirty-seven bylaw checks, and ten of ten livability checks.",
+    "missing_or_changed": [],
+    "extra_spoken": [
+     "A"
+    ],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear and natural delivery in an educated Pakistani English accent.",
+    "blind_transcript": "You can also type a change in plain words. A version five has the bigger kitchen, and passes 37 of 37 bylaw checks, and 10 of 10 livability checks.",
+    "similarity": 0.8136,
+    "word_diff": [
+     "insert: '' -> 'a'",
+     "replace: 'thirty seven' -> '37'",
+     "replace: 'thirty seven' -> '37'",
+     "replace: 'ten' -> '10'",
+     "replace: 'ten' -> '10'"
+    ],
+    "pass": false,
+    "take": 1,
+    "raw": "vo12.take1.wav",
+    "secs": 9.16
+   },
+   {
+    "transcript": "You can also type a change in plain words. Version five has the bigger kitchen and passes thirty-seven of thirty-seven bylaw checks and ten of ten livability checks.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear, natural delivery with an educated South Asian/Pakistani accent.",
+    "blind_transcript": "You can also type a change in plain words. Version 5 has the bigger kitchen and passes thirty-seven of thirty-seven bylaw checks and ten of ten livability checks.",
+    "similarity": 0.9667,
+    "word_diff": [
+     "replace: 'five' -> '5'"
+    ],
+    "pass": true,
+    "take": 2,
+    "raw": "vo12.take2.wav",
+    "secs": 8.6
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo13": {
+  "id": "vo13",
+  "accepted_take": 1,
+  "pass": true,
+  "duration": 16.196,
+  "final_check": {
+   "transcript": "On Google Cloud, one Cloud Run service hosts the app and streams the agent runs, Firestore stores projects, versions and comments, Cloud Storage keeps the images, Firebase Authentication signs people in, and Gemini runs on Vertex AI. Both agents are built with Google's Agent Development Kit.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": null,
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Clear South Asian accent with steady, professional delivery.",
+   "blind_transcript": "On Google Cloud, one Cloud Run service hosts the app and streams the agent runs, Firestore stores projects, versions, and comments, Cloud Storage keeps the images, Firebase Authentication signs people in, and Gemini runs on Vertex AI. Both agents are built with Google's Agent Development Kit,",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [
+   {
+    "transcript": "On Google Cloud, one Cloud Run service hosts the app and streams the agent runs, Firestore stores projects, versions and comments, Cloud Storage keeps the images, Firebase Authentication signs people in, and Gemini runs on Vertex AI. Both agents are built with Google's Agent Development Kit.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": null,
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear, fluent delivery with an educated Pakistani English accent.",
+    "blind_transcript": "On Google Cloud, one Cloud Run service hosts the app and streams the agent runs, Firestore stores projects, versions, and comments, Cloud Storage keeps the images, Firebase Authentication signs people in, and Gemini runs on Vertex AI. Both agents are built with Google's Agent Development Kit.",
+    "similarity": 1.0,
+    "word_diff": [],
+    "pass": true,
+    "take": 1,
+    "raw": "vo13.take1.wav",
+    "secs": 16.2
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": null
+  }
+ },
+ "vo14": {
+  "id": "vo14",
+  "accepted_take": 1,
+  "pass": true,
+  "duration": 17.117,
+  "final_check": {
+   "transcript": "Families can see and walk through their home before they build it, and architects and builders start from a design that has already been checked. Because the agents read bylaws as data, adding a new city starts with adding its rules. We're starting in Pakistan, and Naqsha is live today.",
+   "missing_or_changed": [],
+   "extra_spoken": [],
+   "style_direction_spoken": false,
+   "naqsha_said": "NUK-shah",
+   "naqsha_ok": true,
+   "artefacts": [],
+   "delivery": "Natural, clear delivery with an educated Pakistani English accent.",
+   "blind_transcript": "Families can see and walk through their home before they build it, and architects and builders start from a design that has already been checked. Because the agents read bylaws as data, adding a new city starts with adding its rules. We're starting in Pakistan, and Naqsha is live today.",
+   "similarity": 1.0,
+   "word_diff": [],
+   "pass": true
+  },
+  "takes": [
+   {
+    "transcript": "Families can see and walk through their home before they build it, and architects and builders start from a design that has already been checked. Because the agents read bylaws as data, adding a new city starts with adding its rules. We're starting in Pakistan, and Naqsha is live today.",
+    "missing_or_changed": [],
+    "extra_spoken": [],
+    "style_direction_spoken": false,
+    "naqsha_said": "NUK-shah",
+    "naqsha_ok": true,
+    "artefacts": [],
+    "delivery": "Clear, modern Pakistani English delivery with natural pacing.",
+    "blind_transcript": "Families can see and walk through their home before they build it, and architects and builders start from a design that has already been checked. Because the agents read bylaws as data, adding a new city starts with adding its rules. We're starting in Pakistan, and Naqsha is live today.",
+    "similarity": 1.0,
+    "word_diff": [],
+    "pass": true,
+    "take": 1,
+    "raw": "vo14.take1.wav",
+    "secs": 17.24
+   }
+  ],
+  "consensus": {
+   "issues": [],
+   "pass": true,
+   "naqsha_said": "NUK-shah"
+  }
+ }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "x_bonus_villa_orbit_day_night",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/x_bonus_villa_orbit_day_night.mp4",
+  "frames": 2464,
+  "span": 70,
+  "wall": 70,
+  "duration": 70,
+  "cut": 0,
+  "marks": [
+    {
+      "t": 3.2,
+      "label": "open the 1 kanal Spanish villa sample (copy)"
+    },
+    {
+      "t": 14.7,
+      "label": "villa built: tiled roofs, rooftop solar"
+    },
+    {
+      "t": 16.7,
+      "label": "slow 360 orbit (day)"
+    },
+    {
+      "t": 50.8,
+      "label": "Night"
+    },
+    {
+      "t": 55.7,
+      "label": "night orbit"
+    }
+  ]
+}

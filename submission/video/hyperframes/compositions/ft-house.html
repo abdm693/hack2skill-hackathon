@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body>
+<template id="ft-house-template">
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Noto Nastaliq Urdu"; src: url("assets/fonts/NotoNastaliqUrdu.ttf") format("truetype"); font-weight: 400 700; font-style: normal; }
+
+#ft-house { position:absolute; inset:0; width:100%; height:100%; font-family:"Geist", sans-serif; color:#111113; }
+#ft-house .topbar { position:absolute; left:128px; top:34px; width:1664px; height:66px; display:flex; align-items:center; gap:16px; }
+#ft-house .chip { display:flex; align-items:center; gap:14px; height:60px; padding:0 26px 0 22px; border-radius:999px; background:#111113; color:#F5F5F7; font-size:32px; font-weight:600; letter-spacing:0.01em; box-shadow:0 10px 30px -12px rgba(17,17,19,.5); white-space:nowrap; }
+#ft-house .chip .dot { width:16px; height:16px; border-radius:50%; background:#FF453A; box-shadow:0 0 0 5px rgba(255,69,58,.22); }
+#ft-house .chip .muted { color:#C9C9D1; font-weight:500; }
+#ft-house .bslot { position:relative; width:430px; height:60px; }
+#ft-house .badge { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#2747F5; color:#fff; font-size:32px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-house .badge.rt { background:#0E7A55; }
+#ft-house .badge.sl { background:#46464B; }
+#ft-house .badge svg, #ft-house .clock svg { width:30px; height:30px; flex:none; }
+#ft-house .cslot { position:relative; width:370px; height:60px; }
+#ft-house .clock { position:absolute; left:0; top:0; height:60px; display:flex; align-items:center; gap:10px; padding:0 22px 0 16px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:32px; font-weight:600; border:2px solid #CFCFC8; white-space:nowrap; opacity:0; }
+#ft-house .clock .cv { font-family:"Geist Mono", monospace; font-variant-numeric:tabular-nums; font-weight:600; }
+#ft-house .clock .cl { color:#46464B; font-weight:500; }
+#ft-house .chap { margin-left:auto; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-house .win { position:absolute; left:128px; top:118px; width:1664px; height:936px; border-radius:28px; overflow:hidden; background:#F6F6F3; box-shadow:0 0 0 2px rgba(17,17,19,.07), 0 40px 90px -30px rgba(17,17,19,.42); transform-origin:50% 50%; }
+#ft-house .cam { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; will-change:transform; }
+#ft-house .vid { position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; }
+#ft-house .ring { position:absolute; border:5px solid #2747F5; border-radius:16px; box-shadow:0 0 0 8px rgba(39,71,245,.16); opacity:0; }
+#ft-house .lower { position:absolute; max-width:1180px; padding:26px 34px 28px; border-radius:22px; background:rgba(17,17,19,.86); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-house .lower .ai-tag { display:inline-flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; font-weight:500; color:#9DB0FF; margin-bottom:8px; }
+#ft-house .lower .ai-tag svg { width:30px; height:30px; }
+#ft-house .lower .lt-title { font-size:44px; font-weight:650; letter-spacing:-0.02em; line-height:1.12; }
+#ft-house .lower .lt-sub { font-size:32px; font-weight:450; color:#C9C9D1; margin-top:8px; line-height:1.25; }
+#ft-house .callout { position:absolute; display:flex; align-items:flex-start; gap:18px; max-width:1100px; padding:22px 30px 24px 26px; border-radius:20px; background:#FFFFFF; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-house .callout .cdot { width:18px; height:18px; border-radius:50%; margin-top:14px; flex:none; box-shadow:0 0 0 6px rgba(39,71,245,.14); }
+#ft-house .callout .c-text { font-size:38px; font-weight:620; letter-spacing:-0.015em; line-height:1.18; }
+#ft-house .callout .c-sub { font-size:32px; font-weight:450; color:#46464B; margin-top:6px; line-height:1.25; }
+#ft-house .callout.t-fail { box-shadow:0 0 0 3px rgba(200,40,30,.55), 0 26px 60px -22px rgba(17,17,19,.45); }
+#ft-house .callout.t-fail .c-text { color:#A3241B; }
+#ft-house .callout.t-pass .c-text { color:#0B6446; }
+#ft-house .stat { position:absolute; padding:26px 40px 30px; border-radius:26px; background:#2747F5; color:#fff; box-shadow:0 30px 70px -24px rgba(39,71,245,.6); opacity:0; transform-origin:100% 100%; }
+#ft-house .stat .s-big { font-size:124px; font-weight:700; letter-spacing:-0.05em; line-height:0.95; font-variant-numeric:tabular-nums; }
+#ft-house .stat .s-label { font-size:34px; font-weight:500; color:#DCE3FF; margin-top:10px; }
+#ft-house .log { position:absolute; width:720px; padding:24px 28px 18px; border-radius:22px; background:rgba(17,17,19,.88); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); opacity:0; }
+#ft-house .log .lg-title { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:32px; color:#9DB0FF; margin-bottom:12px; }
+#ft-house .log .lg-title svg { width:30px; height:30px; }
+#ft-house .log .lg-line { display:flex; align-items:flex-start; gap:14px; font-size:32px; line-height:1.25; padding:6px 0; opacity:0; }
+#ft-house .log .lg-dot { width:14px; height:14px; border-radius:50%; background:#7D93FF; margin-top:13px; flex:none; }
+#ft-house .rules { position:absolute; padding:24px 28px 14px; border-radius:22px; background:#FFFFFF; color:#111113; box-shadow:0 0 0 2px rgba(17,17,19,.08), 0 26px 60px -22px rgba(17,17,19,.45); opacity:0; }
+#ft-house .rules .ru-head { display:flex; align-items:center; gap:10px; font-size:36px; font-weight:650; letter-spacing:-0.015em; }
+#ft-house .rules .ru-head svg { width:30px; height:30px; color:#2747F5; }
+#ft-house .rules .ru-tag { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:30px; font-weight:500; }
+#ft-house .rules .ru-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 0; border-top:2px solid #ECECE8; margin-top:10px; }
+#ft-house .rules .ru-k { font-size:32px; font-weight:500; color:#46464B; white-space:nowrap; }
+#ft-house .rules .ru-vs { position:relative; display:block; flex:1; height:42px; }
+#ft-house .rules .ru-v { position:absolute; right:0; top:0; font-family:"Geist Mono", monospace; font-size:31px; font-weight:600; white-space:nowrap; opacity:0; }
+#ft-house .mask { position:absolute; display:flex; align-items:center; gap:12px; padding:0 20px 0 78px; border-radius:999px; background:#FFFFFF; color:#111113; font-size:26px; font-weight:620; letter-spacing:-0.01em; white-space:nowrap; box-shadow:0 0 0 2px rgba(17,17,19,.10), 0 8px 22px -10px rgba(17,17,19,.45); opacity:0; }
+#ft-house .mask .mk-dot { width:12px; height:12px; border-radius:50%; background:#2747F5; flex:none; }
+#ft-house .callout .c-tag { display:inline-block; margin:2px 0 8px; padding:3px 14px; border-radius:999px; background:#EEF1FE; color:#1F3BD0; font-family:"Geist Mono", monospace; font-size:28px; font-weight:500; }
+#ft-house .log .lg-tool { font-family:"Geist Mono", monospace; font-size:28px; color:#9DB0FF; margin-top:2px; }
+#ft-house .steps { position:absolute; left:36px; top:36px; display:flex; gap:10px; opacity:0; }
+#ft-house .steps .sp { display:flex; align-items:center; gap:10px; height:56px; padding:0 20px 0 12px; border-radius:999px; border:2px solid #DADAD4; background:#FFFFFF; color:#6E6E73; font-size:30px; font-weight:600; white-space:nowrap; box-shadow:0 10px 26px -14px rgba(17,17,19,.45); }
+#ft-house .steps .sp-n { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(17,17,19,.08); font-family:"Geist Mono", monospace; font-size:24px; }
+#ft-house .quote { position:absolute; padding:24px 32px 26px; border-radius:22px; background:rgba(17,17,19,.9); color:#F5F5F7; box-shadow:0 24px 60px -20px rgba(0,0,0,.55); clip-path:inset(0 100% 0 0 round 22px); }
+#ft-house .quote .q-tag { display:flex; align-items:center; gap:10px; font-family:"Geist Mono", monospace; font-size:30px; color:#9DB0FF; }
+#ft-house .quote .q-tag svg { width:28px; height:28px; }
+#ft-house .quote .q-title { font-size:40px; font-weight:650; letter-spacing:-0.02em; margin-top:6px; }
+#ft-house .quote .q-body { font-size:34px; line-height:1.28; color:#FFFFFF; margin-top:12px; padding-left:20px; border-left:4px solid #7D93FF; }
+#ft-house .quote .q-foot { font-size:30px; color:#C9C9D1; margin-top:10px; }
+#ft-house .statement { position:absolute; left:0; right:0; bottom:0; padding:60px 64px 56px; background:linear-gradient(180deg, rgba(17,17,19,0) 0%, rgba(17,17,19,.78) 55%); opacity:0; }
+#ft-house .statement .st-text { font-size:84px; font-weight:650; letter-spacing:-0.035em; color:#fff; line-height:1.02; }
+</style>
+<div id="ft-house" data-composition-id="ft-house" data-width="1920" data-height="1080" data-duration="22.948">
+  <div class="topbar">
+    <div class="chip" id="ft-house-chip"><span class="dot" id="ft-house-live"></span><span>LIVE</span><span class="muted">· real product</span></div>
+    <div class="bslot"><div class="badge" id="ft-house-b0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2×</span></div><div class="badge" id="ft-house-b1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 9×</span></div><div class="badge" id="ft-house-b2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 3×</span></div><div class="badge" id="ft-house-b3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 1.6×</span></div><div class="badge" id="ft-house-b4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.4×</span></div><div class="badge" id="ft-house-b5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6V6z"/><path d="M13 6l7 6-7 6V6z"/></svg><span>sped up 2.7×</span></div></div>
+    <div class="cslot"><div class="clock" id="ft-house-c0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg><span class="cv" id="ft-house-c0-v">0:00</span><span class="cl">render</span></div></div>
+    <div class="chap" id="ft-house-chap">04 · Inside and out</div>
+  </div>
+  <div class="win" id="ft-house-win">
+    <div class="cam" id="ft-house-cam" data-layout-allow-overflow>
+      <video id="ft-house-v0" src="assets/footage/d3_live_house_first_look.mp4" data-start="0.0" data-duration="4.7" data-media-start="3.2" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.0" class="vid"></video>
+<video id="ft-house-v1" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="4.7" data-duration="2.956" data-media-start="11.0" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="9.0" class="vid"></video>
+<video id="ft-house-v2" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="7.656" data-duration="4.6" data-media-start="52.7" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="3.0" class="vid"></video>
+<video id="ft-house-v3" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="12.256" data-duration="2.562" data-media-start="81.5" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="1.6" class="vid"></video>
+<video id="ft-house-v4" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="14.818" data-duration="2.167" data-media-start="92.25" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="0.3" class="vid"></video>
+<video id="ft-house-v5" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="16.985" data-duration="4.333" data-media-start="100.6" data-track-index="1" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.4" class="vid"></video>
+<video id="ft-house-v6" src="assets/footage/e_sample_orbit_night_render.mp4" data-start="21.318" data-duration="1.63" data-media-start="115.0" data-track-index="0" data-hf-media-start-basis="local" muted playsinline data-playback-rate="2.7" class="vid"></video>
+      <div class="mask" id="ft-house-o0" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-house-o1" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-house-o2" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div><div class="mask" id="ft-house-o3" data-layout-allow-occlusion style="left:10px;top:10px;width:420px;height:60px;"><span class="mk-dot"></span>Sample home · 10 marla</div>
+    </div>
+    <div class="lower ai" id="ft-house-o4" style="left:36px;bottom:36px;"><div class="lt-in"><span class="ai-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.9 2.6 7.6 7.8 8.6v.8c-5.2 1-7.2 3.7-7.8 8.6h-.8c-.6-4.9-2.6-7.6-7.8-8.6v-.8c5.2-1 7.2-3.7 7.8-8.6z"/></svg>Agent at work</span><div class="lt-title">Written as code by Gemini 4 Argon</div><div class="lt-sub">28 sections · structure, facade, furniture in every room · assembled live</div></div></div><div class="callout t-ink" id="ft-house-o5" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Orbit the outside</div><div class="c-sub">neighbours ghost out of the way</div></div></div><div class="callout t-ink" id="ft-house-o6" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Night: every room lit from inside</div><div class="c-sub">plus the garden and street lights</div></div></div><div class="callout t-ink" id="ft-house-o7" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">Ground floor, cut away</div><div class="c-sub">drawing room, TV lounge and dining, both kitchens, parents’ bedroom</div></div></div><div class="callout t-ink" id="ft-house-o8" style="left:36px;bottom:36px;"><span class="cdot" style="background:#2747F5"></span><div><div class="c-text">First floor, cut away</div><div class="c-sub">three bedrooms and the family lounge, furnished</div></div></div><div class="lower ai" id="ft-house-o9" style="left:36px;bottom:36px;"><div class="lt-in"><span class="ai-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.9 2.6 7.6 7.8 8.6v.8c-5.2 1-7.2 3.7-7.8 8.6h-.8c-.6-4.9-2.6-7.6-7.8-8.6v-.8c5.2-1 7.2-3.7 7.8-8.6z"/></svg>AI at work</span><div class="lt-title">Render this view · Gemini 3.1 Flash Image</div><div class="lt-sub">a photoreal render of this exact view</div></div></div><div class="stat" id="ft-house-o10" style="right:36px;bottom:36px;"><div class="s-big">9.5 s</div><div class="s-label">AI render of the exact view</div></div>
+  </div>
+</div>
+<script>
+(function(){
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#ft-house-win", {scale:1.035}, {scale:1, duration:0.7, ease:"power3.out"}, 0);
+tl.fromTo("#ft-house-chip", {scale:0.94}, {scale:1, duration:0.35, ease:"back.out(1.7)"}, 0);
+tl.fromTo("#ft-house-chap", {opacity:0, x:20}, {opacity:1, x:0, duration:0.4, ease:"power3.out"}, 0.25);
+tl.fromTo("#ft-house-live", {opacity:1}, {opacity:0.35, duration:0.6, repeat:37, yoyo:true, ease:"sine.inOut"}, 0);
+const cam = document.getElementById("ft-house-cam");
+tl.set(cam, {x:-99.84, y:-75.57, scale:0.97067, transformOrigin:"0 0"}, 0);
+tl.set(cam, {x:-99.84, y:-75.57, scale:0.97067}, 0.0);
+tl.to(cam, {x:-199.68, y:-133.81, scale:1.07467, duration:4.6499999999999995, ease:"none"}, 0.02);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 4.7);
+tl.to(cam, {x:-66.56, y:-37.44, scale:0.936, duration:2.905555555555556, ease:"none"}, 4.72);
+tl.set(cam, {x:-161.89, y:-60.67, scale:1.05733}, 7.656);
+tl.to(cam, {x:-275.95, y:-85.97, scale:1.17867, duration:4.549999999999999, ease:"none"}, 7.676);
+tl.set(cam, {x:-710.84, y:-247.52, scale:1.49067}, 12.256);
+tl.to(cam, {x:-782.6, y:-280.8, scale:1.56, duration:4.679166666666682, ease:"none"}, 12.276);
+tl.set(cam, {x:0.0, y:0.0, scale:0.86667}, 16.985);
+tl.to(cam, {x:-116.48, y:-85.28, scale:0.988, duration:1.2, ease:"power2.inOut"}, 17.585);
+tl.set(cam, {x:-116.48, y:-85.28, scale:0.988}, 21.318);
+tl.fromTo("#ft-house-b0", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 0.0);
+tl.to("#ft-house-b0", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 4.54);
+tl.fromTo("#ft-house-b1", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 4.7);
+tl.to("#ft-house-b1", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 7.4959999999999996);
+tl.fromTo("#ft-house-b2", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 7.656);
+tl.to("#ft-house-b2", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 12.096);
+tl.fromTo("#ft-house-b3", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 12.256);
+tl.to("#ft-house-b3", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 14.658);
+tl.fromTo("#ft-house-b4", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 16.985);
+tl.to("#ft-house-b4", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 21.158);
+tl.fromTo("#ft-house-b5", {opacity:0, y:10}, {opacity:1, y:0, duration:0.22, ease:"power3.out"}, 21.318);
+tl.to("#ft-house-b5", {opacity:0, y:-8, duration:0.16, ease:"power2.in"}, 22.788);
+(function(){ const el=document.getElementById("ft-house-c0-v"); const mp=[[17.11, 0.0], [21.068, 9.5]]; const fmt="sec";
+  const f=(x)=>{ let v; if(x<=mp[0][0]) v=mp[0][1]; else if(x>=mp[mp.length-1][0]) v=mp[mp.length-1][1]; else { for(let i=0;i<mp.length-1;i++){ if(x>=mp[i][0]&&x<=mp[i+1][0]){ const u=(x-mp[i][0])/(mp[i+1][0]-mp[i][0]); v=mp[i][1]+u*(mp[i+1][1]-mp[i][1]); break; } } }
+    if(fmt==="sec") return v.toFixed(1)+" s"; const s=Math.round(v); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+  const p={t:0}; tl.fromTo(p,{t:0},{t:22.948, duration:22.948, ease:"none", onUpdate:()=>{ el.textContent=f(p.t); }},0); })();
+tl.fromTo("#ft-house-c0", {opacity:0, x:-12}, {opacity:1, x:0, duration:0.25, ease:"power3.out"}, 16.985);
+tl.to("#ft-house-c0", {opacity:0, duration:0.2}, 22.318);
+tl.set("#ft-house-o0", {opacity:1}, 4.7);
+tl.set("#ft-house-o0", {opacity:0}, 7.656);
+tl.set("#ft-house-o1", {opacity:1}, 7.656);
+tl.set("#ft-house-o1", {opacity:0}, 12.256);
+tl.set("#ft-house-o2", {opacity:1}, 12.256);
+tl.set("#ft-house-o2", {opacity:0}, 14.818);
+tl.set("#ft-house-o3", {opacity:1}, 14.818);
+tl.set("#ft-house-o3", {opacity:0}, 16.985);
+tl.fromTo("#ft-house-o4", {clipPath:"inset(0 100% 0 0 round 22px)", x:-24}, {clipPath:"inset(0 0% 0 0 round 22px)", x:0, duration:0.55, ease:"power3.out"}, 0.2);
+tl.fromTo("#ft-house-o4 .lt-in > *", {opacity:0, y:14}, {opacity:1, y:0, duration:0.4, stagger:0.08, ease:"power2.out"}, 0.35);
+tl.to("#ft-house-o4", {clipPath:"inset(0 0% 100% 0 round 22px)", duration:0.35, ease:"power2.in"}, 4.25);
+tl.fromTo("#ft-house-o5", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 4.9);
+tl.to("#ft-house-o5", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 7.386);
+tl.fromTo("#ft-house-o6", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 7.756);
+tl.to("#ft-house-o6", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 11.985999999999999);
+tl.fromTo("#ft-house-o7", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 12.406);
+tl.to("#ft-house-o7", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 14.548);
+tl.fromTo("#ft-house-o8", {opacity:0, y:22, scale:0.96}, {opacity:1, y:0, scale:1, duration:0.42, ease:"back.out(1.6)"}, 14.868);
+tl.to("#ft-house-o8", {opacity:0, y:12, duration:0.22, ease:"power2.in"}, 16.715);
+tl.fromTo("#ft-house-o9", {clipPath:"inset(0 100% 0 0 round 22px)", x:-24}, {clipPath:"inset(0 0% 0 0 round 22px)", x:0, duration:0.55, ease:"power3.out"}, 17.285);
+tl.fromTo("#ft-house-o9 .lt-in > *", {opacity:0, y:14}, {opacity:1, y:0, duration:0.4, stagger:0.08, ease:"power2.out"}, 17.435);
+tl.to("#ft-house-o9", {clipPath:"inset(0 0% 100% 0 round 22px)", duration:0.35, ease:"power2.in"}, 20.668);
+tl.fromTo("#ft-house-o10", {opacity:0, scale:0.8, y:30}, {opacity:1, scale:1, y:0, duration:0.55, ease:"back.out(1.8)"}, 21.168);
+tl.fromTo("#ft-house-o10 .s-label", {opacity:0, x:-16}, {opacity:1, x:0, duration:0.4, ease:"power2.out"}, 21.418);
+tl.to("#ft-house-o10", {opacity:0, scale:0.96, duration:0.25, ease:"power2.in"}, 22.598);
+window.__timelines["ft-house"] = tl;
+})();
+</script>
+</template>
+</body></html>

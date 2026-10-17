@@ -1,0 +1,146 @@
+{
+ "project": "p_b256a2355e3d",
+ "version": "v_06b127f9f6b2",
+ "sections": [
+  {
+   "name": "structure",
+   "layer": "structure",
+   "code": "// Modern Contemporary 10-marla in Johar Town: crisp white plaster, flamed grey granite portal,\n// matte black aluminium frames, frameless glass railings, white marble reception floors and warm wood bedrooms.\ns.structure({\n  exterior_wall: { preset: \"plaster_white\", color: \"#f4f3ef\" },\n  interior_wall: { preset: \"paint\", color: \"#f3efe8\" },\n  ceiling: { preset: \"paint\", color: \"#fbfaf7\" },\n  floors: {\n    default: \"porcelain_tile\",\n    drawing: \"marble_white\",\n    lounge: \"marble_white\",\n    stair: \"marble_white\",\n    corridor: \"marble_white\",\n    master_bedroom: \"wood_floor_walnut\",\n    bedroom: \"wood_floor_oak\",\n    dressing: \"wood_floor_oak\",\n    kitchen: { preset: \"porcelain_tile\", color: \"#dcd7ce\" },\n    dirty_kitchen: { preset: \"ceramic_tile\", color: \"#cfc9be\" },\n    bath: \"ceramic_tile\",\n    balcony: { preset: \"porcelain_tile\", color: \"#b8b5ae\" },\n    terrace: { preset: \"porcelain_tile\", color: \"#c2bdb4\" },\n    porch: { preset: \"paving\", color: \"#7f8082\" }\n  },\n  window_frame: \"metal_black\",\n  door: \"wood_walnut\",\n  glass: \"glass_clear\",\n  railing: \"glass\",\n  boundary_wall: { preset: \"plaster_white\", color: \"#f0eee9\" },\n  gate: \"metal_black\",\n  plinth: { preset: \"stone_cladding\", color: \"#7d7f82\" }\n});\n"
+  },
+  {
+   "name": "facade_upper_portal",
+   "layer": "facade",
+   "code": "// Bold projecting flamed grey granite picture-frame portal across the first-floor front,\n// with vertical walnut-toned aluminium fins on the left and a wood-lined soffit over the balcony.\nconst f1 = s.plan.levels.find((l) => l.id === \"first\");\nconst f1Bot = f1.elevation_ft;\nconst f1Top = f1.elevation_ft + f1.height_ft;\n\ns.facade.frame({\n  side: \"front\",\n  from_x_ft: 3.8,\n  to_x_ft: 30.0,\n  from_h_ft: f1Bot - 0.6,\n  to_h_ft: f1Top + 1.2,\n  thickness_ft: 1.5,\n  depth_ft: 2.2,\n  material: { preset: \"stone_cladding\", color: \"#8a8c8e\", roughness: 0.75 }\n});\n\ns.facade.fins({\n  side: \"front\",\n  from_x_ft: 5.4,\n  to_x_ft: 13.8,\n  from_h_ft: f1Bot + 0.9,\n  to_h_ft: f1Top - 0.3,\n  count: 14,\n  width_ft: 0.25,\n  depth_ft: 0.65,\n  material: { preset: \"wood_walnut\", color: \"#5c4230\" }\n});\n\ns.facade.canopy({\n  rect: { x: 14.0, y: 8.2, w: 15.6, d: 5.8 },\n  h_ft: f1Top - 0.1,\n  thickness_ft: 0.6,\n  material: { preset: \"wood_walnut\", color: \"#5c4230\" },\n  downlights: true\n});\n\ns.facade.led_strip({\n  side: \"front\",\n  from_x_ft: 5.2,\n  to_x_ft: 28.6,\n  h_ft: f1Top - 0.35,\n  color: \"#ffd9a6\"\n});\n"
+  },
+  {
+   "name": "facade_ground_accents",
+   "layer": "facade",
+   "code": "// Ground floor grey granite accent piers between the drawing room windows, stepped white parapet band,\n// and warm architectural wall washers.\nconst g = s.plan.levels.find((l) => l.id === \"ground\");\nconst f1 = s.plan.levels.find((l) => l.id === \"first\");\nconst gBot = g.elevation_ft;\nconst gTop = g.elevation_ft + g.height_ft;\nconst roofTop = f1.elevation_ft + f1.height_ft + 3.5;\n\ns.facade.cladding({\n  side: \"front\",\n  from_x_ft: 4.6,\n  to_x_ft: 7.4,\n  from_h_ft: gBot,\n  to_h_ft: gTop - 0.6,\n  depth_ft: 0.25,\n  material: { preset: \"stone_cladding\", color: \"#8a8c8e\" }\n});\n\ns.facade.cladding({\n  side: \"front\",\n  from_x_ft: 0.0,\n  to_x_ft: 3.8,\n  from_h_ft: gBot,\n  to_h_ft: roofTop + 0.8,\n  depth_ft: 0.2,\n  material: { preset: \"plaster_white\", color: \"#f7f6f2\" }\n});\n\ns.facade.canopy({\n  rect: { x: 0.0, y: 8.5, w: 17.0, d: 1.5 },\n  h_ft: gTop - 0.2,\n  thickness_ft: 0.7,\n  material: { preset: \"plaster_white\", color: \"#f4f3ef\" },\n  downlights: true\n});\n\ns.facade.wall_light({ side: \"front\", x_ft: 6.0, h_ft: 7.5, color: \"#ffd9a8\", intensity: 1.4 });\ns.facade.wall_light({ side: \"front\", x_ft: 16.2, h_ft: 7.5, color: \"#ffd9a8\", intensity: 1.4 });\ns.facade.wall_light({ side: \"front\", x_ft: 29.2, h_ft: 8.0, color: \"#ffd9a8\", intensity: 1.4 });\n"
+  },
+  {
+   "name": "facade_boundary",
+   "layer": "facade",
+   "code": "// Front boundary wall details matching the concept: horizontal timber-slat inset panel over a grey granite base,\n// plus stone-clad gate piers with lantern caps.\nconst teak = s.mat({ preset: \"wood_teak\", color: \"#7c4d2b\" });\nconst granite = s.mat({ preset: \"stone_cladding\", color: \"#858789\" });\nconst metal = s.mat(\"metal_black\");\n\nconst basePanel = new THREE.Mesh(new THREE.BoxGeometry(s.ft(10.5), s.ft(1.6), s.ft(0.14)), granite);\nbasePanel.position.copy(s.toWorld(9.8, -0.38, 1.1));\ns.add(basePanel, { layer: \"facade\", kind: \"boundary_wall:panel\", label: \"Granite boundary base\" });\n\nfor (let i = 0; i < 5; i++) {\n  const slat = new THREE.Mesh(new THREE.BoxGeometry(s.ft(10.5), s.ft(0.28), s.ft(0.12)), teak);\n  slat.position.copy(s.toWorld(9.8, -0.38, 2.15 + i * 0.34));\n  s.add(slat, { layer: \"facade\", kind: \"boundary_wall:panel\", label: \"Teak boundary slat\" });\n}\n\nfor (const px of [15.2, 18.2, 28.8]) {\n  const pier = new THREE.Mesh(new THREE.BoxGeometry(s.ft(1.2), s.ft(5.2), s.ft(1.1)), granite);\n  pier.position.copy(s.toWorld(px, 0.0, 2.6));\n  s.add(pier, { layer: \"facade\", kind: \"boundary_wall:pier\", label: \"Granite gate pier\" });\n\n  const cap = new THREE.Mesh(new THREE.BoxGeometry(s.ft(0.7), s.ft(0.5), s.ft(0.7)), metal);\n  cap.position.copy(s.toWorld(px, 0.0, 5.45));\n  s.add(cap, { layer: \"facade\", kind: \"boundary_wall:light\", label: \"Gate pier lantern\" });\n}\n"
+  },
+  {
+   "name": "interior_main",
+   "layer": "interior",
+   "code": "// Recessed false ceilings with warm perimeter coves and feature walls in the main reception rooms and bedrooms.\ns.interior.false_ceiling({ room: \"g_drawing\", drop_ft: 0.75, inset_ft: 2.0, cove_color: \"#ffd8a6\" });\ns.interior.downlights({ room: \"g_drawing\", rows: 2, cols: 3 });\ns.interior.accent_wall({ room: \"g_drawing\", side: \"left\", material: \"travertine\" });\n\ns.interior.false_ceiling({ room: \"g_lounge\", drop_ft: 0.75, inset_ft: 2.0, cove_color: \"#ffd8a6\" });\ns.interior.downlights({ room: \"g_lounge\", rows: 2, cols: 4 });\ns.interior.accent_wall({ room: \"g_lounge\", side: \"front\", material: { preset: \"wood_walnut\", color: \"#5a3d2b\" } });\n\ns.interior.false_ceiling({ room: \"g_bed1\", drop_ft: 0.65, inset_ft: 1.6, cove_color: \"#ffd8a6\" });\ns.interior.accent_wall({ room: \"g_bed1\", side: \"left\", material: { preset: \"wood_oak\", color: \"#8c6947\" } });\n\ns.interior.false_ceiling({ room: \"f_master\", drop_ft: 0.7, inset_ft: 1.6, cove_color: \"#ffd8a6\" });\ns.interior.downlights({ room: \"f_master\", rows: 2, cols: 2 });\ns.interior.accent_wall({ room: \"f_master\", side: \"left\", material: { preset: \"wood_walnut\", color: \"#543827\" } });\n\ns.interior.false_ceiling({ room: \"f_lounge\", drop_ft: 0.7, inset_ft: 2.0, cove_color: \"#ffd8a6\" });\ns.interior.downlights({ room: \"f_lounge\", rows: 2, cols: 3 });\ns.interior.accent_wall({ room: \"f_lounge\", side: \"front\", material: \"travertine\" });\n"
+  },
+  {
+   "name": "furnish_g_porch",
+   "layer": "furniture",
+   "code": "// Single-car porch on the right: dark grey SUV parked in the bay, keeping the main door and drawing door clear.\ns.furnish(\"car_suv\", { room: \"g_porch\", at: [7.0, 9.0], color: \"#3d3f42\" });\ns.furnish(\"plant_floor\", { room: \"g_porch\", at: [11.8, 16.5] });\n"
+  },
+  {
+   "name": "furnish_g_drawing",
+   "layer": "furniture",
+   "code": "// Formal drawing room (17 x 18 ft): 3-seater sofa against the left travertine wall, 2-seater on the back wall,\n// armchairs facing a marble coffee table, console on the right pier, and sheer curtains on the front window.\ns.furnish(\"rug\", { room: \"g_drawing\", at: [7.8, 9.5], size: { w_ft: 10.0, d_ft: 8.0 }, color: \"#d4c8b8\" });\ns.furnish(\"sofa_3\", { room: \"g_drawing\", against: \"left\", along_ft: 9.0, color: \"#dcd3c6\" });\ns.furnish(\"side_table\", { room: \"g_drawing\", against: \"left\", along_ft: 4.5 });\ns.furnish(\"table_lamp\", { room: \"g_drawing\", against: \"left\", along_ft: 4.5 });\ns.furnish(\"painting\", { room: \"g_drawing\", against: \"left\", along_ft: 9.0, size: { w_ft: 4.5, h_ft: 2.8 } });\ns.furnish(\"sofa_2\", { room: \"g_drawing\", against: \"back\", along_ft: 6.5, color: \"#dcd3c6\" });\ns.furnish(\"armchair\", { room: \"g_drawing\", at: [11.5, 6.5], rot_deg: -110, color: \"#7a4e32\" });\ns.furnish(\"armchair\", { room: \"g_drawing\", at: [11.5, 11.5], rot_deg: -75, color: \"#7a4e32\" });\ns.furnish(\"coffee_table\", { room: \"g_drawing\", at: [7.5, 9.5], size: { w_ft: 4.0, d_ft: 2.4 }, material: \"marble_white\", variant: \"marble top\" });\ns.furnish(\"console_table\", { room: \"g_drawing\", against: \"right\", along_ft: 14.0, size: { w_ft: 3.4, d_ft: 1.2 } });\ns.furnish(\"mirror_wall\", { room: \"g_drawing\", against: \"right\", along_ft: 14.0, size: { w_ft: 2.4, h_ft: 2.4 }, variant: \"round\" });\ns.furnish(\"curtains\", { room: \"g_drawing\", against: \"front\", along_ft: 5.5, size: { w_ft: 8.5 }, color: \"#eae3d5\" });\ns.furnish(\"chandelier\", { room: \"g_drawing\", at: [7.8, 9.5] });\ns.furnish(\"ceiling_fan\", { room: \"g_drawing\", at: [7.8, 9.5] });\ns.furnish(\"ac_split\", { room: \"g_drawing\", against: \"left\", along_ft: 14.0 });\ns.furnish(\"plant_floor\", { room: \"g_drawing\", at: [1.5, 1.5] });\n"
+  },
+  {
+   "name": "furnish_g_lounge",
+   "layer": "furniture",
+   "code": "// Ground TV lounge & dining (22 x 14.75 ft): L-sofa and coffee table in the central seating zone,\n// 6-seater marble dining table on the right near the sliding door and open kitchen.\ns.furnish(\"rug\", { room: \"g_lounge\", at: [6.5, 7.5], size: { w_ft: 8.5, d_ft: 7.0 }, color: \"#d5cdc0\" });\ns.furnish(\"sofa_l\", { room: \"g_lounge\", at: [6.5, 5.2], rot_deg: 0, size: { w_ft: 8.0, d_ft: 5.5 }, color: \"#b8afa0\" });\ns.furnish(\"coffee_table\", { room: \"g_lounge\", at: [6.5, 8.8], size: { w_ft: 3.6, d_ft: 2.0 }, material: \"wood_walnut\" });\ns.furnish(\"tv_unit\", { room: \"g_lounge\", against: \"back\", along_ft: 6.5, size: { w_ft: 5.5, d_ft: 1.4 } });\ns.furnish(\"tv\", { room: \"g_lounge\", against: \"back\", along_ft: 6.5, size: { w_ft: 4.2 } });\ns.furnish(\"dining_table_6\", { room: \"g_lounge\", at: [16.5, 7.5], rot_deg: 90, material: \"marble_white\", variant: \"marble top\" });\ns.furnish(\"pendant\", { room: \"g_lounge\", at: [16.5, 7.5], variant: \"low\" });\ns.furnish(\"curtains\", { room: \"g_lounge\", against: \"right\", along_ft: 7.5, size: { w_ft: 8.2 }, color: \"#eae3d5\" });\ns.furnish(\"ceiling_fan\", { room: \"g_lounge\", at: [6.5, 7.5] });\ns.furnish(\"ac_split\", { room: \"g_lounge\", against: \"front\", along_ft: 4.5 });\ns.furnish(\"plant_floor\", { room: \"g_lounge\", at: [20.5, 1.5] });\n"
+  },
+  {
+   "name": "furnish_g_stair",
+   "layer": "furniture",
+   "code": "// Ground floor stair hall: keep landings clear, add a small accent plant in the front corner.\ns.furnish(\"plant_floor\", { room: \"g_stair\", at: [1.5, 1.5] });\n"
+  },
+  {
+   "name": "furnish_g_kitchen",
+   "layer": "furniture",
+   "code": "// Open kitchen (12 x 9.25 ft): L-shaped counter along the left and right walls, with sink, hob and fridge.\ns.furnish(\"kitchen_counter\", { room: \"g_kitchen\", against: \"left\", along_ft: 4.6, size: { w_ft: 7.5, d_ft: 2.0 } });\ns.furnish(\"hob\", { room: \"g_kitchen\", against: \"left\", along_ft: 4.6 });\ns.furnish(\"kitchen_counter\", { room: \"g_kitchen\", against: \"right\", along_ft: 4.6, size: { w_ft: 6.5, d_ft: 2.0 } });\ns.furnish(\"sink_kitchen\", { room: \"g_kitchen\", against: \"right\", along_ft: 4.6 });\ns.furnish(\"fridge\", { room: \"g_kitchen\", against: \"back\", along_ft: 9.5 });\ns.furnish(\"water_dispenser\", { room: \"g_kitchen\", against: \"back\", along_ft: 1.5 });\n"
+  },
+  {
+   "name": "furnish_g_dirty",
+   "layer": "furniture",
+   "code": "// Enclosed dirty kitchen / utility room (12 x 6 ft) at the back: secondary cooking run, sink and washing machine.\ns.furnish(\"kitchen_counter\", { room: \"g_dirty\", against: \"left\", along_ft: 3.0, size: { w_ft: 5.0, d_ft: 2.0 } });\ns.furnish(\"hob\", { room: \"g_dirty\", against: \"left\", along_ft: 3.0 });\ns.furnish(\"sink_kitchen\", { room: \"g_dirty\", against: \"back\", along_ft: 6.0 });\ns.furnish(\"washing_machine\", { room: \"g_dirty\", against: \"front\", along_ft: 2.5 });\n"
+  },
+  {
+   "name": "furnish_g_bed1",
+   "layer": "furniture",
+   "code": "// Parents' ground-floor bedroom (12 x 15.25 ft): queen bed on the left wall, wardrobe on the front wall,\n// TV on the right wall, keeping a clear path from the lounge door to the attached bath door.\ns.furnish(\"bed_queen\", { room: \"g_bed1\", against: \"left\", along_ft: 7.5, color: \"#cfc6b8\", variant: \"upholstered headboard\" });\ns.furnish(\"side_table\", { room: \"g_bed1\", against: \"left\", along_ft: 3.8 });\ns.furnish(\"side_table\", { room: \"g_bed1\", against: \"left\", along_ft: 11.2 });\ns.furnish(\"table_lamp\", { room: \"g_bed1\", against: \"left\", along_ft: 3.8 });\ns.furnish(\"table_lamp\", { room: \"g_bed1\", against: \"left\", along_ft: 11.2 });\ns.furnish(\"rug\", { room: \"g_bed1\", at: [5.5, 7.5], size: { w_ft: 7.5, d_ft: 6.5 }, color: \"#dfd7ca\" });\ns.furnish(\"wardrobe\", { room: \"g_bed1\", against: \"front\", along_ft: 8.5, size: { w_ft: 5.0, d_ft: 2.0 } });\ns.furnish(\"tv_unit\", { room: \"g_bed1\", against: \"right\", along_ft: 10.5, size: { w_ft: 4.2, d_ft: 1.3 } });\ns.furnish(\"tv\", { room: \"g_bed1\", against: \"right\", along_ft: 10.5, size: { w_ft: 3.4 } });\ns.furnish(\"prayer_mat\", { room: \"g_bed1\", at: [3.0, 13.0], rot_deg: -90 });\ns.furnish(\"curtains\", { room: \"g_bed1\", against: \"back\", along_ft: 6.0, size: { w_ft: 6.5 }, color: \"#ece5d8\" });\ns.furnish(\"ceiling_fan\", { room: \"g_bed1\", at: [6.0, 7.5] });\ns.furnish(\"ac_split\", { room: \"g_bed1\", against: \"left\", along_ft: 7.5 });\n"
+  },
+  {
+   "name": "furnish_g_bath1",
+   "layer": "furniture",
+   "code": "// Parents' attached bathroom (6 x 15.25 ft): vanity, WC and walk-in shower at the back.\ns.furnish(\"vanity\", { room: \"g_bath1\", against: \"right\", along_ft: 11.5, size: { w_ft: 3.2 } });\ns.furnish(\"mirror_wall\", { room: \"g_bath1\", against: \"right\", along_ft: 11.5, size: { w_ft: 2.8, h_ft: 3.0 } });\ns.furnish(\"wc\", { room: \"g_bath1\", against: \"right\", along_ft: 7.0 });\ns.furnish(\"shower\", { room: \"g_bath1\", against: \"back\", along_ft: 3.0 });\ns.furnish(\"towel_rail\", { room: \"g_bath1\", against: \"left\", along_ft: 4.0 });\n"
+  },
+  {
+   "name": "furnish_f_master",
+   "layer": "furniture",
+   "code": "// First-floor master bedroom (10 x 14 ft): queen bed on the solid left walnut wall, TV on the right pier\n// between the bath door and dressing arch, curtains on the front balcony sliding door.\ns.furnish(\"bed_queen\", { room: \"f_master\", against: \"left\", along_ft: 7.2, color: \"#cbc2b4\", variant: \"upholstered headboard\" });\ns.furnish(\"side_table\", { room: \"f_master\", against: \"left\", along_ft: 3.6 });\ns.furnish(\"side_table\", { room: \"f_master\", against: \"left\", along_ft: 10.8 });\ns.furnish(\"table_lamp\", { room: \"f_master\", against: \"left\", along_ft: 3.6 });\ns.furnish(\"table_lamp\", { room: \"f_master\", against: \"left\", along_ft: 10.8 });\ns.furnish(\"rug\", { room: \"f_master\", at: [5.0, 7.2], size: { w_ft: 7.0, d_ft: 6.5 }, color: \"#ded6c8\" });\ns.furnish(\"tv_unit\", { room: \"f_master\", against: \"right\", along_ft: 7.0, size: { w_ft: 4.0, d_ft: 1.2 } });\ns.furnish(\"tv\", { room: \"f_master\", against: \"right\", along_ft: 7.0, size: { w_ft: 3.4 } });\ns.furnish(\"curtains\", { room: \"f_master\", against: \"front\", along_ft: 5.0, size: { w_ft: 7.2 }, color: \"#efe9df\" });\ns.furnish(\"ceiling_fan\", { room: \"f_master\", at: [5.0, 7.0] });\ns.furnish(\"ac_split\", { room: \"f_master\", against: \"left\", along_ft: 7.2 });\n"
+  },
+  {
+   "name": "furnish_f_master_dress",
+   "layer": "furniture",
+   "code": "// Master dressing room (6 x 5 ft): built-in wardrobe along the front wall.\ns.furnish(\"wardrobe\", { room: \"f_master_dress\", against: \"front\", along_ft: 3.0, size: { w_ft: 4.6, d_ft: 1.8 } });\n"
+  },
+  {
+   "name": "furnish_f_master_bath",
+   "layer": "furniture",
+   "code": "// Master bathroom (6 x 9 ft): vanity, WC and glass shower enclosure.\ns.furnish(\"vanity\", { room: \"f_master_bath\", against: \"front\", along_ft: 3.0, size: { w_ft: 3.2 } });\ns.furnish(\"mirror_wall\", { room: \"f_master_bath\", against: \"front\", along_ft: 3.0, size: { w_ft: 2.8, h_ft: 3.0 } });\ns.furnish(\"wc\", { room: \"f_master_bath\", against: \"back\", along_ft: 2.0 });\ns.furnish(\"shower\", { room: \"f_master_bath\", against: \"right\", along_ft: 2.5 });\ns.furnish(\"towel_rail\", { room: \"f_master_bath\", against: \"left\", along_ft: 6.5 });\n"
+  },
+  {
+   "name": "furnish_f_balcony",
+   "layer": "furniture",
+   "code": "// Front granite-framed balcony (16 x 4 ft): outdoor lounge chairs and potted plant on the right.\ns.furnish(\"outdoor_chair\", { room: \"f_balcony\", at: [11.5, 2.0], rot_deg: -60 });\ns.furnish(\"outdoor_table\", { room: \"f_balcony\", at: [13.2, 2.0] });\ns.furnish(\"plant_floor\", { room: \"f_balcony\", at: [14.8, 1.8] });\n"
+  },
+  {
+   "name": "furnish_f_bed2",
+   "layer": "furniture",
+   "code": "// Bedroom 2 (9 x 13 ft) at front-left behind the timber louvers: queen bed on the right wall,\n// keeping the left wall doors to Bath 2 and Dressing 2 completely clear.\ns.furnish(\"bed_queen\", { room: \"f_bed2\", against: \"right\", along_ft: 6.5, color: \"#d4cbbd\", variant: \"upholstered headboard\" });\ns.furnish(\"side_table\", { room: \"f_bed2\", against: \"right\", along_ft: 2.8 });\ns.furnish(\"side_table\", { room: \"f_bed2\", against: \"right\", along_ft: 10.2 });\ns.furnish(\"table_lamp\", { room: \"f_bed2\", against: \"right\", along_ft: 2.8 });\ns.furnish(\"rug\", { room: \"f_bed2\", at: [4.5, 6.5], size: { w_ft: 6.0, d_ft: 6.0 }, color: \"#e0d8cb\" });\ns.furnish(\"curtains\", { room: \"f_bed2\", against: \"front\", along_ft: 4.5, size: { w_ft: 5.5 }, color: \"#efe9df\" });\ns.furnish(\"ceiling_fan\", { room: \"f_bed2\", at: [4.5, 6.5] });\ns.furnish(\"ac_split\", { room: \"f_bed2\", against: \"right\", along_ft: 6.5 });\n"
+  },
+  {
+   "name": "furnish_f_bed2_dress",
+   "layer": "furniture",
+   "code": "// Dressing 2 (5 x 10 ft): full wardrobe along the left wall and dressing mirror at the back.\ns.furnish(\"wardrobe\", { room: \"f_bed2_dress\", against: \"left\", along_ft: 5.0, size: { w_ft: 6.0, d_ft: 1.8 } });\ns.furnish(\"dresser\", { room: \"f_bed2_dress\", against: \"back\", along_ft: 2.5, size: { w_ft: 3.0, d_ft: 1.5 } });\n"
+  },
+  {
+   "name": "furnish_f_bath2",
+   "layer": "furniture",
+   "code": "// Bath 2 (5 x 8 ft): vanity on the back wall, WC and shower on the left wall.\ns.furnish(\"vanity\", { room: \"f_bath2\", against: \"back\", along_ft: 2.5, size: { w_ft: 2.8 } });\ns.furnish(\"mirror_wall\", { room: \"f_bath2\", against: \"back\", along_ft: 2.5, size: { w_ft: 2.4, h_ft: 2.8 } });\ns.furnish(\"wc\", { room: \"f_bath2\", against: \"left\", along_ft: 5.5 });\ns.furnish(\"shower\", { room: \"f_bath2\", against: \"left\", along_ft: 2.0 });\n"
+  },
+  {
+   "name": "furnish_f_corr",
+   "layer": "furniture",
+   "code": "// Upstairs passage (9 x 5 ft): wall art on the left wall, keeping the 3 ft circulation path clear.\ns.furnish(\"painting\", { room: \"f_corr\", against: \"left\", along_ft: 2.5, size: { w_ft: 3.0, h_ft: 2.2 } });\n"
+  },
+  {
+   "name": "furnish_f_lounge",
+   "layer": "furniture",
+   "code": "// First-floor family lounge (22 x 14.75 ft): L-shaped sofa and coffee table facing a media wall on the front pier,\n// with a study desk in the rear-right corner.\ns.furnish(\"rug\", { room: \"f_lounge\", at: [9.0, 7.5], size: { w_ft: 9.0, d_ft: 7.5 }, color: \"#d8d0c3\" });\ns.furnish(\"tv_unit\", { room: \"f_lounge\", against: \"front\", along_ft: 14.5, size: { w_ft: 5.5, d_ft: 1.4 } });\ns.furnish(\"tv\", { room: \"f_lounge\", against: \"front\", along_ft: 14.5, size: { w_ft: 4.2 } });\ns.furnish(\"sofa_l\", { room: \"f_lounge\", at: [8.5, 8.8], rot_deg: 180, size: { w_ft: 8.5, d_ft: 5.8 }, color: \"#c2b9aa\" });\ns.furnish(\"coffee_table\", { room: \"f_lounge\", at: [8.5, 5.5], size: { w_ft: 3.6, d_ft: 2.0 }, material: \"wood_walnut\" });\ns.furnish(\"study_desk\", { room: \"f_lounge\", against: \"front\", along_ft: 4.0, size: { w_ft: 4.0, d_ft: 1.8 } });\ns.furnish(\"desk_chair\", { room: \"f_lounge\", at: [18.0, 3.2], rot_deg: 180 });\ns.furnish(\"curtains\", { room: \"f_lounge\", against: \"right\", along_ft: 7.5, size: { w_ft: 8.2 }, color: \"#efe9df\" });\ns.furnish(\"ceiling_fan\", { room: \"f_lounge\", at: [9.0, 7.5] });\ns.furnish(\"ac_split\", { room: \"f_lounge\", against: \"back\", along_ft: 8.5 });\ns.furnish(\"plant_floor\", { room: \"f_lounge\", at: [20.5, 13.0] });\n"
+  },
+  {
+   "name": "furnish_f_stair",
+   "layer": "furniture",
+   "code": "// Upper stair hall: kept clear for circulation between the flights and the family lounge.\ns.furnish(\"plant_floor\", { room: \"f_stair\", at: [1.5, 1.5] });\n"
+  },
+  {
+   "name": "furnish_f_bed3",
+   "layer": "furniture",
+   "code": "// Bedroom 3 (12 x 15.25 ft) at rear-left: queen bed on the left wall, wardrobe on the front wall,\n// dresser on the right wall, keeping the bath door path clear.\ns.furnish(\"bed_queen\", { room: \"f_bed3\", against: \"left\", along_ft: 7.5, color: \"#cec5b7\", variant: \"upholstered headboard\" });\ns.furnish(\"side_table\", { room: \"f_bed3\", against: \"left\", along_ft: 3.8 });\ns.furnish(\"side_table\", { room: \"f_bed3\", against: \"left\", along_ft: 11.2 });\ns.furnish(\"table_lamp\", { room: \"f_bed3\", against: \"left\", along_ft: 3.8 });\ns.furnish(\"table_lamp\", { room: \"f_bed3\", against: \"left\", along_ft: 11.2 });\ns.furnish(\"rug\", { room: \"f_bed3\", at: [5.5, 7.5], size: { w_ft: 7.5, d_ft: 6.5 }, color: \"#dfd7ca\" });\ns.furnish(\"wardrobe\", { room: \"f_bed3\", against: \"front\", along_ft: 8.5, size: { w_ft: 5.0, d_ft: 2.0 } });\ns.furnish(\"dresser\", { room: \"f_bed3\", against: \"right\", along_ft: 10.5, size: { w_ft: 3.5, d_ft: 1.5 } });\ns.furnish(\"mirror_wall\", { room: \"f_bed3\", against: \"right\", along_ft: 10.5, size: { w_ft: 2.6, h_ft: 2.8 } });\ns.furnish(\"curtains\", { room: \"f_bed3\", against: \"back\", along_ft: 6.0, size: { w_ft: 6.5 }, color: \"#efe9df\" });\ns.furnish(\"ceiling_fan\", { room: \"f_bed3\", at: [6.0, 7.5] });\ns.furnish(\"ac_split\", { room: \"f_bed3\", against: \"left\", along_ft: 7.5 });\n"
+  },
+  {
+   "name": "furnish_f_bath3",
+   "layer": "furniture",
+   "code": "// Bath 3 (6 x 15.25 ft): vanity, WC and walk-in shower at the rear.\ns.furnish(\"vanity\", { room: \"f_bath3\", against: \"right\", along_ft: 11.5, size: { w_ft: 3.2 } });\ns.furnish(\"mirror_wall\", { room: \"f_bath3\", against: \"right\", along_ft: 11.5, size: { w_ft: 2.8, h_ft: 3.0 } });\ns.furnish(\"wc\", { room: \"f_bath3\", against: \"right\", along_ft: 7.0 });\ns.furnish(\"shower\", { room: \"f_bath3\", against: \"back\", along_ft: 3.0 });\ns.furnish(\"towel_rail\", { room: \"f_bath3\", against: \"left\", along_ft: 4.0 });\n"
+  },
+  {
+   "name": "furnish_f_terrace",
+   "layer": "furniture",
+   "code": "// Rear first-floor terrace (12 x 15.25 ft): outdoor seating group and corner planters.\ns.furnish(\"outdoor_table\", { room: \"f_terrace\", at: [6.0, 8.5] });\ns.furnish(\"outdoor_chair\", { room: \"f_terrace\", at: [3.8, 8.5], rot_deg: 90 });\ns.furnish(\"outdoor_chair\", { room: \"f_terrace\", at: [8.2, 8.5], rot_deg: -90 });\ns.furnish(\"plant_floor\", { room: \"f_terrace\", at: [10.2, 13.5] });\ns.furnish(\"plant_floor\", { room: \"f_terrace\", at: [1.8, 13.5] });\n"
+  },
+  {
+   "name": "landscape",
+   "layer": "landscape",
+   "code": "// Front lawn and verge planting matching the concept photo: low shrubs, ornamental bushes along the boundary wall,\n// paved driveway and pedestrian stepping path, plus neighbourhood street context.\ns.landscape.lawn({ x: 0.5, y: 0.5, w: 14.2, d: 9.0 });\ns.landscape.paving({ x: 15.0, y: 0.0, w: 20.0, d: 10.0 }, { preset: \"paving\", color: \"#808285\" });\n\ns.landscape.planter({ x: 0.6, y: 7.6, w: 10.0, d: 1.8 }, { height_ft: 1.2, material: { preset: \"plaster_white\", color: \"#f0eee9\" } });\ns.landscape.planter({ x: 0.5, y: -2.2, w: 14.0, d: 1.8 }, { height_ft: 0.6, material: { preset: \"stone_cladding\", color: \"#858789\" } });\n\ns.landscape.tree([2.5, -1.2], { kind: \"bush\", height_ft: 3.5 });\ns.landscape.tree([6.5, -1.2], { kind: \"bush\", height_ft: 3.0 });\ns.landscape.tree([11.5, -1.2], { kind: \"palm\", height_ft: 5.5 });\ns.landscape.tree([4.5, 2.2], { kind: \"ornamental\", height_ft: 8.5 });\ns.landscape.tree([11.0, 2.2], { kind: \"bush\", height_ft: 3.5 });\n\ns.landscape.tree([33.8, 22.0], { kind: \"ashoka\", height_ft: 14.0 });\ns.landscape.tree([33.8, 42.0], { kind: \"ashoka\", height_ft: 14.0 });\n\ns.landscape.street({ road_width_ft: 40, neighbours: true, streetlights: true });\n"
+  },
+  {
+   "name": "lighting",
+   "layer": "lighting",
+   "code": "// Warm late-afternoon Lahore golden hour sunlight and cosy interior illumination.\ns.lights.sun({ hour: 17.5, intensity: 1.25 });\ns.lights.interior({ warmth: \"warm\", intensity: 1.0 });\n"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "a_landing_hero_to_portal",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/a_landing_hero_to_portal.mp4",
+  "frames": 1535,
+  "span": 47.6,
+  "wall": 51.7,
+  "duration": 51.7,
+  "cut": 0,
+  "marks": [
+    {
+      "t": 0,
+      "label": "landing: Walk through your home before the first brick"
+    },
+    {
+      "t": 4.8,
+      "label": "construction animation frame in view"
+    },
+    {
+      "t": 9.9,
+      "label": "Replay: house under construction (plot + LDA envelope, plinth, columns, walls, stair, railings, solar, tank, windows) then wipe to render, then night"
+    },
+    {
+      "t": 21.7,
+      "label": "benefits: Everything between the plot and the contractor"
+    },
+    {
+      "t": 28.4,
+      "label": "How it works"
+    },
+    {
+      "t": 35.1,
+      "label": "Sample homes"
+    },
+    {
+      "t": 41.3,
+      "label": "For builders / architects"
+    },
+    {
+      "t": 47.9,
+      "label": "click Portal"
+    },
+    {
+      "t": 47.9,
+      "label": "Portal: Your homes / Samples, one-message start"
+    }
+  ]
+}

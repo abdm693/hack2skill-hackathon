@@ -1,0 +1,43 @@
+{
+  "name": "i_ask_bar_typed_change",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/i_ask_bar_typed_change.mp4",
+  "frames": 35630,
+  "span": 662.8,
+  "wall": 663.2,
+  "duration": 239.3,
+  "cut": 423.9,
+  "marks": [
+    {
+      "t": 4.1,
+      "label": "Ask bar: type a change, no pin needed"
+    },
+    {
+      "t": 7,
+      "label": "Enter: Google ADK agent starts a conversational revision"
+    },
+    {
+      "t": 48,
+      "label": "(paused: middle of the run cut)"
+    },
+    {
+      "t": 53.1,
+      "label": "(resumed late in the run, around 7:40 of the agent clock)"
+    },
+    {
+      "t": 206.5,
+      "label": "version 5 saved"
+    },
+    {
+      "t": 213.6,
+      "label": "Version 5: Naqsha's answer to the typed request (kitchen 9' -> 10' x 15'3\", 37/37 LDA, 10/10 livable)"
+    },
+    {
+      "t": 219.6,
+      "label": "wipe before/after on the ground floor"
+    },
+    {
+      "t": 231.4,
+      "label": "How Naqsha made it (timed feed) for the typed change"
+    }
+  ]
+}

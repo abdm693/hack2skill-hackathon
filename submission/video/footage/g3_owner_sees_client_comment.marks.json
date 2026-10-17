@@ -1,0 +1,23 @@
+{
+  "name": "g3_owner_sees_client_comment",
+  "out": "/Users/abdullahmoazzam/Code/hack2skill-hackathon/submission/video/footage/g3_owner_sees_client_comment.mp4",
+  "frames": 416,
+  "span": 21,
+  "wall": 35.9,
+  "duration": 22.5,
+  "cut": 13.4,
+  "marks": [
+    {
+      "t": 2,
+      "label": "owner: Comments badge now 3, the client's pin appears in the kitchen"
+    },
+    {
+      "t": 6.7,
+      "label": "Comments sheet: Owner and Client notes with names and roles"
+    },
+    {
+      "t": 12.9,
+      "label": "filter: Client -> Ammi: Can the kitchen be bigger?"
+    }
+  ]
+}

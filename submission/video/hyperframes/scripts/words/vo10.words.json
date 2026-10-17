@@ -1,0 +1,266 @@
+[
+  {
+    "text": "Anyone",
+    "start": 0.26,
+    "end": 0.49,
+    "id": "w0"
+  },
+  {
+    "text": "can",
+    "start": 0.49,
+    "end": 0.73,
+    "id": "w1"
+  },
+  {
+    "text": "pin",
+    "start": 0.73,
+    "end": 0.97,
+    "id": "w2"
+  },
+  {
+    "text": "a",
+    "start": 0.97,
+    "end": 1.05,
+    "id": "w3"
+  },
+  {
+    "text": "note",
+    "start": 1.05,
+    "end": 1.32,
+    "id": "w4"
+  },
+  {
+    "text": "to",
+    "start": 1.43,
+    "end": 1.53,
+    "id": "w5"
+  },
+  {
+    "text": "the",
+    "start": 1.54,
+    "end": 1.75,
+    "id": "w6"
+  },
+  {
+    "text": "exact",
+    "start": 1.75,
+    "end": 2.03,
+    "id": "w7"
+  },
+  {
+    "text": "spot",
+    "start": 2.11,
+    "end": 2.37,
+    "id": "w8"
+  },
+  {
+    "text": "they",
+    "start": 2.45,
+    "end": 2.7,
+    "id": "w9"
+  },
+  {
+    "text": "mean.",
+    "start": 2.7,
+    "end": 3.02,
+    "id": "w10"
+  },
+  {
+    "text": "Share",
+    "start": 3.28,
+    "end": 3.29,
+    "id": "w11"
+  },
+  {
+    "text": "a",
+    "start": 3.29,
+    "end": 3.34,
+    "id": "w12"
+  },
+  {
+    "text": "link",
+    "start": 3.34,
+    "end": 3.55,
+    "id": "w13"
+  },
+  {
+    "text": "with",
+    "start": 3.55,
+    "end": 3.76,
+    "id": "w14"
+  },
+  {
+    "text": "your",
+    "start": 3.76,
+    "end": 3.97,
+    "id": "w15"
+  },
+  {
+    "text": "client",
+    "start": 3.97,
+    "end": 4.32,
+    "id": "w16"
+  },
+  {
+    "text": "or",
+    "start": 4.32,
+    "end": 4.46,
+    "id": "w17"
+  },
+  {
+    "text": "your",
+    "start": 4.46,
+    "end": 4.73,
+    "id": "w18"
+  },
+  {
+    "text": "family",
+    "start": 4.76,
+    "end": 5.19,
+    "id": "w19"
+  },
+  {
+    "text": "and",
+    "start": 5.19,
+    "end": 5.46,
+    "id": "w20"
+  },
+  {
+    "text": "they",
+    "start": 5.46,
+    "end": 5.63,
+    "id": "w21"
+  },
+  {
+    "text": "can",
+    "start": 5.63,
+    "end": 5.81,
+    "id": "w22"
+  },
+  {
+    "text": "comment",
+    "start": 5.81,
+    "end": 6.25,
+    "id": "w23"
+  },
+  {
+    "text": "without",
+    "start": 6.25,
+    "end": 6.69,
+    "id": "w24"
+  },
+  {
+    "text": "an",
+    "start": 6.69,
+    "end": 6.81,
+    "id": "w25"
+  },
+  {
+    "text": "account.",
+    "start": 6.81,
+    "end": 7.28,
+    "id": "w26"
+  },
+  {
+    "text": "Here,",
+    "start": 7.54,
+    "end": 8.09,
+    "id": "w27"
+  },
+  {
+    "text": "Ami",
+    "start": 8.17,
+    "end": 8.34,
+    "id": "w28"
+  },
+  {
+    "text": "asks",
+    "start": 8.34,
+    "end": 8.6,
+    "id": "w29"
+  },
+  {
+    "text": "for",
+    "start": 8.71,
+    "end": 8.86,
+    "id": "w30"
+  },
+  {
+    "text": "a",
+    "start": 8.86,
+    "end": 8.93,
+    "id": "w31"
+  },
+  {
+    "text": "bigger",
+    "start": 8.93,
+    "end": 9.31,
+    "id": "w32"
+  },
+  {
+    "text": "kitchen",
+    "start": 9.39,
+    "end": 9.94,
+    "id": "w33"
+  },
+  {
+    "text": "and",
+    "start": 9.94,
+    "end": 10.2,
+    "id": "w34"
+  },
+  {
+    "text": "her",
+    "start": 10.2,
+    "end": 10.3,
+    "id": "w35"
+  },
+  {
+    "text": "note",
+    "start": 10.3,
+    "end": 10.55,
+    "id": "w36"
+  },
+  {
+    "text": "shows",
+    "start": 10.55,
+    "end": 10.86,
+    "id": "w37"
+  },
+  {
+    "text": "up",
+    "start": 10.86,
+    "end": 10.98,
+    "id": "w38"
+  },
+  {
+    "text": "for",
+    "start": 10.98,
+    "end": 11.16,
+    "id": "w39"
+  },
+  {
+    "text": "the",
+    "start": 11.16,
+    "end": 11.26,
+    "id": "w40"
+  },
+  {
+    "text": "owner",
+    "start": 11.37,
+    "end": 11.64,
+    "id": "w41"
+  },
+  {
+    "text": "right",
+    "start": 11.68,
+    "end": 11.96,
+    "id": "w42"
+  },
+  {
+    "text": "away.",
+    "start": 11.96,
+    "end": 12.44,
+    "id": "w43"
+  }
+]
