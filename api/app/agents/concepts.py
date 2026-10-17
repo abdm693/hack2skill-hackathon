@@ -184,10 +184,11 @@ def _image_bytes(resp) -> tuple[bytes, str] | None:
     return None
 
 
-SIDE_ROAD_ASK = ("This is a photo of a house that should stand in a row: neighbouring houses built against both of its side walls "
-                 "and one road in front. Look at the left and right sides of the house. Is there a road, street or lane running "
-                 "beside the house or curving away past one of its sides, or a side lawn or open gap between the house and a "
-                 "neighbour? The road directly in front of the house does not count. Return JSON: {\"side_road\": true | false}")
+SIDE_ROAD_ASK = ("This photo should show a house in a row: one road in front of it and neighbouring houses on both sides. Is "
+                 "there clearly a SECOND road or street (a paved carriageway with a kerb) running along the left or right side "
+                 "of this house, or the front road curving away round the side of its plot, so that it looks like a corner "
+                 "plot? The road in front, pavements, the neighbours' walls, boundary walls and small gaps between buildings do "
+                 "not count. Answer true only if such a side road is clearly visible. Return JSON: {\"side_road\": true | false}")
 SIDE_ROAD_S = 25.0  # the check never holds a concept up longer than this; on a timeout or an error it is skipped
 SIDE_ROAD_FIX = ("Edit this photograph: this house stands mid-row. Replace any road, street, lane, side lawn or open gap beside "
                  "the house (to its left or right) with the neighbouring houses, plain and muted, built right up against this "
