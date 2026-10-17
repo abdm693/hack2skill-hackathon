@@ -36,14 +36,14 @@ export function saidFacts(b: Brief | null): Fact[] {
   if (!b) return [];
   const auto = new Set(b.auto_filled ?? []);
   const out: Fact[] = [];
-  if (b.plot?.width_ft && !auto.has("plot")) {
-    out.push({ key: "plot", text: `${plotLabel(b.plot.area_marla)} · ${b.plot.width_ft}′ × ${b.plot.depth_ft}′` });
-    if (!auto.has("corner")) out.push({ key: "corner", text: b.plot.corner ? "Corner plot" : "Mid-row" });
-  }
+  if (b.plot?.width_ft && !auto.has("plot")) out.push({ key: "plot", text: `${plotLabel(b.plot.area_marla)} · ${b.plot.width_ft}′ × ${b.plot.depth_ft}′` });
+  // Corner or mid-row is the family's once they say it, even on a plot size Naqsha assumed.
+  if (b.plot?.width_ft && !auto.has("corner")) out.push({ key: "corner", text: b.plot.corner ? "Corner plot" : "Mid-row" });
   if (b.scheme && !auto.has("scheme")) out.push({ key: "scheme", text: b.scheme });
   if (b.facing && !auto.has("facing")) out.push({ key: "facing", text: `Faces ${FACING_LABEL[b.facing]?.toLowerCase() ?? b.facing}` });
   if (b.storeys && !auto.has("storeys")) out.push({ key: "storeys", text: `${b.storeys} ${b.storeys === 1 ? "storey" : "storeys"}` });
   if (b.bedrooms && !auto.has("bedrooms")) out.push({ key: "bedrooms", text: `${b.bedrooms} bedrooms` });
+  if (b.bathrooms && !auto.has("bathrooms")) out.push({ key: "bathrooms", text: `${b.bathrooms} ${b.bathrooms === 1 ? "bath" : "baths"}` });
   const porch = b.spaces?.find((s) => s.startsWith("car_porch"));
   if (porch && !auto.has("porch")) out.push({ key: "porch", text: `${porch.split(":")[1] ?? 1}-car porch` });
   if (b.style && !auto.has("style")) out.push({ key: "style", text: b.style });
@@ -51,6 +51,46 @@ export function saidFacts(b: Brief | null): Fact[] {
   if (b.water_tank && !auto.has("water_tank")) out.push({ key: "tank", text: b.water_tank === "plastic" ? "Plastic tank" : "Concrete tank" });
   if (b.solar && !auto.has("solar")) out.push({ key: "solar", text: b.solar === "none" ? "No solar" : b.solar === "panels" ? "Solar panels" : "Solar-ready roof" });
   return out;
+}
+
+/** Space names in the server's "spaces" fact line (intake.py SPACE_LABEL). */
+const SPACE_WORDS = new Set(["drawing room", "tv lounge", "dining", "kitchen", "dirty kitchen", "servant quarter", "lawn", "prayer room", "store", "laundry", "roof terrace", "study", "gym"]);
+
+/**
+ * The brief field an "I assumed" line stands for, read from the lines the server writes (intake.py _fact_items and
+ * understood()), or null for the agent's own free-text assumptions.
+ */
+export function assumptionField(line: string, b: Brief | null): string | null {
+  const t = line.trim();
+  if (/^\d+(\.\d+)?\s+(marla|kanal),\s*[\d.]+\s*×\s*[\d.]+\s*ft\b/i.test(t)) return "plot";
+  if (t === "Corner plot" || /^Mid-row plot\b/.test(t)) return "corner";
+  if (/^Front faces /.test(t)) return "facing";
+  if (/^(Single storey|Two storeys|Three storeys|\d+ storeys|Kept to \d+ storeys?:)/.test(t)) return "storeys";
+  if (/^\d+ bedrooms$/.test(t)) return "bedrooms";
+  if (/^\d+ baths$/.test(t)) return "bathrooms";
+  if (t === "I'll place the rooms on each floor") return "floors";
+  if (/^\d+-car porch$/.test(t)) return "porch";
+  if (t === "Concrete water tank in the stair tower" || t === "Blue plastic water tank") return "water_tank";
+  if (t === "Roof kept clear for solar" || t === "Solar frame on the roof" || t === "No solar for now") return "solar";
+  if (/^(Economy|Standard|Premium|Luxury) budget$/.test(t)) return "budget";
+  if (b?.style && t.toLowerCase() === `${b.style} style`.toLowerCase()) return "style";
+  const parts = t.toLowerCase().split(", ");
+  if (parts.length && SPACE_WORDS.has(parts[0]) && parts.every((x) => SPACE_WORDS.has(x) || /^\d+-car porch$/.test(x))) return "spaces";
+  return null;
+}
+
+/**
+ * The latest card's assumptions as the brief stands now: a server fact stays under "I assumed" only while its field is
+ * still in auto_filled (once the family states it, it reads under "You said" alone). Free-text assumptions stay.
+ */
+export function currentAssumptions(snapshot: string[], b: Brief | null): string[] {
+  if (!b) return snapshot;
+  const auto = new Set(b.auto_filled ?? []);
+  const said = new Set(saidFacts(b).map((f) => (f.key === "tank" ? "water_tank" : f.key)));
+  return snapshot.filter((a) => {
+    const field = assumptionField(a, b);
+    return !field || (auto.has(field) && !said.has(field));
+  });
 }
 
 const rise = (i: number) => ({ initial: { opacity: 0, y: 6 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.24, delay: i * 0.04, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } });
@@ -77,6 +117,8 @@ export function UnderstoodCard({
 }) {
   const u = m.understood!;
   const said = interactive ? saidFacts(brief) : [];
+  // The latest card follows the brief as it stands; folded earlier cards keep their snapshot.
+  const assumptions = interactive ? currentAssumptions(u.assumptions, brief) : u.assumptions;
   const prefs = interactive && brief?.preferences ? brief.preferences : u.preferences;
   const guaranteed = interactive ? currentGuarantees(u.guaranteed, envelope ?? null, brief) : u.guaranteed;
   const [expanded, setExpanded] = useState(false);
@@ -97,7 +139,7 @@ export function UnderstoodCard({
   }
   return (
     <div className="@container mt-3 overflow-hidden rounded-card bg-surface shadow-e1">
-      {(said.length > 0 || u.assumptions.length > 0) && (
+      {(said.length > 0 || assumptions.length > 0) && (
         <div className="space-y-2.5 px-4 pb-3 pt-3.5">
           {said.length > 0 && (
             <div>
@@ -111,11 +153,11 @@ export function UnderstoodCard({
               </div>
             </div>
           )}
-          {u.assumptions.length > 0 && (
+          {assumptions.length > 0 && (
             <div>
               <p className="mb-1.5 text-caption text-ink-3">I assumed</p>
               <div className="flex flex-wrap gap-1.5">
-                {u.assumptions.map((a) => (
+                {assumptions.map((a) => (
                   <motion.span key={a} {...rise(i++)}>
                     <Token text={a} kind="assumed" interactive={interactive} onEdit={(t) => onCorrect(a, t)} onRemove={() => onRemoveAssumption(a)} />
                   </motion.span>

@@ -502,7 +502,7 @@ function ItemView({ it }: { it: Item }) {
       <Mark status={c.status} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "flex", justifyContent: "space-between", gap: "2mm" }}>
-          <span>{c.title}</span>
+          <span>{sentenceCase(c.title)}</span>
           {c.status !== "pass" && (
             <span style={{ flexShrink: 0, fontWeight: 600, color: c.status === "warn" ? "#A35A00" : "#C8281E" }}>{c.status === "warn" ? "Check" : "Fix"}</span>
           )}

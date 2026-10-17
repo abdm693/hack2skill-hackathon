@@ -41,6 +41,10 @@ export function RoomNavigator({
 }) {
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
+  // The list keeps the height it had when you started typing (the panel mounts afresh each time it opens): the
+  // panel opens upward (anchored by its bottom), so a shrinking list would move the search field under your cursor.
+  const listEl = useRef<HTMLDivElement>(null);
+  const [lockH, setLockH] = useState<number | null>(null);
   // The panel is placed (and made visible) a frame after it mounts: keep trying to focus the search until it can
   // take focus (a hidden panel can't), for about a second.
   useEffect(() => {
@@ -84,7 +88,10 @@ export function RoomNavigator({
         <input
           ref={search}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            if (lockH == null && listEl.current) setLockH(listEl.current.offsetHeight);
+            setQ(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && first) first.go();
             e.stopPropagation();
@@ -93,9 +100,9 @@ export function RoomNavigator({
           aria-label="Go to a room"
           className="h-9 min-w-0 flex-1 bg-transparent text-[13.5px] text-hud-ink outline-none placeholder:text-hud-ink-2"
         />
-        <Kbd tone="hud">M</Kbd>
+        <Kbd tone="hud" className="[@media(pointer:coarse)]:hidden">M</Kbd>
       </div>
-      <div className="mt-2 max-h-[50vh] overflow-y-auto [scrollbar-width:thin] max-md:max-h-none">
+      <div ref={listEl} style={lockH != null ? { minHeight: lockH } : undefined} className="mt-2 max-h-[50vh] overflow-y-auto [scrollbar-width:thin] max-md:max-h-none">
         {groups.map(({ l, list }) => (
           <div key={l.id} className="mb-1">
             <p className="px-2 pb-0.5 pt-1.5 text-[12px] text-hud-ink-2">{levelName(l)}</p>

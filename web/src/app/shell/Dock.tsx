@@ -319,7 +319,7 @@ export function Dock(props: DockProps) {
           onChange={(v) => { setDraft(v); setPaletteOpen(true); }}
           onSubmit={submit}
           placeholder={phone ? phonePlaceholder(placeholder, askLabel) : placeholder}
-          label="Ask Naqsha"
+          label={askLabel === "Ask Naqsha" ? "Ask Naqsha" : "Note for the owner"}
           busy={!!working && working.kind !== "intake"}
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}

@@ -17,6 +17,7 @@ import type { Change, Comment, Concept, DesignSection, Version } from "@contract
 import type { BuildingPlan, ComplianceReport } from "@contracts/plan";
 import { api, isAbortError, type ConceptsBody, type NewComment } from "@/api/client";
 import { loadFixLoop } from "@/app/lib/fixloop";
+import { inSentence } from "@/app/plan/model";
 import { useProject, type ConceptRun as StoreConceptRun, type Run as StoreRun } from "@/app/store/project";
 import { useNarration, type Narration } from "@/app/shell/narration";
 import { notify } from "./kit";
@@ -125,6 +126,9 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
   const resolved: Comment[] = [];
   let stage: string | null = null;
   let fails: number[] = [];
+  // The plan attempt behind each entry of `fails`, and the attempts already counted.
+  const attempts: (number | undefined)[] = [];
+  const seen = new Set<number>();
   const push = (id: string, at: number, a: Omit<Activity, "id" | "at">) => {
     const last = activity[activity.length - 1];
     if (last && last.text === a.text && last.kind === a.kind) return;
@@ -147,13 +151,24 @@ function toRun(kind: Run["kind"], pid: string, r: StoreRun, versions: Record<str
         break;
       case "compliance": {
         const n = failures(it.report);
-        fails = [...fails, n];
+        // A design run checks each plan attempt once; the best attempt's report is sent again at the end when a
+        // later round was worse. That one replaces its own entry and says the round is kept (one value per attempt).
+        const again = kind === "design" && it.attempt != null && seen.has(it.attempt);
+        if (again) fails = fails.map((f, i) => (attempts[i] === it.attempt ? n : f));
+        else {
+          fails = [...fails, n];
+          attempts.push(it.attempt);
+          if (it.attempt != null) seen.add(it.attempt);
+        }
+        const rules = it.report.checks.filter((c) => c.status === "fail").slice(0, 2).map((c) => inSentence(c.title)).join(", ");
         push(
           it.id,
           it.at,
-          n
-            ? { kind: "check", text: `${plural(n, "rule")} to fix: ${it.report.checks.filter((c) => c.status === "fail").slice(0, 2).map((c) => c.title.toLowerCase()).join(", ")}`, tone: "warn" }
-            : { kind: "check", text: `All ${it.report.checks.length} checks pass`, tone: "pass" },
+          again
+            ? { kind: "check", text: `Keeping round ${it.attempt}, the best one: ${n ? `${plural(n, "rule")} to fix` : "every check passes"}`, tone: n ? "warn" : "pass" }
+            : n
+              ? { kind: "check", text: `${plural(n, "rule")} to fix: ${rules}`, tone: "warn" }
+              : { kind: "check", text: `All ${it.report.checks.length} checks pass`, tone: "pass" },
         );
         break;
       }

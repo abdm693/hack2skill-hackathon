@@ -53,6 +53,9 @@ export function HouseView({ project, onProjectChange, active = true }: { project
   // Beside the dock only when there is room for both clusters and a 720px dock between them.
   const wide = useMediaQuery("(min-width: 1600px)");
   const phone = useMediaQuery("(max-width: 767px)");
+  // The narrowest phones (320-379px): the comment count becomes a dot and the version chip drops its chevron, so the
+  // one-row HUD stays inside its gutters.
+  const tight = useMediaQuery("(max-width: 379px)");
 
   // ?v= is a version id or its number (?v=2); one that doesn't exist falls back to the latest, and says so.
   const vParam = params.get("v");
@@ -386,11 +389,25 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       )}
     </HudButton>
   );
+  const commentCount = openComments.length > 0 ? `, ${openComments.length} open` : "";
   const commentButton = isLatest ? (
-    <HudButton onClick={comment} pressed={commentMode} label={phone ? (commentMode ? "Comment: tap the house to pin" : "Comment") : "Comment (C)"} accent={commentMode} icon={phone && !openComments.length}>
+    <HudButton
+      onClick={comment}
+      pressed={commentMode}
+      label={phone ? (commentMode ? "Comment: tap the house to pin" : `Comment${commentCount}`) : "Comment (C)"}
+      accent={commentMode}
+      icon={phone && (tight || !openComments.length)}
+      className={phone && !tight && openComments.length > 0 ? "px-3" : undefined}
+    >
       <MessageSquarePlus className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
       <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
-      {openComments.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-white/15 px-1.5 font-mono text-[11px] tabular-nums">{openComments.length}</span>}
+      {openComments.length > 0 &&
+        (phone && tight ? (
+          // A dot on the narrowest phones; the count is in the button's name and the Comments sheet.
+          <span aria-hidden className={cn("absolute right-2 top-2 size-2 rounded-full ring-2 ring-[rgb(24_24_27)]", commentMode ? "bg-white" : "bg-hud-accent")} />
+        ) : (
+          <span className="grid min-w-5 place-items-center rounded-full bg-white/15 px-1.5 font-mono text-[11px] tabular-nums">{openComments.length}</span>
+        ))}
     </HudButton>
   ) : null;
 
@@ -456,7 +473,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       </div>
 
       {/* Bottom-left: mode, view, version. Phones keep one row: rooms and comment join it as named icons. */}
-      <div data-nq-recede="" className={cn("absolute left-3 z-20 flex items-center gap-2 sm:left-4", phone ? "right-3" : "flex-wrap", wide && "bottom-4")} style={row(0)}>
+      <div data-nq-recede="" className={cn("absolute left-3 z-20 flex items-center sm:left-4", phone ? "right-3 min-w-0 gap-1.5 sm:right-4" : "flex-wrap gap-2", wide && "bottom-4")} style={row(0)}>
         <Segmented
           label="Mode"
           tone="hud"
@@ -472,13 +489,20 @@ export function HouseView({ project, onProjectChange, active = true }: { project
           <Layers className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
           <span className="max-sm:hidden">View</span>
         </HudButton>
-        <HudButton ref={versionBtn} onClick={() => setVersionOpen((o) => !o)} pressed={versionOpen} label={`Versions: version ${shown.n}${isLatest ? "" : ", not the latest"}`}>
+        <HudButton
+          ref={versionBtn}
+          onClick={() => setVersionOpen((o) => !o)}
+          pressed={versionOpen}
+          label={`Versions: version ${shown.n}${isLatest ? "" : ", not the latest"}`}
+          // Phones: the chip is the one that gives way (it shrinks first, never under 44px).
+          className={phone ? cn("min-w-11 shrink justify-center overflow-hidden", tight ? "px-2.5" : "px-3") : undefined}
+        >
           <span className="font-mono tabular-nums">v{shown.n}</span>
           {!isLatest && <span className="text-hud-ink-2 max-sm:hidden">· not the latest</span>}
-          <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
+          {!tight && <ChevronDown className="size-3.5 shrink-0 text-hud-ink-2" strokeWidth={1.75} />}
         </HudButton>
         {phone && (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {roomsButton}
             {commentButton}
           </div>
@@ -653,14 +677,21 @@ const HUD_CSS = `
 .nq-house .nq-mini-north, .nq-house .nq-mini-caption, .nq-house .nq-build-meta, .nq-house .nq-kbd { font-size: 12px; }
 .nq-house .nq-mini-floor { position: relative; min-width: 28px; min-height: 26px; font-size: 12px; }
 @media (pointer: coarse), (max-width: 639px) { .nq-house .nq-mini-floor::after { content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2)); } }
-.nq-house .nq-build-pill, .nq-house .nq-room, .nq-house .nq-banner, .nq-house .nq-mini { top: var(--chrome-top, 72px); }
-.nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 60px); }
-.nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 112px); }
-@media (max-width: 767px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock, .nq-house .nq-touch-btns { bottom: calc(var(--dock-h, 96px) + 112px); } .nq-house .nq-toast { bottom: calc(var(--dock-h, 96px) + 164px); } }
-@media (min-width: 1600px) { .nq-house .nq-hints, .nq-house .nq-commenting, .nq-house .nq-chip-mock { bottom: 76px; } .nq-house .nq-toast { bottom: 128px; } }
+/* Top: the viewer's top-centre slot (progress, comment mode, toasts), its room chip and the minimap start under the app's
+   top capsules (--chrome-top, published by the shell). */
+.nq-house .nq-slot, .nq-house .nq-room, .nq-house .nq-mini, .nq-house .nq-help { top: var(--chrome-top, 72px); }
+/* Phones: the floor stack sits under the capsules on the left (12px in, 44px wide), so the centred slot keeps 64px clear
+   on both sides and its pills wrap instead of running under it. */
+@media (max-width: 767px) {
+  .nq-house .nq-slot { top: calc(var(--chrome-top, 116px) + 12px); max-width: calc(100% - 128px); }
+  .nq-house .nq-slot .nq-pill { height: auto; min-height: 32px; padding-block: 6px; white-space: normal; text-align: center; line-height: 1.3; }
+}
+.nq-house .nq-chip-mock { bottom: calc(var(--dock-h, 96px) + 60px); }
+@media (max-width: 767px) { .nq-house .nq-chip-mock { bottom: calc(var(--dock-h, 96px) + 112px); } }
+@media (min-width: 1600px) { .nq-house .nq-chip-mock { bottom: 76px; } }
 `;
 
-const HudButton = ({ ref, onClick, pressed, label, accent, icon, children }: { ref?: React.Ref<HTMLButtonElement>; onClick: () => void; pressed?: boolean; label: string; accent?: boolean; /** A 44px round icon button (phones). */ icon?: boolean; children: ReactNode }) => (
+const HudButton = ({ ref, onClick, pressed, label, accent, icon, className, children }: { ref?: React.Ref<HTMLButtonElement>; onClick: () => void; pressed?: boolean; label: string; accent?: boolean; /** A 44px round icon button (phones). */ icon?: boolean; className?: string; children: ReactNode }) => (
   <button
     ref={ref}
     type="button"
@@ -669,9 +700,10 @@ const HudButton = ({ ref, onClick, pressed, label, accent, icon, children }: { r
     aria-label={label}
     title={label}
     className={cn(
-      "inline-flex h-11 shrink-0 items-center gap-2 rounded-full text-[13px] font-medium outline-none transition-colors focus-visible:shadow-focus",
+      "relative inline-flex h-11 shrink-0 items-center gap-2 rounded-full text-[13px] font-medium outline-none transition-colors focus-visible:shadow-focus",
       icon ? "w-11 justify-center" : "px-4",
       accent ? "bg-accent text-white shadow-e2" : "glass-hud hover:bg-[rgb(40_40_44/0.88)]",
+      className,
     )}
   >
     {children}
