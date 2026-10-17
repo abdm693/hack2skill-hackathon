@@ -1633,8 +1633,23 @@ export class ViewerController {
     this.ensureCollider();
     if (!this.walk.ready || !this.collider) return;
     this.walk.cancelGlide();
-    const route = this.nav.route(this.walk.feet.clone(), { kind: "point", level: lvl, x: xFt * FT, z: zOf(yFt) });
-    if (route.ok && route.pts.length > 1) this.startGlide(route);
+    const target = { kind: "point" as const, level: lvl, x: xFt * FT, z: zOf(yFt) };
+    const feet = this.walk.feet.clone();
+    const route = this.nav.route(feet, target);
+    if (route.ok && route.pts.length > 1 && !route.rough) {
+      this.startGlide(route);
+      return;
+    }
+    // sealed off where you stand: walk on from the nearest connected spot (never glide through a wall or a hedge)
+    const out = this.nav.escape(feet);
+    const alt = out ? this.nav.route(out.clone(), target) : null;
+    if (out && alt && alt.ok && alt.pts.length > 1 && !alt.rough) {
+      const a = alt.pts[0], b = alt.pts[Math.min(alt.pts.length - 1, 6)];
+      this.jumpTo(out, Math.hypot(b.x - a.x, b.z - a.z) > 0.05 ? Math.atan2(-(b.x - a.x), -(b.z - a.z)) : this.walk.yaw, -0.06);
+      this.startGlide(alt);
+      return;
+    }
+    if (route.ok && route.pts.length > 1 && !route.blocked) this.startGlide(route);
     else this.toast("No way to walk there");
   }
 
