@@ -25,7 +25,7 @@ const designFiles = import.meta.glob<string>("../../../../contracts/fixtures/*de
   link.href = "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap";
   document.head.appendChild(link);
   const st = document.createElement("style");
-  st.textContent = `:root{--font-sans:"Geist",ui-sans-serif,system-ui,-apple-system,sans-serif;--font-mono:"Geist Mono",ui-monospace,Menlo,monospace;--color-hud:#18181B;--color-hud-ink:#F5F5F7;--color-hud-ink-2:#A3A3AD;--color-hud-accent:#7D93FF;--color-accent:#2747F5;--color-accent-press:#1F3BD6}`;
+  st.textContent = `:root{--font-sans:"Geist",ui-sans-serif,system-ui,-apple-system,sans-serif;--font-mono:"Geist Mono",ui-monospace,Menlo,monospace;--color-hud:#18181B;--color-hud-ink:#F5F5F7;--color-hud-ink-2:#A3A3AD;--color-hud-accent:#7D93FF;--color-accent:#2747F5;--color-accent-press:#1F3BD6}html,body,#root{height:100%;margin:0}`;
   document.head.appendChild(st);
 }
 

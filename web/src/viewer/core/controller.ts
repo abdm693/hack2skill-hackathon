@@ -18,7 +18,7 @@ import { ghostBox, heroPose, houseBox, plotBox, roomPose } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
-import { displayLabel, resolveHitTags, type PartRange } from "./tags";
+import { displayLabel, humanLabel, resolveHitTags, roomName, type PartRange } from "./tags";
 import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, smoothstep, worldToPlan, zOf } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
@@ -103,6 +103,14 @@ function roomFrame(rect: { x: number; y: number; w: number; d: number }, floorFt
   return m;
 }
 
+/** An element that is solid from the floor up while walking (furniture, fixtures, roof equipment). */
+interface SolidBox {
+  box: THREE.Box3;
+  id: string;
+  layer: string;
+  level?: string;
+}
+
 export interface ThreeBits {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -161,6 +169,11 @@ export class ViewerController {
   private toastTimer = 0;
   private draftTimer = 0;
   private hintsTimer = 0;
+  private promptTimer = 0;
+  private pinnedTimer = 0;
+  /** the pointer is over (or focus is in) the minimap / help card: the HUD never steps back meanwhile */
+  private hudHover = false;
+  private lastDocMove = 0;
   private glideTimer = 0;
   private routeTimer = 0;
   private routeSeq = 0;
@@ -170,7 +183,6 @@ export class ViewerController {
   private lastInput = 0;
   private unlockedAt = 0;
   private lockEverSucceeded = false;
-  private lockRefusedToastShown = false;
   private walkerOnFallback = false;
   private navWarm = false;
   private ghostTarget = 1;
@@ -192,6 +204,10 @@ export class ViewerController {
     };
     this.holder.name = "naqsha-house";
     this.raycaster.layers.enableAll();
+    // the app's chrome can recede with the walk HUD: `:root[data-nq-walk-idle]` (viewer.css, DESIGN "after 2.5s idle")
+    this.store.subscribe((s, prev) => {
+      if (s.idle !== prev.idle && typeof document !== "undefined") document.documentElement.toggleAttribute("data-nq-walk-idle", s.idle && s.mode === "walk");
+    });
     try {
       const q = localStorage.getItem("naqsha.viewer.quality") as Quality | null;
       if (q === "high" || q === "balanced" || q === "performance") {
@@ -219,6 +235,7 @@ export class ViewerController {
     goToRoom: (roomId: string) => this.goToRoom(roomId),
     setFloor: (levelId: string) => this.setFloor(levelId),
     resetView: () => this.resetView(),
+    cancelDraft: () => this.cancelDraft(),
   };
 
   // ───────────────────────────── lifecycle ─────────────────────────────
@@ -234,7 +251,17 @@ export class ViewerController {
     document.addEventListener("pointerlockchange", this.onPointerLockChange);
     document.addEventListener("pointerlockerror", this.onPointerLockError);
     document.addEventListener("mousemove", this.onLockedMouseMove);
+    document.addEventListener("pointermove", this.onDocPointerMove, { passive: true });
   }
+
+  /** Moving the mouse anywhere (the app's chrome too) brings a receded walk HUD back. */
+  private onDocPointerMove = (e: PointerEvent) => {
+    if (e.pointerType === "touch" || this.store.getState().mode !== "walk") return;
+    const now = performance.now();
+    if (now - this.lastDocMove < 100) return;
+    this.lastDocMove = now;
+    this.activity();
+  };
 
   /** Deferred so a StrictMode remount (unmount → mount in the same tick) keeps the built house. */
   unmount() {
@@ -246,6 +273,8 @@ export class ViewerController {
     document.removeEventListener("pointerlockchange", this.onPointerLockChange);
     document.removeEventListener("pointerlockerror", this.onPointerLockError);
     document.removeEventListener("mousemove", this.onLockedMouseMove);
+    document.removeEventListener("pointermove", this.onDocPointerMove);
+    document.documentElement.removeAttribute("data-nq-walk-idle");
     if (this.isLocked()) document.exitPointerLock?.();
     this.unmountTimer = window.setTimeout(() => this.dispose(), 0);
   }
@@ -261,7 +290,7 @@ export class ViewerController {
     this.builds.disposeAll();
     this.ctxfx.dispose();
     this.result = null;
-    for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer]) window.clearTimeout(t);
+    for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer, this.promptTimer, this.pinnedTimer]) window.clearTimeout(t);
     window.clearTimeout(this.glideTimer);
     this.xfade?.remove();
     this.xfade = null;
@@ -409,13 +438,25 @@ export class ViewerController {
     this.updatePins(cam);
     if (this.colliderDirty && mode === "walk" && now > this.colliderTimer) this.ensureCollider();
     if (mode === "walk" && !this.navWarm && this.collider) this.navWarm = this.nav.warm(3);
-    if (this.shadowsDirty) {
+    // a quality change re-sizes (drops) the sun's shadow map: decide it before this frame's shadow pass
+    this.monitorPerf(dt, now);
+    if (this.shadowsDirty || this.shadowMapMissing()) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
     gl.toneMappingExposure = (this.atmosphere?.exposure ?? 1) * (mode === "walk" ? 1.1 : 1);
-    this.monitorPerf(dt, now);
     if (busy) this.invalidate();
+  }
+
+  /**
+   * Would this frame draw a shadow-casting light that has no shadow map yet? three.js then binds its shared empty
+   * depth texture, which (set up without a compare mode) makes every lit draw a WebGL INVALID_OPERATION ("Mismatch
+   * between texture format and sampler type"). Render the shadow pass instead.
+   */
+  private shadowMapMissing(): boolean {
+    const atm = this.atmosphere;
+    for (const l of [atm?.fallbackSun, this.engineSun]) if (l && l.castShadow && l.visible && !l.shadow.map) return true;
+    return false;
   }
 
   private walkFrame(dt: number, now: number, cam: THREE.PerspectiveCamera) {
@@ -446,13 +487,45 @@ export class ViewerController {
     }
     // the HUD steps back when nothing happens for a while
     if (Math.hypot(this.walk.vel.x, this.walk.vel.z) > 0.05 || this.walk.glide) this.lastInput = now;
-    const idle = (s.walk === "free" || s.walk === "look") && now - this.lastInput > IDLE_MS;
+    // never while the pointer rests on (or focus is in) the minimap or the help card: "click to go" must still work
+    const idle = (s.walk === "free" || s.walk === "look") && !this.hudHover && !s.help && now - this.lastInput > IDLE_MS;
     if (idle !== s.idle) this.store.setState({ idle });
   }
 
   private activity() {
     this.lastInput = performance.now();
     if (this.store.getState().idle) this.store.setState({ idle: false });
+  }
+
+  private hudFocus = false;
+  private hudPointer = false;
+
+  /** The minimap / help card is under the pointer or has focus (MiniMap reports it). */
+  setHudHover(on: boolean, via: "pointer" | "focus" = "pointer") {
+    if (via === "pointer") this.hudPointer = on;
+    else this.hudFocus = on;
+    this.hudHover = this.hudPointer || this.hudFocus;
+    this.activity();
+  }
+
+  /** Show "Click (or drag) to look around" for a few seconds (after starting to walk, or letting go of the mouse). */
+  private showLookPrompt(ms = 4000) {
+    const s = this.store.getState();
+    if (s.touch || s.mode !== "walk") return;
+    window.clearTimeout(this.promptTimer);
+    if (!s.prompt) this.store.setState({ prompt: true });
+    this.promptTimer = window.setTimeout(() => this.store.setState({ prompt: false }), ms);
+  }
+
+  /** The first look, step or glide: the prompt (and the one-time coachmark) have done their job. */
+  private hideLookPrompt(alsoHints = false) {
+    window.clearTimeout(this.promptTimer);
+    const s = this.store.getState();
+    if (s.prompt) this.store.setState({ prompt: false });
+    if (alsoHints && s.hints) {
+      window.clearTimeout(this.hintsTimer);
+      this.store.setState({ hints: false });
+    }
   }
 
   // ───────────────────────────── build hooks (called by BuildManager) ─────────────────────────────
@@ -847,9 +920,17 @@ export class ViewerController {
 
   onCommentsChanged() {
     this.pinEls.clear();
-    if (this.store.getState().draft) {
-      window.clearTimeout(this.draftTimer);
-      this.store.setState({ draft: null });
+    const draft = this.store.getState().draft;
+    if (draft) {
+      // the draft became a real comment (same anchor): its pin replaces the draft one. Other changes (a teammate's
+      // note arriving) leave the draft alone while the composer is still open.
+      const near = (a: Vec3 | undefined, b: Vec3) => !!a && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 0.01;
+      const saved = (this.props.comments ?? []).some((c) => near(c.anchor?.position, draft.position));
+      if (saved) {
+        window.clearTimeout(this.draftTimer);
+        this.store.setState({ draft: null });
+        if (this.store.getState().walk === "commenting") this.notePinned();
+      }
     }
     this.invalidate();
   }
@@ -857,6 +938,9 @@ export class ViewerController {
   /** ghostContext / hideVehicles changed. */
   syncContext() {
     this.applyVehicleTargets(false);
+    // shown cars are solid while walking, hidden ones are not
+    this.colliderDirty = true;
+    this.colliderTimer = performance.now() + 150;
     this.invalidate();
   }
 
@@ -865,6 +949,8 @@ export class ViewerController {
   private tickGhost(dt: number): boolean {
     const mode = this.store.getState().mode;
     this.ghostTarget = mode === "orbit" && this.props.ghostContext !== false ? 1 : 0;
+    // the buildings at the camera fade away (an eye-level street view never looks out of the house opposite)
+    if (this.camera && this.ctxfx.updateNear(this.camera, this.ghostTarget > 0)) this.invalidate();
     const g = GHOST.nqGhost;
     if (g.value === this.ghostTarget) return false;
     const step = prefersReducedMotion() ? 1 : dt / 0.42;
@@ -893,8 +979,8 @@ export class ViewerController {
     const eye = mode === "walk" ? this.walk.eyePosition(new THREE.Vector3()) : null;
     for (const v of vs) {
       let target = base;
-      // shown while walking: fade away when you get close (DESIGN: "fade within 2 m")
-      if (eye && target > 0) target = smoothstep(0.6, 2.0, v.box.distanceToPoint(eye));
+      // shown while walking: they are solid, so they only thin out when you get close (never an invisible wall)
+      if (eye && target > 0) target = 0.4 + 0.6 * smoothstep(0.6, 2.0, v.box.distanceToPoint(eye));
       if (Math.abs(target - v.opacity) < 0.002) {
         if (v.opacity !== target) this.ctxfx.setVehicleOpacity(v, target, (o, hidden) => this.vis.suppress(o, hidden));
         continue;
@@ -1143,6 +1229,7 @@ export class ViewerController {
     this.lastInput = performance.now();
     this.store.setState({ walk: this.isLocked() ? "look" : "free" });
     this.maybeShowHints();
+    if (!this.isLocked()) this.showLookPrompt();
   }
 
   private maybeShowHints() {
@@ -1156,7 +1243,7 @@ export class ViewerController {
     if (seen) return;
     this.store.setState({ hints: true });
     window.clearTimeout(this.hintsTimer);
-    this.hintsTimer = window.setTimeout(() => this.store.setState({ hints: false }), 4500);
+    this.hintsTimer = window.setTimeout(() => this.store.setState({ hints: false }), 4000);
   }
 
   private leaveWalk(source: ModeSource) {
@@ -1168,7 +1255,10 @@ export class ViewerController {
     this.walk.input.turn.yaw = this.walk.input.turn.pitch = 0;
     window.clearTimeout(this.routeTimer);
     const cam = this.camera, c = this.controls;
-    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, roomId: null, level: null, gliding: false, route: null, idle: false, hints: false, help: false, mapLevel: null });
+    window.clearTimeout(this.promptTimer);
+    window.clearTimeout(this.pinnedTimer);
+    this.hudHover = this.hudPointer = this.hudFocus = false;
+    this.store.setState({ mode: "orbit", walk: "off", target: null, room: null, roomId: null, level: null, gliding: false, route: null, idle: false, hints: false, prompt: false, pinned: false, help: false, mapLevel: null });
     this.fireRoomChange(null, null);
     this.setOutline(null);
     this.syncVisibility();
@@ -1183,11 +1273,22 @@ export class ViewerController {
         const h = new THREE.Vector3(fwd.x, 0, fwd.z);
         if (h.lengthSq() < 1e-6) h.set(0, 0, -1);
         h.normalize();
-        // keep your heading when it shows the street side; otherwise the usual sunny three-quarter front view
+        // keep your heading when it shows the street side (a three-quarter front view, never side-on over a
+        // neighbour's roof); otherwise the usual sunny three-quarter front view
+        const sunny = 30 * (sunState(this.props.sunHour ?? 16.5, (this.plan.site?.facing ?? "N") as Facing).dir.x >= 0 ? 1 : -1);
         let azDeg = THREE.MathUtils.radToDeg(Math.atan2(-h.x, -h.z));
-        if (Math.abs(azDeg) > 80) azDeg = 30 * (sunState(this.props.sunHour ?? 16.5, (this.plan.site?.facing ?? "N") as Facing).dir.x >= 0 ? 1 : -1);
-        else if (Math.abs(azDeg) < 18) azDeg = 18 * (azDeg < 0 ? -1 : 1);
-        const pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        if (Math.abs(azDeg) > 55) azDeg = sunny;
+        else azDeg = clamp(Math.abs(azDeg), 18, 40) * (azDeg < 0 ? -1 : 1);
+        // and never from over (or inside) a neighbouring house: try the mirror view, then the sunny one
+        const candidates = [azDeg, -azDeg, sunny, -sunny, 0];
+        let pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        for (const az of candidates) {
+          const p = heroPose(this.plan, cam, 1, az, 32);
+          if (!this.overNeighbour(p.position)) {
+            pose = p;
+            break;
+          }
+        }
         c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, !prefersReducedMotion());
       }
     }
@@ -1200,6 +1301,14 @@ export class ViewerController {
         console.warn("[viewer] onExitWalk threw", e);
       }
     }
+  }
+
+  /**
+   * Is this camera spot above or inside a house on our side of the street (its footprint grown by 2 m)? From over
+   * the row across the road the house is framed over the street, so that one doesn't count.
+   */
+  private overNeighbour(p: THREE.Vector3): boolean {
+    return this.ctxfx.buildings.some((b) => b.min.z < 0 && p.x > b.min.x - 2 && p.x < b.max.x + 2 && p.z > b.min.z - 2 && p.z < b.max.z + 2);
   }
 
   /**
@@ -1316,6 +1425,7 @@ export class ViewerController {
   private startGlide(route: RoutePlan, toRoom?: string) {
     window.clearTimeout(this.routeTimer);
     const id = ++this.routeSeq;
+    this.hideLookPrompt();
     this.walk.input.look.dx = this.walk.input.look.dy = 0;
     this.store.setState({ route: { id, byLevel: route.byLevel, to: toRoom }, gliding: true, mapLevel: null, idle: false });
     if (prefersReducedMotion()) {
@@ -1389,15 +1499,9 @@ export class ViewerController {
    * the likely cause: ask for another click instead of dropping to drag-to-look for good.
    */
   private onLockFailed() {
-    if (this.lockEverSucceeded) {
-      this.toast("Click again to look around");
-      return;
-    }
-    this.store.setState({ lockRefused: true });
-    if (!this.lockRefusedToastShown) {
-      this.lockRefusedToastShown = true;
-      this.toast("Drag to look around");
-    }
+    // one message only: the centre prompt ("Click to look around" again, or "Drag to look around"), never a toast too
+    if (!this.lockEverSucceeded) this.store.setState({ lockRefused: true });
+    if (this.store.getState().walk === "free") this.showLookPrompt();
   }
 
   isLocked() {
@@ -1412,12 +1516,15 @@ export class ViewerController {
       if (s.mode === "walk" && s.walk !== "intro") {
         this.walk.enabled = true;
         this.store.setState({ walk: "look", lockRefused: false, target: null });
+        this.hideLookPrompt(true);
       }
     } else {
       this.unlockedAt = performance.now();
       if (s.walk === "look") {
         this.walk.input.keys.clear();
         this.store.setState({ walk: "free", target: null });
+        // let go of the mouse (Esc): say once more how to get it back
+        this.showLookPrompt();
       }
       this.setOutline(null);
     }
@@ -1433,13 +1540,37 @@ export class ViewerController {
     this.walk.input.look.dy += THREE.MathUtils.clamp(e.movementY, -180, 180) * LOCK_SENS;
   };
 
-  /** Leave the "comment pinned" pause and walk again (re-locking the pointer when that is how you were looking). */
+  /** Leave the commenting pause and walk again (re-locking the pointer when that is how you were looking). */
   resumeWalk(relock = true) {
     const s = this.store.getState();
     if (s.mode !== "walk") return;
+    window.clearTimeout(this.pinnedTimer);
     this.walk.enabled = true;
-    this.store.setState({ walk: "free" });
+    this.lastInput = performance.now();
+    this.store.setState({ walk: "free", pinned: false });
     if (relock && !s.touch && !s.lockRefused) this.requestLock();
+    else this.showLookPrompt();
+  }
+
+  /**
+   * The app closed the comment composer without saving (Esc, ×): drop the draft pin and walk on right away.
+   * Exposed on the handle (`cancelDraft`).
+   */
+  cancelDraft() {
+    window.clearTimeout(this.draftTimer);
+    if (this.store.getState().draft) this.store.setState({ draft: null });
+    if (this.store.getState().walk === "commenting") this.resumeWalk(false);
+    this.invalidate();
+  }
+
+  /** The note was saved: "Note pinned" for about 2 s, then walking resumes. */
+  private notePinned() {
+    window.clearTimeout(this.pinnedTimer);
+    this.store.setState({ pinned: true });
+    this.pinnedTimer = window.setTimeout(() => {
+      this.store.setState({ pinned: false });
+      if (this.store.getState().walk === "commenting") this.resumeWalk(false);
+    }, 2000);
   }
 
   setHelp(open: boolean) {
@@ -1457,14 +1588,20 @@ export class ViewerController {
   private onKeyDown = (e: KeyboardEvent) => {
     const s = this.store.getState();
     if (s.mode !== "walk" || isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-    const walking = s.walk === "free" || s.walk === "look";
+    let walking = s.walk === "free" || s.walk === "look";
     const consume = () => {
       e.preventDefault();
       e.stopPropagation();
     };
     if (MOVE_KEYS.has(e.code)) {
+      // "Note pinned" is showing: a step means walk on now
+      if (s.walk === "commenting" && s.pinned && !s.draft) {
+        this.resumeWalk(false);
+        walking = true;
+      }
       if (walking) {
         this.activity();
+        if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") this.hideLookPrompt();
         // the route is still drawing: walking yourself wins
         if (s.gliding && !this.walk.glide && e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
           window.clearTimeout(this.routeTimer);
@@ -1586,6 +1723,7 @@ export class ViewerController {
         d.x = e.clientX;
         d.y = e.clientY;
         d.moved += Math.abs(dx) + Math.abs(dy);
+        if (d.moved > 8 && (s.prompt || s.hints)) this.hideLookPrompt(true);
         if (d.moved > 40 && !s.dragged) this.store.setState({ dragged: true });
         this.walk.input.look.dx += dx * DRAG_SENS;
         this.walk.input.look.dy += dy * DRAG_SENS;
@@ -1620,7 +1758,9 @@ export class ViewerController {
     }
     const p = this.local(e);
     const band = Math.min(90, p.w * 0.07);
-    const side = p.x < band ? -1 : p.x > p.w - band ? 1 : 0;
+    let side = p.x < band ? -1 : p.x > p.w - band ? 1 : 0;
+    // never while the pointer is on, or within 24 px of, any control (the floor rail, the bottom-left buttons…)
+    if (side && this.nearHud(e.clientX, e.clientY, 24)) side = 0;
     const now = performance.now();
     if (side !== this.edge.side) {
       this.edge = { since: now, side };
@@ -1633,6 +1773,23 @@ export class ViewerController {
     }
     const depth = side < 0 ? 1 - p.x / band : 1 - (p.w - p.x) / band;
     turn.yaw = side * (0.35 + 1.0 * clamp(depth, 0, 1));
+    this.hideLookPrompt(true);
+  }
+
+  /**
+   * Is anything but the 3D view under the pointer or within `pad` px of it? The app's chrome floats over the viewer
+   * as siblings (not our children), so this asks the document what is on top at a few points around the cursor.
+   */
+  private nearHud(x: number, y: number, pad: number): boolean {
+    const c = this.container;
+    if (!c) return false;
+    for (const dy of [0, -pad, pad])
+      for (const dx of [0, -pad, pad]) {
+        const el = document.elementFromPoint(x + dx, y + dy);
+        if (!el) continue;
+        if (!c.contains(el) || el.closest("[data-nq-ui], button, a[href], input, select, textarea, [role='button']")) return true;
+      }
+    return false;
   }
 
   private onPointerUp = (e: PointerEvent) => {
@@ -1833,15 +1990,147 @@ export class ViewerController {
     this.builds.finishAnims();
     this.lift.finish();
     const root = this.currentRoot();
-    const list = [...(res.colliders ?? []), ...this.extraSolids(res)].filter((m) => m && this.vis.colliderEnabled(m, root));
-    // parked cars never block the way in (they are hidden or fade while you walk)
-    const next = buildColliderBVH(list, this.ctxfx.exclusionBoxes());
+    const list = (res.colliders ?? []).filter((m) => m && this.vis.colliderEnabled(m, root));
+    const extra = this.extraSolids(res).filter((m) => this.vis.colliderEnabled(m, root));
+    // Furniture, fixtures and roof equipment are obstacles from the floor up and never ground (no climbing an
+    // armchair or the solar panels). Parked cars: hidden while walking (the default) they never block the way in;
+    // shown (the Cars toggle) they are solid like furniture.
+    const carsShown = this.vehicleTarget("walk") > 0;
+    const solid = this.solidBoxes(res).filter((s) => !this.vis.hiddenByTags({ userData: { layer: s.layer, level: s.level } } as unknown as THREE.Object3D));
+    const boxes = solid.map((s) => s.box.clone());
+    if (carsShown) boxes.push(...this.ctxfx.exclusionBoxes());
+    // furniture the engine left out of the colliders (coffee tables, plants, outdoor chairs): its own triangles
+    const fill = (i: number) => (i < solid.length ? this.elementSolid(res, solid[i].id) : null);
+    const next = buildColliderBVH(list, carsShown ? [] : this.ctxfx.exclusionBoxes(), { boxes, meshes: extra, fill, clear: this.doorways() });
     disposeCollider(this.collider);
     this.collider = next;
-    this.walk.setCollider(next?.bvh ?? null);
+    this.walk.setCollider(next?.bvh ?? null, next?.solid?.bvh ?? null);
     this.nav.reset(this.plan, list);
     this.navWarm = false;
     this.colliderDirty = false;
+  }
+
+  private solidBoxCache = new WeakMap<BuildResult, SolidBox[]>();
+
+  /**
+   * World boxes of the elements that are solid from the floor up: furniture and fixtures (not rugs and mats), roof
+   * equipment (water tank, solar), garden planters, trees and swings. Each box is lifted 3 cm off its bottom so the
+   * slab it stands on stays walkable; whole-street aggregates (context) and implausibly big boxes are skipped.
+   */
+  private solidBoxes(res: BuildResult): SolidBox[] {
+    const hit = this.solidBoxCache.get(res);
+    if (hit) return hit;
+    const out: SolidBox[] = [];
+    const FLAT = /(^|:)(rug|carpet|prayer_mat|mat|doormat)$/;
+    const EQUIPMENT = /(^|:)(water_tank|tank|solar\w*|ac_outdoor|generator|planter|tree|swing|bench|fountain|bbq|kiosk)$/;
+    for (const o of res.summary?.objects ?? []) {
+      const kind = o.kind ?? "";
+      if (/(^|:)(context|vehicle)($|:)/.test(kind) || !o.bbox_ft) continue;
+      const furniture = o.layer === "furniture" && !FLAT.test(kind);
+      if (!furniture && !EQUIPMENT.test(kind)) continue;
+      const [x0, y0, z0] = o.bbox_ft.min, [x1, y1, z1] = o.bbox_ft.max;
+      // plan feet [x, y, up] → world metres (z = −y)
+      const b = new THREE.Box3(new THREE.Vector3(x0 * FT, z0 * FT, -y1 * FT), new THREE.Vector3(x1 * FT, z1 * FT, -y0 * FT));
+      const size = b.getSize(new THREE.Vector3());
+      if (b.isEmpty() || size.x > 9 || size.z > 9 || size.y < 0.08) continue;
+      b.min.y += 0.03;
+      b.expandByVector(new THREE.Vector3(0.02, 0, 0.02));
+      b.max.y += 0.02;
+      out.push({ box: b, id: o.id, layer: o.layer, level: o.level });
+    }
+    this.solidBoxCache.set(res, out);
+    return out;
+  }
+
+  /**
+   * The walking zone through every door (its width, 0.6 m each side of the wall, floor to 2.2 m): furniture never
+   * seals a doorway even when a plan leaves a chair or a tall unit standing in one.
+   */
+  private doorways(): THREE.Box3[] {
+    const out: THREE.Box3[] = [];
+    const DOOR = /^(main_door|door|double_door|sliding_door|arch|garage_door|opening)$/;
+    for (const o of this.plan.openings ?? []) {
+      if (!DOOR.test(o.type)) continue;
+      const lvl = this.plan.levels.find((l) => l.id === o.level);
+      if (!lvl) continue;
+      const host = o.between.map((id) => this.plan.rooms.find((r) => r.id === id)).find((r) => !!r);
+      const [ax, ay] = o.at;
+      // the wall the door sits in: the host rect edge nearest the door point
+      let horizontal = true;
+      if (host) {
+        const r = host.rect;
+        const dy = Math.min(Math.abs(ay - r.y), Math.abs(ay - (r.y + r.d)));
+        const dx = Math.min(Math.abs(ax - r.x), Math.abs(ax - (r.x + r.w)));
+        horizontal = dy <= dx;
+      }
+      const half = o.width_ft / 2, depth = 0.6 / FT;
+      const [x0, x1, y0, y1] = horizontal ? [ax - half, ax + half, ay - depth, ay + depth] : [ax - depth, ax + depth, ay - half, ay + half];
+      const floor = lvl.elevation_ft * FT;
+      out.push(new THREE.Box3(new THREE.Vector3(x0 * FT, floor - 0.2, -y1 * FT), new THREE.Vector3(x1 * FT, floor + 2.2, -y0 * FT)));
+    }
+    return out;
+  }
+
+  private partIndex = new WeakMap<BuildResult, Map<string, { mesh: THREE.Mesh; ranges: { start: number; count: number }[] }[]>>();
+  private elementSolidCache = new WeakMap<BuildResult, Map<string, THREE.Mesh | null>>();
+
+  /** One element's visible triangles, baked to world space (cached per build). */
+  private elementSolid(res: BuildResult, id: string): THREE.Mesh | null {
+    let cache = this.elementSolidCache.get(res);
+    if (!cache) this.elementSolidCache.set(res, (cache = new Map()));
+    if (cache.has(id)) return cache.get(id)!;
+    let index = this.partIndex.get(res);
+    if (!index) {
+      index = new Map();
+      const idx = index;
+      res.root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || o.userData?.viewer || (m as THREE.InstancedMesh).isInstancedMesh) return;
+        const parts = o.userData?.parts as PartRange[] | undefined;
+        if (parts?.length) {
+          for (const p of parts) {
+            const pid = String(p.tags.id ?? "");
+            if (!pid) continue;
+            const list = idx.get(pid) ?? idx.set(pid, []).get(pid)!;
+            const last = list[list.length - 1];
+            if (last?.mesh === m) last.ranges.push(p);
+            else list.push({ mesh: m, ranges: [p] });
+          }
+        } else if (typeof o.userData?.id === "string") {
+          const g = m.geometry, n = (g.index ? g.index.count : g.getAttribute("position")?.count ?? 0) / 3;
+          const list = idx.get(o.userData.id) ?? idx.set(o.userData.id, []).get(o.userData.id)!;
+          list.push({ mesh: m, ranges: [{ start: 0, count: n }] });
+        }
+      });
+      this.partIndex.set(res, index);
+    }
+    const srcs = index.get(id);
+    let out: THREE.Mesh | null = null;
+    if (srcs?.length) {
+      res.root.updateMatrixWorld(true);
+      const arr: number[] = [];
+      const v = new THREE.Vector3();
+      for (const { mesh, ranges } of srcs) {
+        const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+        if (!pos) continue;
+        const ix = mesh.geometry.index;
+        for (const r of ranges)
+          for (let t = r.start; t < r.start + r.count; t++)
+            for (let k = 0; k < 3; k++) {
+              const i = t * 3 + k;
+              v.fromBufferAttribute(pos, ix ? ix.getX(i) : i).applyMatrix4(mesh.matrixWorld);
+              arr.push(v.x, v.y, v.z);
+            }
+      }
+      if (arr.length) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+        out = new THREE.Mesh(g);
+        out.userData = { kind: "collider:solid", viewer: "solid" };
+      }
+    }
+    cache.set(id, out);
+    return out;
   }
 
   private solidsCache = new WeakMap<BuildResult, THREE.Mesh[]>();
@@ -1946,10 +2235,11 @@ export class ViewerController {
     const tags = resolveHitTags(hit, this.currentRoot());
     const normal = hitNormal(hit, this.raycaster.ray.direction);
     const where = this.locate(hit.point.clone().addScaledVector(normal, 0.05));
-    const label = tags.label ?? displayLabel(tags, this.plan).title;
     const anchor: CommentAnchor = { position: v3(hit.point), normal: v3(normal) };
     // untagged hits: infer level/room from the plan, but only when the point is inside a room (not a street tree)
     const level = tags.level ?? (where.room ? where.level : undefined), room = tags.room ?? where.room;
+    // one human label: "TV in the upper family lounge", "Floor plant in the drawing room"
+    const label = humanLabel(tags.kind, tags.label, roomName(this.plan, room));
     if (level) anchor.level = level;
     if (room) anchor.room = room;
     if (tags.id) anchor.element_id = tags.id;
@@ -1959,11 +2249,14 @@ export class ViewerController {
     const target = position.clone().addScaledVector(this.raycaster.ray.direction, hit.distance);
     const snapshot = this.snapshot({ width: 640, pin: hit.point, maxAspect: 0.75 });
     window.clearTimeout(this.draftTimer);
-    this.store.setState({ draft: { position: anchor.position, normal: anchor.normal } });
-    this.draftTimer = window.setTimeout(() => this.store.setState({ draft: null }), 60000);
+    window.clearTimeout(this.pinnedTimer);
+    this.store.setState({ draft: { position: anchor.position, normal: anchor.normal }, pinned: false });
+    // safety net only: the app closes the draft with cancelDraft() or by saving it
+    this.draftTimer = window.setTimeout(() => this.cancelDraft(), 15 * 60000);
     if (fromWalk && this.store.getState().mode === "walk") {
       this.walk.enabled = false;
       this.walk.input.keys.clear();
+      this.hideLookPrompt(true);
       this.store.setState({ walk: "commenting", target: null, idle: false });
       if (this.isLocked()) document.exitPointerLock?.();
     }
@@ -2032,7 +2325,7 @@ export class ViewerController {
   renderNow() {
     const gl = this.gl, scene = this.scene, cam = this.camera;
     if (!gl || !scene || !cam) return;
-    if (this.shadowsDirty) {
+    if (this.shadowsDirty || this.shadowMapMissing()) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }

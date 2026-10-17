@@ -319,6 +319,8 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
   }
 
   const currentRoom = room.id ? plan.rooms.find((r) => r.id === room.id) : undefined;
+  // Walking where no room is drawn: the roof reads "Roof", the street "Outside".
+  const walkLevel = !currentRoom && mode === "walk" && room.level ? levels.find((l) => l.id === room.level) : undefined;
   const items = stackItems(levels, (l) => levelKey(l, levels), levelName);
   const asBuiltNotes = asBuilt?.checks.filter((c) => c.status !== "pass") ?? [];
   // Clear of the dock (the shell publishes its height as --dock-h); beside it only on very wide screens.
@@ -348,7 +350,14 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
           onAddComment={(d) => isLatest && setDraft(d)}
           onSelectComment={(id) => setSelected(id)}
           onReady={(res) => void onReady(res)}
-          onRoomChange={(id, level) => setRoom({ id, level })}
+          onRoomChange={(id, level) => {
+            setRoom({ id, level });
+            // ?floor follows the walker, so Orbit opens on the floor you were walking
+            if (level && mode === "walk" && level !== floor) {
+              setFloorState(level);
+              setParams((p) => { const n = new URLSearchParams(p); n.set("floor", level); return n; }, { replace: true });
+            }
+          }}
           onExitWalk={(reason) => {
             // F ("finish"): the viewer stays in walk with the pointer free until the person confirms.
             if (reason === "finish") {
@@ -363,7 +372,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
 
       {/* Left edge: floors */}
       {levels.length > 1 && (
-        <div className="absolute left-3 top-1/2 z-20 -translate-y-1/2 sm:left-4">
+        <div data-nq-recede="" className="absolute left-3 top-1/2 z-20 -translate-y-1/2 sm:left-4">
           <FloorStack items={items} value={mode === "walk" ? room.level ?? floor : floor} onChange={setFloor} tone="hud" extra={mode === "orbit" ? { id: "all", key: "All", name: "Whole house" } : undefined} />
         </div>
       )}
@@ -380,7 +389,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Bottom-left: mode, view, version */}
-      <div className={cn("absolute left-3 z-20 flex flex-wrap items-center gap-2 sm:left-4", wide && "bottom-4")} style={row(0)}>
+      <div data-nq-recede="" className={cn("absolute left-3 z-20 flex flex-wrap items-center gap-2 sm:left-4", wide && "bottom-4")} style={row(0)}>
         <Segmented
           label="Mode"
           tone="hud"
@@ -405,7 +414,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       {/* Bottom-right: rooms and comments */}
       <div className={cn("absolute right-3 z-20 flex items-center gap-2 sm:right-4", wide && "bottom-4")} style={row(phone ? 1 : 0)}>
         <HudButton ref={roomPill} onClick={() => setNavOpen((o) => !o)} pressed={navOpen} label="Rooms (M)">
-          <span className="max-w-[180px] truncate">{currentRoom ? `${sentenceCase(currentRoom.name)} · ${levelName(levels.find((l) => l.id === currentRoom.level)!).replace(/ floor$/i, "")}` : "Rooms"}</span>
+          <span className="max-w-[180px] truncate">{currentRoom ? `${sentenceCase(currentRoom.name)} · ${levelName(levels.find((l) => l.id === currentRoom.level)!).replace(/ floor$/i, "")}` : walkLevel ? (walkLevel.index === 0 ? "Outside" : levelName(walkLevel)) : "Rooms"}</span>
           <ChevronDown className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
         </HudButton>
         {isLatest && (
@@ -418,7 +427,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       </div>
 
       {/* Notes from the as-built check and parts that didn't build */}
-      <div className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(phone ? 2 : 1)}>
+      <div data-nq-recede="" className={cn("pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-4", wide && "bottom-[64px]")} style={row(phone ? 2 : 1)}>
         {asBuiltNotes.length > 0 && <AsBuiltNotes notes={asBuiltNotes.map((c) => c.message)} />}
         {failed.map((f) => (
           <div key={f.name} className="glass-hud pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 text-[13px]">
@@ -456,7 +465,7 @@ export function HouseView({ project, onProjectChange }: { project: Project; onPr
       <AnimatePresence>
         {draft && (
           <div className="absolute inset-0 z-50 grid place-items-center bg-black/30 p-3">
-            <Composer draft={draft} plan={plan} onCancel={() => setDraft(null)} onSave={saveDraft} />
+            <Composer draft={draft} plan={plan} onCancel={() => { setDraft(null); viewer.current?.cancelDraft(); }} onSave={saveDraft} />
           </div>
         )}
       </AnimatePresence>

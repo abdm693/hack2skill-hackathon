@@ -50,6 +50,10 @@ export interface ViewerState {
   dragged: boolean;
   /** the one-time "how to walk" coachmark is showing */
   hints: boolean;
+  /** the centre "Click (or drag) to look around" prompt is showing (4 s, gone at the first look or step) */
+  prompt: boolean;
+  /** "Note pinned": a walk comment was just saved (about 2 s, then walking resumes) */
+  pinned: boolean;
   /** the ? help card is open */
   help: boolean;
   /** no input for a while: the HUD steps back */
@@ -84,6 +88,8 @@ export function makeViewerStore(mode: ViewerMode, touch: boolean) {
     lockRefused: typeof document === "undefined" || !("pointerLockElement" in document),
     dragged: false,
     hints: false,
+    prompt: false,
+    pinned: false,
     help: false,
     idle: false,
     gliding: false,
