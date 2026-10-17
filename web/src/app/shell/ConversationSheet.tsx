@@ -63,8 +63,10 @@ export function ConversationSheet({ project, view }: { project: Project; view: s
         {messages.length === 0 && !busy && (
           <p className="text-[15px] leading-[22px] text-ink-3">Tell me about the plot and who will live there. One message is enough.</p>
         )}
+        {/* Suggestion chips only under Naqsha's latest turn, and never once the home has a version: setup chips
+            ("Show me concepts", "Add a study") would be stale beside a revise. */}
         {messages.map((m) => (
-          <Message key={m.id} m={m} />
+          <Message key={m.id} m={m} chips={m.id === lastAssistant?.id && !project.current_version_id && !busy && design.status !== "running" && revise.status !== "running"} />
         ))}
         {draft !== null && draft !== "" && (
           <div className="flex gap-2.5">
@@ -105,7 +107,7 @@ export function ConversationSheet({ project, view }: { project: Project; view: s
   );
 }
 
-function Message({ m }: { m: ChatMessage }) {
+function Message({ m, chips }: { m: ChatMessage; chips?: boolean }) {
   const ask = useAsk();
   if (m.role === "user") {
     return (
@@ -130,7 +132,7 @@ function Message({ m }: { m: ChatMessage }) {
             {u.assumptions.length > 0 && <Facts label="I assumed" items={u.assumptions} assumed />}
           </div>
         )}
-        {m.suggestions && m.suggestions.length > 0 && (
+        {chips && m.suggestions && m.suggestions.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {m.suggestions.slice(0, 3).map((s) => (
               <SuggestionChip key={s} onClick={() => ask.submit(s)}>{s}</SuggestionChip>

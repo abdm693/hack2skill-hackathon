@@ -29,6 +29,7 @@ import { FloorPlan, type PlanPin } from "./FloorPlan";
 import { anchorLevel, anchorPlanXY, areaDeltas, authorHue, changedRooms, coveredArea, hueColor, levelKey, levelName, levelsOf, sentenceCase } from "./model";
 import { PrintDialog } from "./PrintDialog";
 import { RoomKeyRow } from "./RoomKey";
+import { usePinNumbers } from "@/app/comments/pins";
 
 export function PlanView({ project, onProjectChange }: { project: Project; onProjectChange(p: Project): void }) {
   const goTo = useViewNav();
@@ -156,18 +157,20 @@ export function PlanView({ project, onProjectChange }: { project: Project; onPro
   const [pinSel, setPinSel] = useState<string | null>(null);
   const [pinAt, setPinAt] = useState<{ x: number; y: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Numbered across the whole project (comments/pins.ts): a pin keeps its number from version to version.
+  const pinNo = usePinNumbers(project.id, comments);
   const pins = useMemo<PlanPin[]>(() => {
     if (running || !plan || !comments?.length) return [];
     const ordered = [...comments].sort((a, b) => a.created_at.localeCompare(b.created_at));
     return ordered
-      .map((c, i) => ({ c, n: i + 1 }))
+      .map((c, i) => ({ c, n: pinNo.get(c.id) ?? i + 1 }))
       .filter(({ c }) => anchorLevel(plan, c) === level && c.anchor.kind !== "view")
       .map(({ c, n }) => {
         const [x, y] = anchorPlanXY(c);
         return { id: c.id, n, x, y, hue: authorHue(c), text: c.text, selected: pinSel === c.id };
       })
       .filter((p) => p.x > -2 && p.y > -2 && p.x < plan.site.plot.width_ft + 2 && p.y < plan.site.plot.depth_ft + 2);
-  }, [running, plan, comments, level, pinSel]);
+  }, [running, plan, comments, level, pinSel, pinNo]);
   const selectedPin = comments?.find((c) => c.id === pinSel);
 
   // Keys for rooms too small to label

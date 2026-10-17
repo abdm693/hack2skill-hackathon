@@ -14,6 +14,7 @@ import { Chip } from "@/app/ui/Chip";
 import { Sheet } from "@/app/ui/Sheet";
 import { CommentItem } from "./CommentItem";
 import { FILTERS, groupComments, matches, pinNumbers, type CommentFilter } from "./model";
+import { usePinNumbers } from "./pins";
 
 export function CommentsSheet({
   open,
@@ -54,7 +55,9 @@ export function CommentsSheet({
   const versionId = commentsFor ?? project.current_version_id;
   const plan = versionId ? versions[versionId]?.plan : undefined;
   const list = useMemo(() => comments.filter((c) => !versionId || c.version_id === versionId), [comments, versionId]);
-  const numbers = useMemo(() => pinNumbers(list), [list]);
+  // The owner's pins keep their number across versions (the whole project's comments); a client numbers their own.
+  const projectNumbers = usePinNumbers(clientView ? undefined : project.id, list);
+  const numbers = useMemo(() => (clientView ? pinNumbers(list) : projectNumbers), [clientView, list, projectNumbers]);
   const me = useMemo(() => ({ ids: [user?.uid, clientView ? undefined : userId()].filter(Boolean) as string[], name: clientView ? guestName : user?.name }), [user, clientView, guestName]);
   // Threads on earlier versions (resolved notes, with Naqsha's answers) stay readable after a revision, for everyone,
   // and the filters apply to them too.

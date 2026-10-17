@@ -1,5 +1,7 @@
 import type { BuildingPlan } from "@contracts/plan";
 import type { Comment, CommentAnchor } from "@contracts/api-types";
+import { sentenceCase } from "@/app/plan/model";
+
 
 /**
  * Stand-in viewport image for when the 3D viewer can't capture (still loading, or WebGL is unavailable).
@@ -62,13 +64,28 @@ export function generalAnchor(plan: BuildingPlan): CommentAnchor {
   };
 }
 
-/** "Master Bedroom, first floor" from an anchor, using the plan for names. */
+/** An engine label without its trailing note: "Roof (roof)" → "Roof", "Slab (first floor)" → "Slab". */
+export function cleanAnchorLabel(label: string | undefined | null): string | undefined {
+  const t = (label ?? "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return t || undefined;
+}
+
+/**
+ * "Master bedroom window, first floor" from an anchor, using the plan for names: sentence case, no "(…)" the
+ * engine adds, and no floor when the name already says it ("Roof", never "Roof (roof), roof").
+ */
 export function anchorLabel(anchor: CommentAnchor, plan?: BuildingPlan): string {
   const room = anchor.room ? plan?.rooms.find((r) => r.id === anchor.room)?.name ?? anchor.room : undefined;
   const level = anchor.level ? plan?.levels.find((l) => l.id === anchor.level)?.name ?? anchor.level : undefined;
-  const what = anchor.label && anchor.label !== room ? anchor.label : undefined;
+  const label = cleanAnchorLabel(anchor.label);
+  const what = label && label !== room ? label : undefined;
   // "Car porch roof" already says where it is; don't repeat "Car Porch".
   const roomPart = room && what?.toLowerCase().includes(room.toLowerCase()) ? undefined : room;
-  const parts = [what, roomPart, level?.toLowerCase()].filter(Boolean);
-  return parts.length ? parts.join(", ").replace(/^\w/, (c) => c.toUpperCase()) : "This view";
+  const named = [what, roomPart].filter(Boolean).join(" ").toLowerCase();
+  const levelWord = level?.toLowerCase().replace(/\s*floor$/, "");
+  const levelPart = level && levelWord && named.includes(levelWord) ? undefined : level?.toLowerCase();
+  const parts = [what && sentenceCase(what), roomPart && sentenceCase(roomPart), levelPart].filter(Boolean) as string[];
+  if (!parts.length) return "This view";
+  // Only the first part leads with a capital ("Master bedroom window, first floor").
+  return parts.map((p, i) => (i === 0 ? p.replace(/^\w/, (c) => c.toUpperCase()) : /^.[A-Z]/.test(p) || /\d/.test(p) ? p : p.charAt(0).toLowerCase() + p.slice(1))).join(", ");
 }

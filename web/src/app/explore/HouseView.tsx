@@ -30,6 +30,7 @@ import { notesLine } from "@/app/plan/compliance";
 import { ReviseStatus } from "@/app/revisions/ReviseStatus";
 import { Composer, type CommentDraft } from "./Composer";
 import { RoomNavigator } from "./RoomNavigator";
+import { usePinNumbers } from "@/app/comments/pins";
 
 export { RoomNavigator };
 import { RenderLightbox } from "./RenderLightbox";
@@ -250,12 +251,16 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     if (!c) return false;
     setDraft(null);
     setSelected(c.id);
+    // "Pin it" ends pin mode, as the client's House does (share/HouseStage.tsx).
+    setCommentMode(false);
     return true;
   };
 
   const openComments = useMemo(() => (comments ?? []).filter((c) => c.status === "open"), [comments]);
   // Pins are numbered by when they were made, the same numbers as Plan and the comments sheet (pinNumbers).
   const ordered = useMemo(() => [...(comments ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)), [comments]);
+  // The number a pin keeps across versions (the whole project's comments by when they were made).
+  const pinNo = usePinNumbers(project.id, comments);
   const selectedComment = comments?.find((c) => c.id === selected);
 
   const startRevise = (ids: string[], instruction?: string) => {
@@ -300,15 +305,22 @@ export function HouseView({ project, onProjectChange, active = true }: { project
     if (params.get("v")) setParams((p) => { const n = new URLSearchParams(p); n.delete("v"); return n; }, { replace: true });
   }, [revise?.version, params, setParams]);
 
+  const touch = useMediaQuery("(pointer: coarse)");
   useAskContext(
     active && latestVid
       ? {
           placeholder: "Tell Naqsha what to change…",
           // "Revise with N comments" is the shell's Next pill; typed, it opens the same choice.
           busy: revise?.status === "running",
+          // Pin mode: the house is the one thing to click, so the Next pill steps aside and the dock says how.
+          ...(commentMode && mode === "orbit" ? { next: null, line: touch ? "Tap the house to pin a note · Tap Comment to stop" : "Click the house to pin a note · Esc to stop" } : {}),
           onSubmit: (text) => {
             if (/^revise with \d+ comments?$/i.test(text.trim())) useShell.getState().openComments({ apply: true });
-            else startRevise([], text);
+            else {
+              // A typed change opens the conversation ("Your changes"), as a revise from comments does.
+              useShell.getState().toggleChat(true);
+              startRevise([], text);
+            }
           },
         }
       : null,
@@ -576,7 +588,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
           >
             <PinCard
               c={selectedComment}
-              n={ordered.findIndex((c) => c.id === selectedComment.id) + 1}
+              n={pinNo.get(selectedComment.id) ?? ordered.findIndex((c) => c.id === selectedComment.id) + 1}
               onFly={() => viewer.current?.flyTo(selectedComment)}
               onThread={() => useShell.getState().openComments({ focus: selectedComment.id })}
               onClose={() => setSelected(null)}
@@ -696,7 +708,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       <FinishDialog
         open={finishOpen}
         comments={openComments}
-        ordered={ordered}
+        ordered={ordered} numbers={pinNo}
         onClose={() => setFinishOpen(false)}
         onRevise={(ids) => startRevise(ids)}
       />
@@ -957,7 +969,7 @@ function AsBuiltNotes({
   );
 }
 
-function FinishDialog({ open, comments, ordered, onClose, onRevise }: { open: boolean; comments: Comment[]; ordered: Comment[]; onClose: () => void; onRevise: (ids: string[]) => void }) {
+function FinishDialog({ open, comments, ordered, numbers, onClose, onRevise }: { open: boolean; comments: Comment[]; ordered: Comment[]; numbers?: Map<string, number>; onClose: () => void; onRevise: (ids: string[]) => void }) {
   // Team comments go in by default; a client's comment waits until the owner includes it (DESIGN.md "Comments").
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
@@ -995,7 +1007,7 @@ function FinishDialog({ open, comments, ordered, onClose, onRevise }: { open: bo
               >
                 <span className={cn("mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px]", on ? "bg-accent text-white" : "shadow-[inset_0_0_0_1.5px_var(--color-line-strong)]")}>{on && <Check className="size-3" strokeWidth={3} />}</span>
                 <span className="grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: hueColor(c) }}>
-                  {ordered.findIndex((x) => x.id === c.id) + 1}
+                  {numbers?.get(c.id) ?? ordered.findIndex((x) => x.id === c.id) + 1}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-body text-ink">{c.text}</span>
