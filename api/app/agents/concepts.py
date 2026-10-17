@@ -193,12 +193,18 @@ async def side_road(image: tuple[bytes, str]) -> bool | None:
     """A quick look (the setup model, image in, yes/no out) at a mid-row day image: does a road or street run beside the
     house? None when the check couldn't run (the concept is kept as it is)."""
     try:
-        cfg = types.GenerateContentConfig(response_mime_type="application/json", max_output_tokens=256,
+        # thinking shares the output budget: leave room for it, and pin the answer to one boolean
+        cfg = types.GenerateContentConfig(response_mime_type="application/json", max_output_tokens=4096,
+                                          response_schema={"type": "OBJECT", "properties": {"side_road": {"type": "BOOLEAN"}},
+                                                           "required": ["side_road"]},
                                           thinking_config=types.ThinkingConfig(thinking_level="LOW"))
         resp = await asyncio.wait_for(client().aio.models.generate_content(
             model=config.MODEL_INTAKE, contents=[types.Part.from_bytes(data=image[0], mime_type=image[1]), SIDE_ROAD_ASK],
             config=cfg), SIDE_ROAD_S)
-        return bool(llm.parse_json(resp.text or "").get("side_road"))
+        text = resp.text or ""
+        if (m := re.search(r'"side_road"\s*:\s*(true|false)', text)):
+            return m.group(1) == "true"
+        return bool(llm.parse_json(text).get("side_road"))
     except Exception as e:
         log.warning("mid-row check skipped: %s", e)
         return None

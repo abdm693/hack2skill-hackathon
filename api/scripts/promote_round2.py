@@ -1,8 +1,11 @@
 """Round 2 sample fixes, promoted in place (the samples keep their ids, so the landing and every untouched guest copy pick them
 up: a copy made before the sample's new updated_at is refreshed on its next open). Dry run by default; --apply writes.
 
-    uv run python scripts/promote_round2.py concept SAMPLE CONCEPT_ID DAY.png NIGHT.png [--apply]
-        BE2-02: upload the new day/night images under new names and point the concept at them (same id, same title).
+    uv run python scripts/promote_round2.py concept SAMPLE CONCEPT_ID DAY.png NIGHT.png [--tag=r4] [--apply]
+        BE2-02: upload the new day/night images under new names (<id>-<tag>.png, never over an existing file) and point the
+        concept at them (same id, same title; the project thumbnail follows when it showed the old image).
+    uv run python scripts/promote_round2.py captions SAMPLE [--apply]
+        BE-F1: plain British English captions (concept.summary) from CAPTIONS.
     uv run python scripts/promote_round2.py version SAMPLE STAGING_PID VERSION_ID [--summary="..."] [--strict] [--apply]
         BE2-03: copy a passing version from a staging copy of SAMPLE into SAMPLE and make it current (its compliance is
         rechecked with today's rules first, keeping its open architect's notes; refuses a version with any LDA or livable
@@ -29,7 +32,24 @@ from app.store import blobs, db
 APPLY = "--apply" in sys.argv
 STRICT = "--strict" in sys.argv  # version: also refuse any warning or a major architect's note (not only failures)
 SUMMARY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--summary=")), "Updated to today's rules")
-ARGS = [a for a in sys.argv[1:] if a not in ("--apply", "--strict") and not a.startswith("--summary=")]
+TAG = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--tag=")), "r2")  # concept: the new files' suffix
+ARGS = [a for a in sys.argv[1:] if a not in ("--apply", "--strict") and not a.startswith(("--summary=", "--tag="))]
+
+# Round 4 (BE-F1): each sample concept's caption (concept.summary) in plain British English, about 12 words.
+CAPTIONS = {
+    "p_5a5893a2bcaa": {
+        "c_1f43b123ec11": "A floating upper floor in stone and warm timber slats over the car porch.",
+        "c_0026dc7358eb": "A tall travertine wall beside recessed glass behind a vertical teak screen.",
+        "c_4333ea54cc2c": "Stepped white volumes with a planted first-floor terrace and slim steel frames.",
+        "c_509c756d9b65": "Interlocking brick blocks with a brick jaali screen over the upper windows.",
+    },
+    "p_1a42e70989af": {
+        "c_ffb82b39c6a0": "A stucco stair tower and rubble-stone base frame a calm cream facade.",
+        "c_25ba8b60d59f": "A deep two-storey front veranda with timber beams and smooth plaster walls.",
+        "c_4b551383383d": "Stepped off-white plaster blocks with terracotta eaves and a two-car porch.",
+        "c_44a512ecc5c9": "Ground-floor stucco arches carry a shaded upper terrace with iron balconies.",
+    },
+}
 
 
 def say(*a):
@@ -50,20 +70,42 @@ async def concept(pid: str, cid: str, day: str, night: str):
     if not c:
         raise SystemExit(f"{cid}: no such concept on {pid}")
     folder = c["url"].removeprefix("/api/assets/").rsplit("/", 1)[0]
-    day_path, night_path = f"{folder}/{cid}-r2.png", f"{folder}/{cid}-r2-night.png"
+    day_path, night_path = f"{folder}/{cid}-{TAG}.png", f"{folder}/{cid}-{TAG}-night.png"
     say("concept", cid, c.get("title"), ":", c["url"], "->", f"/api/assets/{day_path}")
     say("        night:", c.get("night_url"), "->", f"/api/assets/{night_path}")
+    say("        thumbnail moves:", p.get("thumbnail_url") == c["url"], "| selected:", p.get("selected_concept_id"))
+    for path in (day_path, night_path):  # never overwrite a stored image (rollback keeps every earlier one)
+        if await blobs.get(path):
+            raise SystemExit(f"{path} already exists: pass another --tag=")
     if not APPLY:
         return
     day_url = await blobs.put(day_path, Path(day).read_bytes(), "image/png")
     night_url = await blobs.put(night_path, Path(night).read_bytes(), "image/png")
     new = {**c, "url": day_url, "night_url": night_url, "previous_url": c["url"], "previous_night_url": c.get("night_url"),
-           "edited": "mid-row: neighbours built against both side walls, one road in front (round 2)"}
+           "edited": f"mid-row: neighbours built against both side walls, one road in front ({TAG})"}
     fields = {"concepts": [new if x["id"] == cid else x for x in cs]}
     if p.get("thumbnail_url") == c["url"]:
         fields["thumbnail_url"] = day_url
     await db.update_project(pid, **fields)
     say("done; selected concept is still", p.get("selected_concept_id"))
+
+
+async def captions(pid: str):
+    """Plain captions (concept.summary) for the sample's concepts, from CAPTIONS; titles, images and ids stay."""
+    p = await sample(pid)
+    plain = CAPTIONS.get(pid) or {}
+    cs = p.get("concepts") or []
+    for c in cs:
+        if c["id"] in plain:
+            say("caption", c["id"], c.get("title"), ":", json.dumps(c.get("summary")), "->", json.dumps(plain[c["id"]]))
+    missing = set(plain) - {c["id"] for c in cs}
+    if missing:
+        raise SystemExit(f"no such concepts on {pid}: {sorted(missing)}")
+    if not APPLY:
+        return
+    await db.update_project(pid, concepts=[{**c, "summary": plain[c["id"]], "previous_summary": c.get("summary")}
+                                           if c["id"] in plain else c for c in cs])
+    say("done")
 
 
 def recheck(v: dict, brief: dict | None) -> dict:
@@ -162,5 +204,5 @@ async def verify(pid: str):
 
 if __name__ == "__main__":
     cmd = ARGS[0]
-    fn = {"concept": concept, "version": version, "chat": chat, "verify": verify}[cmd]
+    fn = {"concept": concept, "captions": captions, "version": version, "chat": chat, "verify": verify}[cmd]
     asyncio.run(fn(*ARGS[1:]))
