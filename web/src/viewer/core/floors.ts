@@ -6,7 +6,37 @@
  * Showing: the real floors come back lifted and settle into place.
  */
 import * as THREE from "three";
+import type { Level } from "@contracts/plan";
 import { easeOutCubic, smoothstep } from "./units";
+
+/** "G", "1", "2", "R", "B": the floor stack's own short names (the app's floor stack, the minimap and walk keys). */
+export function levelShort(l: Level, levels: Level[]): string {
+  const sorted = [...levels].sort((a, b) => a.index - b.index);
+  if (/roof/i.test(l.id) || /roof/i.test(l.name) || (l === sorted[sorted.length - 1] && sorted.length > 1 && !/floor/i.test(l.name))) return "R";
+  if (l.index < 0) return "B";
+  if (l.index === 0) return "G";
+  return String(l.index);
+}
+
+/** Every floor's short name, ground first ("G", "1", "R"). */
+export function levelShorts(levels: Level[]): string[] {
+  const sorted = [...levels].sort((a, b) => a.index - b.index);
+  return sorted.map((l) => levelShort(l, sorted));
+}
+
+/**
+ * The floor a key names, by the same labels the floor stack shows: G (or 0) the ground floor, 1–9 the floor labelled
+ * so, R the roof, B the basement (the one nearest the ground). Null when no floor carries that label.
+ */
+export function levelForKey(code: string, levels: Level[]): Level | null {
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(code)?.[1];
+  const label = digit != null ? (digit === "0" ? "G" : digit) : code === "KeyG" ? "G" : code === "KeyR" ? "R" : code === "KeyB" ? "B" : null;
+  if (!label) return null;
+  const sorted = [...levels].sort((a, b) => a.index - b.index);
+  const hits = sorted.filter((l) => levelShort(l, sorted) === label);
+  // basements count down from the ground; any other label names the lowest floor that carries it
+  return (label === "B" ? hits[hits.length - 1] : hits[0]) ?? null;
+}
 
 const LIFT = 1.5;
 const DUR = 420;

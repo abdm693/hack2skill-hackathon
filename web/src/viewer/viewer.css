@@ -242,13 +242,14 @@
  * The controller never marks idle while the pointer is on the minimap or the help card is open. The app's chrome
  * follows through `:root[data-nq-walk-idle]`: anything it marks `data-nq-recede`, and the shell's floating rows over
  * the view (the pointer-events-none siblings of the <main> that holds the viewer). Hovered or focused chrome stays.
+ * A House kept mounted but hidden behind another view (data-active="0") never makes that view's chrome recede.
  */
 .nq-viewer[data-idle="1"] .nq-mini,
 .nq-viewer[data-idle="1"] .nq-target,
 .nq-viewer[data-idle="1"] .nq-prompt { opacity: 0; pointer-events: none; }
-[data-nq-recede], main:has(.nq-viewer[data-mode="walk"]) ~ .pointer-events-none { transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)); }
+[data-nq-recede], main:has(.nq-viewer[data-mode="walk"]:not([data-active="0"])) ~ .pointer-events-none { transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)); }
 :root[data-nq-walk-idle] [data-nq-recede]:not(:hover):not(:focus-within),
-:root[data-nq-walk-idle] main:has(.nq-viewer[data-mode="walk"]) ~ .pointer-events-none:not(:hover):not(:focus-within) { opacity: 0; }
+:root[data-nq-walk-idle] main:has(.nq-viewer[data-mode="walk"]:not([data-active="0"])) ~ .pointer-events-none:not(:hover):not(:focus-within) { opacity: 0; }
 
 /* ── touch ───────────────────────────── */
 .nq-touch-zone { position: absolute; bottom: 0; top: 30%; touch-action: none; pointer-events: auto; }

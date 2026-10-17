@@ -67,6 +67,11 @@ export interface ViewerState {
   mapLevel: string | null;
   /** the selected comment pin */
   selectedPin: string | null;
+  /**
+   * The viewer is on screen. False while the app keeps it mounted but hidden (`active={false}`, or an ancestor at
+   * visibility: hidden / display: none): it then never renders every frame, takes no keys and lets the HUD rest.
+   */
+  active: boolean;
 }
 
 export type ViewerStore = ReturnType<typeof makeViewerStore>;
@@ -97,5 +102,6 @@ export function makeViewerStore(mode: ViewerMode, touch: boolean) {
     orbitFloor: null,
     mapLevel: null,
     selectedPin: null,
+    active: true,
   }));
 }

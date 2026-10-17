@@ -46,6 +46,12 @@ export const GHOST = {
   /** how much of the same building stands between the camera and the house (it then ghosts whole, not as a hole) */
   nqOccW: { value: new Array<number>(NEAR_MAX).fill(0) },
   nqNearN: { value: 0 },
+  /**
+   * 1 while capturing for "Render this view": nothing is translucent (an AI render turns a ghosted neighbour into a
+   * glass building). Neighbours, also those in front of the house, are drawn solid; only a building at the lens (the
+   * near fade, which the viewport shows at 4%) is left out whole, so the frame is never one blank wall.
+   */
+  nqCapture: { value: 0 },
 };
 
 const GLSL = /* glsl */ `
@@ -57,6 +63,7 @@ uniform vec3 nqNearMax[${NEAR_MAX}];
 uniform float nqNearW[${NEAR_MAX}];
 uniform float nqOccW[${NEAR_MAX}];
 uniform int nqNearN;
+uniform float nqCapture;
 varying vec3 vNqW;
 // how much of this fragment belongs to a building at (or in) the camera, or sits right in front of the lens
 float nqNearF = 0.0;
@@ -88,6 +95,8 @@ float nqGhostAt(vec3 p) {
   nqOccF = 0.0;
   if (nqGhost <= 0.0) return 0.0;
   nqNear(p);
+  // capture: solid, except a building at the lens, which is cut out whole (never a translucent veil)
+  if (nqCapture > 0.5) return step(0.5, nqNearF);
   vec3 d = p - cameraPosition;
   float L = length(d);
   vec3 rd = d / max(L, 1e-5);
@@ -119,7 +128,7 @@ function patch(mat: THREE.Material, mode: "solid" | "ghost") {
     prev?.(sh, r);
     Object.assign(sh.uniforms, GHOST);
     sh.vertexShader = VERT_DECL + sh.vertexShader.replace("#include <project_vertex>", VERT_BODY);
-    const test = mode === "solid" ? "if (nqG > 0.02) discard;" : "if (nqG <= 0.02) discard;";
+    const test = mode === "solid" ? "if (nqG > 0.02) discard;" : "if (nqG <= 0.02 || nqCapture > 0.5) discard;";
     sh.fragmentShader =
       GLSL +
       sh.fragmentShader.replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n  float nqG = nqGhostAt(vNqW);\n  ${test}`);
