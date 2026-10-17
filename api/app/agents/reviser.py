@@ -101,6 +101,14 @@ def new_failures(base: dict, cand: dict) -> list[dict]:
     return [c for c in cand.get("checks", []) if c["status"] == "fail" and c["id"] not in old]
 
 
+def reading_line(comments: list[dict], instruction: str | None) -> str:
+    """The first narration line: "Reading your request…", "Reading your 2 notes…", "Reading your note and your request…"."""
+    n = len(comments)
+    notes = (f"your {n} notes" if n > 1 else "your note") if n else ""
+    what = " and ".join(x for x in (notes, "your request" if instruction else "") if x)
+    return f"Reading {what or 'the design'}…"
+
+
 def pseudo_request(instruction: str) -> dict:
     return {"id": "request", "text": instruction, "anchor": {}, "status": "open"}
 
@@ -189,7 +197,7 @@ async def revise(project: dict, version: dict, comments: list[dict], instruction
     pid = project["id"]
     brief = project.get("brief") or {}
     await db.update_project(pid, stage="revising")
-    yield "stage", {"stage": "changes", "message": "Reading your notes…"}
+    yield "stage", {"stage": "changes", "message": reading_line(comments, instruction)}
     parts = await snapshot_parts(comments)
     env = lda.envelope(brief["plot"]["width_ft"], brief["plot"]["depth_ft"], brief.get("authority") or "LDA") if brief.get("plot") else {}
     env.pop("_band", None)

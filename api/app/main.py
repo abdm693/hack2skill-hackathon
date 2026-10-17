@@ -73,7 +73,8 @@ def public(p: dict, role: str | None = None) -> dict:
 # --- comment authors: opaque per-project handles ---------------------------------------------------------------------------
 # A guest's id is their whole identity (X-Naqsha-User), so comment payloads never carry raw uids or guest ids: each author
 # id becomes an HMAC handle that is stable within a project (pins and threads still group by author) and useless outside it.
-# `mine` tells the caller which comments and replies are their own.
+# Every caller gets the same handle for an author (the owner's own app included), so an author's pin and avatar colour, which
+# the app hashes from the id, are the same for everyone. `mine` tells the caller which comments and replies are their own.
 _HANDLE_KEY = (config.HANDLE_SECRET or f"naqsha-handles:{config.PROJECT}").encode()
 _PUBLIC_AUTHORS = {"naqsha", "owner", "anon", None, ""}
 
@@ -88,9 +89,9 @@ def my_author_ids(me: Identity | None) -> set[str]:
     return {x for x in ((me.uid, me.guest_id) if me else ()) if x and x not in _PUBLIC_AUTHORS}
 
 
-def comment_out(pid: str, c: dict | None, me: Identity | None, keep_own: bool = False) -> dict | None:
-    """A comment as the caller may see it: author ids as handles (the caller's own raw id kept only when keep_own, for the
-    owner's own app), and `mine` on the comment and each reply."""
+def comment_out(pid: str, c: dict | None, me: Identity | None) -> dict | None:
+    """A comment as the caller may see it: author ids as handles (the same for every caller) and `mine` on the comment and
+    each reply."""
     if not c:
         return c
     c = copy.deepcopy(c)
@@ -100,7 +101,7 @@ def comment_out(pid: str, c: dict | None, me: Identity | None, keep_own: bool = 
         a = obj.get("author")
         raw = a.get("id") if isinstance(a, dict) else None
         obj["mine"] = bool(raw and raw in mine_ids)
-        if isinstance(a, dict) and not (keep_own and obj["mine"]):
+        if isinstance(a, dict):
             a["id"] = author_handle(pid, raw)
     fix(c)
     for r in c.get("replies") or []:
@@ -109,8 +110,8 @@ def comment_out(pid: str, c: dict | None, me: Identity | None, keep_own: bool = 
     return c
 
 
-def comments_out(pid: str, cs: list[dict], me: Identity | None, keep_own: bool = False) -> list[dict]:
-    return [comment_out(pid, c, me, keep_own) for c in cs]
+def comments_out(pid: str, cs: list[dict], me: Identity | None) -> list[dict]:
+    return [comment_out(pid, c, me) for c in cs]
 
 
 async def maybe_identity(authorization: str | None = Header(None), x_naqsha_user: str | None = Header(None)) -> Identity:
@@ -265,23 +266,35 @@ async def samples():
 
 @app.post("/api/projects/{pid}/clone")
 async def clone(pid: str, body: NewProject, me: Identity = Depends(auth.identity)):
-    """Copy a sample (or your own project) into your workspace. A sample is copied once: opening it again returns your copy
-    unless {fresh: true}."""
+    """Copy a sample (or your own project) into your workspace. Opening a sample again returns your copy while it is
+    untouched (the name it was made with, no comments, replies or versions of your own; refreshed in place when the sample
+    has changed since). Once you have made it yours, or with {fresh: true}, it makes a new copy. Copies drop the
+    "Sample · " prefix, and a second copy in the same workspace is named "… (2)"."""
     src = await db.get_project(pid)
     if not src or not (src.get("owner") == db.SAMPLES_OWNER or role_of(src, me) in ("owner", "team")):
         raise HTTPException(404, "project not found")
-    if src.get("owner") == db.SAMPLES_OWNER and not body.fresh:
-        stale = None
-        for key in me.owner_keys:
-            mine, is_stale = await db.find_clone(key, pid, src)
-            if mine and not is_stale:
-                return public(mine, "owner")
-            stale = stale or mine
-        if stale:  # an untouched copy of an older sample: refresh it in place with the current sample
-            return public(await db.refresh_clone(stale["id"], src, stale["owner"]), "owner")
-        # one copy per guest and sample, even when two tabs open it at once (a deterministic id, created only once)
-        return public(await db.clone_project(pid, me.key, body.name, once=True), "owner")
-    return public(await db.clone_project(pid, me.key, body.name), "owner")
+    if src.get("owner") != db.SAMPLES_OWNER:
+        return public(await db.clone_project(pid, me.key, body.name), "owner")
+    copies: list[dict] = []
+    for key in me.owner_keys:
+        copies += await db.list_clones(key, pid)
+    if not body.fresh:
+        for c in copies:  # newest first
+            if not await db.untouched_copy(c, src):
+                continue
+            if not db.stale_copy(c, src):
+                return public(c, "owner")
+            # an untouched copy of an older sample: refresh it in place (an older copy's "Sample · …" name loses the prefix)
+            name = db.copy_base_name(src.get("name")) if c.get("name") == src.get("name") else c.get("name")
+            return public(await db.refresh_clone(c["id"], src, c["owner"], name), "owner")
+    taken: set[str] = set()
+    for key in me.owner_keys:
+        taken |= {str(p.get("name") or "") for p in await db.list_projects(key)}
+    name = (body.name or "").strip()[:80] or db.copy_name(src.get("name"), taken)
+    # a deterministic id per copy slot, so two tabs opening the sample at once still make one copy
+    ids = {c["id"] for c in copies}
+    slot = next(k for k in range(1, len(ids) + 2) if db.clone_id(me.key, pid, k) not in ids)
+    return public(await db.clone_project(pid, me.key, name, once=True, slot=slot), "owner")
 
 
 # --- members and sharing --------------------------------------------------------------------------------------------------
@@ -718,7 +731,7 @@ class CommentPatch(BaseModel):
 @app.get("/api/projects/{pid}/comments")
 async def list_comments(pid: str, version_id: str | None = None, me: Identity = Depends(auth.identity)):
     await access(pid, me, "view")
-    return {"comments": comments_out(pid, await db.list_comments(pid, version_id), me, keep_own=True)}
+    return {"comments": comments_out(pid, await db.list_comments(pid, version_id), me)}
 
 
 @app.post("/api/projects/{pid}/comments")
@@ -728,7 +741,7 @@ async def add_comment(pid: str, body: CommentBody, me: Identity = Depends(auth.i
         raise HTTPException(400, "Write a comment first.")
     c = await _new_comment(p, body.version_id, body.text, body.anchor, body.camera, body.snapshot_data_url,
                            author_of(me, role, body.author_name))
-    return comment_out(pid, c, me, keep_own=True)
+    return comment_out(pid, c, me)
 
 
 @app.patch("/api/projects/{pid}/comments/{cid}")
@@ -746,7 +759,7 @@ async def patch_comment(pid: str, cid: str, body: CommentPatch, me: Identity = D
             raise HTTPException(400, "Unknown status.")
         if role == "client" and not mine:
             raise HTTPException(403, "Only the owner or the team can change that.")
-    return comment_out(pid, await db.update_comment(pid, cid, **fields), me, keep_own=True)
+    return comment_out(pid, await db.update_comment(pid, cid, **fields), me)
 
 
 @app.delete("/api/projects/{pid}/comments/{cid}")
@@ -762,7 +775,7 @@ async def delete_comment(pid: str, cid: str, me: Identity = Depends(auth.identit
 @app.post("/api/projects/{pid}/comments/{cid}/replies")
 async def reply(pid: str, cid: str, body: ReplyBody, me: Identity = Depends(auth.identity)):
     p, role = await access(pid, me, "comment")
-    return comment_out(pid, await _reply(p, cid, body, author_of(me, role, body.author_name)), me, keep_own=True)
+    return comment_out(pid, await _reply(p, cid, body, author_of(me, role, body.author_name)), me)
 
 
 # --- revise (comments and/or a typed request → new version) --------------------------------------------------------------------
@@ -770,6 +783,21 @@ class ReviseBody(BaseModel):
     version_id: str
     comment_ids: list[str] | None = None
     instruction: str | None = None
+
+
+async def revise_comments(pid: str, version_id: str, comment_ids: list[str] | None, instruction: str | None) -> list[dict]:
+    """Which comments a revision applies. Named comments are exactly those ([] means none; any not resolved yet, on any
+    version). A typed request with no comment_ids applies no comments: what the family typed is the whole ask, so a comment
+    held back in the chooser stays held back. Neither (the Next pill's "Apply open comments") means every open comment on
+    the version. A client's sign-off is never a change request."""
+    if comment_ids is not None:
+        chosen = set(comment_ids)
+        comments = [c for c in await db.list_comments(pid) if c["id"] in chosen and c.get("status") != "resolved"] if chosen else []
+    elif instruction:
+        comments = []
+    else:
+        comments = [c for c in await db.list_comments(pid, version_id) if c.get("status") == "open"]
+    return [c for c in comments if c.get("kind") != "approval"]
 
 
 @app.post("/api/projects/{pid}/revise")
@@ -780,13 +808,8 @@ async def revise(pid: str, body: ReviseBody, me: Identity = Depends(auth.identit
     v = await db.get_version(pid, body.version_id)
     if not v:
         raise HTTPException(404, "version not found")
-    if body.comment_ids is not None:  # the owner picked which comments go in (any that aren't resolved yet, on any version)
-        chosen = set(body.comment_ids)
-        comments = [c for c in await db.list_comments(pid) if c["id"] in chosen and c.get("status") != "resolved"]
-    else:
-        comments = [c for c in await db.list_comments(pid, body.version_id) if c.get("status") == "open"]
-    comments = [c for c in comments if c.get("kind") != "approval"]  # a client's sign-off is never a change request
     instruction = (body.instruction or "").strip() or None
+    comments = await revise_comments(pid, body.version_id, body.comment_ids, instruction)
     if not comments and not instruction:
         raise HTTPException(400, "Add a comment or tell me what to change.")
 
@@ -801,7 +824,7 @@ async def revise(pid: str, body: ReviseBody, me: Identity = Depends(auth.identit
                 yield _out(ev)
 
     def _out(ev):  # the run stream reaches the team too: comment authors as handles
-        return (ev[0], {**ev[1], "comment": comment_out(pid, ev[1]["comment"], me, keep_own=True)}) if ev[0] == "comment" else ev
+        return (ev[0], {**ev[1], "comment": comment_out(pid, ev[1]["comment"], me)}) if ev[0] == "comment" else ev
     return _attach(runs.start(pid, "revise", gen))
 
 

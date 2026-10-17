@@ -24,7 +24,7 @@ from ..compliance import lda
 from ..gemini import RETRY
 from ..store import db
 from .architect import BUILD_SYSTEM, CONTRACTS, _read, prepare
-from .reviser import apply_ops, comment_brief, finalize, merge_sections, new_failures, snapshot_parts
+from .reviser import apply_ops, comment_brief, finalize, merge_sections, new_failures, reading_line, snapshot_parts
 
 APP = "naqsha-reviser"
 
@@ -221,10 +221,7 @@ async def revise(project: dict, version: dict, comments: list[dict], instruction
     pid = project["id"]
     brief = project.get("brief") or {}
     await db.update_project(pid, stage="revising")
-    n = len(comments)
-    notes = f"your {n} note{'s' if n != 1 else ''}" if n else ""
-    what = " and ".join(x for x in (notes, "your request" if instruction else "") if x)
-    yield "stage", {"stage": "changes", "message": f"Reading {what}…"}
+    yield "stage", {"stage": "changes", "message": reading_line(comments, instruction)}
     targets = list(comments) + ([{"id": "request", "text": instruction, "anchor": {}}] if instruction else [])
     ws = Workspace(version, targets, brief)
     agent = Agent(name="reviser", model=Gemini(model=config.MODEL_ARCHITECT, retry_options=RETRY), instruction=INSTRUCTION,
