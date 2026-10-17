@@ -36,8 +36,8 @@
     <div class="cup r" style="--i:0"><span class="dot"></span>Live on Cloud Run · Google Cloud AI Builder Cup 2026</div>
     <div class="wordmark r" style="--i:1"><span class="en">Naqsha</span><span class="ur" lang="ur">نقشہ</span></div>
     <p class="tag r" style="--i:2">Walk through your home before the first brick.</p>
-    <p class="desc r" style="--i:3">From a rough idea to an LDA-checked floor plan and a 3D home you can walk through, comment on and change.</p>
-    <p class="scored r" style="--i:4">Gemini 4 Argon designs the house in code. A Google ADK agent revises it. All on Google Cloud.</p>
+    <p class="desc r" style="--i:3">From one message about a plot to an LDA-checked floor plan and a 3D home the family can walk through, share, comment on and change.</p>
+    <p class="scored r" style="--i:4">Gemini 4 Argon designs the house in code and reviews its own drawings. Google ADK agents take the brief and make the revisions. All on Google Cloud.</p>
     <div class="meta r" style="--i:5">
       <span class="url">naqsha-242926648187.us-central1.run.app</span>
       <span class="sub">github.com/abdm693/hack2skill-hackathon</span>
@@ -198,7 +198,8 @@
   </div>
 
   <aside class="notes">
-    <p>"Naqsha is what Pakistani families call a house plan. Every house in Lahore starts with one, usually on paper, then argued over for weeks. We built an agentic web app on Google Cloud that turns a family's idea into a house they can walk through before the first brick is laid, checked against Lahore Development Authority rules at every step. The house on the right wasn't modelled by a person. Gemini 4 Argon wrote it, as code."</p>
+    <p>"Naqsha is what Pakistani families call a house plan. Every house in Lahore starts with one, usually on paper, then argued over for weeks. We built an agentic web app on Google Cloud that turns a family's idea into a house they can walk through before the first brick is laid, checked against Lahore Development Authority rules and livable-home rules at every step. The house on the right wasn't modelled by a person. Gemini 4 Argon wrote it, as code."</p>
+    <p>The render on the right is Argon's first 10-marla house (16 Oct). The live samples shown from slide 3 on are the v3 homes of 17 Oct.</p>
   </aside>
 </section>
 
@@ -299,8 +300,8 @@
     </ul>
     <div class="cost r" style="--i:11">
       <div class="label">What a mistake costs on this plot · worked out from LDA's fee schedule</div>
-      <div class="row"><span class="big">≈ Rs 38,000</span><span class="t">for each resubmission of the 2,565 sq ft house Naqsha designed for this plot</span></div>
-      <div class="row"><span class="big">Rs 15–30k</span><span class="t">penalty for a porch 4 ft into the front open space: 60 sq ft at Rs 250 or Rs 500</span></div>
+      <div class="row"><span class="big">≈ Rs 41,000</span><span class="t">for each resubmission of the 2,762 sq ft house Naqsha designed for this plot</span></div>
+      <div class="row"><span class="big">Rs 14.5–29k</span><span class="t">penalty for its 14′6″ porch pushed 4 ft into the front open space: 58 sq ft at Rs 250 or Rs 500</span></div>
     </div>
   </div>
 
@@ -308,8 +309,8 @@
   <footer class="foot"><span>Source: LDA Building &amp; Zoning Regulations 2019, consolidated text of 9 Feb 2026, Appendix C</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Picture a family in Johar Town with a 10-marla plot. Their house begins as a pencil sketch and a contractor's best guess. The rules for that plot are precise: ten feet open at the front, seven at the rear, five on one side, seventy percent coverage, forty-five feet, and now three storeys, not four. That changed in LDA's 2026 text. A registered architect must stamp the plan. Mistakes are expensive: every resubmission pays the scrutiny fee again, about thirty-eight thousand rupees for a house like ours, and a porch pushed four feet into the front open space costs fifteen to thirty thousand in penalties, if LDA compounds it at all."</p>
-    <p>Arithmetic: Rs 15 × 2,565 sq ft (total covered area of the 10-marla sample, live API) = Rs 38,475. Porch: 4 ft × 15 ft = 60 sq ft; Rs 250/sq ft (porch projection over the limit) to Rs 500/sq ft (ground-floor open-space violation), both Appendix C [v2026].</p>
+    <p>"Picture a family in Johar Town with a 10-marla plot. Their house begins as a pencil sketch and a contractor's best guess. The rules for that plot are precise: ten feet open at the front, seven at the rear, five on one side, seventy percent coverage, forty-five feet, and now three storeys, not four. That changed in LDA's 2026 text. A registered architect must stamp the plan. Mistakes are expensive: every resubmission pays the scrutiny fee again, about forty-one thousand rupees for a house like ours, and a porch pushed four feet into the front open space costs up to twenty-nine thousand in penalties, if LDA compounds it at all."</p>
+    <p>Arithmetic: Rs 15 × 2,762 sq ft (total covered area of the live 10 marla sample, v3: the print cover's area schedule, porch, balconies and stair tower included) = Rs 41,430. Porch: 4 ft × 14.5 ft (the sample's 14′6″ × 18′ porch) = 58 sq ft; Rs 250/sq ft (porch projection over the limit) = Rs 14,500 to Rs 500/sq ft (ground-floor open-space violation) = Rs 29,000, both Appendix C [v2026].</p>
   </aside>
 </section>
 
@@ -320,50 +321,50 @@
   <header class="chrome"><span class="eyebrow">The journey</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
     <h1 class="title r" style="--i:0">One sitting, from an idea to a house you can walk through</h1>
-    <p class="kicker r" style="--i:1">Brief, concepts, plan, 3D, walk and revise. Shown on the live 10-marla sample.</p>
+    <p class="kicker r" style="--i:1">Brief, concepts, plan, house, walk and revise. Shown on the live 10 marla sample.</p>
   </div>
 
   <div class="strip">
     <div class="stop r" style="--i:2">
-      <div class="frame"><img data-asset="liveSetup10m" style="object-view-box:inset(55.1% 1.4% 9.7% 74.1%)"></div>
-      <div class="name">Brief <span class="chip mono out">instant</span></div>
-      <div class="what">Answer one-tap questions, or skip and let the AI choose. The LDA envelope appears as soon as the plot is known.</div>
-      <div class="eng">gemini-3.8-flash + deterministic envelope</div>
+      <div class="frame" style="background:#F6F6F3"><img data-asset="v2BriefPhone" style="object-view-box:inset(45.1% 0% 7.9% 0%)"></div>
+      <div class="name">Brief <span class="chip mono out">1 message</span></div>
+      <div class="what">Describe the plot in one message. Naqsha says what it understood and asks only what's missing.</div>
+      <div class="eng">gemini-3.8-flash on ADK + LDA envelope</div>
     </div>
     <div class="stop r" style="--i:3">
-      <div class="frame"><img data-asset="concept10m" style="object-position:62% 50%"></div>
-      <div class="name">Concepts <span class="chip mono out">12–17 s</span></div>
-      <div class="what">Four photoreal exteriors, generated in parallel. Pick one, or remix it in plain words.</div>
-      <div class="eng">gemini-3.1-flash-image × 4</div>
+      <div class="frame"><img data-asset="concept10mDay" style="object-position:58% 50%"></div>
+      <div class="name">Concepts <span class="chip mono out">45–94 s</span></div>
+      <div class="what">Four distinct exteriors from the same camera and light, by day and by night.</div>
+      <div class="eng">gemini-3.1-flash-image × 4, with fallbacks</div>
     </div>
     <div class="stop r" style="--i:4">
-      <div class="frame" style="background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(22% 34.4% 27.25% 35.3%)"></div>
+      <div class="frame" style="background:#F6F6F3"><img data-asset="v2Plan10m" style="object-view-box:inset(16.6% 39.6% 27.4% 27.6%)"></div>
       <div class="name">Plan</div>
-      <div class="what">A dimensioned plan, checked against LDA rules and fixed by Argon until it passes.</div>
-      <div class="eng">gemini-4-argon + LDA engine</div>
+      <div class="what">Checked against LDA and livable-home rules. Argon reviews a drawing of it and fixes what fails.</div>
+      <div class="eng">gemini-4-argon + LDA and livable rules</div>
     </div>
     <div class="stop r" style="--i:5">
-      <div class="frame"><img data-asset="liveExplore10m" style="object-view-box:inset(21% 33.4% 12% 26.6%)"></div>
-      <div class="name">3D</div>
-      <div class="what">Argon writes the house as code, and it assembles live: structure, facade, interiors, furniture, landscape.</div>
+      <div class="frame"><img data-asset="v2House10m" style="object-view-box:inset(13.7% 32.9% 19.4% 27.1%)"></div>
+      <div class="name">House</div>
+      <div class="what">Argon writes the house as code: structure, facade, interiors, furniture, landscape and lights.</div>
       <div class="eng">gemini-4-argon → House SDK code</div>
     </div>
     <div class="stop r" style="--i:6">
-      <div class="frame"><img data-asset="viewerWalkHud" style="object-position:38% 50%"></div>
+      <div class="frame"><img data-asset="v2WalkLounge" style="object-view-box:inset(8.2% 26.4% 14.1% 27.1%)"></div>
       <div class="name">Walk <span class="chip mono out">live</span></div>
-      <div class="what">First person, with collisions and stairs. Pin a comment on any surface.</div>
+      <div class="what">Mouse look, floor moves and a room navigator. Pin a note on any surface.</div>
       <div class="eng">three.js + three-mesh-bvh</div>
     </div>
     <div class="stop r" style="--i:7">
       <div class="frame">
         <div class="revcard">
           <div class="where">Car porch, ground floor</div>
-          <div class="q">“Can we extend the car porch 4 feet forward into the front lawn?”</div>
+          <div class="q">“Can we extend the car porch 4 ft forward into the front lawn?”</div>
           <span class="chip fail"><span class="dot"></span>Not possible</span>
-          <div class="a">“…a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space.”</div>
+          <div class="a">“LDA regulations require a mandatory 10 ft front open setback and do not allow the car porch slab to project into the front lawn…”</div>
         </div>
       </div>
-      <div class="name">Revise <span class="chip mono out">~95 s</span></div>
+      <div class="name">Revise <span class="chip mono out">~70 s</span></div>
       <div class="what">A new version with what changed, or the rule that says no and an alternative.</div>
       <div class="eng">Google ADK agent, 9 tools</div>
     </div>
@@ -372,8 +373,8 @@
   <svg class="track dg" viewBox="0 0 1680 100" aria-hidden="true">
     <path class="wire draw" pathLength="1" style="--d:.7s;--dur:1.8s" d="M0 14H1420"/>
     <path class="wacc draw" pathLength="1" style="--d:2.0s" d="M568 30V44H1112V30"/>
-    <rect x="662" y="52" width="356" height="34" rx="10" fill="#EDF0FF" class="f" style="--d:2.4s"/>
-    <text x="840" y="75" text-anchor="middle" class="t-mi t-acc f" style="--d:2.4s">~7 min, plan + LDA checks + 3D</text>
+    <rect x="632" y="52" width="416" height="34" rx="10" fill="#EDF0FF" class="f" style="--d:2.4s"/>
+    <text x="840" y="75" text-anchor="middle" class="t-mi t-acc f" style="--d:2.4s">~5–6 min: plan, checks, review, 3D</text>
     <path class="wire2 dash f" style="--d:2.4s" d="M1420 24C1420 50 1396 52 1278 52C1160 52 1136 50 1136 30" marker-end="url(#ah3)"/>
     <text class="t-m f" style="--d:2.6s" x="1278" y="78" text-anchor="middle">v2, v3 …</text>
     <g>
@@ -386,10 +387,11 @@
     </g>
     <circle class="packet live-only" r="4.5" fill="#2747F5"><animateMotion dur="5.5s" repeatCount="indefinite" path="M0 14H1420"/></circle>
   </svg>
-  <footer class="foot"><span>Times measured on the live Cloud Run service · sample homes open instantly, with no wait</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Times measured on the live Cloud Run service, revision naqsha-00009, 17 Oct 2026 · sample homes open instantly</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"This is the whole journey in one sitting. The family answers a few one-tap questions, or skips them, and the LDA envelope appears at once. Four concepts arrive in twelve to seventeen seconds. They pick one. Argon plans the floors, our engine checks them and Argon fixes its own violations. Then Argon writes the 3D house as code, and it assembles in front of them. Plan to 3D takes about seven minutes; sample homes open instantly. They walk through it, pin comments, and an ADK agent produces version two in about a minute and a half."</p>
+    <p>"This is the whole journey in one sitting. The family describes the plot in one message. A setup agent on Google ADK tells them what it understood and asks only what's missing, and the LDA envelope appears at once. Four distinct concepts arrive in under a minute and a half, by day and by night. They pick one. Argon plans the floors, our engine checks them against LDA and livable-home rules, Argon reviews a drawing of its own plan, and it fixes what fails. Then Argon writes the 3D house as code. Plan to 3D takes five to six minutes for a 10 marla house; sample homes open instantly. They walk through it, pin notes, and an ADK agent produces the next version in about seventy seconds."</p>
+    <p>Concepts: 45–94 s for four, measured live, with the image chain Flash Image → Nano Banana 2.1 → 3 Pro Image. Revise: the 10 marla sample's v1 → v2 run took 70 s (version timestamps 05:38:04 → 05:39:14 UTC). The porch quote is verbatim from that run (comment cm_f4bd928bdc37).</p>
   </aside>
 </section>
 
@@ -410,28 +412,28 @@
   </div>
 
   <div class="big r" style="--i:2">
-    <div class="frame hero"><img data-asset="liveExplore1k" style="object-view-box:inset(28% 22% 9.8% 32%)"></div>
-    <p class="cap"><b>3D.</b> The 1-kanal sample, a second brief: Argon wrote it as 25 code sections.</p>
+    <div class="frame hero"><img data-asset="v2HouseVilla" style="object-view-box:inset(17.1% 24.3% 14.7% 27.1%)"></div>
+    <p class="cap"><b>House.</b> The 1 kanal villa: tiled roofs, rooftop solar and a two-car porch.</p>
   </div>
   <div class="mid">
     <div class="r" style="--i:3">
-      <div class="frame plan" style="background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(14.5% .6% 42.4% 36.9%)"></div>
-      <p class="cap"><b>Plan.</b> The 10-marla sample: all 42 LDA checks pass.</p>
+      <div class="frame plan" style="background:#F6F6F3"><img data-asset="v2Plan10m" style="object-view-box:inset(24.9% .7% 29.7% 33.6%)"></div>
+      <p class="cap"><b>Plan.</b> The 10 marla sample: 37/37 LDA and 10/10 livable, no warnings.</p>
     </div>
     <div class="r" style="--i:4">
-      <div class="frame rev" style="background:#F2F0EB"><img data-asset="liveRevisions10m" style="object-view-box:inset(69% 31.5% 2.8% 18.9%)"></div>
-      <p class="cap"><b>Revise.</b> A real ADK run: the porch refused, with the rule and an alternative.</p>
+      <div class="frame rev" style="background:#F6F6F3"><img data-asset="v2RevisionsFromComments" style="object-view-box:inset(37.1% 35.9% 38.1% 20.6%)"></div>
+      <p class="cap"><b>Versions.</b> Version 2, from two comments: what changed, in feet.</p>
     </div>
   </div>
   <div class="phonecol r" style="--i:5">
-    <div class="phone"><img data-asset="liveMobileExplore"></div>
-    <p class="cap"><b>Phone.</b> The same 3D house.</p>
+    <div class="phone"><img data-asset="v2PhoneHouse"></div>
+    <p class="cap"><b>Phone.</b> The same house.</p>
   </div>
-  <footer class="foot"><span>Captured from the live service on 17 Oct 2026, from the two public sample homes</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Captured from the live service, revision naqsha-00009, on 17 Oct 2026, from the two public sample homes</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Everything in this deck runs at this URL, and these screens were captured from it this week. Open a sample home to skip the seven-minute design run. You can orbit, switch floors, cut a section, slide the sun and walk in first person. The plan screen shows the LDA panel: forty-two of forty-two checks pass. The revisions screen shows a real agent run refusing a porch extension and explaining why. And it works on a phone."</p>
-    <p>The live app still wears the v1 look (brick accent, serif titles). The crops avoid the stage bar where they can. Re-shoot with the v2 UI if it ships before export.</p>
+    <p>"Everything in this deck runs at this URL, and these screens were captured from it today. Open a sample home to skip the design run. You can orbit, switch floors, walk in first person and switch to night. The plan screen shows the compliance panel: thirty-seven of thirty-seven LDA checks and all ten livable-home rules pass, with no warnings. Version two came from two comments left in 3D, and every change is listed in feet. And it works on a phone."</p>
+    <p>The live compliance panel's first line reads "Approval-ready"; the crop starts below it, because the deck says "pre-check", not "approval" (facts.json: claim_approval_ready).</p>
   </aside>
 </section>
 
@@ -464,21 +466,21 @@
       <text class="t-m" x="294" y="38">1</text>
       <text class="t-h" x="318" y="39">Plan</text>
       <text class="t-m" x="666" y="38" text-anchor="end">gemini-4-argon</text>
-      <text class="t-b" x="294" y="78">A schema-bound JSON plan, in feet:</text>
-      <text class="t-b" x="294" y="102">levels, rooms, doors, windows, stairs,</text>
-      <text class="t-b" x="294" y="126">roof, mumty and boundary wall.</text>
+      <text class="t-b" x="294" y="78">A schema-bound JSON plan in feet: rooms,</text>
+      <text class="t-b" x="294" y="102">doors, windows, stairs, roof and tank. Then</text>
+      <text class="t-b" x="294" y="126">Argon reviews a drawing of its own plan.</text>
     </g>
     <g class="rs" style="--i:4">
       <rect class="boxhud" x="270" y="192" width="420" height="120" rx="20"/>
-      <text class="t-h2 t-hud" x="294" y="230">LDA engine</text>
+      <text class="t-h2 t-hud" x="294" y="230">Rules engine</text>
       <text class="t-m t-hud2" x="666" y="229" text-anchor="end">deterministic</text>
-      <text class="t-b t-hud2" x="294" y="264">18 check types, run per room and stair,</text>
-      <text class="t-b t-hud2" x="294" y="290">from LDA's text of 9 Feb 2026</text>
+      <text class="t-b t-hud2" x="294" y="264">18 LDA check types per room and stair,</text>
+      <text class="t-b t-hud2" x="294" y="290">plus 10 livable-home rules</text>
     </g>
     <path class="wire draw" pathLength="1" style="--d:1.1s;--dur:.6s" d="M352 152V190" marker-end="url(#ah)"/>
     <text class="t-m f" style="--d:1.2s" x="364" y="177">check</text>
     <path class="wacc draw" pathLength="1" style="--d:1.4s;--dur:.6s" d="M520 190V152" marker-end="url(#aha)"/>
-    <text class="t-m t-acc f" style="--d:1.5s" x="532" y="177">fix, ≤ 3 attempts</text>
+    <text class="t-m t-acc f" style="--d:1.5s" x="532" y="177">fix: 3 rounds, up to 5</text>
     <circle class="packet live-only" r="4" fill="#2747F5"><animateMotion dur="2.4s" repeatCount="indefinite" path="M352 150V192H520V150Z"/></circle>
 
     <path class="wire draw" pathLength="1" style="--d:1.6s" d="M694 75H750" marker-end="url(#ah)"/>
@@ -539,14 +541,14 @@
   <div class="jump">
     <div class="label r" style="--i:8">Same model, two ways of working</div>
     <div class="row rs" style="--i:9;margin-top:12px"><span class="n">481 s</span><span class="t">for the one shot: raw three.js, nothing to see until the end, and a blocky house</span></div>
-    <div class="row rs" style="--i:10"><span class="n">~7 min</span><span class="t">today, for the plan, the LDA checks and a high-fidelity house that renders after every section</span></div>
-    <p class="so rs" style="--i:11">The whole pipeline now takes about as long as the one shot spent writing blocky code alone.</p>
+    <div class="row rs" style="--i:10"><span class="n">~5–6 min</span><span class="t">today for a 10 marla home: the plan, the checks, Argon's self-review and a high-fidelity house</span></div>
+    <p class="so rs" style="--i:11">The whole pipeline now finishes sooner than the one shot took to write blocky code alone.</p>
   </div>
   <footer class="foot"><span>One-shot spike: 16 Oct 2026, re-shot from a matching front camera · both are 10-marla Lahore houses by Argon</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Our first spike asked Argon to write a whole house in raw three.js. It ran first time, but it took eight minutes and looked blocky. So we split the job. First Argon produces a plan as structured JSON, in feet, small enough for a deterministic engine to check. Then it writes the house as short, named sections against our own House SDK, which holds the hard parts: real openings, PBR materials, a furniture kit. It sees the plan, the concept image the family chose, and the SDK's types. Each section renders as it arrives. This pier is one section, facade_stone_pier. Because the house is code, it's exact, checkable, walkable, and a revision only touches the section that changed."</p>
-    <p>Spike: docs/spikes/README.md (481 s total, first token at 164 s, 1,780 lines). The spike image was re-rendered from Argon's unchanged code with a straight-on camera; its golden-hour lighting is the spike's own.</p>
+    <p>"Our first spike asked Argon to write a whole house in raw three.js. It ran first time, but it took eight minutes and looked blocky. So we split the job. First Argon produces a plan as structured JSON, in feet, small enough for a deterministic engine to check. Then it writes the house as short, named sections against our own House SDK, which holds the hard parts: real openings, PBR materials, a furniture kit. It sees the plan, the concept image the family chose, and the SDK's types. Each section renders as it arrives. This pier is one section, facade_stone_pier. Because the house is code, it's exact, checkable, walkable, and a revision only touches the section that changed. Today the whole run, with the checks and Argon's review of its own drawings, takes five to six minutes for a 10 marla house: less than the one shot took to write a blocky one."</p>
+    <p>Spike: docs/spikes/README.md (481 s total, first token at 164 s, 1,780 lines). ~5–6 min: a 10 marla design end to end on revision naqsha-00009, 17 Oct (plan, checks, review, 3D). Fix rounds: PLAN_MAX_ATTEMPTS 3, up to PLAN_MAX_ATTEMPTS_HARD 5 on big briefs (api/app/config.py). The stream thumbnails are v1 captures of the first 10-marla house. The spike image was re-rendered from Argon's unchanged code with a straight-on camera; its golden-hour lighting is the spike's own.</p>
   </aside>
 </section>
 
@@ -557,63 +559,44 @@
   <header class="chrome"><span class="eyebrow">Trust</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
     <h1 class="title r" style="--i:0">Argon is creative. The rules are code.</h1>
-    <p class="kicker r" style="--i:1">A deterministic engine checks every plan, and enforces safety whatever Argon writes.</p>
+    <p class="kicker r" style="--i:1">Deterministic engines check every plan for LDA and livable-home rules, and Argon reviews its own drawings like an architect.</p>
   </div>
 
   <div class="colA">
-    <div class="lblrow r" style="--i:2"><span class="label">LDA engine</span><span class="st live">Live</span></div>
-    <div class="bigchip r" style="--i:3"><span class="dot"></span><span><span data-count="42">42</span>/42 LDA checks</span></div>
-    <p class="small r" style="--i:3;margin-top:12px;color:var(--ink-2)">on the 10-marla sample. Plans run 42–50 checks, depending on their rooms and stairs.</p>
-    <p class="body r" style="--i:4;margin-top:14px"><b>18 check types</b>, applied per room and per stair: setbacks, coverage, FAR, height, storeys, 8% daylight and stairs.</p>
+    <div class="lblrow r" style="--i:2"><span class="label">Rules engine</span><span class="st live">Live</span></div>
+    <div class="bigchip r" style="--i:3"><span class="dot"></span><span><span data-count="37">37</span>/37 LDA · 10/10 livable</span></div>
+    <p class="small r" style="--i:3;margin-top:12px;color:var(--ink-2)">on the 10 marla sample, with no warnings. The 1 kanal villa passes 43/43 and 10/10.</p>
+    <p class="body r" style="--i:4;margin-top:14px"><b>18 LDA check types</b>, applied per room and per stair: setbacks, coverage, FAR, height, storeys, 8% daylight and stairs. <b>10 livable-home rules</b> on top.</p>
     <div class="fix r" style="--i:5">
-      <div class="label">Argon's fix loop, measured live</div>
-      <div class="fixnums"><span style="color:var(--fail)">5</span><span class="a">→</span><span style="color:var(--warn)">1</span><span class="a">→</span><span style="color:var(--pass)">0</span></div>
+      <div class="label">Argon's fix loop on a big 1 kanal brief, measured live</div>
+      <div class="fixnums"><span style="color:var(--fail)">15</span><span class="a">→</span><span style="color:var(--warn)">5</span><span class="a">→</span><span style="color:var(--pass)">0</span></div>
       <div class="fixbar"><i class="bar-fill" style="--d:.9s;background:var(--fail)"></i><i class="bar-fill" style="--d:1.2s;background:var(--warn)"></i><span class="zero"></span></div>
-      <div class="fixlbl">attempt 1: 5 · attempt 2: 1 · attempt 3: 0</div>
-      <p class="small" style="margin-top:12px;color:var(--ink-2)">And <span class="mono ink">4 → 0</span> on the 1-kanal sample: three daylight failures and one undersized room, fixed in one retry.</p>
+      <div class="fixlbl">failures · attempt 1: 15 · attempt 2: 5 · attempt 3: 0</div>
+      <p class="small" style="margin-top:12px;color:var(--ink-2)">Adaptive: a big brief gets up to 5 rounds while each one still improves the plan.</p>
     </div>
   </div>
 
   <div class="colB">
-    <div class="lblrow r" style="--i:3"><span class="label">Livable-home rules</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
-    <ul class="liv">
-      <li class="rs" style="--i:5"><span class="ok"></span><span>Bedrooms open only to a corridor, lounge, balcony or their own bath.</span></li>
-      <li class="rs" style="--i:6"><span class="ok"></span><span>A stair reaches every floor, roof included.</span></li>
-      <li class="rs" style="--i:7"><span class="ok"></span><span>A railing at every drop, enforced by the engine.</span></li>
-      <li class="rs" style="--i:8"><span class="ok"></span><span>Doors kept clear of furniture, with a <span class="mono ink">3′</span> path.</span></li>
-    </ul>
-    <svg class="stair dg r" style="--i:9" viewBox="0 0 544 176" width="544" height="176" aria-label="Stair edge before and after: a 22 foot drop with no railing, then a guard of at least 42 inches">
-      <text x="0" y="18" class="t-m">before</text>
-      <path d="M0 52H180" stroke="#111113" stroke-width="3"/>
-      <path d="M180 52V172" stroke="#C8281E" stroke-width="1.5" stroke-dasharray="5 5"/>
-      <path d="M180 172H230" stroke="#111113" stroke-width="2"/>
-      <path d="M206 60V164" stroke="#C8281E" stroke-width="1.5" marker-start="url(#ahf)" marker-end="url(#ahf)"/>
-      <text x="40" y="106" class="t-mi" style="fill:#C8281E;font-size:20px">22′ drop</text>
-      <text x="40" y="132" class="t-m" style="fill:#C8281E">no railing</text>
-      <text x="300" y="18" class="t-m">after · IBC 2021</text>
-      <path d="M300 52H480" stroke="#111113" stroke-width="3"/>
-      <path d="M480 52V172" stroke="#A1A1A6" stroke-width="1.5" stroke-dasharray="5 5"/>
-      <path d="M480 172H544" stroke="#111113" stroke-width="2"/>
-      <path d="M476 52V30M306 30H476M450 30V52M424 30V52M398 30V52M372 30V52M346 30V52M320 30V52" stroke="#0E7A55" stroke-width="2.4"/>
-      <text x="300" y="106" class="t-mi" style="fill:#0E7A55;font-size:20px">≥ 42″ guard</text>
-      <text x="300" y="132" class="t-m" style="fill:#0E7A55">drop over 30″</text>
-    </svg>
-    <p class="small r" style="--i:10;margin-top:10px;color:var(--ink-2)">We audited three houses (two by Argon, one hand-made). All three had stair-safety defects. LDA doesn't define guards, so we apply IBC 2021.</p>
+    <div class="lblrow r" style="--i:3"><span class="label">Livable-home rules, in the live panel</span><span class="st live">Live</span></div>
+    <div class="frame panel r" style="--i:4"><img data-asset="v2PlanVillaLivable" style="object-view-box:inset(48.6% 1% 19.3% 73%)"></div>
+    <p class="small r" style="--i:6;margin-top:14px;color:var(--ink-2)">Why deterministic: we audited three houses (two by Argon, one hand-made) and all three had stair-safety defects, one a 22 ft drop with no railing. LDA doesn't define guards, so we apply IBC 2021: 42″ wherever the drop is over 30″.</p>
   </div>
 
   <div class="colC">
-    <div class="lblrow r" style="--i:4"><span class="label">The live compliance panel</span></div>
-    <div class="frame panel r" style="--i:5;background:#F2F0EB"><img data-asset="liveDesign10m" style="object-view-box:inset(15.2% .5% 60.75% 78%)"></div>
-    <div class="review r" style="--i:6">
-      <div class="lblrow"><span class="label">Argon self-review</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
-      <p class="small" style="margin-top:10px;color:var(--ink-2)">Argon looks at a rendered image of its own plan and critiques circulation, privacy, daylight and the brief before the family sees it.</p>
+    <div class="lblrow r" style="--i:4"><span class="label">Argon's self-review</span><span class="st live">Live</span></div>
+    <div class="frame review-img r" style="--i:5"><img data-asset="v2ReviewGround" style="object-view-box:inset(14.7% 0% 59.2% 0%)"></div>
+    <p class="small r" style="--i:6;margin-top:12px;color:var(--ink-2)">Argon looks at its own floors, drawn like this, and critiques circulation, privacy, daylight and the brief. Then it revises, before the family sees the plan.</p>
+    <div class="lblrow r" style="--i:7;margin-top:16px"><span class="label">Built in 3D, whatever Argon writes</span></div>
+    <div class="thumbs r" style="--i:8">
+      <div><div class="frame"><img data-asset="v2WalkRailings" style="object-view-box:inset(6.9% 10.7% 20% 10.7%)"></div><div class="tcap">railings on every edge</div></div>
+      <div><div class="frame"><img data-asset="v2WalkRoofDoor" style="object-view-box:inset(6.9% 17.9% 33.7% 17.9%)"></div><div class="tcap">roof door at the top landing</div></div>
     </div>
   </div>
   <footer class="foot"><span>Naqsha is a pre-check, not an approval. A PCATP-registered architect still stamps the plan.</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Trust is the product. Every plan goes through a deterministic engine built from LDA's official 2026 text: eighteen kinds of check, forty-two to fifty on a typical house. Argon gets each failure back in plain terms and fixes it. We've watched it go from five violations to zero, and on our 1-kanal sample from four to zero in a single retry. But LDA-compliant isn't the same as livable. We audited our own houses as a senior Lahore architect would, and found a stair edge with a twenty-two-foot drop and no railing. Code doesn't let that slip, so railings, door clearances and a stair to the roof are now guaranteed by the engine itself."</p>
-    <p>Evidence: docs/evidence/live-samples-2026-10-17.json (42/42 on the 10-marla sample; fix_history 4 → 0 on the 1-kanal sample). The audit is docs/review/architecture-rules.md; the 22 ft drop was in the 1-kanal sample. Livable rules and self-review are in the 18 Oct build: set DECK_SHIPPED once verified.</p>
+    <p>"Trust is the product. Every plan goes through a deterministic engine built from LDA's official 2026 text: eighteen kinds of check, applied per room and per stair. But LDA-compliant isn't the same as livable. We audited our own houses as a senior Lahore architect would, and found a stair edge with a twenty-two-foot drop and no railing. So ten livable-home rules now run in the same loop: every room independent and reached properly, stairs to the roof with the door at the landing, a railing at every drop, doors kept clear. Both samples pass every rule with no warnings. Argon gets each failure back in plain terms and fixes it: on a big 1 kanal brief we watched fifteen failures become five, then zero. And for what rules can't judge, Argon looks at a drawing of its own plan and critiques it like an architect before you see it."</p>
+    <p>Sources: v2-live-plan-compliance-*.png (37/37 · 10/10 and 43/43 · 10/10, 0 warnings, revision naqsha-00009); 15 → 5 → 0 measured live on 17 Oct; rounds: api/app/config.py PLAN_MAX_ATTEMPTS 3, PLAN_MAX_ATTEMPTS_HARD 5; self-review: api/app/agents/drawing.py and config.SELF_REVIEW. The audit is docs/review/architecture-rules.md; the 22 ft drop was in an earlier 1-kanal house. The livable rules are api/app/compliance/planning.py.</p>
   </aside>
 </section>
 
@@ -624,41 +607,34 @@
   <header class="chrome"><span class="eyebrow">Agentic revisions · Google ADK</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
     <h1 class="title r" style="--i:0">Comment in 3D. The agent revises, or tells you which rule says no.</h1>
-    <p class="kicker r" style="--i:1">An agent, not one prompt: it reads only what it needs, dry-runs every layout change, and saves nothing until it finishes.</p>
+    <p class="kicker r" style="--i:1">An agent, not one prompt: it reads only what it needs, dry-runs every layout change against the rules, and saves nothing until it finishes.</p>
   </div>
 
-  <div class="pins frame r" style="--i:2">
-    <svg viewBox="300 230 880 640" preserveAspectRatio="xMidYMid slice" aria-label="The 10-marla house with the three comment pins of the run">
-      <image data-asset="renderFront" x="0" y="0" width="1600" height="1000"/>
-    </svg>
-    <span class="pin" style="left:162px;top:132px;background:var(--author-1)">1</span>
-    <span class="pin" style="left:192px;top:283px;background:var(--author-1)">2</span>
-    <span class="pin" style="left:383px;top:228px;background:var(--author-1)">3</span>
-  </div>
+  <div class="pins frame r" style="--i:2"><img data-asset="v2Comments" style="object-view-box:inset(8.9% .7% 13% 32.3%)"></div>
 
   <div class="log r" style="--i:6">
-    <div class="lh">What the agent changed · v1 → v2</div>
-    <div class="ln"><span class="k">plan</span><span>f_master_w1 <span class="d">· window 10×7 → 13×8.5 ft</span></span></div>
-    <div class="ln"><span class="k">code</span><span>furnish_f_master <span class="d">· curtains to 13 ft</span></span></div>
-    <div class="ln"><span class="k">code</span><span>furnish_g_drawing <span class="d">· green velvet sofa</span></span></div>
-    <div class="ln"><span class="k">check</span><span>42/42 LDA <span class="d">· still pass</span></span></div>
+    <div class="lh">What the agent changed · 10 marla, v1 → v2</div>
+    <div class="ln"><span class="k">plan</span><span>f_master_slide <span class="d">· 7×7.5 → 9×8.5 ft</span></span></div>
+    <div class="ln"><span class="k">code</span><span>furnish_f_master <span class="d">· wider curtains</span></span></div>
+    <div class="ln"><span class="k">code</span><span>facade_upper_screen <span class="d">· louvers opened up</span></span></div>
+    <div class="ln"><span class="k">check</span><span>36/36 LDA · 12/12 livable <span class="d">· still pass</span></span></div>
   </div>
 
-  <svg class="loop dg" viewBox="0 0 402 640" aria-label="The agent loop: look, test against the LDA engine, change, explain">
+  <svg class="loop dg" viewBox="0 0 402 640" aria-label="The agent loop: look, test against the rules engine, change, explain">
     <text class="t-m" x="0" y="16">Google ADK 2.12 · gemini-4-argon</text>
     <rect class="f" style="--d:.4s" x="0" y="32" width="402" height="482" rx="24" fill="none" stroke="#CFCFC8" stroke-dasharray="6 6"/>
     <g class="rs" style="--i:4">
       <rect class="box" x="56" y="56" width="330" height="88" rx="16"/>
       <text class="t-h2" x="76" y="86">Look</text>
-      <text class="t-m" x="76" y="112">get_room · read_section</text>
-      <text class="t-m" x="76" y="133">list_sections</text>
+      <text class="t-m" x="76" y="112">get_rooms · read_sections</text>
+      <text class="t-m" x="76" y="133">list_sections · sdk_reference</text>
     </g>
     <path class="wire draw" pathLength="1" style="--d:.9s;--dur:.4s" d="M221 146V162" marker-end="url(#ah)"/>
     <g class="rs" style="--i:5">
       <rect class="boxacc" x="56" y="166" width="330" height="88" rx="16"/>
       <text class="t-h2" x="76" y="196">Test</text>
       <text class="t-m t-acc" x="76" y="222">check_plan_ops</text>
-      <text class="t-s" x="76" y="243">a dry run on the LDA engine</text>
+      <text class="t-s" x="76" y="243">a dry run on LDA and livable rules</text>
     </g>
     <path class="wire draw" pathLength="1" style="--d:1.1s;--dur:.4s" d="M221 256V272" marker-end="url(#ah)"/>
     <g class="rs" style="--i:6">
@@ -671,38 +647,40 @@
     <g class="rs" style="--i:7">
       <rect class="box" x="56" y="386" width="330" height="88" rx="16"/>
       <text class="t-h2" x="76" y="416">Explain</text>
-      <text class="t-m" x="76" y="442">resolve_comment · finish</text>
+      <text class="t-m" x="76" y="442">finish</text>
+      <text class="t-s" x="76" y="463">one answer per comment</text>
     </g>
     <path class="wire2 draw" pathLength="1" style="--d:1.6s" d="M56 440H36Q26 440 26 430V110Q26 100 36 100H52" marker-end="url(#ah3)"/>
     <text class="t-m f" style="--d:1.8s" x="26" y="500">↑ back to Look for the next comment</text>
     <circle class="packet live-only" r="4.5" fill="#2747F5"><animateMotion dur="4s" repeatCount="indefinite" path="M221 100V440H36Q26 440 26 430V110Q26 100 36 100Z"/></circle>
-    <text class="t-s" x="0" y="560">If the ADK run fails, a single-shot</text>
-    <text class="t-s" x="0" y="582">reviser takes over.</text>
+    <text class="t-s" x="0" y="560">The same agent takes requests typed</text>
+    <text class="t-s" x="0" y="582">in the Ask bar. If a run fails, a</text>
+    <text class="t-s" x="0" y="604">single-shot reviser takes over.</text>
   </svg>
 
   <div class="results">
-    <div class="runmeta r" style="--i:3"><span>One live run on the 10-marla sample</span><span class="ink">3 comments · ~95 s</span></div>
+    <div class="runmeta r" style="--i:3"><span>10 marla sample · v1 → v2 · 2 comments</span><span class="ink">70 s</span></div>
     <div class="card res r" style="--i:4">
-      <div class="top"><span class="where">1 · First floor · master bedroom window</span><span class="chip pass"><span class="dot"></span>Done</span></div>
-      <div class="q">“Please make the master bedroom window bigger, I want much more morning light.”</div>
-      <div class="a">“We enlarged the master bedroom front window from 10×7 ft to 13×8.5 ft with a low 0.5 ft sill to bring in plenty of morning sunlight.”</div>
+      <div class="top"><span class="where">First floor · master bedroom window</span><span class="chip pass"><span class="dot"></span>Done</span></div>
+      <div class="q">“Please make the master bedroom window bigger, we want much more morning light.”</div>
+      <div class="a">“We expanded the master bedroom's front glass opening to 9 ft wide by 8.5 ft tall—nearly wall-to-wall—and spaced out the balcony screen slats so plenty of morning light fills the room.”</div>
     </div>
-    <div class="card res r" style="--i:5">
-      <div class="top"><span class="where">2 · Ground floor · drawing room sofa</span><span class="chip pass"><span class="dot"></span>Done</span></div>
-      <div class="q">“Change the drawing room sofa to a dark green velvet one.”</div>
-      <div class="a">“We updated the drawing room sofa to a rich dark green velvet finish (#1e4230).”</div>
+    <div class="card res no r" style="--i:5">
+      <div class="top"><span class="where">Ground floor · car porch</span><span class="chip fail"><span class="dot"></span>Not possible</span></div>
+      <div class="q">“Can we extend the car porch 4 ft forward into the front lawn?”</div>
+      <div class="a">“LDA regulations require a mandatory 10 ft front open setback and do not allow the car porch slab to project into the front lawn or driveway. Instead, your porch already includes the maximum permitted 2.6 ft cantilevered canopy overhang at the front, and if you need deeper covered parking we could push the lounge wall back slightly inside the building line.”</div>
     </div>
-    <div class="card res no r" style="--i:6">
-      <div class="top"><span class="where">3 · Ground floor · car porch</span><span class="chip fail"><span class="dot"></span>Not possible</span></div>
-      <div class="q">“Can we extend the car porch 4 feet forward into the front lawn?”</div>
-      <div class="a">“Under LDA Building &amp; Zoning Regulations for a 10-marla plot, a mandatory 10 ft front setback is required and the car porch slab cannot project into the front open space. As an alternative, the 20×10 ft front driveway directly ahead of the 15×16 ft porch already provides extra tandem parking space, or we could deepen the porch inward if you are open to reducing the TV lounge depth.”</div>
+    <div class="runmeta r" style="--i:6"><span>The same porch request on the 1 kanal villa</span></div>
+    <div class="card res no r" style="--i:7">
+      <div class="top"><span class="where">Ground floor · car porch</span><span class="chip fail"><span class="dot"></span>Not possible</span></div>
+      <div class="a">“The car porch and entrance veranda already sit right on the required 10 ft LDA front setback line… we could instead add an overhead front canopy projecting up to 3 ft past the setback line.”</div>
     </div>
   </div>
-  <footer class="foot"><span>Comments and answers verbatim from the live run, 16 Oct 2026 · pins placed at each comment's anchor</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Answers verbatim from the live samples' ADK runs · left: the live comments sheet (the client note was added for the capture)</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"This is the moment families love. They walk through the house and leave notes where they stand. Then a Google ADK agent with nine tools takes over. It doesn't reread the whole house. It looks up the room, reads the sections it needs, and dry-runs every layout change against the LDA engine before applying it. In this run it enlarged a window, changed a sofa, and refused to push the porch four feet into the lawn. Those are its own words on the right. It cited the ten-foot front setback, pointed out the driveway already gives tandem parking, and offered to deepen the porch inward instead. About ninety-five seconds."</p>
-    <p>Verbatim from the live API (docs/evidence/live-samples-2026-10-17.json): comments cm_0a4b21c612eb, cm_87e5b922d6d3, cm_2581acf761a7 and the v2 change log. The change log is the run's record of what it wrote, not a tool-call trace; the service doesn't log tool calls yet.</p>
+    <p>"This is the moment families love. They walk through the house and leave notes where they stand, and everyone sees who said what. Then a Google ADK agent with nine tools takes over. It doesn't reread the whole house. It looks up the rooms, reads the sections it needs, and dry-runs every layout change against the rules engine before applying it. On the 10 marla sample it enlarged the master bedroom window and opened up the balcony screen, and it refused to push the porch four feet into the lawn. Those are its own words: it cited the ten-foot front setback and offered alternatives. Same request on the villa, a different answer: it offered a canopy instead, because that house is different. The run took seventy seconds."</p>
+    <p>Verbatim from Firestore, read on 17 Oct: 10 marla p_5a5893a2bcaa comments cm_672615ec42ba (resolved) and cm_f4bd928bdc37 (rejected), v2 v_f881a067c573 changes ch1 and ch2, summary "36/36 LDA · 12/12 livable · 3 review notes"; villa p_1a42e70989af comment cm_67e769d1d31b (rejected). 70 s: v1 05:38:04 → v2 05:39:14 UTC. Tools: api/app/agents/reviser_adk.py Workspace.tools() (9).</p>
   </aside>
 </section>
 
@@ -733,20 +711,20 @@
     </g>
     <g class="rs" style="--i:4">
       <rect class="box2" x="24" y="196" width="317" height="122" rx="16"/>
-      <text class="t-h2" x="44" y="228">Setup</text>
-      <text class="t-b" x="44" y="256">One-tap turns, LDA envelope</text>
-      <rect class="chipbg" x="44" y="276" width="168" height="30" rx="8"/><text class="t-mi" x="56" y="297">gemini-3.8-flash</text>
+      <text class="t-h2" x="44" y="228">Setup agent</text>
+      <text class="t-b" x="44" y="256">Takes the brief in one message</text>
+      <rect class="chipbg" x="44" y="276" width="240" height="30" rx="8"/><text class="t-mi" x="56" y="297">gemini-3.8-flash · ADK</text>
     </g>
     <g class="rs" style="--i:5">
       <rect class="box2" x="397" y="196" width="317" height="122" rx="16"/>
       <text class="t-h2" x="417" y="228">Concepts</text>
-      <text class="t-b" x="417" y="256">Four photoreal exteriors at once</text>
+      <text class="t-b" x="417" y="256">Four exteriors, day and night</text>
       <rect class="chipbg" x="417" y="276" width="270" height="30" rx="8"/><text class="t-mi" x="429" y="297">gemini-3.1-flash-image ×4</text>
     </g>
     <g class="rs" style="--i:6">
       <rect class="box2" x="770" y="196" width="317" height="122" rx="16"/>
       <text class="t-h2" x="790" y="228">Architect</text>
-      <text class="t-b" x="790" y="256">Plan JSON, then design.js</text>
+      <text class="t-b" x="790" y="256">Plan, self-review, then design.js</text>
       <rect class="chipbg" x="790" y="276" width="152" height="30" rx="8"/><text class="t-mi" x="802" y="297">gemini-4-argon</text>
     </g>
     <g class="rs" style="--i:7">
@@ -763,14 +741,14 @@
     </g>
     <g class="rs" style="--i:9">
       <rect class="boxhud" x="770" y="356" width="317" height="122" rx="16"/>
-      <text class="t-h2 t-hud" x="790" y="388">LDA engine</text>
-      <text class="t-b t-hud2" x="790" y="416">Deterministic, rules as JSON</text>
-      <rect x="790" y="436" width="150" height="30" rx="8" fill="rgb(255 255 255 / .1)"/><text class="t-mi t-hud" x="802" y="457">18 check types</text>
+      <text class="t-h2 t-hud" x="790" y="388">Rules engine</text>
+      <text class="t-b t-hud2" x="790" y="416">LDA and livable rules, as code</text>
+      <rect x="790" y="436" width="210" height="30" rx="8" fill="rgb(255 255 255 / .1)"/><text class="t-mi t-hud" x="802" y="457">18 LDA + 10 livable</text>
     </g>
     <!-- Architect <-> LDA engine -->
     <path class="wacc draw" pathLength="1" style="--d:1.6s;--dur:.5s" d="M900 320V352" marker-end="url(#aha)"/>
     <path class="wacc draw" pathLength="1" style="--d:1.8s;--dur:.5s" d="M940 354V322" marker-end="url(#aha)"/>
-    <text class="t-m t-acc f" style="--d:1.9s" x="956" y="343">≤ 3 fix rounds</text>
+    <text class="t-m t-acc f" style="--d:1.9s" x="956" y="343">3–5 fix rounds</text>
     <!-- Reviser <-> LDA engine -->
     <path class="wacc draw" pathLength="1" style="--d:2.0s;--dur:.5s" d="M716 400H766" marker-end="url(#aha)"/>
     <path class="wacc draw" pathLength="1" style="--d:2.1s;--dur:.5s" d="M768 434H718" marker-end="url(#aha)"/>
@@ -806,29 +784,25 @@
     <g class="rs" style="--i:13">
       <rect class="box" x="850" y="538" width="262" height="102" rx="18"/>
       <text class="t-h2" x="870" y="572">Identity Platform</text>
-      <text class="t-s" x="870" y="598">accounts, roles, share links</text>
-      <g data-st="build">
-        <rect x="870" y="608" width="204" height="26" rx="7" fill="none" stroke="#CFCFC8"/>
-        <circle cx="885" cy="621" r="3.5" fill="none" stroke="#6E6E73" stroke-width="1.5"/>
-        <text class="t-mi" x="896" y="626" style="font-size:15px;fill:#46464B" data-shipped-text="Live">In the 18 Oct build</text>
-      </g>
+      <text class="t-s" x="870" y="598">email accounts; guests</text>
+      <text class="t-s" x="870" y="620">claim their homes</text>
     </g>
   </svg>
 
   <div class="models">
     <div class="label r" style="--i:3">Gemini, matched to each job</div>
-    <div class="m rs" style="--i:4;margin-top:12px"><div class="mt"><span class="job">Setup</span><span class="id">gemini-3.8-flash</span></div><div class="why">Structured turns and one-tap chips. Fast and cheap.</div></div>
-    <div class="m rs" style="--i:5"><div class="mt"><span class="job">Concepts</span><span class="id">gemini-3.1-flash-image</span></div><div class="why">Four at once. Speed over hero quality.</div></div>
-    <div class="m rs" style="--i:6"><div class="mt"><span class="job">Plan</span><span class="id">gemini-4-argon</span></div><div class="why">Schema-bound JSON in feet, reasoned against hard limits.</div></div>
+    <div class="m rs" style="--i:4;margin-top:12px"><div class="mt"><span class="job">Setup</span><span class="id">gemini-3.8-flash · ADK</span></div><div class="why">A conversational agent with 5 tools. Fast and cheap.</div></div>
+    <div class="m rs" style="--i:5"><div class="mt"><span class="job">Concepts</span><span class="id">gemini-3.1-flash-image</span></div><div class="why">Four at once, by day and night. Falls back to Nano Banana 2.1, then 3 Pro Image.</div></div>
+    <div class="m rs" style="--i:6"><div class="mt"><span class="job">Plan</span><span class="id">gemini-4-argon</span></div><div class="why">JSON in feet against hard limits, then a review of its own drawings.</div></div>
     <div class="m rs" style="--i:7"><div class="mt"><span class="job">Build</span><span class="id">gemini-4-argon</span></div><div class="why">Long, correct code against our typed SDK, from the concept.</div></div>
     <div class="m rs" style="--i:8"><div class="mt"><span class="job">Revise</span><span class="id">gemini-4-argon + ADK</span></div><div class="why">Nine tools, a dry run before every write, one save at the end.</div></div>
     <p class="one rs" style="--i:9"><b>One service, one URL.</b> No CORS, and a deploy is one <span class="mono nw" style="font-size:16px">gcloud run deploy --source .</span></p>
   </div>
-  <footer class="foot"><span>google-genai 2.31 · google-adk 2.12 · Cloud Run, 3,600 s request timeout</span><span class="pg"></span></footer>
+  <footer class="foot"><span>google-genai 2.31 · google-adk 2.12 · Cloud Run revision naqsha-00009, 3,600 s request timeout</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"The architecture is deliberately simple. One Cloud Run service serves the API and the app. Gemini runs through Vertex AI on the global endpoint, the only place the newest models are served. Firestore holds projects, versions and comments; Cloud Storage holds images. The interesting part is the two loops into the deterministic engine: Argon plans against it, and the ADK reviser dry-runs every change against it. We match the model to the job: Flash for quick turns, Flash Image for four concepts at once, and Argon for anything that has to reason about limits or write long, correct code."</p>
-    <p>Generated code runs in the user's browser after a static screen for 21 banned patterns; a sandboxed iframe is on the roadmap. Identity Platform accounts are in the 18 Oct build.</p>
+    <p>"The architecture is deliberately simple. One Cloud Run service serves the API and the app. Gemini runs through Vertex AI on the global endpoint, the only place the newest models are served. Firestore holds projects, versions and comments; Cloud Storage holds images; Identity Platform holds accounts, and a guest's homes move in on sign-in. The interesting part is the loops into the deterministic rules engine: Argon plans against it, and the ADK reviser dry-runs every change against it. We match the model to the job: Flash on ADK for the setup conversation, Flash Image for four concepts at once with two fallbacks, and Argon for anything that has to reason about limits or write long, correct code."</p>
+    <p>Generated code runs in the user's browser after a static screen for 21 banned patterns; a sandboxed iframe is on the roadmap. Setup agent: api/app/agents/setup_agent.py (5 tools: update_brief, get_lda_envelope, ask, present_understanding, complete_setup). Image fallbacks: api/app/config.py MODEL_IMAGE_FALLBACKS.</p>
   </aside>
 </section>
 
@@ -838,8 +812,8 @@
 <section class="slide s-eng" data-title="Built for real quotas">
   <header class="chrome"><span class="eyebrow">Engineering</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
-    <h1 class="title r" style="--i:0">Built for real models on real quotas</h1>
-    <p class="kicker r" style="--i:1">Every step of a design run has a guardrail, so a long agent job survives quota errors, bad output and closed tabs.</p>
+    <h1 class="title r" style="--i:0">Built for real quotas, tested by agents</h1>
+    <p class="kicker r" style="--i:1">Every step of a run has a guardrail, so a long agent job survives quota errors, bad output and closed tabs. Then agents tested the live app until it held.</p>
   </div>
 
   <svg class="lane dg" viewBox="0 0 1680 600" aria-hidden="true">
@@ -861,35 +835,47 @@
     </g>
     <g class="rs" style="--i:14">
       <rect class="boxhud" x="0" y="402" width="1680" height="204" rx="22"/>
-      <text class="t-h2 t-hud" x="32" y="446">Detached runs</text>
-      <text class="t-b t-hud2" x="190" y="446">A design or revision keeps going when the browser goes away.</text>
-      <text class="t-m t-hud2" x="32" y="505">browser</text>
-      <text class="t-m t-hud2" x="32" y="557">Cloud Run</text>
-      <path d="M150 500H520" stroke="#F5F5F7" stroke-width="2.5"/>
-      <path d="M520 500H1100" stroke="#A3A3AD" stroke-width="2" stroke-dasharray="6 7"/>
-      <path d="M1100 500H1636" stroke="#7D93FF" stroke-width="2.5" marker-end="url(#ahw)"/>
-      <path d="M150 552H1636" stroke="#F5F5F7" stroke-width="2.5" marker-end="url(#ahw)"/>
-      <circle cx="520" cy="500" r="6" fill="#18181B" stroke="#F5F5F7" stroke-width="2"/>
-      <circle cx="1100" cy="500" r="6" fill="#7D93FF"/>
-      <text class="t-m t-hud" x="532" y="486">tab closed</text>
-      <text class="t-m t-hud" x="1112" y="486">tab back: every event replays, then it goes live</text>
-      <text class="t-m t-hud2" x="532" y="584">the run keeps going: CPU always allocated, session affinity</text>
+      <text class="t-h2 t-hud" x="32" y="446">Quality loop</text>
+      <text class="t-b t-hud2" x="176" y="446">Tester agents used the deployed app the way families, architects and builders would. Every finding was triaged against the code, fixed and redeployed.</text>
+      <g font-family="Geist, sans-serif">
+        <rect x="32" y="474" width="196" height="64" rx="14" fill="rgb(255 255 255 / .08)"/>
+        <text class="t-h2 t-hud" x="50" y="502">Round 1</text><text class="t-m t-hud2" x="50" y="526">8 testers</text>
+        <path d="M232 506H256" stroke="#A3A3AD" stroke-width="1.75" marker-end="url(#ahw)"/>
+        <rect x="262" y="474" width="196" height="64" rx="14" fill="rgb(255 255 255 / .08)"/>
+        <text class="t-h2 t-hud" x="280" y="502">Round 2</text><text class="t-m t-hud2" x="280" y="526">8 testers</text>
+        <path d="M462 506H486" stroke="#A3A3AD" stroke-width="1.75" marker-end="url(#ahw)"/>
+        <rect x="492" y="474" width="196" height="64" rx="14" fill="rgb(255 255 255 / .08)"/>
+        <text class="t-h2 t-hud" x="510" y="502">Round 3</text><text class="t-m t-hud2" x="510" y="526">8 testers</text>
+        <path d="M692 506H716" stroke="#A3A3AD" stroke-width="1.75" marker-end="url(#ahw)"/>
+        <rect x="722" y="474" width="236" height="64" rx="14" fill="rgb(125 147 255 / .22)"/>
+        <text class="t-h2 t-hud" x="740" y="502">Final check</text><text class="t-m t-hud2" x="740" y="526">the must-fix list</text>
+        <text class="t-m t-hud2" x="32" y="576">each round: test the live app → triage against the code → fix → deploy</text>
+      </g>
+      <g>
+        <text x="1050" y="520" style="font-family:var(--mono);font-size:46px;font-weight:500;letter-spacing:-.04em;fill:#7D93FF">~200</text>
+        <text class="t-m t-hud2" x="1050" y="552">fixes merged</text>
+        <text x="1250" y="520" style="font-family:var(--mono);font-size:46px;font-weight:500;letter-spacing:-.04em;fill:#F5F5F7">123</text>
+        <text class="t-m t-hud2" x="1250" y="552">API tests</text>
+        <text x="1420" y="520" style="font-family:var(--mono);font-size:46px;font-weight:500;letter-spacing:-.04em;fill:#F5F5F7">All</text>
+        <text class="t-m t-hud2" x="1420" y="552">must-fix items confirmed</text>
+        <text class="t-m t-hud2" x="1420" y="574">on deployed code</text>
+      </g>
     </g>
   </svg>
 
   <div class="gcards">
-    <div class="g rs" style="--i:8"><div class="gt">Backoff on quota errors</div><p>429s and 5xx errors retry with exponential backoff and jitter: 6 attempts, from 4 s up to 60 s. google-genai and ADK share the policy.</p></div>
+    <div class="g rs" style="--i:8"><div class="gt">Backoff and fallbacks</div><p>429s and 5xx errors retry with backoff and jitter, 4 s to 60 s. Concept images fall back to Nano Banana 2.1, then 3 Pro Image.</p></div>
     <div class="g rs" style="--i:9"><div class="gt">Degenerate-decoding watch</div><p>A runaway tail such as <span class="m">35.0000000…</span> aborts and retries the attempt. Prompts cap numbers at 2 decimals.</p></div>
     <div class="g rs" style="--i:10"><div class="gt">21 banned patterns</div><p>Network, eval, storage, timers and globals are screened out of generated code before it runs.</p></div>
-    <div class="g rs" style="--i:11"><div class="gt">Self-healing sections</div><p>A section that throws is rewritten on its own by Argon. If code is missing, a default design is built from the plan.</p></div>
-    <div class="g rs" style="--i:12"><div class="gt">Nothing in a setback</div><p>No part of the 3D model may reach into an open space beyond the chajja (sunshade) allowance: 3 ft, or 1.5 ft where the space is under 10 ft.</p></div>
-    <div class="g rs" style="--i:13"><div class="gt">A fallback reviser</div><p>If the ADK run fails, a single-shot reviser takes over. ADK saves nothing until it finishes.</p></div>
+    <div class="g rs" style="--i:11"><div class="gt">Self-healing sections</div><p>A section that throws is rewritten on its own by Argon. If an ADK run fails, a single-shot reviser takes over.</p></div>
+    <div class="g rs" style="--i:12"><div class="gt">Engine invariants</div><p>Railings at every drop, door keep-outs, the roof door at the landing, and nothing in a setback beyond the chajja allowance.</p></div>
+    <div class="g rs" style="--i:13"><div class="gt">Detached runs</div><p>A design keeps going when the tab closes. When it comes back, every event replays, then the run goes live.</p></div>
   </div>
-  <footer class="foot"><span>Each guardrail is in the public repo: retry policy, stream guard, code screen, repair, as-built check, fallback</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Guardrails: api/app/gemini.py, llm.py, runs.py, web/src/engine · Testing: docs/review/*-triage.md, api/tests (pytest)</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Here is what keeps a seven-minute agent run reliable. The global endpoint's shared quota returns 429s under load, so every call retries with backoff and jitter, in both google-genai and ADK. Constrained decoding sometimes loops on digits, so we watch the stream and cut it off. Generated code is screened before it runs, and a broken section repairs itself. The finished model is checked again: nothing may project into a setback. The ADK agent has a fallback. And the whole run is detached from the browser. None of this shows in the demo, which is the point."</p>
-    <p>Sources: api/app/gemini.py (RETRY), api/app/llm.py (degenerate), web/src/engine/index.ts (BANNED, defaultDesign), api/app/agents/architect.py (repair_section), api/app/compliance/lda.py (check_asbuilt), api/app/main.py (revise fallback), api/app/runs.py.</p>
+    <p>"Here is what keeps a six-minute agent run reliable. The global endpoint's shared quota returns 429s under load, so every call retries with backoff and jitter, and concept images fall back to a second and a third image model. Constrained decoding sometimes loops on digits, so we watch the stream and cut it off. Generated code is screened before it runs, and a broken section repairs itself. The engine guarantees railings, door clearances and the roof door whatever Argon writes, and the whole run is detached from the browser. Then we tested it like a product: eight tester agents per round used the live app as families, architects and builders would, over three rounds and a final check. That produced about two hundred fixes, and the API has a hundred and twenty-three tests. The final check confirmed every item on our must-fix list on the deployed code."</p>
+    <p>Sources: api/app/gemini.py (RETRY), api/app/config.py (MODEL_IMAGE_FALLBACKS), api/app/llm.py (degenerate), web/src/engine/index.ts (BANNED), api/app/agents/architect.py (repair_section), api/app/compliance/planning.py and lda.py (invariants, check_asbuilt), api/app/main.py (revise fallback), api/app/runs.py. Testing: docs/review/round1–3-triage.md and final-triage.md (76 + 28 + 21 + 35 = 160 triaged tasks, about 200 fixes); `pytest --collect-only` in api/ collects 123 tests (17 Oct).</p>
   </aside>
 </section>
 
@@ -900,30 +886,30 @@
   <header class="chrome"><span class="eyebrow">Feasibility and scalability</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
     <h1 class="title r" style="--i:0">Two briefs, two houses, one pipeline, live today</h1>
-    <p class="kicker r" style="--i:1">And a short, concrete path from one city to many.</p>
+    <p class="kicker r" style="--i:1">Both samples pass every LDA and livable rule with no warnings. And a short, concrete path from one city to many.</p>
   </div>
 
   <div class="houses">
     <div class="house r" style="--i:2">
-      <div class="frame"><img data-asset="liveExplore10m" style="object-view-box:inset(19% 8.2% 12% 8.1%)"></div>
-      <div class="hn"><span class="h4">10-marla modern, Johar Town</span></div>
+      <div class="frame"><img data-asset="v2House10m" style="object-view-box:inset(16% 16.5% 21.1% 7.1%)"></div>
+      <div class="hn"><span class="h4">10 marla modern, Johar Town</span></div>
       <div class="brief">35′ × 65′ · faces north · 2 storeys · 4 bedrooms</div>
       <dl>
-        <dt>Spaces</dt><dd>28</dd>
-        <dt>Code sections</dt><dd>23</dd>
-        <dt>LDA checks</dt><dd>42 / 42 pass</dd>
-        <dt>Revision</dt><dd>3 comments: 2 done, 1 refused</dd>
+        <dt>Checks</dt><dd>37/37 LDA · 10/10 livable</dd>
+        <dt>Covered area</dt><dd>2,762 sq ft on 3 levels</dd>
+        <dt>Revisions</dt><dd>v2 in 70 s · v3 from the Ask bar</dd>
+        <dt>Design time</dt><dd>~5–6 min for a 10 marla home</dd>
       </dl>
     </div>
     <div class="house r" style="--i:3">
-      <div class="frame"><img data-asset="liveExplore1k" style="object-view-box:inset(27% 7.1% 8% 14%)"></div>
-      <div class="hn"><span class="h4">1-kanal Spanish villa</span></div>
+      <div class="frame"><img data-asset="v2HouseVilla" style="object-view-box:inset(22.9% 12.7% 20% 17.9%)"></div>
+      <div class="hn"><span class="h4">1 kanal Spanish villa</span></div>
       <div class="brief">50′ × 90′ · faces south · 2 storeys · 5 bedrooms</div>
       <dl>
-        <dt>Spaces</dt><dd>34</dd>
-        <dt>Code sections</dt><dd>25</dd>
-        <dt>LDA checks</dt><dd>50 pass · 2 advisory</dd>
-        <dt>Fix loop</dt><dd>4 → 0 in one retry</dd>
+        <dt>Checks</dt><dd>43/43 LDA · 10/10 livable</dd>
+        <dt>Roof</dt><dd>solar panels, stair tower</dd>
+        <dt>Revisions</dt><dd>porch refused, canopy offered</dd>
+        <dt>Big briefs</dt><dd>~6.5 min · fails 15 → 5 → 0</dd>
       </dl>
     </div>
   </div>
@@ -931,16 +917,16 @@
   <div class="scale">
     <div class="label r" style="--i:3">How it scales</div>
     <div class="it rs" style="--i:4;margin-top:12px"><div class="h">Cloud Run, as deployed</div><p>Autoscales to 5 instances today, each 2 vCPU and 2 GiB with 40 concurrent requests, CPU always on. The cap is one flag.</p></div>
-    <div class="it rs" style="--i:5"><div class="h">A shared Gemini quota</div><p>Every call to the global endpoint backs off on 429s, so a burst queues instead of failing.</p></div>
+    <div class="it rs" style="--i:5"><div class="h">A shared Gemini quota</div><p>Calls back off on 429s, so a burst queues instead of failing. Four concepts take 45–94 s, with two fallback image models.</p></div>
     <div class="it rs" style="--i:6"><div class="h">Long jobs</div><p>Today: an in-memory event log per instance, held by session affinity. Next: the log in Firestore with Cloud Tasks, so any instance can resume.</p></div>
     <div class="it rs" style="--i:7"><div class="h">Cost follows intent</div><p>Samples open with no model calls. Briefs and concepts use Flash models; Argon runs only on a full design.</p></div>
     <div class="it rs" style="--i:8"><div class="h">New cities are data</div><p>Rules live in one JSON file per authority, and DHA's height and storey caps already switch on.</p></div>
   </div>
-  <footer class="foot"><span>Evidence: the live samples API and the Cloud Run service settings, read 17 Oct 2026, in the public repo</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Evidence: the live samples (revision naqsha-00009) and Cloud Run settings, read 17 Oct 2026 · times measured live</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Is it feasible? It's running. These are the two sample homes on the live service, from two different briefs: a north-facing 10-marla modern house and a south-facing 1-kanal Spanish villa. Different plots, different styles, the same pipeline. Both pass LDA's checks; the villa's plan failed four on the first attempt and Argon fixed them in one retry. How does it scale? Cloud Run autoscales, and every model call backs off on quota errors. Long jobs survive a closed tab today through session affinity; the next step is moving the event log into Firestore so any instance can resume. Costs follow intent: browsing samples costs nothing, and Argon only runs on a full design. A new city is a new rule file."</p>
-    <p>Settings read with gcloud run services describe naqsha on 17 Oct 2026: maxScale 5, 2 vCPU / 2Gi, concurrency 40, cpu-throttling false, sessionAffinity true, timeout 3600. Per-design cost is not measured yet.</p>
+    <p>"Is it feasible? It's running. These are the two sample homes on the live service, from two different one-message briefs: a north-facing 10 marla modern house and a south-facing 1 kanal Spanish villa with solar on the roof. Different plots, different styles, the same pipeline, and both pass every LDA and livable-home rule with no warnings. A 10 marla design takes five to six minutes end to end; a big 1 kanal brief took six and a half, with the adaptive fix loop taking fifteen failures to five, then zero. How does it scale? Cloud Run autoscales, every model call backs off on quota errors, and images fall back to a second and third model. Long jobs survive a closed tab today through session affinity; next, the event log moves into Firestore so any instance can resume. Costs follow intent: browsing samples costs nothing, and Argon only runs on a full design. A new city is a new rule file."</p>
+    <p>Samples: p_5a5893a2bcaa v3 (37/37 · 10/10, 0 warnings; covered 2,762 sq ft from the print cover's area schedule; v1 → v2 70 s) and p_1a42e70989af v3 (43/43 · 10/10, 0 warnings). The 6.5 min / 15 → 5 → 0 run was a big 1 kanal brief measured live on 17 Oct, not necessarily the sample's own run. Cloud Run settings read with gcloud run services describe naqsha on 17 Oct 2026: maxScale 5, 2 vCPU / 2Gi, concurrency 40, cpu-throttling false, sessionAffinity true, timeout 3600. Per-design cost is not measured yet.</p>
   </aside>
 </section>
 
@@ -958,12 +944,13 @@
     <colgroup><col style="width:166px"><col style="width:172px"><col style="width:316px"><col style="width:316px"></colgroup>
     <thead><tr><th></th><th>Status quo</th><th>maket.ai, 16 Oct 2026</th><th class="nq">Naqsha</th></tr></thead>
     <tbody>
-      <tr><th>Knows the plot</th><td>From memory</td><td>No: it drew a house wider than the plot</td><td class="nq">Envelope first; 42–50 LDA checks per plan</td></tr>
+      <tr><th>Knows the plot</th><td>From memory</td><td>No: it drew a house wider than the plot</td><td class="nq">Envelope first; LDA and livable rules on every plan</td></tr>
       <tr><th>Local rooms</th><td>Yes</td><td>US-centric: no drawing room or servant quarter</td><td class="nq">Drawing room, dirty kitchen, servant quarter</td></tr>
       <tr><th>Floors, stairs</th><td>On paper</td><td>One floor when free; no stairs anywhere</td><td class="nq">Up to 3 storeys, checked stairs, a mumty</td></tr>
       <tr><th>3D</th><td>None until built</td><td>White-box massing; a walk through walls</td><td class="nq">Facade, interiors, furniture as code; collisions</td></tr>
       <tr><th>Changes</th><td>Redraw by hand</td><td>Chat edits at 5 credits each, paid plans</td><td class="nq">Pin a comment; the agent revises or cites the rule</td></tr>
-      <tr><th>Speed</th><td>Weeks to a drawing</td><td>About 6 min to a 2D plan: faster than us to 2D</td><td class="nq">About 7 min to a walkable, checked 3D house</td></tr>
+      <tr><th>Sharing</th><td>In person</td><td>A view-only link</td><td class="nq">Team and client roles; a client link; threads</td></tr>
+      <tr><th>Speed</th><td>Weeks to a drawing</td><td>About 6 min to a 2D plan</td><td class="nq">About 5–6 min to a walkable, checked 3D house</td></tr>
     </tbody>
   </table>
 
@@ -983,14 +970,15 @@
       <p class="cap">maket.ai: a 59′6″ house for a 50 ft plot, with no warning.</p>
     </div>
     <div class="r" style="--i:4">
-      <div class="frame" style="background:#F2F0EB"><img data-asset="liveDesign1k" style="object-view-box:inset(18% 29.7% 15.9% 29.9%)"></div>
+      <div class="frame" style="background:#F6F6F3"><img data-asset="v2PlanVilla" style="object-view-box:inset(15.4% 41% 20.9% 27%)"></div>
       <p class="cap">Naqsha: inside the 10′ front, 7′ rear and 5′ side setbacks.</p>
     </div>
   </div>
   <footer class="foot"><span>Source: our maket.ai teardown on its free tier, 16 Oct 2026</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"We tested maket.ai on the sixteenth, briefing it as a Lahore family with a 1-kanal plot would. It's polished, and we borrowed its best ideas. But it read our plot as the house and drew a building wider than the land, with no warning, because it has no idea what a setback is. Here is our plan for the same plot size, inside its setbacks. Maket has no drawing room and no stairs. To be fair, it gets to a 2D plan faster than we get to a 3D house. We spend those extra minutes on a house that's local, legal and walkable."</p>
+    <p>"We tested maket.ai on the sixteenth, briefing it as a Lahore family with a 1-kanal plot would. It's polished, and we borrowed its best ideas. But it read our plot as the house and drew a building wider than the land, with no warning, because it has no idea what a setback is. Here is our plan for the same plot size, inside its setbacks. Maket has no drawing room and no stairs, and sharing is a view-only link. It takes about six minutes to a 2D plan; we take five to six to a house that's local, legal, livable and walkable."</p>
+    <p>Naqsha inset: the live 1 kanal villa v3 ground floor (v2-live-plan-compliance-villa.png). Naqsha time: a 10 marla design end to end, measured 17 Oct; a big 1 kanal brief took about 6.5 min.</p>
   </aside>
 </section>
 
@@ -1001,66 +989,28 @@
   <header class="chrome"><span class="eyebrow">Collaboration</span><span class="mark">Naqsha <span class="ur" lang="ur">نقشہ</span></span></header>
   <div class="head">
     <h1 class="title r" style="--i:0">The family, the architect and the builder, in one home</h1>
+    <p class="kicker r" style="--i:1">Owner, Team and Client roles. Clients need no account, and the owner picks which comments go into the next version.</p>
   </div>
 
-  <ul class="list">
-    <li class="rs" style="--i:2"><b>One Share dialog.</b> Invite Team or Client by email, or turn on a client link that can comment or only view.</li>
-    <li class="rs" style="--i:3"><b>Clients need no account.</b> They give a name, walk the house and pin comments.</li>
-    <li class="rs" style="--i:4"><b>Every comment has an author:</b> a name, a role and a colour, with replies. Naqsha answers with a feasibility chip.</li>
-    <li class="rs" style="--i:5"><b>The owner decides what goes into the next revision.</b> Team comments go in by default; client comments wait for the owner.</li>
-    <li class="rs" style="--i:6"><b>Accounts</b> on Google Identity Platform. A guest's homes move into the account on sign-in.</li>
-  </ul>
-
-  <div class="mockwrap">
-    <div class="mocklbl r" style="--i:2"><span class="label">The client's view of a shared home</span><span class="st build" data-live="Live">In the 18 Oct build</span></div>
-    <div class="mock r" style="--i:3">
-      <div class="bgf"><img data-asset="liveExplore10m" style="object-view-box:inset(21% 3.75% 10% 15%)"></div>
-      <div class="banner"><span class="dot" style="color:var(--accent)"></span><span>Shared by <b>Ahmed Builders</b> · You can comment</span></div>
-      <span class="pin" style="left:445px;top:409px;background:var(--author-1)">1</span>
-      <span class="pin" style="left:274px;top:265px;background:var(--author-2)">2</span>
-      <span class="pin" style="left:479px;top:313px;background:var(--author-3)">3</span>
-      <div class="sheet">
-        <div class="hd"><span class="h4">Comments</span><span class="label">3 open</span></div>
-        <div class="tabs"><span class="on">Open</span><span>Resolved</span><span>Mine</span></div>
-        <div class="cmt">
-          <span class="av" style="background:var(--author-1)">SA</span>
-          <div>
-            <div class="who">Sana A. <span>Client · Ground · Car porch</span></div>
-            <p>Can the porch come 4 ft forward?</p>
-            <div class="reply"><span class="nq" lang="ur">نقشہ</span><span class="chip fail"><span class="dot"></span>Breaks the 10′ front setback</span></div>
-            <div class="incl"><span class="tog"></span>Include in next revision</div>
-          </div>
-        </div>
-        <div class="cmt">
-          <span class="av" style="background:var(--author-2)">BK</span>
-          <div>
-            <div class="who">Bilal K. <span>Team · First · Bedroom 2</span></div>
-            <p>Widen the window toward the side space.</p>
-            <div class="reply"><span class="nq" lang="ur">نقشہ</span><span class="chip pass"><span class="dot"></span>Feasible · daylight improves</span></div>
-            <div class="incl"><span class="tog on"></span>Include in next revision</div>
-          </div>
-        </div>
-        <div class="cmt">
-          <span class="av" style="background:var(--author-3)">HR</span>
-          <div>
-            <div class="who">Hira R. <span>Client · First · Teak louvers</span></div>
-            <p>Warmer wood on the louvers, please.</p>
-          </div>
-        </div>
-      </div>
-      <div class="share z" style="--d:.6s">
-        <div class="h4">Share “Johar Town family home”</div>
-        <div class="row" style="margin-top:14px"><div class="field">naqsha…run.app/s/k7Qe2</div><span class="btn secondary">Copy</span></div>
-        <div class="row" style="margin-top:12px;justify-content:space-between"><span style="font-size:15px;color:var(--ink-2)">Client link</span><span class="seg"><span class="on">Can comment</span><span>Can view</span></span></div>
-      </div>
+  <div class="shots">
+    <div class="shot s1 r" style="--i:2">
+      <div class="frame"><img data-asset="v2Share" style="object-view-box:inset(9.4% 32.5% 37.1% 32.5%)"></div>
+      <p class="cap"><b>Share.</b> A client link that needs no account, or an email invite to a free account.</p>
+    </div>
+    <div class="shot s2 r" style="--i:3">
+      <div class="frame"><img data-asset="v2ClientView" style="object-view-box:inset(0% 17.3% 0% 0%)"></div>
+      <p class="cap"><b>The client's view</b> at /s/&lt;token&gt;: “Shared with you · You can comment”. They walk it, leave notes and approve v3.</p>
+    </div>
+    <div class="shot s3 r" style="--i:4">
+      <div class="frame"><img data-asset="v2Comments" style="object-view-box:inset(29.1% 1.1% 15.4% 72.7%)"></div>
+      <p class="cap"><b>Threads.</b> Every note has a name and a role. Naqsha answers what it changed.</p>
     </div>
   </div>
-  <p class="small contrast r" style="--i:7;position:absolute;left:120px;top:910px;width:544px">For contrast, maket.ai offers a view-only link and nothing else (tested 16 Oct 2026).</p>
-  <footer class="foot"><span>Roles: Owner and Team edit and revise · Client comments and approves · Viewer looks</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Roles: Owner and Team edit and revise · Client views, comments and approves · maket.ai offers a view-only link (tested 16 Oct 2026)</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"A house is never one person's decision. The owner invites their architect or builder as Team, and their family or client by link. Clients don't need an account. They type a name, walk the house and pin comments. Every comment shows who said it, and Naqsha replies with whether it's feasible. The owner chooses which comments go into the next revision, so a cousin's wish doesn't silently move a wall. Maket, the best-known AI floor-plan tool, offers a view-only link and nothing else."</p>
-    <p>This is a design mock of the 18 Oct build, labelled as such. Replace it with a live capture once collaboration ships, and set DECK_SHIPPED. If it doesn't ship by submission, move this slide's content into the roadmap.</p>
+    <p>"A house is never one person's decision. The owner shares a client link, or invites their architect or builder as Team by email. Clients don't need an account: they open the link, walk the house, leave notes and approve the version. Every comment shows who said it and their role, the owner replies in the thread, and Naqsha answers what it changed. The owner chooses which comments go into the next revision, so a cousin's wish doesn't silently move a wall. Accounts run on Google Identity Platform, and a guest's homes move into the account on sign-in. Maket, the best-known AI floor-plan tool, offers a view-only link and nothing else."</p>
+    <p>Live captures, revision naqsha-00009, 17 Oct: v2-live-share-dialog.png, v2-live-client-view.png (/s/&lt;token&gt;), v2-live-comments.png. For the capture, one client comment ("Ayesha") and an owner reply were posted on a guest copy through the share link; both were deleted with that copy, and sharing was turned off. The "Done" answer is the sample's real ADK resolution (cm_672615ec42ba). Roles in code: api/app/main.py RANK (client, team, owner).</p>
   </aside>
 </section>
 
@@ -1075,10 +1025,10 @@
   </div>
 
   <ul class="aud">
-    <li class="rs" style="--i:2"><div class="h4">Families</div><p class="body">See, walk and agree on the house before paying for drawings, and catch rule breaks before a resubmission that repeats a <span class="nw">≈ Rs 38,000</span> scrutiny fee.</p></li>
-    <li class="rs" style="--i:3"><div class="h4">Architects and builders</div><p class="body">Win the client in the first meeting with a walkable concept and an LDA pre-check.</p></li>
+    <li class="rs" style="--i:2"><div class="h4">Families</div><p class="body">See, walk and agree on the house before paying for drawings, and catch rule breaks before a resubmission that repeats a <span class="nw">≈ Rs 41,000</span> scrutiny fee.</p></li>
+    <li class="rs" style="--i:3"><div class="h4">Architects and builders</div><p class="body">Win the client in the first meeting with a walkable concept and an LDA pre-check, then share a link the family can comment on.</p></li>
     <li class="rs" style="--i:4"><div class="h4">Developers and schemes</div><p class="body">A sample home for every plot size in a scheme, to sell plots with.</p></li>
-    <li class="rs" style="--i:5"><div class="h4">PCATP architects, as stamping partners</div><p class="body">They review, stamp and submit a pre-checked plan. A 1:100 print set, the scale LDA asks for, is in the 18 Oct build.</p></li>
+    <li class="rs" style="--i:5"><div class="h4">PCATP architects, as stamping partners</div><p class="body">They review, stamp and submit a pre-checked plan, printed at 1:100, the scale LDA asks for, with a cover and a compliance report.</p></li>
   </ul>
 
   <div class="right">
@@ -1147,16 +1097,16 @@
   <div class="cols">
     <div class="card col now r" style="--i:2">
       <h3 class="h3 accent">Now</h3>
-      <div class="when">the 18 Oct 2026 submission build</div>
+      <div class="when">live on revision naqsha-00009</div>
       <ul>
-        <li><span>Livable-home rules and Argon's self-review</span><span class="st build" data-live="Live">18 Oct</span></li>
-        <li><span>Collaboration: roles, client links, replies</span><span class="st build" data-live="Live">18 Oct</span></li>
-        <li><span>Day and night concepts</span><span class="st build" data-live="Live">18 Oct</span></li>
-        <li><span>A per-floor room program</span><span class="st build" data-live="Live">18 Oct</span></li>
-        <li><span>Solar-ready roofs, a choice of water tank</span><span class="st build" data-live="Live">18 Oct</span></li>
-        <li><span>Print to PDF at 1:100</span><span class="st build" data-live="Live">18 Oct</span></li>
+        <li><span>Livable-home rules and Argon's self-review</span><span class="st live">Live</span></li>
+        <li><span>Roles, client links and threaded comments</span><span class="st live">Live</span></li>
+        <li><span>Accounts; guests claim their homes</span><span class="st live">Live</span></li>
+        <li><span>One-message setup agent on ADK</span><span class="st live">Live</span></li>
+        <li><span>Day and night concepts</span><span class="st live">Live</span></li>
+        <li><span>Print or save as PDF at 1:100</span><span class="st live">Live</span></li>
       </ul>
-      <div class="ms"><span class="label">Milestone</span>Every item verified on the live URL.</div>
+      <div class="ms"><span class="label">Milestone</span>Every must-fix item confirmed on the deployed code.</div>
     </div>
     <div class="card col r" style="--i:3">
       <h3 class="h3">Next</h3>
@@ -1183,10 +1133,10 @@
       <div class="ms"><span class="label">Milestone</span>A first pilot with practising architects.</div>
     </div>
   </div>
-  <footer class="foot"><span>Status: <span class="st live legend" style="height:26px;font-size:14px">Live</span> on the service today · <span class="st build legend" style="height:26px;font-size:14px">18 Oct</span> in the submission build, not yet verified live</span><span class="pg"></span></footer>
+  <footer class="foot"><span>Status: <span class="st live legend" style="height:26px;font-size:14px">Live</span> on the service today, verified 17 Oct 2026 · Next and Later are plans, not commitments</span><span class="pg"></span></footer>
 
   <aside class="notes">
-    <p>"Our vision is simple: every family in Punjab walks through a legal home before paying for drawings. Now is the build we're submitting: livable-home rules, collaboration, day and night concepts and a 1:100 print set. Next is depth and reach: direct manipulation of the plan, Google sign-in, a sandbox for generated code, a resumable event log, and rule packs that take us beyond Lahore. Later is where the business is: pilots with the architects who stamp plans, and drawing sets ready for LDA's online submission. Those are ideas today, not commitments."</p>
+    <p>"Our vision is simple: every family in Punjab walks through a legal home before paying for drawings. Now is what's live today: livable-home rules and Argon's self-review, collaboration with roles and client links, accounts, the one-message setup agent, day and night concepts and a 1:100 print set. A final round of agent testing confirmed every must-fix item on the deployed code. Next is depth and reach: direct manipulation of the plan, Google sign-in, a sandbox for generated code, a resumable event log, and rule packs that take us beyond Lahore. Later is where the business is: pilots with the architects who stamp plans, and drawing sets ready for LDA's online submission. Those are ideas today, not commitments."</p>
   </aside>
 </section>
 
@@ -1194,12 +1144,12 @@
      15 · Close
      ================================================================ -->
 <section class="slide s-close" data-title="Close">
-  <div class="bgimg z" style="--d:0s"><img data-asset="renderFront" style="object-position:20% 50%"></div>
+  <div class="bgimg z" style="--d:0s"><img data-asset="concept10mNight" style="object-position:60% 50%"></div>
   <div class="fade"></div>
   <div class="content">
     <div class="mark r" style="--i:0">Naqsha <span class="ur" lang="ur">نقشہ</span></div>
     <h1 class="title r" style="--i:1">Walk through your home before the first brick.</h1>
-    <p class="kicker r" style="--i:2">Naqsha is live. Open a sample home in a minute, or design your own in about seven.</p>
+    <p class="kicker r" style="--i:2">Naqsha is live. Open a sample home in a minute, or design your own in about six.</p>
     <p class="echo r" style="--i:3">It said no to the porch, and told us which rule.</p>
     <div class="links r" style="--i:4">
       <span class="k">Live</span><span class="v live">naqsha-242926648187.us-central1.run.app</span>
@@ -1225,7 +1175,7 @@
   </div>
   <aside class="notes">
     <p>"Naqsha takes a family from an idea to a house they can walk through, checked against the rules of the city they're building in. It's live, the code is public, and the agents are real. Argon designs in code, the engine keeps it legal, and ADK revises on request. It said no to the porch, and told us which rule. Next, we'd make every design resumable on any instance, add the next three authorities, and pilot it with the architects who stamp plans. Thank you."</p>
-    <p>Before export: fill the demo URL, the team name and the three names and photos. Make sure the GitHub repo is public (it returned 404 on 17 Oct).</p>
+    <p>Background: the 10 marla sample's chosen concept by night (c_0026dc7358eb). Before export: fill the demo URL, the team name and the three names and photos. Make the GitHub repo public before submission.</p>
   </aside>
 </section>
 

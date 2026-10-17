@@ -15,19 +15,6 @@
   if (STATIC) root.classList.add("static");
   if (PRINT) root.classList.add("print-mode");
 
-  /* ---------- Status chips ----------
-     Every .st.build chip marks a feature from the 18 Oct build that was not yet live when the deck was written.
-     Once it is verified on the live URL, set DECK_SHIPPED = true in assets.js (or open with ?shipped=1)
-     and every such chip reads "Live" instead. */
-  var SHIPPED = params.get("shipped") === "1" || window.DECK_SHIPPED === true;
-  if (SHIPPED) {
-    document.querySelectorAll(".st.build:not(.legend)").forEach(function (el) {
-      el.classList.remove("build"); el.classList.add("live");
-      el.textContent = el.getAttribute("data-live") || "Live";
-    });
-    document.querySelectorAll("[data-shipped-text]").forEach(function (el) { el.textContent = el.getAttribute("data-shipped-text"); });
-  }
-
   /* ---------- Assets from the manifest ---------- */
   var manifest = window.DECK_ASSETS || {};
   document.querySelectorAll("[data-asset]").forEach(function (el) {

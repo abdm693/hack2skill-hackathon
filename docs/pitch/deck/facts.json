@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "purpose": "Single source for every number and claim in docs/pitch/deck-content.md. Edit the value here, then search deck-content.md for the fact id.",
+    "purpose": "Single source for every number and claim in the deck (docs/pitch/deck/index.html) and its content source (docs/pitch/deck-content.md). Edit the value here, then search both for the fact id or the old value.",
     "compiled_on": "2026-10-17",
-    "deck": "docs/pitch/deck-content.md",
+    "deck": "docs/pitch/deck/index.html; content source docs/pitch/deck-content.md",
     "status_legend": {
       "measured_live": "Measured by the team on the live Cloud Run app and reported in the deck brief. No log of the run is committed to the repo; corroborating repo sources are listed where they exist.",
       "repo_code": "Read directly from source code in this repo.",
@@ -13,8 +13,11 @@
       "in_progress": "Specified in docs/OVERHAUL.md or docs/design/DESIGN.md, not yet confirmed live. Confirm on the live URL before exporting the PDF, or relabel it 'Shipping next'.",
       "proposal": "A business or roadmap idea. Not validated, and not a commitment.",
       "qualitative": "Framing without a measured number. Keep it qualitative on slides.",
-      "unverified": "No source. Do not state as fact."
-    }
+      "unverified": "No source. Do not state as fact.",
+      "superseded": "True when measured, but replaced on the slides by a newer live figure. Kept for history; do not use on slides."
+    },
+    "updated": "2026-10-17, v2 update for live revision naqsha-00009 (the shipped overhaul). Facts touched in this update carry \"updated\": \"2026-10-17 v2\".",
+    "used_on_numbering": "used_on: facts touched in the v2 update use the slide numbers of docs/pitch/deck/index.html (1 cover, 2 problem, 3 journey, 4 live product, 5 Argon in code, 6 trust, 7 ADK revisions, 8 architecture, 9 engineering and quality, 10 feasibility, 11 comparison, 12 collaboration, 13 impact, 14 roadmap, 15 close). Older entries may still use deck-content.md numbering."
   },
 
   "facts": {
@@ -27,30 +30,38 @@
         {"file": "deck brief", "where": "Live URL"},
         {"file": "SETUP.md", "where": "Project number 242926648187, region us-central1"}
       ],
-      "used_on": [1, 5, 15]
+      "used_on": [1, 4, 15],
+      "updated": "2026-10-17 v2"
     },
 
     "model_setup": {
-      "claim": "The setup (intake) agent runs on Gemini 3.8 Flash, with one structured call per turn that returns a brief patch and one-tap chips.",
-      "value": "gemini-3.8-flash",
+      "claim": "The setup agent is a Google ADK agent on Gemini 3.8 Flash with 5 tools (update_brief, get_lda_envelope, ask, present_understanding, complete_setup). One rich message can fill the whole brief; it replies 'Here's what I understood' and asks only what is missing.",
+      "value": "gemini-3.8-flash on Google ADK, 5 tools",
       "status": "repo_code",
       "sources": [
-        {"file": "api/app/config.py", "where": "MODEL_INTAKE"},
-        {"file": "api/app/agents/intake.py", "where": "module docstring"}
+        {"file": "api/app/agents/setup_agent.py", "where": "module docstring; tools() L213; Agent(model=Gemini(model=config.MODEL_SETUP)) L282"},
+        {"file": "api/app/config.py", "where": "MODEL_SETUP = MODEL_INTAKE"},
+        {"file": "docs/screens/v2-live-brief-understood.png", "where": "'Here's what I understood' card"},
+        {"file": "docs/screens/v2-live-phone-brief.png", "where": "phone"}
       ],
-      "used_on": [4, 10],
-      "note": "Today it is not an ADK agent. The overhaul plans an 'ADK conversational setup agent' (docs/OVERHAUL.md, BACKEND track). Only call setup an ADK agent once that change is live."
+      "used_on": [3, 8, 14],
+      "note": "Superseded the 16 Oct note: setup is now an ADK agent (it was a plain structured call before the overhaul).",
+      "updated": "2026-10-17 v2"
     },
+
     "model_concepts": {
-      "claim": "Concepts and viewport renders use Gemini 3.1 Flash Image, generating 4 in parallel. Gemini 3 Pro Image is configured for hero shots.",
-      "value": "gemini-3.1-flash-image (hero: gemini-3-pro-image)",
+      "claim": "Concepts and night versions use Gemini 3.1 Flash Image, four in parallel. When it is rate-limited, images fall back to Nano Banana 2.1, then Gemini 3 Pro Image.",
+      "value": "gemini-3.1-flash-image → gemini-nano-banana-2.1 → gemini-3-pro-image",
       "status": "repo_code",
       "sources": [
-        {"file": "api/app/config.py", "where": "MODEL_IMAGE, MODEL_IMAGE_HERO"},
-        {"file": "api/app/agents/concepts.py", "where": "module docstring, VARIANTS (4)"}
+        {"file": "api/app/config.py", "where": "MODEL_IMAGE, MODEL_IMAGE_FALLBACKS, MODEL_IMAGE_HERO"},
+        {"file": "api/app/agents/concepts.py", "where": "VARIANTS (4)"},
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
       ],
-      "used_on": [4, 10]
+      "used_on": [3, 8, 9, 10],
+      "updated": "2026-10-17 v2"
     },
+
     "model_architect": {
       "claim": "The planner, the builder and the ADK reviser all run on Gemini 4 Argon.",
       "value": "gemini-4-argon",
@@ -63,25 +74,28 @@
     },
 
     "concepts_time": {
-      "claim": "Four photoreal concepts arrive in about 12–17 s, generated in parallel.",
-      "value": "12–17 s",
+      "claim": "Four concepts take 45–94 s, generated in parallel with an image-model fallback chain (Flash Image → Nano Banana 2.1 → 3 Pro Image).",
+      "value": "45–94 s for 4",
       "status": "measured_live",
       "sources": [
-        {"file": "deck brief", "where": "Measured live facts"},
-        {"file": "README.md", "where": "L15: 'about 17 s'"},
-        {"file": "docs/spikes/README.md", "where": "gemini-3.1-flash-image ~11 s for one image"},
-        {"file": "docs/pitch/demo-script.md", "where": "0:40–1:00: 'about fifteen seconds'"}
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "api/app/config.py", "where": "MODEL_IMAGE_FALLBACKS"}
       ],
-      "used_on": [4, 11, 12]
+      "used_on": [3, 10],
+      "note": "Superseded '12–17 s' (16 Oct, one model, before night versions and the fallback chain).",
+      "updated": "2026-10-17 v2"
     },
 
     "full_design_time": {
-      "claim": "A full design (plan, LDA fix loop and streamed 3D build) takes about 7 minutes.",
-      "value": "~7 min",
+      "claim": "A 10 marla design takes about 5–6 min end to end: plan, checks, Argon's self-review and the 3D build.",
+      "value": "~5–6 min (10 marla)",
       "status": "measured_live",
-      "sources": [{"file": "deck brief", "where": "Measured live facts"}],
-      "used_on": [4, 11, 12, 15],
-      "note": "docs/pitch/demo-script.md still says 'nobody waits 8 minutes on camera'. Update it to about 7 minutes for consistency."
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [3, 5, 10, 11, 15],
+      "note": "Superseded '~7 min' (16 Oct). A big 1 kanal brief takes longer: see big_brief_time.",
+      "updated": "2026-10-17 v2"
     },
 
     "code_sections_count": {
@@ -93,7 +107,9 @@
         {"file": "contracts/fixtures/argon-v1-design.js", "where": "23 '// @section' headers (real Argon output)"},
         {"file": "docs/screens/app-design.png", "where": "'28 spaces, 23 code sections, 42/42 LDA checks passed'"}
       ],
-      "used_on": [4, 6, 11]
+      "used_on": [4, 6, 11],
+      "note": "Measured on the 16 Oct samples (23 and 25 sections). Not recounted for the v3 samples; recount before quoting it as current.",
+      "updated": "2026-10-17 v2"
     },
 
     "stream_per_section": {
@@ -112,23 +128,32 @@
       "claim": "The one-shot spike, with Argon writing raw three.js for a whole house, took 481 s in total (about 8 min). The first token arrived after 164 s.",
       "value": "481 s (first token 164 s)",
       "status": "repo_doc",
-      "sources": [{"file": "docs/spikes/README.md", "where": "'Argon writing raw three.js in one shot' > Time"}],
+      "sources": [
+        {"file": "docs/spikes/README.md", "where": "'Argon writing raw three.js in one shot' > Time"}
+      ],
       "used_on": [6]
     },
+
     "spike_oneshot_lines": {
       "claim": "The one-shot spike produced 1,780 lines (37.7k tokens).",
       "value": "1,780 lines; 37.7k tokens",
       "status": "repo_doc",
-      "sources": [{"file": "docs/spikes/README.md", "where": "Output"}],
+      "sources": [
+        {"file": "docs/spikes/README.md", "where": "Output"}
+      ],
       "used_on": [3, 6]
     },
+
     "spike_oneshot_ran_first_time": {
       "claim": "The one-shot code ran first time with no console errors.",
       "value": "true",
       "status": "repo_doc",
-      "sources": [{"file": "docs/spikes/README.md", "where": "What worked"}],
+      "sources": [
+        {"file": "docs/spikes/README.md", "where": "What worked"}
+      ],
       "used_on": [3]
     },
+
     "spike_oneshot_blocky": {
       "claim": "The one-shot result looked blocky and low-fidelity, and it was too slow for an interactive loop. That led to the House SDK and sectioned code.",
       "value": "blocky; too slow",
@@ -142,38 +167,43 @@
     },
 
     "plan_max_attempts": {
-      "claim": "The plan fix loop sends violations back to Argon, up to 3 attempts.",
-      "value": "3",
+      "claim": "The fix loop sends failures back to Argon: 3 rounds, and on big briefs up to 5 while each extra round still improves the best plan, within a 420 s extra budget.",
+      "value": "3, up to 5",
       "status": "repo_code",
       "sources": [
-        {"file": "api/app/config.py", "where": "L13 PLAN_MAX_ATTEMPTS default 3"},
-        {"file": "docs/ARCHITECTURE.md", "where": "§2 Stage 1: 'the loop stops after 3 tries'"}
+        {"file": "api/app/config.py", "where": "PLAN_MAX_ATTEMPTS 3, PLAN_MAX_ATTEMPTS_HARD 5, PLAN_EXTRA_BUDGET_S 420"}
       ],
-      "used_on": [6, 10],
-      "note": "The overhaul adds a 'best-attempt' fix loop (docs/OVERHAUL.md, BACKEND track)."
+      "used_on": [5, 6, 8],
+      "note": "The overhaul adds a 'best-attempt' fix loop (docs/OVERHAUL.md, BACKEND track).",
+      "updated": "2026-10-17 v2"
     },
 
     "lda_check_types": {
-      "claim": "The deterministic LDA engine implements 18 check types: front, rear and side setbacks, the envelope, coverage, FAR, height, storeys, mumty, parapet, boundary wall, room size, clear height, daylight (8%), wet-room ventilation, room access, stairs and the overhead water tank.",
+      "claim": "The deterministic LDA engine implements 18 check types: plan overlap, front, rear and side setbacks, the envelope, coverage, FAR, height, storeys, mumty, parapet, boundary wall, room size, clear height, daylight (8%), ventilation, stairs and the overhead water tank.",
       "value": "18",
       "status": "repo_code",
-      "sources": [{"file": "api/app/compliance/lda.py", "where": "check(), L125–313: count of distinct add() ids"}],
-      "used_on": [7],
-      "note": "Counted by hand from the code. Recount if lda.py or the overhaul's planning.py adds check types."
+      "sources": [
+        {"file": "api/app/compliance/lda.py", "where": "check(): distinct add() ids, recounted 17 Oct"}
+      ],
+      "used_on": [5, 6, 8],
+      "note": "Counted by hand from the code. Recount if lda.py or the overhaul's planning.py adds check types.",
+      "updated": "2026-10-17 v2"
     },
+
     "lda_checks_per_plan": {
-      "claim": "The engine runs 42–50 checks on a plan. The count scales with the number of rooms and stairs, because room and stair checks run per instance.",
-      "value": "42–50",
+      "claim": "The number of LDA checks scales with rooms and stairs: 37 on the 10 marla sample (v3) and 43 on the 1 kanal villa (v3).",
+      "value": "37 / 43",
       "status": "measured_live",
       "sources": [
-        {"file": "deck brief", "where": "Measured live facts: 42–50 rules"},
-        {"file": "contracts/fixtures/argon-v1-compliance.json", "where": "42 checks on the argon-v1 10-marla plan"},
-        {"file": "docs/design/DESIGN.md", "where": "L183, L233: '42 LDA checks'"},
-        {"file": "api/app/compliance/lda.py", "where": "per-room loop L245–292, per-stair loop L295–305"}
+        {"file": "docs/screens/v2-live-plan-compliance-10marla.png", "where": "37/37 LDA"},
+        {"file": "docs/screens/v2-live-plan-compliance-villa.png", "where": "43/43 LDA"},
+        {"file": "api/app/compliance/lda.py", "where": "per-room and per-stair loops"}
       ],
-      "used_on": [3, 7, 11, 12],
-      "note": "Say 'checks', not 'rules': 18 check types are applied per room and per stair."
+      "used_on": [4, 6, 10],
+      "note": "Superseded '42–50' (16 Oct samples).",
+      "updated": "2026-10-17 v2"
     },
+
     "lda_text_version": {
       "claim": "The rules come from LDA's own consolidated text of the Building & Zoning Regulations 2019, a PDF dated 09-02-2026.",
       "value": "LDA B&ZR 2019, consolidated 09-02-2026",
@@ -189,69 +219,92 @@
     "fix_loop_5_1_0": {
       "claim": "Argon's fix loop went from 5 violations to 1, then 0.",
       "value": "5 → 1 → 0",
-      "status": "measured_live",
+      "status": "superseded",
       "sources": [
         {"file": "deck brief", "where": "Measured live facts"},
         {"file": "README.md", "where": "L26 screen caption"},
         {"file": "docs/screens/app-design.png", "where": "'Argon fixed 5 → 1 → 0 LDA violations over 3 checks'"}
       ],
-      "used_on": [5, 7, 11]
+      "used_on": [],
+      "note": "16 Oct v1 run. Replaced on slide 6 by fix_loop_15_5_0.",
+      "updated": "2026-10-17 v2"
     },
+
     "fix_loop_4_0": {
       "claim": "On another run the fix loop went from 4 violations to 0.",
       "value": "4 → 0",
-      "status": "measured_live",
+      "status": "superseded",
       "sources": [
         {"file": "deck brief", "where": "Measured live facts"},
         {"file": "docs/evidence/live-samples-2026-10-17.json", "where": "sample_1_kanal.v1.fix_history: attempt 1 fail 4 (3 x room.light, 1 x room.size), attempt 2 fail 0"}
       ],
-      "used_on": [6, 10],
-      "note": "This is the live 1-kanal sample's own fix history."
+      "used_on": [],
+      "note": "The 16 Oct 1-kanal sample's fix history. That sample was replaced by p_1a42e70989af (v3).",
+      "updated": "2026-10-17 v2"
     },
 
     "livable_rules": {
-      "claim": "Livable-home rules: bedrooms open only to a corridor, lounge, balcony or their own bath; a stair reaches every floor including the roof; there is a railing at every drop; doors are clear of furniture; there is a clear 3 ft path to every door.",
-      "value": "5 livable checks ('5/5 livable')",
-      "status": "in_progress",
+      "claim": "10 livable-home rules: roof kept clear for solar; rooms are independent; every room has a proper way in; stairs reach every floor and the roof; the roof door is at the top of the stair; doors and windows fit their walls; rooms match the brief; every stair edge and void has a railing; doors are clear of furniture; a clear 3 ft path to every door.",
+      "value": "10 livable rules",
+      "status": "repo_code",
       "sources": [
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 1 and 2 (planning.py)"},
-        {"file": "docs/design/DESIGN.md", "where": "Plan > Compliance chip > Livable (L233–240)"},
-        {"file": "docs/review/architecture-rules.md", "where": "Part A"}
+        {"file": "api/app/compliance/planning.py", "where": "module docstring; checks with category 'livable'"},
+        {"file": "docs/screens/v2-live-plan-compliance-villa-livable.png", "where": "Livable home · 10 pass"},
+        {"file": "docs/screens/v2-live-print-sheet-compliance.png", "where": "Livable home · 10 pass, all ten listed"}
       ],
-      "used_on": [7]
+      "used_on": [3, 6, 8, 10, 11, 14],
+      "updated": "2026-10-17 v2"
     },
+
     "engine_invariants": {
-      "claim": "The engine guarantees railings, door keep-outs, the mumty door at the stair arrival, parking bays and walkways, whatever Argon writes.",
+      "claim": "The engine builds railings at every stair edge, void and balcony (3′6″), keeps furniture out of door swings and walkways, puts the roof door at the top landing under the stair tower, and parks cars clear of walkways, whatever Argon writes.",
       "value": "engine-enforced",
-      "status": "in_progress",
+      "status": "repo_code",
       "sources": [
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 2"},
-        {"file": "docs/review/architecture-rules.md", "where": "Part B (B.1–B.9)"}
+        {"file": "api/app/compliance/planning.py", "where": "livable rules"},
+        {"file": "web/src/engine/", "where": "structure, furniture zones, outdoor keep-outs"},
+        {"file": "docs/screens/v2-live-walk-stairwell-railings.png", "where": "railings on every edge"},
+        {"file": "docs/screens/v2-live-walk-roof-door.png", "where": "roof door at the top landing"},
+        {"file": "Firestore (read-only, 17 Oct 2026)", "where": "p_5a5893a2bcaa v_35584fee3af9 fix_history repairs: 'set the stair tower over the stair with its door at the top landing'"}
       ],
-      "used_on": [7]
+      "used_on": [6, 9],
+      "updated": "2026-10-17 v2"
     },
+
     "self_review": {
-      "claim": "Argon reviews a rendered PNG of its own floor plan, with a room and area table. It critiques circulation, privacy, proportions, daylight and the brief, then revises.",
+      "claim": "Argon reviews a drawn image of each of its own floor plans (rooms with names, sizes, doors and windows) and critiques circulation, privacy, proportions, daylight and the brief, then revises within a time budget.",
       "value": "self-review step",
-      "status": "in_progress",
-      "sources": [{"file": "docs/OVERHAUL.md", "where": "Non-negotiable 2; BACKEND track 'Argon self-review step (floor plan PNG via Pillow → critique → revise)'"}],
-      "used_on": [7]
+      "status": "repo_code",
+      "sources": [
+        {"file": "api/app/agents/drawing.py", "where": "module docstring"},
+        {"file": "api/app/config.py", "where": "SELF_REVIEW, MODEL_REVIEW = MODEL_ARCHITECT, REVIEW_BUDGET_S 150"},
+        {"file": "docs/screens/v2-backend-review-ground.png", "where": "a drawing Argon reviews (from an earlier plan)"}
+      ],
+      "used_on": [3, 5, 6, 8, 14],
+      "updated": "2026-10-17 v2"
     },
+
     "audit_stair_defects": {
       "claim": "An audit of three houses (two real Argon outputs and the hand-made fixture), done as a senior Lahore architect would, found stair life-safety defects in all three.",
       "value": "3 of 3 houses",
       "status": "repo_doc",
-      "sources": [{"file": "docs/review/architecture-rules.md", "where": "§0 Headline findings, closing line"}],
+      "sources": [
+        {"file": "docs/review/architecture-rules.md", "where": "§0 Headline findings, closing line"}
+      ],
       "used_on": [7],
       "note": "The audited houses are argon-v1, the fixture and a live 1-kanal house."
     },
+
     "audit_22ft_drop": {
       "claim": "In the 1-kanal house, one roof stairwell edge had a 22 ft drop and no railing.",
       "value": "22 ft",
       "status": "repo_doc",
-      "sources": [{"file": "docs/review/architecture-rules.md", "where": "Headline findings table, row 1, '1-kanal' column"}],
+      "sources": [
+        {"file": "docs/review/architecture-rules.md", "where": "Headline findings table, row 1, '1-kanal' column"}
+      ],
       "used_on": [7]
     },
+
     "ibc_guards": {
       "claim": "LDA does not specify guards or furniture clearances, so the spec uses IBC 2021: guards where the drop exceeds 30 in, at least 42 in high.",
       "value": ">30 in drop → guard ≥42 in",
@@ -262,11 +315,14 @@
       ],
       "used_on": [7]
     },
+
     "disclaimer_pcatp": {
       "claim": "Naqsha produces concept designs and a regulation pre-check. LDA requires plans to be stamped by a PCATP-registered architect.",
       "value": "pre-check, not approval",
       "status": "repo_doc",
-      "sources": [{"file": "README.md", "where": "L79 Disclaimer"}],
+      "sources": [
+        {"file": "README.md", "where": "L79 Disclaimer"}
+      ],
       "used_on": [7]
     },
 
@@ -280,6 +336,7 @@
       ],
       "used_on": [3, 10]
     },
+
     "genai_version": {
       "claim": "The app uses google-genai 2.31.0; Gemini 4 Argon needs 2.30.1 or later.",
       "value": "google-genai==2.31.0",
@@ -290,6 +347,7 @@
       ],
       "used_on": [10]
     },
+
     "adk_tools_count": {
       "claim": "The ADK revision agent has 9 tools.",
       "value": "9",
@@ -298,58 +356,85 @@
         {"file": "api/app/agents/reviser_adk.py", "where": "Workspace.tools() return list, L163–164"},
         {"file": "README.md", "where": "L41"}
       ],
-      "used_on": [3, 4, 8, 11]
+      "used_on": [3, 7, 8],
+      "updated": "2026-10-17 v2"
     },
+
     "adk_tool_names": {
-      "claim": "The tool names are list_sections, read_section, get_room, check_plan_ops, apply_plan_ops, write_section, remove_section, resolve_comment and finish.",
+      "claim": "The ADK reviser's 9 tools: get_rooms, list_sections, read_sections, sdk_reference, check_plan_ops, apply_plan_ops, write_section, remove_section and finish.",
       "value": "9 names",
       "status": "repo_code",
-      "sources": [{"file": "api/app/agents/reviser_adk.py", "where": "Workspace.tools(), L62–164"}],
-      "used_on": [8]
+      "sources": [
+        {"file": "api/app/agents/reviser_adk.py", "where": "Workspace.tools(), L203"}
+      ],
+      "used_on": [7],
+      "updated": "2026-10-17 v2"
     },
+
     "adk_revision_time": {
-      "claim": "One ADK revision run took about 95 s.",
-      "value": "~95 s",
+      "claim": "An ADK revision takes about 70 s. On the 10 marla sample, v1 → v2 from two comments took 70 s.",
+      "value": "~70 s",
       "status": "measured_live",
-      "sources": [{"file": "deck brief", "where": "Measured live facts"}],
-      "used_on": [4, 8, 11],
-      "note": "This was one run with 3 comments. The time will grow with the number of comments."
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "Firestore (read-only, 17 Oct 2026)", "where": "p_5a5893a2bcaa versions: v_35584fee3af9 created 05:38:04 UTC, v_f881a067c573 created 05:39:14 UTC"}
+      ],
+      "used_on": [3, 7, 10],
+      "note": "Superseded '~95 s' (one 16 Oct run with 3 comments).",
+      "updated": "2026-10-17 v2"
     },
+
     "adk_window_enlarged": {
-      "claim": "In that run the agent enlarged a window through an LDA-checked plan edit (check_plan_ops, then apply_plan_ops).",
+      "claim": "On the 10 marla sample the agent enlarged the master bedroom's front glass from 7 × 7.5 ft to 9 × 8.5 ft and opened up the balcony screen. Answer, verbatim: 'We expanded the master bedroom's front glass opening to 9 ft wide by 8.5 ft tall—nearly wall-to-wall—and spaced out the balcony screen slats so plenty of morning light fills the room.'",
       "value": "Done",
       "status": "measured_live",
-      "sources": [{"file": "deck brief", "where": "Measured live facts"}],
-      "used_on": [8],
-      "note": "Verbatim comment and answer are on the live 10-marla sample (comment cm_0a4b21c612eb, change ch1) and in docs/evidence/live-samples-2026-10-17.json."
+      "sources": [
+        {"file": "Firestore (read-only, 17 Oct 2026)", "where": "p_5a5893a2bcaa comment cm_672615ec42ba (resolved); v_f881a067c573 changes ch1 (f_master_slide), ch2 (furnish_f_master, facade_upper_screen)"},
+        {"file": "docs/screens/v2-live-revisions-from-comments.png", "where": "What changed"},
+        {"file": "docs/screens/v2-live-comments.png", "where": "Done + Naqsha's reply"},
+        {"file": "GET /api/samples (live, 17 Oct)", "where": "v2 summary 'From 2 comments · 36/36 LDA · 12/12 livable · 3 review notes' (slide 7 log: still pass)"}
+      ],
+      "used_on": [4, 7, 12],
+      "note": "Verbatim comment and answer are on the live 10-marla sample (comment cm_0a4b21c612eb, change ch1) and in docs/evidence/live-samples-2026-10-17.json.",
+      "updated": "2026-10-17 v2"
     },
+
     "adk_sofa_restyled": {
       "claim": "In that run the agent restyled a sofa by rewriting a furniture section.",
       "value": "Done",
-      "status": "measured_live",
-      "sources": [{"file": "deck brief", "where": "Measured live facts"}],
-      "used_on": [8],
-      "note": "Verbatim comment and answer are on the live 10-marla sample (comment cm_87e5b922d6d3, change ch3)."
+      "status": "superseded",
+      "sources": [
+        {"file": "deck brief", "where": "Measured live facts"}
+      ],
+      "used_on": [],
+      "note": "16 Oct run on the old 10-marla sample. Not on the v2 slides.",
+      "updated": "2026-10-17 v2"
     },
+
     "adk_porch_rejected": {
-      "claim": "The agent rejected a porch extension because of the 10 ft front setback, and offered alternatives.",
+      "claim": "Both samples' agents refused a porch extension 4 ft into the front lawn, citing the 10 ft front setback, and each offered a different alternative. 10 marla, verbatim: 'LDA regulations require a mandatory 10 ft front open setback and do not allow the car porch slab to project into the front lawn or driveway. Instead, your porch already includes the maximum permitted 2.6 ft cantilevered canopy overhang at the front, and if you need deeper covered parking we could push the lounge wall back slightly inside the building line.' Villa, verbatim: 'The car porch and entrance veranda already sit right on the required 10 ft LDA front setback line, so we cannot extend the slab 4 ft forward into the front lawn/driveway setback. If you'd like extra shaded coverage toward the front, we could instead add an overhead front canopy projecting up to 3 ft past the setback line.'",
       "value": "Not possible (10 ft front setback)",
       "status": "measured_live",
       "sources": [
-        {"file": "deck brief", "where": "Measured live facts"},
-        {"file": "docs/evidence/live-samples-2026-10-17.json", "where": "sample_10_marla.comments: cm_2581acf761a7, status rejected, verbatim resolution"},
-        {"file": "docs/screens/app-revisions.png", "where": "same text, captured in demo mode (web/src/api/mock/revise.ts reuses it); do not cite this screenshot as live"},
-        {"file": "docs/pitch/demo-script.md", "where": "2:05–2:55"}
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "Firestore (read-only, 17 Oct 2026)", "where": "p_5a5893a2bcaa comment cm_f4bd928bdc37 (rejected); p_1a42e70989af comment cm_67e769d1d31b (rejected)"}
       ],
-      "used_on": [8]
+      "used_on": [3, 7, 10, 15],
+      "note": "The slide 7 villa quote is shortened with an ellipsis.",
+      "updated": "2026-10-17 v2"
     },
+
     "adk_fallback": {
       "claim": "If the ADK reviser fails, the single-shot reviser takes over. ADK saves nothing until it finishes.",
       "value": "fallback to single-shot reviser",
       "status": "repo_code",
-      "sources": [{"file": "api/app/main.py", "where": "revise endpoint, L328"}],
-      "used_on": [8, 11]
+      "sources": [
+        {"file": "api/app/main.py", "where": "revise endpoint, L328"}
+      ],
+      "used_on": [7, 9],
+      "updated": "2026-10-17 v2"
     },
+
     "comment_anchor": {
       "claim": "Each comment is anchored to a room, element and level, with a snapshot. The agent receives up to 8 comment snapshots as images.",
       "value": "room / element / level + snapshot",
@@ -365,16 +450,22 @@
       "claim": "The House SDK exposes 44 PBR material presets.",
       "value": "44",
       "status": "repo_code",
-      "sources": [{"file": "contracts/house-sdk.d.ts", "where": "MaterialPreset union, L37–54 (counted)"}],
+      "sources": [
+        {"file": "contracts/house-sdk.d.ts", "where": "MaterialPreset union, L37–54 (counted)"}
+      ],
       "used_on": [6]
     },
+
     "sdk_furniture_types": {
       "claim": "The House SDK has 57 furniture types, including Pakistani details such as ceiling fans, split ACs, a water dispenser and a prayer mat.",
       "value": "57",
       "status": "repo_code",
-      "sources": [{"file": "contracts/house-sdk.d.ts", "where": "FurnitureType union, L70–85 (counted)"}],
+      "sources": [
+        {"file": "contracts/house-sdk.d.ts", "where": "FurnitureType union, L70–85 (counted)"}
+      ],
       "used_on": [6]
     },
+
     "sdk_object_tags": {
       "claim": "Every object is tagged with {layer, level, room, kind, label, id}. The tags drive layer toggles, comment anchors and the as-built check.",
       "value": "Tags interface",
@@ -385,6 +476,7 @@
       ],
       "used_on": [6]
     },
+
     "section_edits": {
       "claim": "Edits replace whole named sections, such as furnish_g_lounge or facade_front.",
       "value": "section-level edits",
@@ -395,6 +487,7 @@
       ],
       "used_on": [6]
     },
+
     "asbuilt_check": {
       "claim": "The as-built check confirms nothing in the 3D model projects into a mandatory open space beyond the chajja allowance: 3 ft where the open space is at least 10 ft, otherwise 1.5 ft, and 0 against a party wall.",
       "value": "3 ft / 1.5 ft / 0",
@@ -416,13 +509,17 @@
       ],
       "used_on": [11]
     },
+
     "degenerate_guard": {
       "claim": "Streamed JSON is watched for degenerate decoding: in the last 160 characters, 2 or fewer distinct characters, or a digit repeated 40 or more times (for example 35.0000000…). Either one aborts the attempt and retries it (2 attempts). Prompts also cap numbers at 2 decimal places.",
       "value": "guard + retry",
       "status": "repo_code",
-      "sources": [{"file": "api/app/llm.py", "where": "degenerate() L20–22; NUM_RULE L13; stream_json attempts=2"}],
+      "sources": [
+        {"file": "api/app/llm.py", "where": "degenerate() L20–22; NUM_RULE L13; stream_json attempts=2"}
+      ],
       "used_on": [11]
     },
+
     "detached_runs": {
       "claim": "Long pipelines (design, revise) keep running if the browser disconnects. A client re-attaches through GET /api/projects/{pid}/run and replays every event.",
       "value": "detached runs + SSE replay",
@@ -434,6 +531,7 @@
       "used_on": [10, 11],
       "note": "Runs are held in memory per instance, and runs.py relies on Cloud Run session affinity. The deploy command in README.md does not show --session-affinity, so confirm the live service has it enabled."
     },
+
     "section_repair": {
       "claim": "When a section throws in the browser, the client reports the error and Argon rewrites only that section.",
       "value": "per-section repair",
@@ -445,6 +543,7 @@
       ],
       "used_on": [11]
     },
+
     "code_screen_patterns": {
       "claim": "Before generated design.js runs, it is screened statically against 21 banned patterns: network access, import, eval and Function, DOM and window access, storage, navigator, postMessage, globals, prototype tricks, timers and location.",
       "value": "21",
@@ -455,13 +554,17 @@
       ],
       "used_on": [11]
     },
+
     "default_design_fallback": {
       "claim": "If Argon's code is missing, a default design is built from the plan: structure, auto-furnishing for every room, landscape and lights.",
       "value": "defaultDesign()",
       "status": "repo_code",
-      "sources": [{"file": "web/src/engine/index.ts", "where": "defaultDesign, L153"}],
+      "sources": [
+        {"file": "web/src/engine/index.ts", "where": "defaultDesign, L153"}
+      ],
       "used_on": [11]
     },
+
     "one_service": {
       "claim": "One Cloud Run service serves both the API and the SPA, and deploys with a single gcloud run deploy --source .",
       "value": "one service, one URL",
@@ -477,9 +580,12 @@
       "claim": "The service runs on Cloud Run in us-central1, using FastAPI and SSE, with a 3600 s request timeout.",
       "value": "Cloud Run, us-central1, --timeout 3600",
       "status": "repo_doc",
-      "sources": [{"file": "README.md", "where": "Architecture; Deploy"}],
+      "sources": [
+        {"file": "README.md", "where": "Architecture; Deploy"}
+      ],
       "used_on": [10]
     },
+
     "stack_firestore": {
       "claim": "Firestore stores projects, messages, versions and comments.",
       "value": "Firestore Native (default), us-central1",
@@ -490,13 +596,17 @@
       ],
       "used_on": [10]
     },
+
     "stack_gcs": {
       "claim": "Cloud Storage holds concept images, renders and comment snapshots.",
       "value": "Cloud Storage",
       "status": "repo_doc",
-      "sources": [{"file": "README.md", "where": "Architecture"}],
+      "sources": [
+        {"file": "README.md", "where": "Architecture"}
+      ],
       "used_on": [10]
     },
+
     "stack_vertex_global": {
       "claim": "Gemini is called through Vertex AI (Gemini Enterprise Agent Platform) on the global endpoint, the only location that serves the newest models.",
       "value": "location=global",
@@ -507,35 +617,54 @@
       ],
       "used_on": [10]
     },
+
     "stack_identity_platform": {
       "claim": "Accounts use Google Identity Platform with email and password. Google sign-in comes later.",
       "value": "Identity Platform (email/password)",
-      "status": "in_progress",
-      "sources": [{"file": "docs/OVERHAUL.md", "where": "Non-negotiable 4; Auth decision"}],
-      "used_on": [10],
-      "note": "docs/design/DESIGN.md describes 'Continue with Google'. OVERHAUL.md's auth decision overrides it for this build."
+      "status": "repo_code",
+      "sources": [
+        {"file": "api/app/config.py", "where": "AUTH_API_KEY, AUTH_PROJECT (Identity Platform)"},
+        {"file": "api/app/main.py", "where": "/api/me, /api/me/claim"},
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [8, 12, 14],
+      "note": "docs/design/DESIGN.md describes 'Continue with Google'. OVERHAUL.md's auth decision overrides it for this build.",
+      "updated": "2026-10-17 v2"
     },
+
     "auth_identity_platform": {
       "claim": "Sign-up and sign-in use Identity Platform (email and password). Guests can work without an account, and signing in claims the guest's projects.",
       "value": "email/password; guest claim",
-      "status": "in_progress",
-      "sources": [{"file": "docs/OVERHAUL.md", "where": "Auth decision"}],
-      "used_on": [9]
+      "status": "repo_code",
+      "sources": [
+        {"file": "api/app/main.py", "where": "POST /api/me/claim"},
+        {"file": "docs/screens/v2-live-workspace.png", "where": "Guest · saved in this browser; Save your work to an account"},
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [8, 12, 14],
+      "updated": "2026-10-17 v2"
     },
+
     "stack_threejs": {
       "claim": "The viewer uses three.js r186.",
       "value": "three@0.186.1",
       "status": "repo_code",
-      "sources": [{"file": "web/package.json", "where": "dependencies"}],
+      "sources": [
+        {"file": "web/package.json", "where": "dependencies"}
+      ],
       "used_on": [4, 10]
     },
+
     "stack_r3f": {
       "claim": "It uses React 19 and react-three-fiber.",
       "value": "react@19.3.1, @react-three/fiber@9.8.2",
       "status": "repo_code",
-      "sources": [{"file": "web/package.json", "where": "dependencies"}],
+      "sources": [
+        {"file": "web/package.json", "where": "dependencies"}
+      ],
       "used_on": [10]
     },
+
     "stack_bvh": {
       "claim": "Walk physics (collisions and stairs) use three-mesh-bvh.",
       "value": "three-mesh-bvh@0.9.16",
@@ -551,160 +680,222 @@
       "claim": "Sample homes can be opened or cloned without waiting for a design run.",
       "value": "GET /api/samples; POST /api/projects/{pid}/clone",
       "status": "repo_code",
-      "sources": [{"file": "api/app/main.py", "where": "/api/samples, /clone"}],
+      "sources": [
+        {"file": "api/app/main.py", "where": "/api/samples, /clone"}
+      ],
       "used_on": [5, 15],
       "note": "The landing page's 'Explore a sample home' button, with no sign-in, is part of the overhaul (DESIGN.md Landing)."
     },
+
     "mobile_screens": {
-      "claim": "The app has mobile layouts for setup, design and explore.",
-      "value": "app-mobile-setup/design/explore.png",
-      "status": "repo_doc",
-      "sources": [{"file": "docs/screens/", "where": "app-mobile-*.png"}],
-      "used_on": [5]
+      "claim": "The v2 app works on a phone: brief and House.",
+      "value": "v2-live-phone-*.png",
+      "status": "measured_live",
+      "sources": [
+        {"file": "docs/screens/v2-live-phone-brief.png", "where": "brief"},
+        {"file": "docs/screens/v2-live-phone-house.png", "where": "House"}
+      ],
+      "used_on": [3, 4],
+      "updated": "2026-10-17 v2"
     },
 
     "collab_roles": {
-      "claim": "Roles: Owner and Team can edit and revise, Client can comment and approve, Viewer can only look.",
-      "value": "Owner / Team / Client / Viewer",
-      "status": "in_progress",
+      "claim": "Roles: Owner and Team can edit and revise; Client can view, comment and approve. There is no separate Viewer role.",
+      "value": "Owner / Team / Client",
+      "status": "repo_code",
       "sources": [
-        {"file": "docs/design/DESIGN.md", "where": "Comments and collaboration > Roles"},
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 4"}
+        {"file": "api/app/main.py", "where": "RANK = {client, team, owner}; NEED"}
       ],
-      "used_on": [9]
+      "used_on": [12],
+      "note": "The 16 Oct mock listed a Viewer role and a 'Can view' link mode; neither is in the live build.",
+      "updated": "2026-10-17 v2"
     },
+
     "collab_share": {
-      "claim": "One Share dialog lets the owner invite Team or Client by email, or turn on a client link with Can comment or Can view.",
+      "claim": "The Share dialog turns on a client link ('Anyone with the link can view and comment', no account needed) with Copy link, and invites Team or Client by email (invites need a free account).",
       "value": "Share dialog",
-      "status": "in_progress",
+      "status": "measured_live",
       "sources": [
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 4"},
-        {"file": "docs/design/DESIGN.md", "where": "Share dialog"}
+        {"file": "docs/screens/v2-live-share-dialog.png", "where": "Share this home"}
       ],
-      "used_on": [9]
+      "used_on": [12],
+      "updated": "2026-10-17 v2"
     },
+
     "collab_client_link": {
-      "claim": "The client view at /s/:token needs no account; guests give only a name. Next becomes 'Approve v2'.",
-      "value": "/s/:token",
-      "status": "in_progress",
-      "sources": [{"file": "docs/design/DESIGN.md", "where": "Client view"}],
-      "used_on": [9]
+      "claim": "The client view at /s/<token> needs no account. It reads 'Shared with you · You can comment' and offers 'Approve v3'.",
+      "value": "/s/<token>",
+      "status": "measured_live",
+      "sources": [
+        {"file": "docs/screens/v2-live-client-view.png", "where": "banner, Approve v3"},
+        {"file": "docs/screens/v2-live-client-view-comments.png", "where": "client comments"},
+        {"file": "docs/screens/v2-live-client-view-plan.png", "where": "Plan tab"}
+      ],
+      "used_on": [12],
+      "updated": "2026-10-17 v2"
     },
+
     "collab_comment_authors": {
-      "claim": "Comments carry an author (name, role, colour) and threaded replies. Naqsha replies with a feasibility chip.",
+      "claim": "Comments carry an author name and role (for example 'Client'), with threaded replies. Naqsha replies in the thread with what it changed and a status such as Done or Not possible.",
       "value": "author + replies + feasibility chip",
-      "status": "in_progress",
+      "status": "measured_live",
       "sources": [
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 4; contract changes Comment.author, replies"},
-        {"file": "docs/design/DESIGN.md", "where": "Comments sheet"}
+        {"file": "docs/screens/v2-live-comments.png", "where": "Ayesha · Client; You; Owner; Done; Naqsha"},
+        {"file": "docs/screens/v2-live-revisions-from-comments.png", "where": "Done / Not possible replies"}
       ],
-      "used_on": [9]
+      "used_on": [7, 12],
+      "note": "The 'Ayesha' comment and the owner's reply were posted on a guest copy for the capture and deleted with it.",
+      "updated": "2026-10-17 v2"
     },
+
     "collab_owner_picks": {
-      "claim": "The owner picks which comments go into a revision. 'Include in next revision' is on by default for Team and off for Client until the owner includes it.",
+      "claim": "The owner chooses which comments go into the next revision.",
       "value": "owner-curated revisions",
-      "status": "in_progress",
+      "status": "measured_live",
       "sources": [
-        {"file": "docs/OVERHAUL.md", "where": "Non-negotiable 4"},
-        {"file": "docs/design/DESIGN.md", "where": "Comments sheet"},
-        {"file": "api/app/main.py", "where": "revise accepts comment_ids (live)"}
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "api/app/main.py", "where": "revise accepts comment_ids"}
       ],
-      "used_on": [9]
+      "used_on": [12],
+      "updated": "2026-10-17 v2"
     },
 
     "overhaul_scope": {
-      "claim": "The overhaul for the 18 Oct build covers livable rules and self-review, collaboration, day/night concepts, a per-floor program, a water tank and solar-ready roof, print to PDF, and a landing page with a Portal.",
-      "value": "overhaul list",
-      "status": "in_progress",
-      "sources": [{"file": "docs/OVERHAUL.md", "where": "Non-negotiables 1–6"}],
-      "used_on": [14]
+      "claim": "Shipped on revision naqsha-00009: the Calm design system; a landing page with the house-under-construction animation and a Portal; Identity Platform accounts with guest claim; collaboration (Owner/Team/Client, share link, threaded comments, choosing comments to apply); the ADK setup agent; four day/night concepts; livable-home rules and Argon's self-review; the adaptive fix loop; print or save as PDF; walk upgrades; conversational edits from the Ask bar.",
+      "value": "shipped",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [14],
+      "updated": "2026-10-17 v2"
     },
+
     "print_1_100": {
-      "claim": "Print to PDF produces one floor per page at 1:100, with a scale bar, a north arrow and a title block, plus cover and compliance pages.",
+      "claim": "Print or save as PDF: A3 or A4 landscape sheets, one floor per sheet at 1:100 with a room schedule and title block, plus a cover (concept, site plan, area schedule) and a compliance report.",
       "value": "1:100",
-      "status": "in_progress",
-      "sources": [{"file": "docs/design/DESIGN.md", "where": "Plan > Print (L241–244)"}],
-      "used_on": [13]
+      "status": "measured_live",
+      "sources": [
+        {"file": "docs/screens/v2-live-print-dialog.png", "where": "Print or save as PDF; floors print at 1:100"},
+        {"file": "docs/screens/v2-live-print-sheet-ground-floor.png", "where": "1:100 at A3"},
+        {"file": "docs/screens/v2-live-print-sheet-cover.png", "where": "cover"},
+        {"file": "docs/screens/v2-live-print-sheet-compliance.png", "where": "compliance report"}
+      ],
+      "used_on": [13, 14],
+      "updated": "2026-10-17 v2"
     },
 
     "lda_setbacks_10_30_marla": {
       "claim": "In approved schemes, a 10–30 marla plot has 10 ft front, 7 ft rear and 5 ft side space on one side.",
       "value": "10 / 7 / 5 (one side)",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 3, L41; §2.1"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 3, L41; §2.1"}
+      ],
       "used_on": [2, 8]
     },
+
     "lda_coverage_10m_1k": {
       "claim": "Ground coverage is 70% for 10 marla to under 1 kanal (FAR 1:2.8).",
       "value": "70%",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 4, L45"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 4, L45"}
+      ],
       "used_on": [2]
     },
+
     "lda_height_10m_plus": {
       "claim": "The maximum height is 45 ft for 10 marla and above (38 ft below 10 marla), measured from the road crown to the top of the parapet. A mumty up to 9 ft 6 in is excluded.",
       "value": "45 ft",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 5, L46"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 5, L46"}
+      ],
       "used_on": [2]
     },
+
     "lda_storeys_3": {
       "claim": "No plan may be approved above 3 storeys, excluding the basement, for any plot size (clause 2.7.1(a)).",
       "value": "3",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 6, L47"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 6, L47"}
+      ],
       "used_on": [2]
     },
+
     "lda_storeys_2020_4": {
       "claim": "The 2020 text allowed 4 storeys for 10 marla and above.",
       "value": "4 → 3",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 6, L47"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 6, L47"}
+      ],
       "used_on": [2, 3]
     },
+
     "lda_glazing_8pct": {
       "claim": "Window glazing must be at least 8% of floor area, with half of it openable.",
       "value": "8%",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 7, L52"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 7, L52"}
+      ],
       "used_on": [2]
     },
+
     "lda_stairs": {
       "claim": "Stairs must be at least 3 ft 6 in wide, with risers of 7.5 in or less, treads of 10 in or more, and no more than 15 risers per flight.",
       "value": "3′6″ / 7½″ / 10″ / 15",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 7, L54"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 7, L54"}
+      ],
       "used_on": [2]
     },
+
     "lda_pcatp_stamp": {
       "claim": "The plan must be prepared, stamped and signed by a PCATP-registered architect who is enlisted with LDA.",
       "value": "PCATP stamp required",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 11; §11.1 L424 (S1 §10.3.1(b))"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 11; §11.1 L424 (S1 §10.3.1(b))"}
+      ],
       "used_on": [2, 13]
     },
+
     "lda_decision_21_days": {
       "claim": "LDA must decide on residential plans within 21 days in approved schemes and 30 days in controlled areas.",
       "value": "21 days",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.2 Time limit (S1 §10.13)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.2 Time limit (S1 §10.13)"}
+      ],
       "used_on": [2],
       "note": "S1 §10.4.1 still says 45 days, so the text is inconsistent."
     },
+
     "lda_refusal_names_rule": {
       "claim": "A refusal must name the regulation breached. An appeal may be filed within 30 days.",
       "value": "refusal cites the rule",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.2 Refusal and appeal, L444 (S1 §10.4.1(a), §10.4.3)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.2 Refusal and appeal, L444 (S1 §10.4.1(a), §10.4.3)"}
+      ],
       "used_on": [2]
     },
+
     "lda_scrutiny_fee": {
       "claim": "The plan scrutiny fee, for a first or revised plan, is Rs 15 per sq ft of total covered area.",
       "value": "Rs 15/sq ft",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.2 Residential fees [v2026] (S1 Appendix C)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.2 Residential fees [v2026] (S1 Appendix C)"}
+      ],
       "used_on": [2]
     },
+
     "lda_penalty_open_space": {
       "claim": "An open-space violation on the ground floor carries a penalty of Rs 500 per sq ft.",
       "value": "Rs 500/sq ft",
@@ -715,26 +906,35 @@
       ],
       "used_on": [2]
     },
+
     "lda_plan_scale_1_100": {
       "claim": "LDA asks for building plans at 1:100 (1:200 if very large).",
       "value": "1:100",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.1 Building plan, L428 (S1 §10.3.2(c))"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.1 Building plan, L428 (S1 §10.3.2(c))"}
+      ],
       "used_on": [13]
     },
+
     "lda_online_since_2024": {
       "claim": "LDA launched online approval of residential building plans in August 2024.",
       "value": "2024-08-15",
       "status": "regulation_secondary",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.4, L467 (N7, APP)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.4, L467 (N7, APP)"}
+      ],
       "used_on": [3, 14],
       "note": "Secondary source. The system was reported shut for 10 days in May 2025 (N8), and in 2026 processing reportedly took up to 18 days (N11)."
     },
+
     "lda_amendments_aug_2026": {
       "claim": "The LDA Governing Body approved further amendments on 2026-08-19. Their text has not been published.",
       "value": "2026-08-19",
       "status": "regulation_secondary",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 1, L33 (N6)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 1, L33 (N6)"}
+      ],
       "used_on": [3]
     },
 
@@ -742,43 +942,60 @@
       "claim": "RDA, FDA and GDA adopted the LDA 2019 text as it stood on 28-01-2020, so they still allow 4 storeys at 10 marla and above.",
       "value": "RDA, FDA, GDA",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L66; §12.2"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L66; §12.2"}
+      ],
       "used_on": [13]
     },
+
     "punjab_mda": {
       "claim": "MDA has its own 2020 regulations: 38/48 ft measured to the roof, with the parapet extra, and boundary walls up to 8 ft.",
       "value": "MDA 2020",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L67"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L67"}
+      ],
       "used_on": [13]
     },
+
     "punjab_dha": {
       "claim": "DHA Lahore's August 2026 bylaws cap houses at 39 ft (basement, ground and first floor only).",
       "value": "39 ft",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L68; §12.5"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L68; §12.5"}
+      ],
       "used_on": [13],
       "note": "Check the §12.5 status labels before putting more DHA detail on a slide."
     },
+
     "punjab_bahria": {
       "claim": "Bahria Town Lahore's bylaws are not published online.",
       "value": "unpublished",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L69"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§(a) item 12, L69"}
+      ],
       "used_on": [13]
     },
+
     "punjab_lgcd": {
       "claim": "Outside the development authorities, the LG&CD Department approves building plans through e-Khidmat Markaz within 30 working days.",
       "value": "LG&CD areas",
       "status": "regulation_verified",
-      "sources": [{"file": "docs/research/lda-regulations.md", "where": "§11.4, L471 (S8)"}],
+      "sources": [
+        {"file": "docs/research/lda-regulations.md", "where": "§11.4, L471 (S8)"}
+      ],
       "used_on": [13]
     },
+
     "engine_authority_overrides": {
       "claim": "The engine already accepts other authorities. DHA overrides the height to 39 ft and storeys to 2 (ground and first, plus a basement). Bahria and other authorities show the LDA baseline with a caveat.",
       "value": "LDA, DHA, BAHRIA, OTHER",
       "status": "repo_code",
-      "sources": [{"file": "api/app/compliance/lda.py", "where": "_authority_overrides, L44–55"}],
+      "sources": [
+        {"file": "api/app/compliance/lda.py", "where": "_authority_overrides, L44–55"}
+      ],
       "used_on": [13],
       "note": "The DHA and Bahria setbacks still use the LDA baseline. Full rule packs are on the roadmap."
     },
@@ -793,68 +1010,95 @@
       ],
       "used_on": [12]
     },
+
     "maket_plot_as_house": {
       "claim": "Maket took the plot size as the house size and drew a 59′6″-wide house plus garage on a 50 ft plot, with no warning.",
       "value": "59′6″ on 50 ft",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§4, L50"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§4, L50"}
+      ],
       "used_on": [12]
     },
+
     "maket_us_centric": {
       "claim": "Maket is US-centric: it offers a mudroom and mechanical room, but no drawing room, servant quarter, store, prayer room or dirty kitchen.",
       "value": "US-centric",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§4, L53"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§4, L53"}
+      ],
       "used_on": [12]
     },
+
     "maket_single_floor_no_stairs": {
       "claim": "Maket allows a single floor on the free tier and has no stairs anywhere.",
       "value": "single floor; no stairs",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§4, L57"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§4, L57"}
+      ],
       "used_on": [12]
     },
+
     "maket_walk_no_collision": {
       "claim": "Maket's walk has no collision (the tester walked through a wall) and spawns in the garage.",
       "value": "no collision",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§4, L56"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§4, L56"}
+      ],
       "used_on": [12]
     },
+
     "maket_white_box": {
       "claim": "In Maket the exterior is a white box; facades exist only in renders.",
       "value": "white box",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§4, L59"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§4, L59"}
+      ],
       "used_on": [12]
     },
+
     "maket_edit_cost": {
       "claim": "Maket's AI edits by chat cost 5 credits each and are available on paid plans only.",
       "value": "5 credits",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§2 AI edits by chat; Pricing, L32"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§2 AI edits by chat; Pricing, L32"}
+      ],
       "used_on": [12]
     },
+
     "maket_collab_view_only": {
       "claim": "Maket's only collaboration is a view-only public link: no comments, no team roles and no client view.",
       "value": "view-only link",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§2 Collaboration, L30"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§2 Collaboration, L30"}
+      ],
       "used_on": [9, 12]
     },
+
     "maket_time_to_plan": {
       "claim": "Going from a blank dashboard to a furnished 2D plan in Maket took about 6 minutes and about 8 user actions. Plan generation alone took about 2 minutes.",
       "value": "~6 min, ~8 actions (generation ~2 min)",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§1, L14 and L20"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§1, L14 and L20"}
+      ],
       "used_on": [12],
       "note": "Maket reaches a 2D plan faster than Naqsha reaches a full 3D house. Speaker notes for slide 12 say so."
     },
+
     "maket_pricing": {
       "claim": "Maket's pricing: Free (30 one-time credits), Homeowner at $20/mo or $17 annual, Pro at $100/mo or $83 annual, and Scale (custom).",
       "value": "$20/mo; $100/mo",
       "status": "competitor_tested",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§2 Pricing, L32"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§2 Pricing, L32"}
+      ],
       "used_on": [13]
     },
 
@@ -862,26 +1106,35 @@
       "claim": "Families start with a sketch on paper and a contractor's guess, then go back and forth with an architect for a long time.",
       "value": "weeks of back-and-forth",
       "status": "qualitative",
-      "sources": [{"file": "README.md", "where": "L5: 'months of back-and-forth with an architect'"}],
+      "sources": [
+        {"file": "README.md", "where": "L5: 'months of back-and-forth with an architect'"}
+      ],
       "used_on": [2],
       "note": "README.md says 'months' and the deck brief says 'weeks'. No measured duration exists. The 10-marla Johar Town family on slide 2 is an illustrative example, not a real household."
     },
+
     "status_quo_qualitative": {
       "claim": "The 'Sketch + contractor' column on slide 12 (from memory, redraw by hand, in person, weeks to a first drawing) describes the status quo.",
       "value": "qualitative",
       "status": "qualitative",
-      "sources": [{"file": "README.md", "where": "L5"}],
+      "sources": [
+        {"file": "README.md", "where": "L5"}
+      ],
       "used_on": [12],
       "note": "No source measures these. Keep the wording soft and free of numbers."
     },
+
     "pricing_proposal": {
       "claim": "Pricing idea: Free (brief, envelope, concepts); per-home (plan, 3D, walk, revisions, print); Pro seats for architects and builders; a referral to a stamping partner.",
       "value": "no prices set",
       "status": "proposal",
-      "sources": [{"file": "deck-content.md", "where": "slide 13 (new in this deck)"}],
+      "sources": [
+        {"file": "deck-content.md", "where": "slide 13 (new in this deck)"}
+      ],
       "used_on": [13],
       "note": "Not in any repo doc. Price points are deliberately left blank."
     },
+
     "impact_unmeasured": {
       "claim": "Impact on families, such as fewer refusals, less time to a first drawing and fewer revision rounds, has not been measured.",
       "value": "to measure in pilots",
@@ -895,30 +1148,42 @@
       "claim": "Drag-to-swap rooms in 2D, with an automatic LDA re-check.",
       "value": "Next",
       "status": "proposal",
-      "sources": [{"file": "docs/research/maket-teardown.md", "where": "§5 P1 item 9"}],
+      "sources": [
+        {"file": "docs/research/maket-teardown.md", "where": "§5 P1 item 9"}
+      ],
       "used_on": [14]
     },
+
     "roadmap_google_signin": {
       "claim": "Google sign-in, which needs an OAuth client created in the console.",
       "value": "Next",
       "status": "proposal",
-      "sources": [{"file": "docs/OVERHAUL.md", "where": "Auth decision"}],
+      "sources": [
+        {"file": "docs/OVERHAUL.md", "where": "Auth decision"}
+      ],
       "used_on": [14]
     },
+
     "roadmap_sandbox_iframe": {
       "claim": "Hardening design.js execution into a sandboxed iframe.",
       "value": "Next",
       "status": "proposal",
-      "sources": [{"file": "docs/ARCHITECTURE.md", "where": "§3 Code safety: 'a stretch item'"}],
+      "sources": [
+        {"file": "docs/ARCHITECTURE.md", "where": "§3 Code safety: 'a stretch item'"}
+      ],
       "used_on": [14]
     },
+
     "roadmap_gltf": {
       "claim": "glTF download.",
       "value": "Next",
       "status": "proposal",
-      "sources": [{"file": "docs/ARCHITECTURE.md", "where": "§1 step 9 Stretch"}],
+      "sources": [
+        {"file": "docs/ARCHITECTURE.md", "where": "§1 step 9 Stretch"}
+      ],
       "used_on": [14]
     },
+
     "roadmap_rule_packs": {
       "claim": "Rule packs for RDA, FDA and GDA, then DHA and Bahria Town.",
       "value": "Next",
@@ -929,11 +1194,14 @@
       ],
       "used_on": [14]
     },
+
     "roadmap_later_ideas": {
       "claim": "Pilots with PCATP architects, submission-ready sets for LDA's online system, structural and services drafts, an Urdu interface and cost estimates.",
       "value": "Later (ideas)",
       "status": "proposal",
-      "sources": [{"file": "deck-content.md", "where": "slide 14 (new in this deck)"}],
+      "sources": [
+        {"file": "deck-content.md", "where": "slide 14 (new in this deck)"}
+      ],
       "used_on": [14],
       "note": "None of these is specified in a repo doc. The slide labels them as ideas."
     },
@@ -942,10 +1210,13 @@
       "claim": "'Half of [families' plans] get rejected for breaking LDA bylaws.'",
       "value": "50%",
       "status": "unverified",
-      "sources": [{"file": "docs/pitch/demo-script.md", "where": "0:00–0:15 voice-over"}],
+      "sources": [
+        {"file": "docs/pitch/demo-script.md", "where": "0:00–0:15 voice-over"}
+      ],
       "used_on": [],
       "note": "No source. Kept off the deck. Remove it from the demo voice-over or find a source."
     },
+
     "claim_approval_ready": {
       "claim": "'Approved-ready' or 'approval-ready'.",
       "value": "n/a",
@@ -955,8 +1226,10 @@
         {"file": "docs/design/DESIGN.md", "where": "L183 landing feature"}
       ],
       "used_on": [],
-      "note": "This overstates it: approval needs a PCATP stamp and an LDA decision. The deck says 'LDA-checked' or 'pre-check'."
+      "note": "This overstates it: approval needs a PCATP stamp and an LDA decision. The deck says 'LDA-checked' or 'pre-check'. NOTE (17 Oct): the live UI itself says 'Approval-ready · 37/37 LDA · 10/10 livable' in the compliance panel, 'Plot to approval-ready plan the same afternoon' and 'LDA-ready design' on the landing page. The deck's crops avoid those lines; consider changing the UI copy.",
+      "updated": "2026-10-17 v2"
     },
+
     "market_size": {
       "claim": "Market size: plots, houses built per year, or spend on house design in Lahore or Punjab.",
       "value": "none",
@@ -965,31 +1238,45 @@
       "used_on": [],
       "note": "No source in the repo. Add a sourced figure here before putting any market number on slide 13."
     },
+
     "cloud_run_settings": {
       "claim": "The live service autoscales to 5 instances, each with 2 vCPU, 2 GiB and 40 concurrent requests; CPU is always allocated; session affinity is on; request timeout 3,600 s.",
       "value": "maxScale 5, 2 vCPU, 2Gi, concurrency 40, cpu-throttling false, sessionAffinity true",
       "status": "measured_live",
-      "sources": [{"file": "docs/evidence/live-samples-2026-10-17.json", "where": "cloud_run_service (gcloud run services describe naqsha, 17 Oct 2026)"}],
+      "sources": [
+        {"file": "docs/evidence/live-samples-2026-10-17.json", "where": "cloud_run_service (gcloud run services describe naqsha, 17 Oct 2026)"}
+      ],
       "used_on": [9, 10]
     },
+
     "two_live_samples": {
-      "claim": "The live service has two sample homes from different briefs: a 10-marla modern house (35 x 65, north, 28 spaces, 23 sections, 42/42 checks, v2 from 3 comments) and a 1-kanal Spanish villa (50 x 90, south, 34 spaces, 25 sections, 50 pass and 2 advisory, fix loop 4 -> 0).",
-      "value": "2 samples",
+      "claim": "The live service has two sample homes from different one-message briefs: a 10 marla modern house (35 × 65, faces north, 2 storeys, 4 bedrooms; v3 37/37 LDA · 10/10 livable, 0 warnings) and a 1 kanal Spanish villa (50 × 90, faces south, 2 storeys, 5 bedrooms, solar panels; v3 43/43 LDA · 10/10 livable, 0 warnings).",
+      "value": "p_5a5893a2bcaa v3; p_1a42e70989af v3",
       "status": "measured_live",
-      "sources": [{"file": "docs/evidence/live-samples-2026-10-17.json", "where": "samples, sample_10_marla, sample_1_kanal"}],
-      "used_on": [4, 10]
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "GET /api/samples (live, 17 Oct)", "where": "version summaries 'Kitchens widened, a guest powder room under Bath 2 · 37/37 LDA · 10/10 livable' and '… · 43/43 LDA · 10/10 livable · 2 architect's notes'"},
+        {"file": "docs/screens/v2-live-plan-compliance-10marla.png", "where": "37/37 · 10/10"},
+        {"file": "docs/screens/v2-live-plan-compliance-villa.png", "where": "43/43 · 10/10"}
+      ],
+      "used_on": [3, 4, 6, 10],
+      "note": "The villa's v3 summary lists '2 architect's notes' (self-review notes), which are not warnings: the compliance panel shows 0 warnings.",
+      "updated": "2026-10-17 v2"
     },
+
     "problem_cost_examples": {
-      "claim": "Worked examples from LDA Appendix C [v2026]: the scrutiny fee for the 2,565 sq ft 10-marla sample is Rs 15 x 2,565 = Rs 38,475 per submission; a porch 4 ft into the front open space is 4 x 15 = 60 sq ft, Rs 15,000 at Rs 250/sq ft (projection over the limit) to Rs 30,000 at Rs 500/sq ft (ground-floor open-space violation).",
-      "value": "≈ Rs 38,000; Rs 15–30k",
+      "claim": "Worked examples from LDA Appendix C [v2026]: the scrutiny fee for the 2,762 sq ft 10 marla sample (v3) is Rs 15 × 2,762 = Rs 41,430 per submission; its 14′6″ porch pushed 4 ft into the front open space is 4 × 14.5 = 58 sq ft: Rs 14,500 at Rs 250/sq ft (projection over the limit) to Rs 29,000 at Rs 500/sq ft (ground-floor open-space violation).",
+      "value": "≈ Rs 41,000; Rs 14.5–29k",
       "status": "regulation_verified",
       "sources": [
         {"file": "docs/research/lda-regulations.md", "where": "§11.2 fees and selected penalties; projections row (Rs 250/sq ft)"},
-        {"file": "docs/evidence/live-samples-2026-10-17.json", "where": "sample_10_marla.v1.metrics.total_floor_area_sqft = 2565; porch 15 x 16 ft in the plan"}
+        {"file": "docs/screens/v2-live-print-sheet-cover.png", "where": "Total covered 2,762"}
       ],
       "used_on": [2, 13],
-      "note": "Derived arithmetic, labelled as such on the slide. Whether LDA compounds an open-space violation at all depends on a neighbour's NOC."
+      "note": "Superseded the 16 Oct figures (2,565 sq ft → Rs 38,475; 60 sq ft → Rs 15–30k). Whether LDA compounds an open-space violation at all depends on a neighbour's NOC.",
+      "updated": "2026-10-17 v2"
     },
+
     "cost_per_design": {
       "claim": "Vertex AI cost per design.",
       "value": "none",
@@ -997,16 +1284,164 @@
       "sources": [],
       "used_on": [],
       "note": "Not measured. Pull it from billing before quoting unit economics."
+    },
+
+    "live_revision": {
+      "claim": "The live Cloud Run service runs revision naqsha-00009, which ships the overhaul.",
+      "value": "naqsha-00009",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [3, 4, 8, 10, 14],
+      "updated": "2026-10-17 v2"
+    },
+
+    "repo_url": {
+      "claim": "The code is at github.com/abdm693/hack2skill-hackathon. It is to be made public before submission.",
+      "value": "github.com/abdm693/hack2skill-hackathon",
+      "status": "repo_doc",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [1, 15],
+      "note": "Confirm it is public before export.",
+      "updated": "2026-10-17 v2"
+    },
+
+    "setup_one_message": {
+      "claim": "The family can describe the plot in one message. The setup agent shows 'Here's what I understood' (plot, facing, storeys, bedrooms, porch, style, tank, solar), records a per-floor program, and asks about the water tank and solar only if they are missing.",
+      "value": "one message → 'Here's what I understood'",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "docs/screens/v2-live-brief-understood.png", "where": "brief, understood card, 'Your brief' panel with per-floor rooms, Roof: Blue plastic tank, Roof kept clear for solar"}
+      ],
+      "used_on": [3, 14],
+      "updated": "2026-10-17 v2"
+    },
+
+    "concepts_day_night": {
+      "claim": "Four distinct concepts share the same camera and light, and each has a night version (Day/Night toggle).",
+      "value": "4 concepts, day and night",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "docs/screens/v2-live-concepts-day.png", "where": "Day"},
+        {"file": "docs/screens/v2-live-concepts-night.png", "where": "Night"},
+        {"file": "api/scripts/round4/c_0026dc7358eb-day.png, -night.png", "where": "the 10 marla sample's chosen concept B, used on slides 3 and 15"}
+      ],
+      "used_on": [3, 8, 14, 15],
+      "updated": "2026-10-17 v2"
+    },
+
+    "big_brief_time": {
+      "claim": "A big 1 kanal brief took about 6.5 min with the adaptive fix loop, whose failures went 15 → 5 → 0.",
+      "value": "~6.5 min; 15 → 5 → 0",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [6, 10, 11],
+      "note": "Measured on a 1 kanal brief on the live service; not necessarily the villa sample's own run. The slides say 'a big 1 kanal brief'.",
+      "updated": "2026-10-17 v2"
+    },
+
+    "fix_loop_15_5_0": {
+      "claim": "Argon's adaptive fix loop on a big 1 kanal brief: 15 failures, then 5, then 0.",
+      "value": "15 → 5 → 0",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [6, 10],
+      "updated": "2026-10-17 v2"
+    },
+
+    "conversational_edits": {
+      "claim": "Requests typed in the Ask bar become a revision. The 10 marla sample's v3 came from one: 'In the Open Kitchen the walk from the TV lounge to the Dirty Kitchen door squeezes under 3 ft…'; Naqsha's answer: 'We moved the fridge in the 7′6″ × 15′3″ Open Kitchen to the back of the left wall…, leaving a 5′6″ clear walkway…'",
+      "value": "Ask bar → v3",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "Firestore (read-only, 17 Oct 2026)", "where": "p_5a5893a2bcaa v_acb3189dc5f3 source.instruction and source.answer"},
+        {"file": "docs/screens/v2-live-revisions-latest.png", "where": "Your request + answer"}
+      ],
+      "used_on": [7, 10],
+      "updated": "2026-10-17 v2"
+    },
+
+    "walk_features": {
+      "claim": "The walk has mouse look, floor moves, a room navigator (M) with 'You're here' and room sizes, ghosted neighbours in orbit, and a night view.",
+      "value": "walk features",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "docs/screens/v2-live-walk-room-navigator.png", "where": "navigator"},
+        {"file": "docs/screens/v2-live-house-ghosted-neighbour.png", "where": "ghosting"},
+        {"file": "docs/screens/v2-live-house-night-10marla.png", "where": "night"}
+      ],
+      "used_on": [3, 4],
+      "updated": "2026-10-17 v2"
+    },
+
+    "sample_10m_areas": {
+      "claim": "The 10 marla sample (v3) covers 2,762 sq ft in total (ground 1,440, first 1,203, stair tower 119; porch, balconies and stair tower included); floor area for FAR 2,382; coverage 63.3%; FAR 1:1.05; 27 ft to the parapet; car porch 14′6″ × 18′.",
+      "value": "2,762 sq ft",
+      "status": "measured_live",
+      "sources": [
+        {"file": "docs/screens/v2-live-print-sheet-cover.png", "where": "area schedule"},
+        {"file": "docs/screens/v2-live-plan-compliance-10marla.png", "where": "Car porch 14′6″ × 18′; coverage, FAR, height"}
+      ],
+      "used_on": [2, 10, 13],
+      "updated": "2026-10-17 v2"
+    },
+
+    "quality_loop": {
+      "claim": "Multi-agent testing: 8 tester agents per round used the live app, over 3 rounds and a final verification. Findings were triaged against the code, fixed and redeployed: about 200 fixes.",
+      "value": "8 testers × 3 rounds + final; ~200 fixes",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "docs/review/round1-triage.md, round2-triage.md, round3-triage.md, final-triage.md", "where": "76 + 28 + 21 + 35 = 160 triaged tasks, each merging duplicate findings (round 1 had 8 tester reports)"}
+      ],
+      "used_on": [9, 14],
+      "note": "The '8 testers per round' and '~200 fixes' figures are from the brief. The triage files list 160 tasks; round 2 and 3 triage files name 3 report files each (the reports may merge several testers).",
+      "updated": "2026-10-17 v2"
+    },
+
+    "api_tests": {
+      "claim": "The API test suite has 123 tests.",
+      "value": "123",
+      "status": "repo_code",
+      "sources": [
+        {"file": "api/tests/", "where": "`.venv/bin/python -m pytest --collect-only -q` in api/: '123 tests collected' (17 Oct 2026)"},
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"}
+      ],
+      "used_on": [9],
+      "updated": "2026-10-17 v2"
+    },
+
+    "must_fix_verified": {
+      "claim": "The final verification confirmed every one of the user's must-fix items on the deployed code.",
+      "value": "all must-fix items",
+      "status": "measured_live",
+      "sources": [
+        {"file": "workflow brief, 17 Oct 2026", "where": "Facts as of 17 Oct, live revision naqsha-00009"},
+        {"file": "docs/review/final-must-fix-3d.md, final-must-fix-journey.md, final-must-fix-collab.md", "where": "final verification reports"}
+      ],
+      "used_on": [9, 14],
+      "updated": "2026-10-17 v2"
     }
   },
 
   "discrepancies_to_resolve": [
-    "Design time: the deck brief says about 7 min, and docs/pitch/demo-script.md says 'nobody waits 8 minutes'.",
-    "Check count: the brief says 42–50, while DESIGN.md and the demo script say exactly 42. Use '42–50 checks' unless the UI fixes the number.",
+    "Approval wording: the live UI says 'Approval-ready' (compliance panel) and 'Plot to approval-ready plan' / 'LDA-ready design' (landing). The deck says 'pre-check'. Change the UI copy, or accept the mismatch.",
+    "Testing figures: the brief says 8 testers per round and about 200 fixes; the triage files list 160 tasks, and the round 2 and 3 triage files name 3 report files each.",
+    "Code sections: '23–25 sections' was measured on the 16 Oct samples and has not been recounted for the v3 samples.",
+    "Self-review image (slide 6): v2-backend-review-ground.png is a real drawing from api/app/agents/drawing.py, but of an earlier plan, not the v3 sample.",
+    "Cover and slide 5 renders (engine-argon-front, the stream thumbnails, the spike) show the first 10-marla house of 16 Oct, not the v3 sample. They are labelled as Argon's renders, not as the current sample.",
     "Back-and-forth duration: README.md says 'months', and the deck brief says 'weeks'. Both are qualitative.",
-    "Runtime service account roles: docs/ARCHITECTURE.md lists aiplatform.user, datastore.user and storage.objectAdmin, while SETUP.md lists aiplatform.user, datastore.user, secretmanager.secretAccessor, logging.logWriter, cloudtrace.agent and monitoring.metricWriter. The deck names no roles.",
-    "Auth: DESIGN.md says 'Continue with Google (Firebase Auth)', and OVERHAUL.md says Identity Platform email and password now, with Google sign-in later. The deck follows OVERHAUL.md.",
-    "Setup agent: ARCHITECTURE.md calls it an ADK intake_agent, but api/app/agents/intake.py is a plain structured google-genai call. The deck does not call setup an ADK agent.",
-    "Screens: docs/screens/*.png show the v1 UI (brick accent, serif titles, numbered stage bar). DESIGN.md replaces that look. Re-shoot as v2-*.png before export."
+    "Runtime service account roles: docs/ARCHITECTURE.md and SETUP.md list different roles. The deck names no roles."
   ]
 }

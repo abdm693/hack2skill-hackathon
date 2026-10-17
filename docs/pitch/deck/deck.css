@@ -112,9 +112,8 @@ em { font-style: italic; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 
 /* One status component for the whole deck.
-   .st.live  = running on the live service today.
-   .st.build = in the 18 Oct submission build, not yet verified on the live URL.
-   deck.js flips every .st.build to "Live" when the deck is opened with ?shipped=1 or DECK_SHIPPED is true. */
+   .st.live  = running on the live service today (everything in the deck is, as of revision naqsha-00009, 17 Oct 2026).
+   .st.build = kept for a future "shipping next" label; not used on any slide now. */
 .st { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px; border-radius: 8px; font-family: var(--mono); font-size: 15px; font-weight: 500; white-space: nowrap; vertical-align: middle; line-height: 1; }
 .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: none; box-sizing: border-box; }
 .st.live { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
@@ -365,7 +364,7 @@ html.print-mode .progress { display: none; }
 .s-trust .fix { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rule); }
 .s-trust .fixnums { font-family: var(--mono); font-size: 60px; font-weight: 500; letter-spacing: -.05em; line-height: 1; display: flex; gap: 20px; align-items: baseline; margin-top: 12px; }
 .s-trust .fixnums .a { color: var(--ink-3); font-size: 36px; }
-.s-trust .fixbar { margin-top: 18px; display: grid; grid-template-columns: 5fr 1fr 22px; gap: 10px; height: 14px; align-items: center; }
+.s-trust .fixbar { margin-top: 18px; display: grid; grid-template-columns: 15fr 5fr 22px; gap: 10px; height: 14px; align-items: center; }
 .s-trust .fixbar i { display: block; height: 12px; border-radius: 6px; }
 .s-trust .fixbar .zero { width: 18px; height: 18px; border-radius: 50%; background: var(--pass-soft); position: relative; box-shadow: inset 0 0 0 1.5px var(--pass); }
 .s-trust .fixbar .zero::after { content: ""; position: absolute; left: 6px; top: 3px; width: 4px; height: 8px; border: solid var(--pass); border-width: 0 2px 2px 0; transform: rotate(45deg); }
@@ -375,14 +374,17 @@ html.print-mode .progress { display: none; }
 .s-trust .liv li:last-child { border-bottom: 1px solid var(--rule); }
 .s-trust .liv .ok { width: 18px; height: 18px; margin-top: 4px; border-radius: 50%; background: var(--pass-soft); position: relative; }
 .s-trust .liv .ok::after { content: ""; position: absolute; left: 6px; top: 3.5px; width: 4px; height: 8px; border: solid var(--pass); border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.s-trust .stair { margin-top: 18px; }
-.s-trust .panel { margin-top: 14px; height: 380px; }
-.s-trust .review { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
+.s-trust .panel { margin-top: 14px; height: 420px; background: var(--surface); }
+.s-trust .review-img { margin-top: 14px; height: 250px; background: #fff; }
+.s-trust .thumbs { margin-top: 12px; display: grid; grid-template-columns: 260px 260px; gap: 24px; }
+.s-trust .thumbs .frame { height: 140px; }
+.s-trust .tcap { margin-top: 8px; font-family: var(--mono); font-size: 15px; color: var(--ink-2); }
 
 /* =====================================================================
    07 · ADK revisions
    ===================================================================== */
 .s-adk .pins { position: absolute; left: 120px; top: var(--top); width: 544px; height: 396px; }
+.s-adk .pins img { object-fit: cover; }
 .s-adk .log { position: absolute; left: 120px; top: 762px; width: 544px; padding: 20px 24px 20px; border-radius: var(--r-card); background: var(--hud); }
 .s-adk .log .lh { font-family: var(--mono); font-size: 15px; color: var(--hud-ink-2); margin-bottom: 10px; }
 .s-adk .log .ln { display: grid; grid-template-columns: 74px 1fr; gap: 10px; font-family: var(--mono); font-size: 16px; line-height: 1.75; color: var(--hud-ink); white-space: nowrap; }
@@ -396,7 +398,7 @@ html.print-mode .progress { display: none; }
 .s-adk .res .where { font-family: var(--mono); font-size: 15px; color: var(--ink-3); }
 .s-adk .res .chip { height: 30px; font-size: 15px; padding: 0 12px; }
 .s-adk .res .q { margin-top: 6px; font-size: 19px; line-height: 1.36; color: var(--ink); font-weight: 500; }
-.s-adk .res .a { margin-top: 6px; font-size: 18px; line-height: 1.4; color: var(--ink-2); }
+.s-adk .res .a { margin-top: 6px; font-size: 17px; line-height: 1.4; color: var(--ink-2); }
 .s-adk .res.no .a { background: var(--fail-soft); margin: 8px -22px -14px; padding: 10px 22px 12px; border-radius: 0 0 var(--r-card) var(--r-card); color: var(--ink); }
 
 /* =====================================================================
@@ -458,45 +460,9 @@ html.print-mode .progress { display: none; }
 /* =====================================================================
    12 · Collaboration
    ===================================================================== */
-.s-collab .list { position: absolute; left: var(--pad-x); top: var(--top); width: 544px; list-style: none; margin: 0; padding: 0; }
-.s-collab .list li { padding: 14px 0; border-top: 1px solid var(--rule); font-size: 20px; line-height: 1.45; color: var(--ink-2); }
-.s-collab .list li:last-child { border-bottom: 1px solid var(--rule); }
-.s-collab .contrast { margin-top: 18px; font-size: 18px; color: var(--ink-3); }
-.s-collab .mockwrap { position: absolute; left: 688px; top: var(--top); width: 1112px; }
-.s-collab .mocklbl { display: flex; align-items: center; justify-content: space-between; height: 30px; }
-.s-collab .mock { position: relative; margin-top: 14px; height: 590px; border-radius: var(--r-media); overflow: visible; }
-.s-collab .mock .bgf { position: absolute; inset: 0; border-radius: var(--r-media); overflow: hidden; box-shadow: 0 0 0 1px rgb(17 17 19 / .07); }
-.s-collab .mock .bgf img { width: 100%; height: 100%; object-fit: cover; }
-.s-collab .banner { position: absolute; left: 22px; top: 20px; height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 12px; background: rgb(255 255 255 / .92); font-size: 16px; color: var(--ink-2); box-shadow: 0 0 0 1px rgb(17 17 19 / .06); z-index: 2; }
-.s-collab .banner b { color: var(--ink); }
-.s-collab .sheet { position: absolute; right: 20px; top: 20px; bottom: 20px; width: 420px; border-radius: 26px; background: var(--surface); box-shadow: 0 0 0 1px rgb(17 17 19 / .05), 0 32px 80px -24px rgb(17 17 19 / .40); padding: 22px 22px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; z-index: 2; }
-.s-collab .sheet .hd { display: flex; justify-content: space-between; align-items: baseline; }
-.s-collab .tabs { display: flex; gap: 6px; }
-.s-collab .tabs span { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 14px; font-weight: 500; display: flex; align-items: center; color: var(--ink-3); }
-.s-collab .tabs span.on { background: var(--surface-2); color: var(--ink); }
-.s-collab .cmt { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.s-collab .av { width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; flex: none; }
-.s-collab .cmt .who { display: flex; align-items: baseline; gap: 8px; font-size: 15px; font-weight: 600; color: var(--ink); flex-wrap: wrap; }
-.s-collab .cmt .who span { font-weight: 500; color: var(--ink-3); font-size: 13.5px; }
-.s-collab .cmt p { margin: 4px 0 0; font-size: 15.5px; line-height: 1.4; color: var(--ink-2); }
-.s-collab .reply { margin-top: 8px; display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; }
-.s-collab .reply .nq { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-family: var(--urdu); font-size: 9px; line-height: 1; }
-.s-collab .reply .chip { height: 30px; font-size: 16px; padding: 0 12px; }
-.s-collab .incl { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13.5px; color: var(--ink-3); }
-.s-collab .tog { width: 30px; height: 18px; border-radius: 9px; background: var(--line-strong); position: relative; flex: none; }
-.s-collab .tog::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
-.s-collab .tog.on { background: var(--accent); }
-.s-collab .tog.on::after { left: 14px; }
-.s-collab .share { position: absolute; left: -20px; bottom: 24px; width: 380px; padding: 22px 22px 20px; border-radius: 24px; background: var(--surface); box-shadow: 0 0 0 1px rgb(17 17 19 / .06), 0 28px 70px -24px rgb(17 17 19 / .45); z-index: 3; }
-.s-collab .share .h4 { font-size: 19px; }
-.s-collab .row { display: flex; align-items: center; gap: 10px; }
-.s-collab .field { flex: 1; height: 40px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-strong); display: flex; align-items: center; padding: 0 12px; font-family: var(--mono); font-size: 14px; color: var(--ink-2); overflow: hidden; white-space: nowrap; }
-.s-collab .seg { display: inline-flex; height: 34px; padding: 3px; border-radius: 10px; background: var(--surface-2); font-size: 14px; font-weight: 500; }
-.s-collab .seg span { padding: 0 11px; display: flex; align-items: center; border-radius: 8px; color: var(--ink-3); }
-.s-collab .seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px rgb(17 17 19 / .06), 0 1px 2px rgb(17 17 19 / .06); }
-.s-collab .btn { height: 38px; padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 14.5px; font-weight: 500; }
-.s-collab .btn.secondary { box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); background: var(--surface); }
-.s-collab .mock .pin { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+.s-collab .shots { position: absolute; left: var(--pad-x); top: var(--top); width: 1680px; display: grid; grid-template-columns: 544px 688px 400px; column-gap: 24px; }
+.s-collab .shot .frame { height: 520px; background: #fff; }
+.s-collab .shot .cap { margin-top: 14px; font-size: 18px; line-height: 1.4; }
 
 /* =====================================================================
    13 · Impact and business model
