@@ -187,3 +187,109 @@ def test_auto_name_follows_plot_until_renamed():
                                         ("Mid-row plot, neighbours on both sides", "corner"), ("I'll place the rooms on each floor", "floors")])
 def test_fact_field_maps_card_lines(text, field):
     assert intake.fact_field(full_brief(), text) == field
+
+
+# --- BE2-04: "You said" lists only what the family said ------------------------------------------------------------------------
+def you_said(b):
+    """The app's "You said" tokens (web/src/app/setup/Understood.tsx saidFacts), both as shipped (it hides a fact whose key
+    is in auto_filled) and as hinted for round 2 (corner needs corner_stated === true, the porch checks "spaces")."""
+    auto = set(b.get("auto_filled") or [])
+    porch = next((s for s in b.get("spaces") or [] if s.startswith("car_porch")), None)
+    shipped, hinted = set(), set()
+    if b.get("plot") and "plot" not in auto:
+        if "corner" not in auto:
+            shipped.add("corner")
+        if b.get("corner_stated") is True:
+            hinted.add("corner")
+    if b.get("storeys") and "storeys" not in auto:
+        shipped.add("storeys")
+        hinted.add("storeys")
+    if porch and "porch" not in auto:
+        shipped.add("porch")
+    if porch and "spaces" not in auto and "porch" not in auto:
+        hinted.add("porch")
+    return shipped, hinted
+
+
+def test_dha_three_storeys_mid_row_and_default_porch_are_not_you_said():
+    """'1 kanal plot in DHA Phase 6 Lahore, 3 storeys, 5 bedrooms': no corner said, storeys capped, porch defaulted."""
+    b = intake.merge_brief(intake.empty_brief(), {"authority": "DHA", "scheme": "DHA Phase 6", "plot": {"width_ft": 50, "depth_ft": 90},
+                                                  "storeys": 3, "bedrooms": 5}, spaces_mode="union")
+    b, push = intake.clamp_storeys(b)
+    assert push and b["storeys"] == 2 and b["storeys_asked"] == 3
+    assert {"corner", "storeys"} <= set(b["auto_filled"]) and b["corner_stated"] is False
+    for said in you_said(b):
+        assert not said & {"corner", "storeys"}
+    card = intake.understood(b)
+    assert "Kept to 2 storeys: DHA's limit" in card["assumptions"]
+    assert "Mid-row plot, neighbours on both sides" in card["assumptions"]
+    assert not any("storey" in p.lower() or "mid-row" in p.lower() for p in card["preferences"])
+    assert intake.to_ask(b)[:1] == ["corner"]                    # still asked, though it is an assumption meanwhile
+    # completion fills the default spaces: the 2-car porch is Naqsha's choice
+    d, _ = intake.defaults_for(b)
+    done = intake.merge_brief(b, {"spaces": d["spaces"]}, ["spaces"])
+    assert "car_porch:2" in done["spaces"] and {"spaces", "porch"} <= set(done["auto_filled"])
+    for said in you_said(done):
+        assert "porch" not in said
+    card = intake.understood(done)
+    assert not any("porch" in p for p in card["preferences"]) and any("2-car porch" in a for a in card["assumptions"])
+    # "Don't assume: Kept to 2 storeys: DHA's limit" asks the storeys again
+    assert intake.fact_field(done, "Kept to 2 storeys: DHA's limit") == "storeys"
+    cleared, _ = intake.unset_fields(done, ["storeys"])
+    assert cleared["storeys"] is None and "storeys_asked" not in cleared and "storeys" not in cleared["auto_filled"]
+
+
+def test_corner_said_skipped_and_reasked():
+    b = intake.merge_brief(intake.empty_brief(), {"plot": {"width_ft": 35, "depth_ft": 65}})
+    assert "corner" in b["auto_filled"] and b["corner_open"] and "corner" in intake.to_ask(b)
+    said = intake.merge_brief(b, {"plot": {"corner": False}})          # the "Mid-row" chip
+    assert said["corner_stated"] is True and "corner" not in said["auto_filled"] and "corner_open" not in said
+    assert all("corner" in s for s in you_said(said))
+    corner = intake.merge_brief(b, {"plot": {"corner": True}})
+    assert "Corner plot" in intake.understood(corner)["preferences"]
+    skipped = intake.skip_field(b, "corner")
+    assert "corner" not in intake.to_ask(skipped) and not any("corner" in s for s in you_said(skipped))
+    resized = intake.merge_brief(skipped, {"plot": {"width_ft": 40, "depth_ft": 70}})   # a new size: not asked again
+    assert "corner" not in intake.to_ask(resized) and resized["corner_stated"] is False
+    again, _ = intake.unset_fields(said, ["corner"])                   # "Don't assume: Mid-row plot"
+    assert "corner" in intake.to_ask(again) and "corner" in again["auto_filled"]
+    # a brief from before round 2 (asked, not answered): still asked
+    legacy = {**full_brief(), "corner_stated": False, "auto_filled": []}
+    assert "corner" in intake.to_ask(legacy)
+    assert "Mid-row plot, neighbours on both sides" in intake.understood({**full_brief(), "corner_stated": None})["assumptions"]
+
+
+def test_corner_chip_in_the_turn_is_said(monkeypatch):
+    Msgs(monkeypatch)
+    b = intake.merge_brief(intake.empty_brief(), {"authority": "LDA", "plot": {"width_ft": 35, "depth_ft": 65}})
+    evs = turn({"id": "p1", "name": "x", "brief": b}, chips=["corner:false"])
+    nb = brief_of(evs)
+    assert nb["corner_stated"] is True and "corner" not in nb["auto_filled"]
+    assert last_msg(evs)["field"] == "facing"
+
+
+def test_brief_panel_round_trip_keeps_assumptions():
+    """The panel PATCHes the whole brief back: an unchanged plot is not 'You said: Mid-row', an unchanged storey count keeps
+    the cap, and a confirmed fact becomes said."""
+    b = intake.merge_brief(intake.empty_brief(), {"authority": "DHA", "plot": {"width_ft": 50, "depth_ft": 90}, "storeys": 3,
+                                                  "bedrooms": 5, "style": "Spanish"})
+    b, _ = intake.clamp_storeys(b)
+    d, _ = intake.defaults_for(b)
+    b = intake.merge_brief(b, {"spaces": d["spaces"]}, ["spaces"])
+    sent = {**b, "style": "Classic"}                                    # the style changed, nothing else
+    out = intake.merge_brief(b, intake.panel_patch(b, sent), [], spaces_mode="replace", prefs_mode="replace")
+    out, _ = intake.clamp_storeys(out)
+    assert out["style"] == "Classic" and out["corner_stated"] is False
+    assert {"corner", "storeys", "porch", "spaces"} <= set(out["auto_filled"]) and intake.storeys_kept(out)
+    # the family confirms "Mid-row" and "2 storeys" in the panel (their marks leave auto_filled)
+    sent = {**b, "auto_filled": [a for a in b["auto_filled"] if a not in ("corner", "storeys")]}
+    out = intake.merge_brief(b, intake.panel_patch(b, sent), [], spaces_mode="replace", prefs_mode="replace")
+    out, _ = intake.clamp_storeys(out)
+    assert out["corner_stated"] is True and "corner" not in out["auto_filled"]
+    assert out["storeys"] == 2 and "storeys" not in out["auto_filled"] and not intake.storeys_kept(out)
+    # a corner the panel changes is said
+    sent = {**b, "plot": {**b["plot"], "corner": True}}
+    out = intake.merge_brief(b, intake.panel_patch(b, sent), [], spaces_mode="replace", prefs_mode="replace")
+    assert out["plot"]["corner"] is True and out["corner_stated"] is True and "corner" not in out["auto_filled"]
+    # server-kept marks never come from a patch
+    assert "corner_stated" not in intake.merge_brief(intake.empty_brief(), {"corner_stated": True})

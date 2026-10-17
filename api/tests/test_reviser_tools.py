@@ -31,3 +31,31 @@ def test_harmless_edit_applies_and_streams_events(plans):
     assert tools["finish"]([{"summary": "Widened the window", "kind": "plan"}],
                            [{"comment_id": "c1", "status": "resolved", "resolution": "The window is now 8 ft."}])["ok"]
     assert ws.finished and ws.section_label("furnish_f_bed3") == "the furniture in Bedroom 3"
+
+
+def test_a_stalled_agent_step_times_out_so_the_fallback_runs():
+    """A model call that never answers must not leave a revision running forever: the guard raises, main.py falls back."""
+    import asyncio
+
+    import pytest
+
+    from app.agents.reviser_adk import stall_guard
+
+    closed = []
+
+    async def agent(hang_after: int):
+        try:
+            for i in range(5):
+                if i == hang_after:
+                    await asyncio.sleep(3600)
+                yield i
+        finally:
+            closed.append(True)
+
+    async def collect(hang_after):
+        return [e async for e in stall_guard(agent(hang_after), stall_s=0.05)]
+
+    assert asyncio.run(collect(99)) == [0, 1, 2, 3, 4]
+    with pytest.raises(TimeoutError):
+        asyncio.run(collect(2))
+    assert closed == [True, True]

@@ -9,6 +9,7 @@ browser as plain-language progress. If ADK fails, the caller falls back to the s
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 from typing import AsyncIterator
@@ -194,6 +195,28 @@ class Workspace:
                 remove_section, finish]
 
 
+STALL_S = 600.0  # one agent step (a model call plus its tools) that takes longer than this has stalled
+
+
+async def stall_guard(events, stall_s: float = STALL_S):
+    """Yield from an async iterator, raising TimeoutError when a single step takes longer than stall_s: a model call that never
+    answers would otherwise leave the revision "Checking the change…" forever (seen: a revise waiting 30 min on one call).
+    The caller then falls back to the single-shot reviser."""
+    it = events.__aiter__()
+    try:
+        while True:
+            try:
+                ev = await asyncio.wait_for(it.__anext__(), stall_s)
+            except StopAsyncIteration:
+                return
+            yield ev
+    finally:
+        try:
+            await it.aclose()
+        except Exception:  # already closed, or still unwinding the cancelled step
+            pass
+
+
 async def revise(project: dict, version: dict, comments: list[dict], instruction: str | None = None) -> AsyncIterator[tuple[str, dict]]:
     pid = project["id"]
     brief = project.get("brief") or {}
@@ -222,7 +245,7 @@ async def revise(project: dict, version: dict, comments: list[dict], instruction
             + "Revise the design now.")
     msg = types.Content(role="user", parts=parts + [types.Part.from_text(text=text)])
 
-    async for event in runner.run_async(user_id=pid, session_id=session.id, new_message=msg):
+    async for event in stall_guard(runner.run_async(user_id=pid, session_id=session.id, new_message=msg)):
         while ws.events:
             yield ws.events.pop(0)
         if ws.finished:

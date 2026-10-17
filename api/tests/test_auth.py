@@ -392,3 +392,49 @@ def test_brief_edit_after_design_keeps_the_stage(api):
                                      "auto_filled": [], "bedrooms": 4})
     p = client.patch(f"/api/projects/{pid}", json={"brief": {"spaces": ["prayer"]}}, headers=H(GUEST_A)).json()
     assert p["stage"] == "ready" and p["brief_changed"] is True
+
+
+# --- round 2 ---------------------------------------------------------------------------------------------------------------------
+def test_share_meta_is_light(api):
+    """BE2-05: the client link polls /meta every 30 s: the current version and the list, never the plan or the comments."""
+    client, fake = api
+    pid, token = _shared_project(client, fake)
+    fake.projects[pid]["versions"] = [{"id": "v1", "n": 1, "summary": "37/37 LDA"}, {"id": "v2", "n": 2, "summary": "x"}]
+    fake.projects[pid]["current_version_id"] = "v2"
+    client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Porch?", "anchor": {}, "camera": {}},
+                headers=H(GUEST_B))
+    r = client.get(f"/api/share/{token}/meta")
+    assert r.status_code == 200
+    assert r.json() == {"current_version_id": "v2", "versions": [{"id": "v1", "n": 1}, {"id": "v2", "n": 2}]}
+    client.post(f"/api/projects/{pid}/share", json={"enabled": False}, headers=H(GUEST_A))
+    assert client.get(f"/api/share/{token}/meta").status_code == 404
+
+
+def test_general_pins_keep_clear_of_each_other(api):
+    """BE2-05: general notes are a quarter of the plot width apart (2.67 m on 35 ft; 0.9 m left pins overlapping at the
+    default view); a fifth starts a second row."""
+    import math
+
+    client, fake = api
+    pid, token = _shared_project(client, fake)
+    anchor = {"position": [5.3, 4, -6.6], "normal": [0, 0, 1], "label": "Whole home", "kind": "view"}
+    pos = []
+    for i in range(6):
+        c = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": f"Note {i}", "anchor": anchor,
+                                                               "camera": {}}, headers=H(GUEST_B)).json()
+        pos.append(c["anchor"]["position"])
+    assert pos[:4] == [[5.3, 4, -6.6], [7.97, 4, -6.6], [2.63, 4, -6.6], [10.64, 4, -6.6]]
+    assert pos[4] == [5.3, 6.4, -6.6] and pos[5] == [7.97, 6.4, -6.6]
+    assert min(math.dist(a, b) for i, a in enumerate(pos) for b in pos[i + 1:]) >= 2.4 - 1e-9
+    from app import main
+    assert main.spread_step(35) == 2.67 and main.spread_step(50) == 3.81 and main.spread_step(10) == 1.6
+    # a pin placed near (not exactly on) a taken spot still moves clear
+    near = {**anchor, "position": [6.5, 4, -6.6]}
+    c = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Near", "anchor": near, "camera": {}},
+                    headers=H(GUEST_B)).json()
+    assert all(math.dist(c["anchor"]["position"], q) >= 2.0 - 1e-9 for q in pos)
+    # pinned notes (a room or element) are left where they were put
+    room = {"position": [5.3, 4, -6.6], "room": "g_lounge"}
+    c = client.post(f"/api/share/{token}/comments", json={"author_name": "Mr. Khan", "text": "Lounge", "anchor": room, "camera": {}},
+                    headers=H(GUEST_B)).json()
+    assert c["anchor"]["position"] == [5.3, 4, -6.6]

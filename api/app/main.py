@@ -9,6 +9,7 @@ import copy
 import hashlib
 import hmac
 import logging
+import math
 import os
 import re
 from pathlib import Path
@@ -238,7 +239,7 @@ async def patch_project(pid: str, body: PatchProject, me: Identity = Depends(aut
     if body.brief is not None:
         before = p.get("brief") or intake.empty_brief()
         # The brief panel sends whole lists: preferences are replaced (an empty list clears them), not appended.
-        brief = intake.merge_brief(before, body.brief, [], spaces_mode="replace", prefs_mode="replace")
+        brief = intake.merge_brief(before, intake.panel_patch(before, body.brief), [], spaces_mode="replace", prefs_mode="replace")
         brief, _ = intake.clamp_storeys(brief)
         fields.update(brief=brief, envelope=intake.envelope_for(brief), stage=intake.next_stage(p, bool(p.get("intake_complete"))))
         if p.get("versions") and intake._design_fields(before) != intake._design_fields(brief):
@@ -387,6 +388,14 @@ async def share_view(token: str, me: Identity = Depends(maybe_identity)):
             "comments": comments_out(p["id"], await db.list_comments(p["id"]), me), "role": "client"}
 
 
+@app.get("/api/share/{token}/meta")
+async def share_meta(token: str):
+    """What the client link polls (every 30 s): the current version and the version list, without the plan or comments."""
+    p = await _shared(token)
+    return {"current_version_id": p.get("current_version_id"),
+            "versions": [{"id": v["id"], "n": v.get("n")} for v in p.get("versions") or [] if isinstance(v, dict) and v.get("id")]}
+
+
 @app.get("/api/share/{token}/versions/{vid}")
 async def share_version(token: str, vid: str):
     p = await _shared(token)
@@ -424,8 +433,9 @@ def _general(anchor: dict) -> bool:
     return not (anchor or {}).get("room") and not (anchor or {}).get("element_id")
 
 
-async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
-    """General notes ("Whole home", "This view") share one anchor point; nudge each new one sideways so pins don't stack."""
+async def _spread(pid: str, version_id: str, anchor: dict, plot_w_ft: float | None = None) -> dict:
+    """General notes ("Whole home", "This view") share one anchor point; move each new one to the first free slot so pins
+    don't stack (see spread_slots)."""
     pos = (anchor or {}).get("position")
     if not _general(anchor) or not (isinstance(pos, list) and len(pos) == 3):
         return anchor
@@ -434,14 +444,39 @@ async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
     except (TypeError, ValueError):
         return anchor
     others = [c for c in await db.list_comments(pid, version_id) if _general(c.get("anchor") or {})]
-    taken = {tuple(round(float(v), 2) for v in (c.get("anchor") or {}).get("position") or []) for c in others}
-    step = 0.9  # metres
-    for k in range(0, 40):
-        dx = step * ((k + 1) // 2) * (1 if k % 2 else -1) if k else 0.0
-        cand = [round(p0[0] + dx, 2), round(p0[1], 2), round(p0[2], 2)]
-        if tuple(cand) not in taken:
+    taken = []
+    for c in others:
+        try:
+            q = [float(v) for v in (c.get("anchor") or {}).get("position") or []]
+        except (TypeError, ValueError):
+            continue
+        if len(q) == 3:
+            taken.append(q)
+    step = spread_step(plot_w_ft)
+    for cand in spread_slots(p0, step):
+        if all(math.dist(cand, q) >= 0.75 * step - 1e-6 for q in taken):
             return {**anchor, "position": cand}
     return anchor
+
+
+def spread_step(plot_w_ft: float | None) -> float:
+    """Metres between general pins: a quarter of the plot's width (at least 1.6 m). The hero view frames the whole plot, so
+    this is the same on-screen gap on any plot: ~50 px on a 35 ft plot at the default view, wider than a pin (24 px on a
+    desktop, ~48 px on a phone)."""
+    try:
+        w = float(plot_w_ft or 35.0)
+    except (TypeError, ValueError):
+        w = 35.0
+    return round(max(1.6, 0.25 * w * 0.3048), 2)
+
+
+def spread_slots(p0: list[float], step: float):
+    """Where general pins go: 0, +step, -step, +2 step along x, then the same four 0.9 step higher, and so on (a slot within
+    0.75 step of another general pin is taken)."""
+    for row in range(10):
+        for k in range(4):
+            dx = step * ((k + 1) // 2) * (1 if k % 2 else -1)
+            yield [round(p0[0] + dx, 2), round(p0[1] + 0.9 * step * row, 2), round(p0[2], 2)]
 
 
 async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera: dict, snapshot: str | None, author: dict,
@@ -451,7 +486,7 @@ async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera
     if snapshot:
         data, mime = blobs.decode_data_url(snapshot)
         snap = await blobs.put(f"projects/{p['id']}/comments/{cid}.{'jpg' if 'jpeg' in mime else 'png'}", data, mime)
-    anchor = await _spread(p["id"], version_id, anchor)
+    anchor = await _spread(p["id"], version_id, anchor, ((p.get("brief") or {}).get("plot") or {}).get("width_ft"))
     c = {"id": cid, "version_id": version_id, "text": text.strip(), "anchor": anchor, "camera": camera, "snapshot_url": snap,
          "created_at": db.now(), "status": "open", "author": author, "replies": []}
     if kind == "approval":  # a sign-off, not a change request: closed from the start, so Revise and Apply leave it out
