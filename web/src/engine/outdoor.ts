@@ -220,12 +220,9 @@ interface Grid {
   route: Uint8Array;
 }
 
-function routeGrid(ctx: BuildCtx, om: OutdoorModel, solids: Box[]): Grid {
-  const W = ctx.plan.plotW, D = ctx.plan.plotD;
-  const nx = Math.ceil(W / CELL), ny = Math.ceil(D / CELL);
-  // the clearance of each cell centre: its distance to the nearest obstacle box (only within HALF of one matters)
-  const clear = new Float32Array(nx * ny).fill(HALF + 1);
-  for (const b of [...om.fixed, ...solids]) {
+/** min-stamp each box's distance into a clearance grid (only cells within HALF of a box change) */
+function stamp(clear: Float32Array, nx: number, ny: number, boxes: Box[]): void {
+  for (const b of boxes) {
     const i0 = Math.max(0, Math.floor((b.x0 - HALF) / CELL)), i1 = Math.min(nx - 1, Math.ceil((b.x1 + HALF) / CELL));
     const j0 = Math.max(0, Math.floor((b.y0 - HALF) / CELL)), j1 = Math.min(ny - 1, Math.ceil((b.y1 + HALF) / CELL));
     for (let j = j0; j <= j1; j++) {
@@ -239,6 +236,27 @@ function routeGrid(ctx: BuildCtx, om: OutdoorModel, solids: Box[]): Grid {
         if (d < clear[k]) clear[k] = d;
       }
     }
+  }
+}
+
+/** the clearance grid of the walls and `solids`, kept for the last set asked (the landscape asks the same set for
+ *  every candidate spot of one item) */
+const clearCache = new WeakMap<BuildCtx, { sig: string; clear: Float32Array }>();
+function routeGrid(ctx: BuildCtx, om: OutdoorModel, solids: Box[], extra?: Box): Grid {
+  const W = ctx.plan.plotW, D = ctx.plan.plotD;
+  const nx = Math.ceil(W / CELL), ny = Math.ceil(D / CELL);
+  // the clearance of each cell centre: its distance to the nearest obstacle box (only within HALF of one matters)
+  const sig = solids.map((b) => `${b.x0.toFixed(2)},${b.x1.toFixed(2)},${b.y0.toFixed(2)},${b.y1.toFixed(2)}`).join(";");
+  let hit = clearCache.get(ctx);
+  if (!hit || hit.sig !== sig) {
+    const clear = new Float32Array(nx * ny).fill(HALF + 1);
+    stamp(clear, nx, ny, [...om.fixed, ...solids]);
+    clearCache.set(ctx, (hit = { sig, clear }));
+  }
+  let clear = hit.clear;
+  if (extra) {
+    clear = clear.slice();
+    stamp(clear, nx, ny, [extra]);
   }
   const route = new Uint8Array(nx * ny);
   for (let k = 0; k < route.length; k++) route[k] = clear[k] >= HALF ? 1 : 0;
@@ -302,9 +320,9 @@ export function outdoorReach(ctx: BuildCtx, solids: Box[]): Reach {
 }
 
 /** What a 3 ft route from the gates reaches with `solids` on the ground: [doors reached, outdoor rooms reached]. */
-export function reachedWith(ctx: BuildCtx, solids: Box[]): { doors: boolean[]; rooms: boolean[] } {
+export function reachedWith(ctx: BuildCtx, solids: Box[], extra?: Box): { doors: boolean[]; rooms: boolean[] } {
   const om = outdoorModel(ctx);
-  const g = routeGrid(ctx, om, solids);
+  const g = routeGrid(ctx, om, solids, extra);
   const f = flood(om, g);
   return { doors: om.zones.filter((z) => z.kind === "door").map((z) => anyIn(g, f.seen, z.approach)), rooms: om.outdoor.map((room) => anyIn(g, f.seen, rectBox(room.rect, -0.2))) };
 }
@@ -312,7 +330,7 @@ export function reachedWith(ctx: BuildCtx, solids: Box[]): { doors: boolean[]; r
 /** Does adding `f` cut the route from the gates to a door or outdoor room that `before` (the same solids without it)
  *  reaches? */
 export function keepsReach(ctx: BuildCtx, solids: Box[], f: Box, before: { doors: boolean[]; rooms: boolean[] }): boolean {
-  const after = reachedWith(ctx, [...solids, f]);
+  const after = reachedWith(ctx, solids, f);
   return after.doors.every((d, k) => d || !before.doors[k]) && after.rooms.every((r, k) => r || !before.rooms[k]);
 }
 
