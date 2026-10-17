@@ -8,6 +8,10 @@ import { MeshBuilder } from "./core/meshbuilder";
 import { Kit, lathe, mat4, unitCyl } from "./core/shapes";
 import { FT, clamp, hashStr, num, rng, warn } from "./core/util";
 import { makeCanvas } from "./materials/gen";
+import type { RoomM } from "./plan/model";
+import { openingNameLow, sentenceName as sentence } from "./structure/labels";
+import { carWays, onWalkwayRect, parking } from "./furniture/parking";
+import { CLEAR_H, CLEAR_W, freeAcross, keepsReach, outdoorItems, outdoorModel, overlaps, passagesClear, reachedWith, type Box, type OutdoorModel, type Passage } from "./outdoor";
 
 type TreeKind = "palm" | "ashoka" | "neem" | "ornamental" | "bush";
 
@@ -84,11 +88,274 @@ export function landscapeAPI(ctx: BuildCtx) {
     const rect = normRect(r);
     if (!rect) return warn("landscape.paving: invalid rect");
     surface(rect, M.get(material, "paving"), "paving", "Paving", 0.035);
+    paved.push({ x0: rect.x, x1: rect.x + rect.w, y0: rect.y, y1: rect.y + rect.d });
   }
+
+  // ── EN-F1: where planting may stand ─────────────────────────────────────────────────────────────────────
+  // Whatever the design asks: nothing planted within 3 ft outside an exterior door, sliding door, arch or gate (its
+  // width plus 1 ft each side), nothing on the gate-to-door walkway or a car's way in, and in a passage (an outdoor
+  // room under 8 ft) a clear walking width of 3 ft is left between 0 and 7 ft above the ground; nor may planting cut
+  // the 3 ft route from the gate to a door or an outdoor room it reached. An item that breaks this is slid along,
+  // made a slim columnar form against the boundary wall (trees), moved into a wider outdoor space, or left out, each
+  // with a warning in the build log. Footprints are what the item actually builds (canopy, fronds, shrubs): the box
+  // the walkthrough treats as solid.
+  const placed: Box[] = ctx.plantings;
+  let reachMemo: { n: number; v: { doors: boolean[]; rooms: boolean[] } } | null = null;
+  const model = (): OutdoorModel | null => (ctx.structureBuilt ? outdoorModel(ctx) : null);
+  const solids = (): Box[] => [...outdoorItems(ctx), ...placed];
+  // (the way from the gate is judged against the planting alone: outdoor furniture that closes it is moved at the end
+  // of the build, see keepOutdoorReach)
+  const reachNow = () => {
+    const n = placed.length;
+    if (!reachMemo || reachMemo.n !== n) reachMemo = { n, v: reachedWith(ctx, placed) };
+    return reachMemo.v;
+  };
+  const keeps = (f: Box) => keepsReach(ctx, placed, f, reachNow());
+  // (a verge shrub whose leaves reach over the boundary wall's footing is still out in the street)
+  const inPlot = (f: Box) => f.x1 > 0.4 && f.y1 > 0.4 && f.x0 < plan.plotW - 0.4 && f.y0 < plan.plotD - 0.4;
+  /** paths and patios the design paved: nothing moved is planted on them */
+  const paved: Box[] = [];
+  /** the objects one builder call adds (each ctx.add is one element) */
+  const capture = (fn: () => void): THREE.Object3D[] => {
+    const g = ctx.sectionGroup;
+    const n = g.children.length;
+    fn();
+    return g.children.slice(n);
+  };
+  /** plan footprint (ft) of the elements that come lower than 7 ft above `base` */
+  const footprint = (objs: THREE.Object3D[], base: number): Box | null => {
+    let f: Box | null = null;
+    for (const o of objs) {
+      o.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(o);
+      if (bb.isEmpty() || bb.min.y / FT >= base + CLEAR_H - 0.05) continue;
+      const b = { x0: bb.min.x / FT, x1: bb.max.x / FT, y0: -bb.max.z / FT, y1: -bb.min.z / FT };
+      f = f ? { x0: Math.min(f.x0, b.x0), x1: Math.max(f.x1, b.x1), y0: Math.min(f.y0, b.y0), y1: Math.max(f.y1, b.y1) } : b;
+    }
+    return f;
+  };
+  /** slide by (dx, dy), lift by dh and, for a slim form, narrow by k about the trunk at (px, py) */
+  const transform = (objs: THREE.Object3D[], px: number, py: number, k: number, dx: number, dy: number, dh: number) => {
+    for (const o of objs) {
+      o.scale.set(k, 1, k);
+      o.position.set((px * (1 - k) + dx) * FT, dh * FT, -(py * (1 - k) + dy) * FT);
+      o.updateMatrixWorld(true);
+    }
+  };
+  const moved = (f: Box, px: number, py: number, k: number, dx: number, dy: number): Box => ({
+    x0: px + (f.x0 - px) * k + dx, x1: px + (f.x1 - px) * k + dx, y0: py + (f.y0 - py) * k + dy, y1: py + (f.y1 - py) * k + dy,
+  });
+  const removeAll = (objs: THREE.Object3D[]) => {
+    for (const o of objs) {
+      o.removeFromParent();
+      o.traverse((q) => (q as THREE.Mesh).geometry?.dispose());
+    }
+  };
+  const rectOf = (r: Rect): Box => ({ x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.d });
+  /** the passage (outdoor room under 8 ft) a point stands in */
+  const passageAt = (m: OutdoorModel, x: number, y: number): Passage | null => m.passages.find((p) => x >= p.room.rect.x && x <= p.room.rect.x + p.room.rect.w && y >= p.room.rect.y && y <= p.room.rect.y + p.room.rect.d) ?? null;
+  /**
+   * Why a footprint may not stand here (null: it may). `strict` also keeps it from standing across a passage from a
+   * door (a preference when moving); `moving` keeps it off walls and the other planting (the spot the design gave
+   * stays as long as it breaks no rule); `reach` also asks that the 3 ft route from the gates still reaches every door
+   * and outdoor room it reached.
+   */
+  let lowItem = false;
+  const why = (f: Box, strict: boolean, moving: boolean, reach = true): string | null => {
+    const m = model();
+    if (!m) return null;
+    const z = m.zones.find((q) => overlaps(f, q.box));
+    if (z) {
+      const op = plan.openings.find((o) => o.id === z.id);
+      return `stood within 3 ft of ${z.kind === "gate" ? "a gate" : op ? openingNameLow(plan, op) : "a door"}`;
+    }
+    if (!inPlot(f)) return null;
+    if (strict)
+      for (const q of m.zones) {
+        if (q.kind !== "door") continue;
+        for (const p of m.passages) {
+          const r = p.room.rect;
+          if (!overlaps(q.box, rectOf(r))) continue;
+          const across: Box = q.axis === "x" ? { x0: q.a - 1, x1: q.b + 1, y0: r.y, y1: r.y + r.d } : { x0: r.x, x1: r.x + r.w, y0: q.a - 1, y1: q.b + 1 };
+          if (overlaps(f, across)) return "stood across the passage from a door";
+        }
+      }
+    const P = parking(ctx);
+    if (onWalkwayRect(P, f)) return "stood on the walkway from the gate to the main door";
+    if (carWays(P, plan.plotW, plan.plotD).some((w) => overlaps(f, w))) return "stood in a car's way in";
+    if (moving && m.fixed.some((b) => overlaps(f, b, 0.03))) return "met a wall";
+    // (a shrub may stand under a tree's canopy)
+    if (moving && !lowItem && placed.some((b) => overlaps(f, b, 0.1))) return "met other planting";
+    const pass = m.passages.find((p) => !passagesClear({ ...m, passages: [p] }, f, solids()));
+    if (pass) return `left less than 3 ft clear in the ${sentence(pass.room.name)}`;
+    if (reach && !keeps(f)) return "cut the 3 ft way from the gate to a door or a yard";
+    return null;
+  };
+  const fits = (f: Box, strict: boolean, moving: boolean): boolean => !why(f, strict, moving);
+  const at1 = (n: number) => n.toFixed(1);
+
+  /**
+   * Settle what one planting call built (`objs`, its trunk or centre at (x, y) on ground `base`) where the rules let it
+   * stand: as asked; slid along (a passage, the street verge) or nearby; a slim column against the boundary wall
+   * (`slim`); in a wider outdoor space (`wider`); else left out. The street verge only slides along the street.
+   */
+  const settle = (objs: THREE.Object3D[], x: number, y: number, base: number, label: string, how: { slim: "first" | "later" | "never"; wider: boolean }): void => {
+    const m = model();
+    const f0 = footprint(objs, base);
+    if (!m || !f0 || !objs.length) return;
+    // (a shrub, under 4 ft: may stand under another tree's canopy when it is moved)
+    lowItem = objs.every((o) => new THREE.Box3().setFromObject(o).max.y / FT < base + 4);
+    const g0 = plan.levels[0].id;
+    const room = plan.roomAt(g0, x, y);
+    if (room && room.cat === "enclosed") {
+      placed.push(f0);
+      return;
+    }
+    const reason = why(f0, false, false);
+    if (!reason) {
+      placed.push(f0);
+      return;
+    }
+    const street = !room && y < 0;
+    const done = (f: Box, k: number, dx: number, dy: number, what: string) => {
+      transform(objs, x, y, k, dx, dy, groundAt(x + dx, y + dy) - base);
+      placed.push(f);
+      warn(`landscape: ${label} at (${at1(x)}, ${at1(y)}) ${reason}; ${what}.`);
+    };
+    const passage = room ? passageAt(m, x, y) : null;
+    const onPaving = (px: number, py: number) => paved.some((b) => px > b.x0 - 0.5 && px < b.x1 + 0.5 && py > b.y0 - 0.5 && py < b.y1 + 0.5);
+    const within = (f: Box, r: Rect, e: number) => f.x0 >= r.x - e && f.x1 <= r.x + r.w + e && f.y0 >= r.y - e && f.y1 <= r.y + r.d + e;
+    // a. slide it along the passage (or the street verge), or nearby in its own space, as it is
+    const slide = (): boolean => {
+      const offs: [number, number][] = [];
+      if (passage || street) {
+        const ax = passage ? passage.axis : "x";
+        for (let d = 0.5; d <= 12; d += 0.5) for (const s of [1, -1]) offs.push(ax === "x" ? [s * d, 0] : [0, s * d]);
+      } else
+        for (let r = 0.5; r <= 6; r += 0.5)
+          for (let a = 0; a < 16; a++) offs.push([Math.round(Math.cos((a / 16) * Math.PI * 2) * r * 4) / 4, Math.round(Math.sin((a / 16) * Math.PI * 2) * r * 4) / 4]);
+      for (const strict of [true, false])
+        for (const [dx, dy] of offs) {
+          const f = moved(f0, x, y, 1, dx, dy);
+          const home = street ? f.x0 >= -0.5 && f.x1 <= plan.plotW + 0.5 : room ? plan.roomAt(g0, x + dx, y + dy) === room && within(f, room.rect, 0.6) && !onPaving(x + dx, y + dy) : false;
+          if (home && fits(f, strict, !street)) {
+            done(f, 1, dx, dy, `moved ${at1(Math.hypot(dx, dy))} ft${passage ? ` along the ${sentence(room!.name)}` : street ? " along the street" : ""}`);
+            return true;
+          }
+        }
+      return false;
+    };
+    // b. a slim columnar form against the boundary wall of the passage it stands in (3 ft left clear beside it)
+    const slim = (): boolean => {
+      if (!passage || !room) return false;
+      const r = passage.room.rect;
+      const ax = passage.axis;
+      const [lo, hi] = ax === "y" ? [r.x, r.x + r.w] : [r.y, r.y + r.d];
+      const lim = ax === "y" ? plan.plotW : plan.plotD;
+      // hug the long side on the plot boundary (else the side farther from the middle of the plot)
+      const toHigh = hi >= lim - 0.01 ? true : lo <= 0.01 ? false : (lo + hi) / 2 > lim / 2;
+      const [fc0, fc1] = ax === "y" ? [f0.x0, f0.x1] : [f0.y0, f0.y1];
+      const pc = ax === "y" ? x : y;
+      for (const strict of [true, false])
+        for (let d = 0; d <= 12; d += 0.5)
+          for (const s of d ? [1, -1] : [1]) {
+            const du = s * d;
+            const u = (ax === "y" ? y : x) + du;
+            const [a0, a1] = freeAcross(m, passage, u, solids());
+            const room2 = a1 - a0 - CLEAR_W - 0.1;
+            if (room2 < 0.8) continue;
+            const k = Math.min(1, room2 / (fc1 - fc0));
+            const dc = toHigh ? a1 - 0.05 - (pc + (fc1 - pc) * k) : a0 + 0.05 - (pc + (fc0 - pc) * k);
+            const [dx, dy] = ax === "y" ? [dc, du] : [du, dc];
+            const f = moved(f0, x, y, k, dx, dy);
+            if (!within(f, r, 0.05) || !fits(f, strict, true)) continue;
+            done(f, k, dx, dy, `made a slim column ${at1(k * (fc1 - fc0))} ft wide against the boundary wall${d ? `, ${at1(d)} ft along` : ""}, leaving 3 ft clear`);
+            return true;
+          }
+      return false;
+    };
+    // b2. in a wider space with no room for it as it is: a slimmer form (down to half its spread) against the plot's
+    // boundary wall where that space meets it
+    const slimOpen = (): boolean => {
+      if (!room || passage || room.cat !== "outdoor") return false;
+      const r = room.rect;
+      const B = 0.375 + 0.05;
+      const edges: ("left" | "right" | "back" | "front")[] = [];
+      if (r.x <= 0.01) edges.push("left");
+      if (r.x + r.w >= plan.plotW - 0.01) edges.push("right");
+      if (r.y + r.d >= plan.plotD - 0.01) edges.push("back");
+      if (r.y <= 0.01) edges.push("front");
+      const cands: { k: number; dx: number; dy: number; dist: number }[] = [];
+      for (let k = 0.9; k >= 0.499; k -= 0.1)
+        for (const e of edges) {
+          const alongX = e === "front" || e === "back";
+          const [lo, hi] = alongX ? [r.x, r.x + r.w] : [r.y, r.y + r.d];
+          for (let u = lo + 0.5; u <= hi - 0.5; u += 0.5) {
+            const sc = moved(f0, x, y, k, 0, 0);
+            const dx = alongX ? u - x : e === "left" ? B - sc.x0 : plan.plotW - B - sc.x1;
+            const dy = !alongX ? u - y : e === "front" ? B - sc.y0 : plan.plotD - B - sc.y1;
+            if (onPaving(x + dx, y + dy)) continue;
+            cands.push({ k, dx, dy, dist: Math.hypot(dx, dy) });
+          }
+        }
+      cands.sort((a, b) => b.k - a.k || a.dist - b.dist);
+      let tries = 0;
+      for (const c of cands) {
+        const f = moved(f0, x, y, c.k, c.dx, c.dy);
+        if (!within(f, r, 0.6) || plan.roomAt(g0, x + c.dx, y + c.dy) !== room) continue;
+        if (why(f, true, true, false)) continue;
+        if (++tries > 40) break;
+        if (!keeps(f)) continue;
+        done(f, c.k, c.dx, c.dy, `made a slimmer form (${Math.round(c.k * 100)} % of its spread) against the boundary wall, ${at1(c.dist)} ft away`);
+        return true;
+      }
+      return false;
+    };
+    // c. into a wider outdoor space (a lawn, a yard, a courtyard: 8 ft or more each way, never the driveway), within
+    // 30 ft of where it was asked for
+    const wider = (): boolean => {
+      const cands: { dx: number; dy: number; dist: number; to: RoomM }[] = [];
+      for (const to of m.outdoor) {
+        if (to.type === "driveway" || Math.min(to.rect.w, to.rect.d) < 8) continue;
+        const r = to.rect;
+        for (let px = r.x + 1; px <= r.x + r.w - 1; px += 1)
+          for (let py = r.y + 1; py <= r.y + r.d - 1; py += 1) if (Math.hypot(px - x, py - y) <= 30) cands.push({ dx: px - x, dy: py - y, dist: Math.hypot(px - x, py - y), to });
+      }
+      cands.sort((a, b) => a.dist - b.dist);
+      let tries = 0;
+      for (const c of cands) {
+        const f = moved(f0, x, y, 1, c.dx, c.dy);
+        const r = c.to.rect;
+        if (!within(f, { x: r.x + 0.5, y: r.y + 0.5, w: r.w - 1, d: r.d - 1 }, 0) || onPaving(x + c.dx, y + c.dy)) continue;
+        if (why(f, true, true, false)) continue;
+        if (++tries > 40) break;
+        if (!keeps(f)) continue;
+        done(f, 1, c.dx, c.dy, `moved to the ${sentence(c.to.name)}`);
+        return true;
+      }
+      return false;
+    };
+    const steps: (() => boolean)[] = [slide];
+    if (!street) {
+      if (how.slim === "first") steps.push(slim, slimOpen);
+      if (how.wider) steps.push(wider);
+      if (how.slim === "later") steps.push(slim, slimOpen);
+    }
+    for (const st of steps) if (st()) return;
+    removeAll(objs);
+    warn(`landscape: ${label} at (${at1(x)}, ${at1(y)}) ${reason}; left out (no spot nearby keeps the way clear).`);
+  };
 
   function planter(r: Rect, o?: { height_ft?: number; material?: MaterialSpec }): void {
     const rect = normRect(r);
     if (!rect) return warn("landscape.planter: invalid rect");
+    const cx = rect.x + rect.w / 2, cy = rect.y + rect.d / 2;
+    const objs = capture(() => planterRaw(rect, o));
+    settle(objs, cx, cy, groundAt(cx, cy), "a planter", { slim: "never", wider: true });
+  }
+
+  function planterRaw(rect: Rect, o?: { height_ft?: number; material?: MaterialSpec }): void {
+
     const H = clamp(num(o?.height_ft, 1.5), 0.3, 6);
     const base = groundAt(rect.x + rect.w / 2, rect.y + rect.d / 2);
     const mat = M.get(o?.material, "plaster_grey");
@@ -118,7 +385,11 @@ export function landscapeAPI(ctx: BuildCtx) {
     const kind: TreeKind = kinds.includes(o?.kind as TreeKind) ? (o!.kind as TreeKind) : "neem";
     const dflt: Record<TreeKind, number> = { palm: 14, ashoka: 18, neem: 20, ornamental: 12, bush: 3 };
     const H = clamp(num(o?.height_ft, dflt[kind]), kind === "bush" ? 0.8 : 2, 60);
-    plantTree(ctx, x, y, groundAt(x, y), kind, H);
+    const base = groundAt(x, y);
+    const objs = capture(() => plantTree(ctx, x, y, base, kind, H));
+    // an ashoka grows as a column anyway (the boundary-wall tree): made slim before it is moved; a spreading tree or a
+    // palm goes to a wider space first
+    settle(objs, x, y, base, `the ${kind === "bush" ? "shrub" : `${kind} tree`}`, { slim: kind === "ashoka" ? "first" : "later", wider: true });
   }
 
   function hedge(from: Pt, to: Pt, o?: { height_ft?: number }): void {
@@ -127,6 +398,54 @@ export function landscapeAPI(ctx: BuildCtx) {
     const len = Math.hypot(x1 - x0, y1 - y0);
     if (len < 0.5) return;
     const H = clamp(num(o?.height_ft, 3), 0.8, 10);
+    const objs = capture(() => hedgeRaw(x0, y0, x1, y1, H));
+    const base = groundAt((x0 + x1) / 2, (y0 + y1) / 2);
+    const f0 = footprint(objs, base);
+    if (!model() || !f0 || !why(f0, false, false)) {
+      if (f0) placed.push(f0);
+      return;
+    }
+    // EN-F1: keep the stretches of the hedge that break no rule (a gap at a door or a gate, none across a passage)
+    removeAll(objs);
+    const depth = Math.min(1.6, H * 0.6) / 2 + 0.25;
+    const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+    // (its leaves reach past the ends of its line: keep that much more clear)
+    const over = Math.max(0.3, Math.abs(ux) * Math.max(f0.x1 - Math.max(x0, x1), Math.min(x0, x1) - f0.x0) + Math.abs(uy) * Math.max(f0.y1 - Math.max(y0, y1), Math.min(y0, y1) - f0.y0));
+    const n = Math.max(1, Math.round(len / 0.5));
+    const good: boolean[] = [];
+    for (let k = 0; k < n; k++) {
+      const t0 = (k / n) * len, t1 = ((k + 1) / n) * len;
+      const ax = x0 + ux * t0, ay = y0 + uy * t0, bx = x0 + ux * t1, by = y0 + uy * t1;
+      const f: Box = { x0: Math.min(ax, bx) - Math.abs(uy) * depth - Math.abs(ux) * over, x1: Math.max(ax, bx) + Math.abs(uy) * depth + Math.abs(ux) * over, y0: Math.min(ay, by) - Math.abs(ux) * depth - Math.abs(uy) * over, y1: Math.max(ay, by) + Math.abs(ux) * depth + Math.abs(uy) * over };
+      good.push(!why(f, false, false, false));
+    }
+    let kept = 0;
+    for (let k = 0; k < n; ) {
+      if (!good[k]) {
+        k++;
+        continue;
+      }
+      let e = k;
+      while (e + 1 < n && good[e + 1]) e++;
+      const t0 = (k / n) * len, t1 = ((e + 1) / n) * len;
+      if (t1 - t0 >= 1.5) {
+        const sx = x0 + ux * t0, sy = y0 + uy * t0, ex = x0 + ux * t1, ey = y0 + uy * t1;
+        const part = capture(() => hedgeRaw(sx, sy, ex, ey, H));
+        const f = footprint(part, base);
+        if (f && why(f, false, false)) removeAll(part);
+        else {
+          if (f) placed.push(f);
+          kept += t1 - t0;
+        }
+      }
+      k = e + 1;
+    }
+    warn(`landscape: the hedge from (${at1(x0)}, ${at1(y0)}) to (${at1(x1)}, ${at1(y1)}) crossed a door, a gate or a passage's 3 ft clear way; ${kept > 0 ? `${at1(kept)} of its ${at1(len)} ft kept` : "left out"}.`);
+  }
+
+  function hedgeRaw(x0: number, y0: number, x1: number, y1: number, H: number): void {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+
     const base = groundAt((x0 + x1) / 2, (y0 + y1) / 2);
     const depth = Math.min(1.6, H * 0.6);
     const kit = new Kit();

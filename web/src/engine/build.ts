@@ -16,6 +16,7 @@ import { floorBelow } from "./facade";
 import { ensurePaths } from "./furniture/paths";
 import { ensureCars, ensureDefining } from "./furniture/place";
 import { parking } from "./furniture/parking";
+import { keepOutdoorReach } from "./outdoor";
 import { ITEMS } from "./furniture/items";
 import { solarRect } from "./furniture/zones";
 import { NoteLog, type EngineNote } from "./core/notes";
@@ -165,6 +166,8 @@ export async function buildHouseImpl(
   if (ctx.structureBuilt && ctx.carsParked < ctx.carsPlan && ctx.carsAsked < ctx.carsPlan) await runSection("park_cars", "furniture", () => ensureCars(ctx));
   // EN-03: every bedroom has its bed, every bath its WC, every kitchen its fridge and hob, every dressing its wardrobe
   if (ctx.structureBuilt) await ensureDefining(ctx, (fn) => runSection("furnish_essentials", "furniture", fn));
+  // EN-F1: outdoor furniture never closes the 3 ft way from the gate to a door or a yard the planting leaves open
+  if (ctx.structureBuilt) await runSection("outdoor_reach", "furniture", () => keepOutdoorReach(ctx));
   let hasSun = false;
   ctx.root.traverse((o) => {
     if (o.userData.kind === "sun") hasSun = true;

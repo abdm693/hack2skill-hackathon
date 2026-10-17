@@ -135,8 +135,9 @@ export function buildPrivacyScreens(ctx: BuildCtx, mats: { wall: THREE.Material;
     ctx.model.notes.add({
       id: `asbuilt.privacy_screen:${lv}`,
       title: "Privacy screen added",
-      status: "warn",
-      message: `On the ${level?.name.toLowerCase() ?? lv}, a 7 ft screen now separates ${list.join(", and ")}: they share an edge but neither opens onto the other, so one room could otherwise be reached through the other's balcony.`,
+      // EN-F4: the engine's own addition, not a problem (pass: never counted or listed as a note)
+      status: "pass",
+      message: `The engine added 7 ft privacy screens between ${list.length} pair${list.length === 1 ? "" : "s"} of terraces on the ${level?.name.toLowerCase() ?? lv} that don't open onto each other.`,
       element_ids: ctx.model.screens.filter((s) => s.level.id === lv).flatMap((s) => [s.neg.id, s.pos.id]),
     });
   }

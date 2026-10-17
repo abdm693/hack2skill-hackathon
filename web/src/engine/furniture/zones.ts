@@ -54,7 +54,7 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
   // doors and windows on this room's walls
   for (const o of model.openingsOfRoom(room)) {
     const run = o.run;
-    const into = run.neg === room ? -1 : 1;
+    const into = o.neg === room ? -1 : 1;
     const c0 = run.c + (into * run.t) / 2;
     const w = o.u1 - o.u0;
     if (o.isDoor) {
@@ -122,10 +122,10 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
   // roof: the tower door's outside landing, the water tank, the solar area
   if (room.lv.isRoof) {
     const tw = model.tower;
-    const door = tw ? model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.run.neg === tw.room || o.run.pos === tw.room)) : null;
+    const door = tw ? model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.neg === tw.room || o.pos === tw.room)) : null;
     if (door) {
       const run = door.run;
-      const out1 = run.neg === tw!.room ? 1 : -1;
+      const out1 = door.neg === tw!.room ? 1 : -1;
       const c0 = run.c + (out1 * run.t) / 2, c1 = c0 + out1 * 3.5;
       const z: Zone = run.axis === "x" ? { x0: door.u0 - 0.5, x1: door.u1 + 0.5, y0: Math.min(c0, c1), y1: Math.max(c0, c1), kind: "roof_door" } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: door.u0 - 0.5, y1: door.u1 + 0.5, kind: "roof_door" };
       if (hits(z, room)) out.push(z);
@@ -163,13 +163,18 @@ export function blocksWindow(type: string, h: number, z: Zone): boolean {
 }
 /**
  * The windows of a room a tall piece may still stand in front of as a last resort: in a room people live in, only
- * ventilators and the smallest window when there are two or more; elsewhere (dressing, store, bath) any.
+ * ventilators and the smallest window when there are two or more; elsewhere (a dressing, a store) any window but the
+ * room's only one (EN-F5: a dressing room's one window is never walled up by its wardrobe). A kitchen's fridge, which
+ * the kitchen cannot do without, may still stand in front of its window when there is no other place.
  */
-export function spareWindows(ctx: BuildCtx, room: RoomM): Set<string> | "all" {
-  if (!HABITABLE.has(room.type)) return "all";
+export function onlyWindowKept(room: RoomM, type: string): boolean {
+  return room.cat === "enclosed" && !HABITABLE.has(room.type) && type !== "fridge";
+}
+export function spareWindows(ctx: BuildCtx, room: RoomM, type = ""): Set<string> | "all" {
   const ws = keepOut(ctx, room).filter((z) => z.kind === "window");
   const out = new Set<string>(ws.filter((z) => z.op === "ventilator").map((z) => z.id ?? ""));
   const real = ws.filter((z) => z.op !== "ventilator").sort((a, b) => (a.width ?? 0) - (b.width ?? 0));
+  if (!HABITABLE.has(room.type)) return real.length >= 2 || !onlyWindowKept(room, type) ? "all" : out;
   if (real.length >= 2 && real[0].id) out.add(real[0].id);
   return out;
 }

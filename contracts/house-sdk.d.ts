@@ -244,6 +244,21 @@ export interface HouseSDK {
   /** Sensible default layout for a room by its type (use when no specific intent). */
   auto_furnish(room: string, o?: { style?: "modern" | "classic" | "minimal" | "traditional"; palette?: string[] }): void;
 
+  /**
+   * Clearances for `planter`, `tree` and `hedge` (EN-F1), kept whatever the call asks. An item's footprint is everything
+   * it builds below 7 ft (a tree's whole canopy when its crown comes lower than that, a palm's fronds, a planter's
+   * shrubs), which is also what the walkthrough treats as solid:
+   *  - nothing within 3 ft outside an exterior door, sliding door, arch or garage door, across its width plus 1 ft each
+   *    side; nothing within 3 ft of a gate, on either side of the boundary wall;
+   *  - nothing on the walkway from the gate to the main door, or in a parked car's way in;
+   *  - in a passage (an outdoor room narrower than 8 ft: a side or rear space, a light court) at least 3 ft of clear
+   *    walking width is left beside it, between the walls, everything else standing there and the item;
+   *  - it never cuts the 3 ft way from the gate to an exterior door or an outdoor room that was open without it.
+   * An item that breaks one is slid along (a passage, the street verge) or nearby, made a slim columnar form against the
+   * boundary wall (trees: an ashoka first), moved into a wider outdoor space within 30 ft (a lawn, a yard, never the
+   * driveway), or left out, each with a warning in the build log (never an as-built note). Hedges keep the stretches
+   * that break no rule. Plant passages with slim, boundary-wall trees and keep doors and gates clear.
+   */
   landscape: {
     lawn(rect: Rect): void;
     paving(rect: Rect, material?: MaterialSpec): void;

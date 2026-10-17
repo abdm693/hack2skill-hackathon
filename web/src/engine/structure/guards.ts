@@ -108,11 +108,9 @@ export function buildDropGuards(ctx: BuildCtx, type: RailType, m: RailMats): voi
     ctx.notes.add({
       id: `asbuilt.guard_added:${lvId}`,
       title: "Guard rail added",
-      status: "warn",
-      message:
-        es.length === 1
-          ? `A ${len.toFixed(1)} ft edge on the ${lv.name} with a ${drop.toFixed(1)} ft drop had no wall or railing; the engine added a 3.5 ft guard.`
-          : `${es.length} edges on the ${lv.name} (${len.toFixed(0)} ft in all, with drops of up to ${drop.toFixed(1)} ft) had no wall or railing; the engine added 3.5 ft guards.`,
+      // EN-F4: the engine's own safety work is not a problem (pass: never counted or listed as a note)
+      status: "pass",
+      message: `The engine added a 3.5 ft guard rail along ${len.toFixed(0)} ft of open edge on the ${lv.name.toLowerCase()} (drops of up to ${drop.toFixed(1)} ft).`,
     });
   }
   for (const [lv, k] of byLevel) {

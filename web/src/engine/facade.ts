@@ -93,7 +93,7 @@ export function facadeAPI(ctx: BuildCtx) {
       for (const o of ctx.model.openings) {
         if (!o.isDoor || o.op.level !== g.id) continue;
         const run = o.run;
-        for (const [r, into] of [[run.neg, -1], [run.pos, 1]] as const) {
+        for (const [r, into] of [[o.neg, -1], [o.pos, 1]] as const) {
           if (r ? r.cat === "enclosed" : run.out !== into) continue;
           const c0 = run.c + (into * run.t) / 2, c1 = c0 + into * 3;
           zones.push(run.axis === "x" ? { x0: o.u0 - 0.3, x1: o.u1 + 0.3, y0: Math.min(c0, c1), y1: Math.max(c0, c1) } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: o.u0 - 0.3, y1: o.u1 + 0.3 });

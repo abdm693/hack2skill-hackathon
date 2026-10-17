@@ -60,6 +60,11 @@ export interface PlacedOpening {
   /** frame plane offset from the wall centerline (ft, signed in the run's across axis) */
   frameOff: number;
   isDoor: boolean;
+  /** EN-F2: the rooms on the run's neg / pos side AT this opening. An exterior run keeps one enclosed room along its
+   *  length but may face several outdoor rooms or terraces (its own neg/pos is only the first one), so code that asks
+   *  "which room does this opening join" reads these, never `run.neg` / `run.pos`. */
+  neg: RoomM | null;
+  pos: RoomM | null;
 }
 
 export interface EdgeFeature {
@@ -305,24 +310,29 @@ export class StructureModel {
       const named = op.between.filter((b) => b && b !== "exterior");
       const other = named.map((id) => plan.room(id)).filter((r): r is RoomM => !!r && r.level !== op.level);
       if (other.length) {
-        this.skipOpening(op, `${this.openingLabel(op)} joins the ${other.map((r) => `${r.name} on the ${r.lv.name.toLowerCase()}`).join(", ")}; openings only join rooms on the same floor, so it was not built.`);
+        this.skipOpening(op, `${this.openingLabel(op)} couldn't be built: it joins rooms on different floors.`);
         continue;
       }
       const known = named.filter((id) => plan.room(id));
       const wantExt = op.between.includes("exterior");
       const runs = (this.runsByLevel.get(op.level) ?? []).filter((r) => r.kind === "exterior" || r.kind === "interior");
-      let best: { run: WallRun; score: number; along: number } | null = null;
+      let best: { run: WallRun; score: number; along: number; pair: [RoomM | null, RoomM | null] } | null = null;
       for (const run of runs) {
         const along = run.axis === "x" ? op.at[0] : op.at[1];
         const across = run.axis === "x" ? op.at[1] : op.at[0];
         const dA = Math.abs(across - run.c);
         const dL = along < run.a ? run.a - along : along > run.b ? along - run.b : 0;
         if (dA > 1.5 || dL > 1.5) continue;
-        const ids = [run.neg?.id, run.pos?.id];
-        if (!known.every((id) => ids.includes(id))) continue;
+        // EN-F2: the rooms either side of the wall at the opening itself (an exterior wall can face several outdoor
+        // rooms); the run's own pair is still accepted, so nothing that matched before is skipped now
+        let pair = this.roomsAcross(run, along);
+        if (!known.every((id) => pair[0]?.id === id || pair[1]?.id === id)) {
+          if (!known.every((id) => run.neg?.id === id || run.pos?.id === id)) continue;
+          pair = [run.neg, run.pos];
+        }
         if (wantExt && run.kind !== "exterior") continue;
         const score = Math.hypot(dA, dL);
-        if (!best || score < best.score) best = { run, score, along };
+        if (!best || score < best.score) best = { run, score, along, pair };
       }
       if (!best) {
         // openings on porch/deck edges are simply open; anything else is reported
@@ -331,10 +341,11 @@ export class StructureModel {
         const rs = known.map((id) => plan.room(id) ?? null);
         const openPlan = rs.length === 2 && plan.isOpen(rs[0], rs[1]);
         if (openPlan) warn(`opening ${op.id}: ${op.between.join(" / ")} are open-plan; no wall to cut, skipped`);
-        else if (!onEdge) this.skipOpening(op, `${this.openingLabel(op)} is not on a wall between the ${op.between.map((b) => (b === "exterior" ? "outside" : plan.room(b)?.name ?? "room")).join(" and the ")}, so it was not built.`);
+        else if (!onEdge) this.skipOpening(op, `${this.openingLabel(op)} couldn't be built: ${known.length >= 2 ? "those rooms don't share a wall" : "that room has no outside wall there"}.`);
         continue;
       }
       const run = best.run;
+      const [pNeg, pPos] = best.pair;
       const isDoor = DOOR_TYPES.includes(op.type);
       const mA = run.perpA ? run.perpA / 2 + 0.12 : 0.06;
       const mB = run.perpB ? run.perpB / 2 + 0.12 : 0.06;
@@ -343,7 +354,7 @@ export class StructureModel {
       let w = op.width;
       if (w > avail) {
         if (avail < 1.2) {
-          this.skipOpening(op, `${label} was not built: its wall is only ${Math.max(0, run.b - run.a).toFixed(1)} ft long.`, isDoor ? "fail" : "warn");
+          this.skipOpening(op, `${label} couldn't be built: its wall is only ${Math.max(0, run.b - run.a).toFixed(1)} ft long.`, isDoor ? "fail" : "warn");
           continue;
         }
         warn(`opening ${op.id}: narrowed from ${w} to ${avail.toFixed(2)} ft to fit its wall`);
@@ -386,7 +397,7 @@ export class StructureModel {
           const door = fit(doors, want, w, wMin, 2);
           if (door) {
             const [du0, dw] = door;
-            const mine: PlacedOpening = { op, run, u0: du0, u1: du0 + dw, bottom: 0, top: 0, floor: 0, swingSide: 1, hingeAtA: true, frameOff: 0, isDoor: true };
+            const mine: PlacedOpening = { op, run, u0: du0, u1: du0 + dw, bottom: 0, top: 0, floor: 0, swingSide: 1, hingeAtA: true, frameOff: 0, isDoor: true, neg: pNeg, pos: pPos };
             // re-fit every window that now clashes with this door, around the doors and the other windows
             const wins = run.openings.filter((o) => !o.isDoor && du0 < o.u1 + 0.3 && du0 + dw > o.u0 - 0.3);
             let ok = true;
@@ -400,14 +411,14 @@ export class StructureModel {
               }
               win.u0 = f[0];
               win.u1 = f[0] + f[1];
-              this.notes.add({ id: `asbuilt.opening_moved:${win.op.id}`, title: "Window adjusted", status: "warn", message: `${this.openingLabel(win.op)} was ${f[1] < ww0 - 0.05 ? `narrowed to ${f[1].toFixed(1)} ft` : "moved"} to make room for ${label}.`, element_ids: [win.op.id, op.id] });
+              this.notes.add({ id: `asbuilt.opening_moved:${win.op.id}`, title: "Window adjusted", status: "warn", message: `${this.openingLabel(win.op)} was ${f[1] < ww0 - 0.05 ? `narrowed to ${f[1].toFixed(1)} ft` : "moved along its wall"} to make room for a door.`, element_ids: [win.op.id, op.id] });
             }
             if (!ok) {
               // the window cannot shrink enough: leave the window out rather than the door
               for (const win of run.openings.filter((o) => !o.isDoor && du0 < o.u1 + 0.3 && du0 + dw > o.u0 - 0.3)) {
                 run.openings.splice(run.openings.indexOf(win), 1);
                 this.openings.splice(this.openings.indexOf(win), 1);
-                this.skipOpening(win.op, `${this.openingLabel(win.op)} was left out to make room for ${label}.`, "warn");
+                this.skipOpening(win.op, `${this.openingLabel(win.op)} was left out to make room for a door.`, "warn");
               }
             }
             run.openings.sort((p, q) => p.u0 - q.u0);
@@ -415,13 +426,13 @@ export class StructureModel {
           }
         }
         if (!spot) {
-          this.skipOpening(op, `${label} was not built: it overlaps another opening on the same wall and there is no room to move it.`, isDoor ? "fail" : "warn");
+          this.skipOpening(op, `${label} couldn't be built: another opening fills that stretch of wall.`, isDoor ? "fail" : "warn");
           continue;
         }
         if (spot[1] < w - 0.05) warn(`opening ${op.id}: narrowed from ${w.toFixed(2)} to ${spot[1].toFixed(2)} ft beside its neighbour`);
         [u0, w] = spot;
       }
-      const rooms = [run.neg, run.pos].filter((r): r is RoomM => !!r && r.cat !== "outdoor");
+      const rooms = [pNeg, pPos].filter((r): r is RoomM => !!r && r.cat !== "outdoor");
       const r0 = plan.room(op.between[0]);
       const floor = r0 && rooms.includes(r0) ? r0.floorH : rooms.length ? Math.max(...rooms.map((r) => r.floorH)) : run.h0 + FINISH;
       const wallFloor = run.h0 + FINISH;
@@ -431,27 +442,27 @@ export class StructureModel {
       if (top - bottom < 0.8) {
         bottom = Math.max(run.h0, top - 0.8);
         if (top - bottom < 0.8) {
-          this.skipOpening(op, `${label} was not built: the wall is too low for it.`, isDoor ? "fail" : "warn");
+          this.skipOpening(op, `${label} couldn't be built: its wall is too low.`, isDoor ? "fail" : "warn");
           continue;
         }
       }
       // swing side
       const target = op.swing === "out" ? op.between[1] : op.between[0];
       let swingSide: -1 | 1;
-      if (run.neg?.id === target) swingSide = -1;
-      else if (run.pos?.id === target) swingSide = 1;
+      if (pNeg?.id === target) swingSide = -1;
+      else if (pPos?.id === target) swingSide = 1;
       else if (run.out !== 0) swingSide = (-run.out) as -1 | 1;
-      else swingSide = run.neg && run.neg.cat === "enclosed" ? -1 : 1;
+      else swingSide = pNeg && pNeg.cat === "enclosed" ? -1 : 1;
       if (op.swing === "out" && run.out !== 0 && target === "exterior") swingSide = run.out as -1 | 1;
       // a tiny WC or bath (under 36 sq ft): its door opens outward, as architects draw it,
       // so the leaf never sweeps over the WC or basin
-      const into = swingSide < 0 ? run.neg : run.pos;
-      const away = swingSide < 0 ? run.pos : run.neg;
+      const into = swingSide < 0 ? pNeg : pPos;
+      const away = swingSide < 0 ? pPos : pNeg;
       if (into && (into.type === "powder" || into.type === "bath") && into.rect.w * into.rect.d < 36 && away && away.cat === "enclosed" && !(away.type === "powder" || away.type === "bath"))
         swingSide = (-swingSide) as -1 | 1;
       const hingeAtA = u0 - run.a <= run.b - (u0 + w);
       const frameOff = run.out !== 0 && !isDoor ? run.out * run.t * 0.18 : run.out !== 0 && op.type === "sliding_door" ? run.out * run.t * 0.12 : 0;
-      const po: PlacedOpening = { op, run, u0, u1: u0 + w, bottom, top, floor, swingSide, hingeAtA, frameOff, isDoor };
+      const po: PlacedOpening = { op, run, u0, u1: u0 + w, bottom, top, floor, swingSide, hingeAtA, frameOff, isDoor, neg: pNeg, pos: pPos };
       run.openings.push(po);
       run.openings.sort((p, q) => p.u0 - q.u0);
       this.openings.push(po);
@@ -524,7 +535,8 @@ export class StructureModel {
         }
         for (const sp of spans)
           this.stairGuards.push({ level: lv, axis: run.axis, c: sp.s.side, a: sp.a, b: sp.b, ha: sp.s.pitch(sp.a), hb: sp.s.pitch(sp.b), op: o.op.id });
-        this.notes.add({ id: `asbuilt.stair_window_guard:${o.op.id}`, title: "Guard rail across a stair window", status: "warn", message: `A guard rail was added across ${label.charAt(0).toLowerCase() + label.slice(1)}: its glass comes within 3 ft of the stair beside it.`, element_ids: [o.op.id] });
+        // EN-F4: a rail the engine adds for safety is not a problem to report (status pass: never counted or listed)
+        this.notes.add({ id: `asbuilt.stair_window_guard:${o.op.id}`, title: "Guard rail across a stair window", status: "pass", message: `A guard rail was added across ${label.charAt(0).toLowerCase() + label.slice(1)}, beside the stair.`, element_ids: [o.op.id] });
       }
     }
   }
@@ -545,13 +557,13 @@ export class StructureModel {
   private checkTowerDoor(): void {
     const tw = this.tower;
     if (!tw) return;
-    const door = this.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.run.neg === tw.room || o.run.pos === tw.room));
+    const door = this.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.neg === tw.room || o.pos === tw.room));
     if (!door) {
       this.notes.add({ id: "asbuilt.roof_door_missing", title: "No roof door", status: "fail", message: "The stair tower has no door onto the roof.", element_ids: [tw.room.id] });
       return;
     }
     const run = door.run;
-    const into = run.neg === tw.room ? -1 : 1;
+    const into = door.neg === tw.room ? -1 : 1;
     const holes = this.stairs.filter((s) => s.holeLevel === door.op.level).flatMap((s) => s.holes);
     let bad = 0, n = 0;
     for (let i = 0; i <= 6; i++)
@@ -750,8 +762,23 @@ export class StructureModel {
   }
 
   openingsOfRoom(room: RoomM): PlacedOpening[] {
-    return this.openings.filter((o) => o.run.neg === room || o.run.pos === room);
+    return this.openings.filter((o) => o.neg === room || o.pos === room);
   }
+
+  /**
+   * EN-F2: the rooms just either side of a wall run at `along` ([neg side, pos side]). An interior run joins the same
+   * two rooms all along; an exterior run keeps its enclosed room but the outdoor room, porch or terrace on its open
+   * side can change along it, so that side is looked up at the point itself.
+   */
+  roomsAcross(run: WallRun, along: number): [RoomM | null, RoomM | null] {
+    if (run.kind !== "exterior" || run.out === 0) return [run.neg, run.pos];
+    const u = clamp(along, run.a + 0.05, run.b - 0.05);
+    const w = run.c + run.out * 0.05;
+    const other = run.axis === "x" ? this.plan.roomAt(run.level.id, u, w) : this.plan.roomAt(run.level.id, w, u);
+    const outside = !other ? null : other.cat !== "enclosed" ? other : run.out < 0 ? run.neg : run.pos;
+    return run.out < 0 ? [outside, run.pos] : [run.neg, outside];
+  }
+
 }
 
 function distToEdge(e: EdgeFeature, at: [number, number]): number {

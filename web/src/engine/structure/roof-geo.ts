@@ -41,7 +41,7 @@ export function computeSolarRect(ctx: BuildCtx): R | null {
   const roofRooms = plan.roomsOn(plan.roof.id).filter((r) => r.cat === "enclosed");
   const tank = tankRect(ctx);
   const tw = ctx.structureBuilt ? ctx.model.tower : null;
-  const door = tw ? ctx.model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.run.neg === tw.room || o.run.pos === tw.room)) : null;
+  const door = tw ? ctx.model.openings.find((o) => o.op.level === tw.room.level && o.isDoor && (o.neg === tw.room || o.pos === tw.room)) : null;
   const CELL = 1;
   const nx = Math.ceil(plan.plotW / CELL), ny = Math.ceil(plan.plotD / CELL);
   const ok = new Uint8Array(nx * ny);
@@ -57,7 +57,7 @@ export function computeSolarRect(ctx: BuildCtx): R | null {
       if (v && tank) v = !(x > tank.x - 1 && x < tank.x + tank.w + 1 && y > tank.y - 1 && y < tank.y + tank.d + 1);
       if (v && door) {
         const run = door.run;
-        const out = run.neg === tw!.room ? 1 : -1;
+        const out = door.neg === tw!.room ? 1 : -1;
         const c0 = run.c + out * run.t / 2, c1 = c0 + out * 4.5;
         const [x0, x1, y0, y1] = run.axis === "x" ? [door.u0 - 1.5, door.u1 + 1.5, Math.min(c0, c1), Math.max(c0, c1)] : [Math.min(c0, c1), Math.max(c0, c1), door.u0 - 1.5, door.u1 + 1.5];
         v = !(x > x0 && x < x1 && y > y0 && y < y1);
