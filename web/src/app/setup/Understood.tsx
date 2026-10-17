@@ -9,6 +9,7 @@ import { Check, Plus, X } from "lucide-react";
 import type { Brief, ChatMessage, Envelope } from "@contracts/api-types";
 import { FACING_LABEL, plotLabel } from "@/api/domain";
 import { cn, feetInches, num } from "@/app/lib/utils";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
 
 /**
  * The guarantees for the brief as it stands now: the authority's limits from the current envelope (so a plot edit
@@ -48,8 +49,8 @@ export function saidFacts(b: Brief | null): Fact[] {
   if (porch && !auto.has("porch")) out.push({ key: "porch", text: `${porch.split(":")[1] ?? 1}-car porch` });
   if (b.style && !auto.has("style")) out.push({ key: "style", text: b.style });
   if (b.budget && !auto.has("budget")) out.push({ key: "budget", text: `${b.budget.charAt(0).toUpperCase()}${b.budget.slice(1)} finishes` });
-  if (b.water_tank && !auto.has("water_tank")) out.push({ key: "tank", text: b.water_tank === "plastic" ? "Plastic tank" : "Concrete tank" });
-  if (b.solar && !auto.has("solar")) out.push({ key: "solar", text: b.solar === "none" ? "No solar" : b.solar === "panels" ? "Solar panels" : "Solar-ready roof" });
+  if (b.water_tank && !auto.has("water_tank")) out.push({ key: "tank", text: tankLabel(b.water_tank) ?? "Water tank" });
+  if (b.solar && !auto.has("solar")) out.push({ key: "solar", text: solarLabel(b.solar) ?? "Solar" });
   return out;
 }
 
@@ -70,8 +71,8 @@ export function assumptionField(line: string, b: Brief | null): string | null {
   if (/^\d+ baths$/.test(t)) return "bathrooms";
   if (t === "I'll place the rooms on each floor") return "floors";
   if (/^\d+-car porch$/.test(t)) return "porch";
-  if (t === "Concrete water tank in the stair tower" || t === "Blue plastic water tank") return "water_tank";
-  if (t === "Roof kept clear for solar" || t === "Solar frame on the roof" || t === "No solar for now") return "solar";
+  if (t === "Concrete water tank in the stair tower" || t === "Blue plastic water tank" || t === "Concrete tank in the stair tower" || t === "Blue plastic tank") return "water_tank";
+  if (t === "Roof kept clear for solar" || t === "Solar frame on the roof" || t === "Raised solar frame" || t === "No solar for now" || t === "No solar") return "solar";
   if (/^(Economy|Standard|Premium|Luxury) budget$/.test(t)) return "budget";
   if (b?.style && t.toLowerCase() === `${b.style} style`.toLowerCase()) return "style";
   const parts = t.toLowerCase().split(", ");

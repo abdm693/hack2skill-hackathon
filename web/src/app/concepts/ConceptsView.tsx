@@ -18,6 +18,8 @@ import { flow, useFlow, withNight, type ConceptSlot } from "@/app/design/flow";
 import { BreathingDot, Button, Chip, Dialog, EASE_OUT, IconButton, Segmented, Shimmer, notify, useGuardedClick, useHotkeys } from "@/app/design/kit";
 import { useViewNav } from "@/app/design/nav";
 import { labelConcepts, nextRootLetter, type Labelled } from "./names";
+import { sentenceCase } from "@/app/plan/model";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
 
 const REMIX_IDEAS = ["Darker glass", "More timber", "Add a jaali screen", "Brick instead of plaster"];
 
@@ -195,9 +197,9 @@ export function ConceptsView({ project, onProjectChange }: { project: Project; o
   const chips = [
     brief?.plot ? (brief.plot.corner ? "Corner" : "Mid-row") : null,
     brief?.facing ? `Faces ${FACING_LABEL[brief.facing]?.toLowerCase()}` : null,
-    brief?.solar === "panels" ? "Solar frame" : brief?.solar === "ready" ? "Solar-ready roof" : null,
-    brief?.water_tank === "concrete" ? "Tank in the stair tower" : brief?.water_tank === "plastic" ? "Plastic tank" : null,
-    brief?.style || null,
+    brief?.solar && brief.solar !== "none" ? solarLabel(brief.solar) : null,
+    tankLabel(brief?.water_tank),
+    brief?.style ? sentenceCase(brief.style) : null,
   ].filter(Boolean) as string[];
 
   const pendingRoots = run && !run.baseId ? run.slots.filter((s) => s.status !== "done") : [];

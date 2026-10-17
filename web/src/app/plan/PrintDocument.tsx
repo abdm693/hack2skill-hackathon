@@ -18,6 +18,7 @@ import { PlanDefs, PlanSheet, sheetBounds, stairAvoid } from "./FloorPlan";
 import { layoutLabels } from "./labels";
 import { area, coveredArea, isRoofLevel, levelName, levelsOf, roomsOn, SITE_TYPES, sentenceCase } from "./model";
 import { useProject } from "@/app/store/project";
+import { planSolarLabel, planTankLabel } from "@/app/lib/roof";
 import { categoryOf, firstSentence, isReview, reviewLine, statusLine, summarize, tallyLine, valueLine } from "./compliance";
 
 export type Paper = "a3" | "a4";
@@ -213,8 +214,8 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
     const t = plan.roof.water_tank;
     const s = plan.roof.solar;
     if (m) rows.unshift({ id: "mumty", name: `Stair tower (mumty), ${feetInches(m.height_ft)} high`, size: `${feetInches(m.rect.w)} × ${feetInches(m.rect.d)}`, area: m.rect.w * m.rect.d });
-    if (t) rows.push({ id: "tank", name: t.material === "plastic" ? "Water tank, plastic" : t.material === "concrete" ? "Water tank, concrete" : "Water tank", size: `${feetInches(t.rect.w)} × ${feetInches(t.rect.d)}`, area: t.rect.w * t.rect.d });
-    if (s?.rect) rows.push({ id: "solar", name: s.mode === "panels" ? "Solar panels" : "Kept clear for solar", size: `${feetInches(s.rect.w)} × ${feetInches(s.rect.d)}`, area: s.rect.w * s.rect.d });
+    if (t) rows.push({ id: "tank", name: planTankLabel(t.material), size: `${feetInches(t.rect.w)} × ${feetInches(t.rect.d)}`, area: t.rect.w * t.rect.d });
+    if (s?.rect) rows.push({ id: "solar", name: planSolarLabel(s.mode), size: `${feetInches(s.rect.w)} × ${feetInches(s.rect.d)}`, area: s.rect.w * s.rect.d });
   }
   const covered = roof && plan.roof.mumty ? plan.roof.mumty.rect.w * plan.roof.mumty.rect.d : coveredArea(plan, level.id);
   return (

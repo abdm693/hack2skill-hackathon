@@ -376,7 +376,12 @@ export function Dialog({
               </div>
               {description && <div className={cn("mt-1.5 text-body", tone === "light" ? "text-ink-2" : "text-hud-ink-2")}>{description}</div>}
               {children && <div className="mt-5">{children}</div>}
-              {actions && <div className="mt-6 flex flex-wrap items-center justify-end gap-2">{actions}</div>}
+              {/* The actions stay in view (a long dialog scrolls under them): Save is never below the fold. */}
+              {actions && (
+                <div className={cn("mt-6 flex flex-wrap items-center justify-end gap-2", tone === "light" && "sticky -bottom-6 z-10 -mx-6 -mb-6 mt-2 bg-surface px-6 pb-6 pt-4")}>
+                  {actions}
+                </div>
+              )}
             </div>
           </motion.div>
         </motion.div>

@@ -10,7 +10,8 @@ import { BUDGET_LABEL, FACING_LABEL, plotLabel, toMarla } from "@/api/domain";
 import { cn, feetInches, num } from "@/app/lib/utils";
 import { Button, Dialog, EASE_OUT, Segmented } from "@/app/design/kit";
 import { LEVEL_LABEL, defaultProgram, levelsFor, roomsLine, toFloors, bedroomsIn, bathsIn, type Program } from "./catalogue";
-import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate } from "./widgets";
+import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate, useCurrentReport } from "./widgets";
+import { solarLabel, tankLabel } from "@/app/lib/roof";
 
 export type SaveBrief = (patch: Partial<Brief>, decided: string[]) => void;
 
@@ -86,8 +87,8 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
           )}
         </Row>}
         {(b?.water_tank || b?.solar) && <Row label="Roof" empty={!b?.water_tank && !b?.solar} assumed={auto.has("water_tank") || auto.has("solar")} onEdit={() => setEditing("roof")}>
-          {b?.water_tank && <span>{b.water_tank === "plastic" ? "Plastic tank" : "Concrete tank in the stair tower"}</span>}
-          {b?.solar && <span className="text-ink-2">{b.solar === "ready" ? "Clear for solar" : b.solar === "panels" ? "Solar frame" : "No solar"}</span>}
+          {b?.water_tank && <span>{tankLabel(b.water_tank)}</span>}
+          {b?.solar && <span className="text-ink-2">{solarLabel(b.solar)}</span>}
         </Row>}
         {b?.style && <Row label="Style" empty={!b?.style} assumed={auto.has("style")} onEdit={() => setEditing("style")}>
           {b?.style && <span>{b.style}</span>}
@@ -389,6 +390,7 @@ function FloorsDialog({ open, brief, envelope, onClose, save }: { open: boolean;
 }
 
 function RoofDialog({ open, brief, envelope, onClose, save }: { open: boolean; brief: Brief; envelope: Envelope | null; onClose: () => void; save: SaveBrief }) {
+  const report = useCurrentReport();
   const [tank, setTank] = useState<"plastic" | "concrete">(brief.water_tank ?? "concrete");
   const [solar, setSolar] = useState<"none" | "ready" | "panels">(brief.solar ?? "ready");
   useEffect(() => {
@@ -419,7 +421,7 @@ function RoofDialog({ open, brief, envelope, onClose, save }: { open: boolean; b
         </>
       }
     >
-      <RoofEditor tank={tank} solar={solar} panels={solarEstimate(envelope, brief)} onChange={(t, s) => { setTank(t); setSolar(s); }} />
+      <RoofEditor tank={tank} solar={solar} panels={solarEstimate(envelope, brief, report)} onChange={(t, s) => { setTank(t); setSolar(s); }} />
     </Dialog>
   );
 }

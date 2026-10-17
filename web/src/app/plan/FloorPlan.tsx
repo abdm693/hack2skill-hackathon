@@ -14,6 +14,7 @@ import { cn, feetInches, num, sizeLabel } from "@/app/lib/utils";
 import { EXT_WALL, deriveWalls, placeOpenings, stairDrawing, wallPieces, type PlacedOpening, type StairDrawing } from "./geometry";
 import { layoutLabels, measure, type Box, type Label } from "./labels";
 import { CATEGORY, FILL, OPEN_TYPES, SITE_TYPES, area, isRoofLevel, levelsOf, opensTo, sentenceCase } from "./model";
+import { planSolarLabel, planTankLabel } from "@/app/lib/roof";
 
 export type HighlightTone = "accent" | "fail" | "warn" | "pass";
 
@@ -704,12 +705,12 @@ function RoofLabels({ plan, Y, px, W, D }: { plan: BuildingPlan; Y: (y: number) 
   const solids: R[] = [...(m ? [m.rect] : []), ...(tank ? [tank.rect] : [])];
   if (m) place("mumty", m.rect, "Stair tower", `${feetInches(m.height_ft)} high`, false, solids.filter((r) => r !== m.rect));
   if (tank) {
-    const name = tank.material === "plastic" ? "Plastic tank" : tank.material === "concrete" ? "Concrete tank" : "Water tank";
+    const name = planTankLabel(tank.material);
     const onTower = !!(m && inside(tank.rect, m.rect));
     // A tank on the stair tower's roof is labelled beside the tower (its own box sits over the flights).
     place("tank", tank.rect, onTower ? `${name} above` : name, undefined, !onTower, [...(m ? [m.rect] : []), ...stairsUp].filter((r) => r !== tank.rect), onTower && m ? m.rect : tank.rect);
   }
-  if (solar?.rect) place("solar", solar.rect, solar.mode === "panels" ? "Solar panels" : "Kept clear for solar", `${num(solar.rect.w * solar.rect.d)} sq ft`, true, solids);
+  if (solar?.rect) place("solar", solar.rect, planSolarLabel(solar.mode), `${num(solar.rect.w * solar.rect.d)} sq ft`, true, solids);
   return <g>{out}</g>;
 }
 
