@@ -14,7 +14,7 @@ import { createSDK, lenientThree } from "./sdk";
 import { addSun, sunDirection } from "./lights";
 import { floorBelow } from "./facade";
 import { ensurePaths } from "./furniture/paths";
-import { ensureDefining } from "./furniture/place";
+import { ensureCars, ensureDefining } from "./furniture/place";
 import { parking } from "./furniture/parking";
 import { ITEMS } from "./furniture/items";
 import { solarRect } from "./furniture/zones";
@@ -147,7 +147,9 @@ export async function buildHouseImpl(
     for (const s of sections) n += (s.body.match(carRe) ?? []).length;
     const porches = plan.rooms.filter((r) => r.lv.i === 0 && (r.type === "porch" || r.type === "garage"));
     const named = porches.reduce((a, r) => a + (Number(/(\d)\s*-?\s*car/i.exec(r.name)?.[1]) || 0), 0);
-    ctx.carsWanted = Math.max(n, named, porches.length ? 1 : 0);
+    // EN2-04: the plan's own count: the porch's name ("Car porch (2 cars)"), else "a 2-car porch" in its notes
+    ctx.carsPlan = porches.length ? named || carsInNotes(plan.plan.notes) : 0;
+    ctx.carsWanted = Math.max(n, ctx.carsPlan, porches.length ? 1 : 0);
   }
 
   // structure first even if Argon put it later; it must exist for everything else
@@ -159,6 +161,8 @@ export async function buildHouseImpl(
     await runSection(s.name, s.layer, s.body);
   }
   if (!ctx.structureBuilt) await runSection("structure_auto", "structure", () => buildStructure(ctx, {}));
+  // EN2-04: as many cars as the plan's porch asks for (into free bays; a car that does not fit is reported)
+  if (ctx.structureBuilt && ctx.carsParked < ctx.carsPlan && ctx.carsAsked < ctx.carsPlan) await runSection("park_cars", "furniture", () => ensureCars(ctx));
   // EN-03: every bedroom has its bed, every bath its WC, every kitchen its fridge and hob, every dressing its wardrobe
   if (ctx.structureBuilt) await ensureDefining(ctx, (fn) => runSection("furnish_essentials", "furniture", fn));
   let hasSun = false;
@@ -362,13 +366,27 @@ function roofChecks(ctx: BuildCtx, objects: AsBuiltSummary["objects"]): void {
     const name = `${o.kind ?? ""} ${o.id}`;
     const inSolar = !!sol && x0 < sol.x + sol.w && x1 > sol.x && y0 < sol.y + sol.d && y1 > sol.y;
     if (inSolar)
-      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${cap1((o.kind ?? o.id).split(":").pop()!.replace(/_/g, " "))} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
+      ctx.notes.add({ id: `asbuilt.roof_solar_blocked:${o.id}`, title: "Rooftop object in the solar area", status: "warn", message: `${rooftopName(o.kind)} stands in the roof area kept clear for solar panels.`, element_ids: [o.id] });
     else if (deco.test(name))
       ctx.notes.add({ id: `asbuilt.roof_decoration:${o.id}`, title: "Decorative roof structure", status: "warn", message: `A decorative ${(name.match(deco)?.[0] ?? "structure").toLowerCase()} stands on the roof; keep the roof clear unless the brief asks for it.`, element_ids: [o.id] });
   }
 }
 
 const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+/** EN2-05: "A pergola", "Outdoor chair" from an object's kind, never its id */
+function rooftopName(kind?: string): string {
+  const k = (kind ?? "").split(":").pop()?.replace(/_/g, " ").trim() ?? "";
+  return !k || ["custom", "facade", "structure", "group", "mesh", "obj"].includes(k) ? "A rooftop object" : cap1(k);
+}
+
+/** "a 16x18 ft 2-car porch", "a two-car porch": the car count a plan's notes give its porch (0 when they do not). */
+function carsInNotes(notes: unknown): number {
+  const text = Array.isArray(notes) ? notes.filter((x) => typeof x === "string").join(" ") : typeof notes === "string" ? notes : "";
+  const m = /\b(\d|one|two|three|four|single|double)[\s-]*cars?\s+(?:car\s+)?(?:porch|garage|parking)/i.exec(text);
+  if (!m) return 0;
+  const W: Record<string, number> = { one: 1, single: 1, two: 2, double: 2, three: 3, four: 4 };
+  return Number(m[1]) || W[m[1].toLowerCase()] || 0;
+}
 
 /** EN-07: one line per fact across the structure and furnishing logs (same id or same message → merged). */
 function mergeNotes(list: EngineNote[]): EngineNote[] {

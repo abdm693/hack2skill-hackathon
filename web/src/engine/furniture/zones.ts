@@ -24,6 +24,9 @@ export interface Zone {
   kind: "door" | "gate" | "stair" | "roof_door" | "tank" | "solar" | "window" | "walkway" | "bay";
   /** windows: sill height above the room floor (the zone applies to items that rise 0.5 ft above the sill) */
   sill?: number;
+  /** windows: the opening type ("window", "ventilator", ...) and its width (ft) */
+  op?: string;
+  width?: number;
   /** the part that may never be touched, used when the full clearance leaves no room (the door leaf's sweep and
    *  2 ft in front of every doorway, the stair itself, its landings and 0.5 ft around the stairwell) */
   core?: { x0: number; x1: number; y0: number; y1: number };
@@ -70,7 +73,8 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
       const c1 = c0 + into * 2.0;
       const a = o.u0 - 0.3, b = o.u1 + 0.3;
       const sill = o.bottom - room.floorH;
-      out.push(run.axis === "x" ? { x0: a, x1: b, y0: Math.min(c0, c1), y1: Math.max(c0, c1), kind: "window", sill, id: o.op.id } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: a, y1: b, kind: "window", sill, id: o.op.id });
+      const meta = { kind: "window" as const, sill, id: o.op.id, op: o.op.type, width: o.u1 - o.u0 };
+      out.push(run.axis === "x" ? { x0: a, x1: b, y0: Math.min(c0, c1), y1: Math.max(c0, c1), ...meta } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: a, y1: b, ...meta });
     }
   }
   // open-plan gates
@@ -141,6 +145,34 @@ function computeZones(ctx: BuildCtx, room: RoomM): Zone[] {
 }
 
 type Box4 = { x0: number; x1: number; y0: number; y1: number };
+
+/** EN2-02: pieces that adapt to a window behind them (counters cut their wall cabinets, baths sit under ventilators) */
+export const WINDOW_EXEMPT = new Set<string>(["kitchen_counter", "vanity", "shower", "wc", "bathtub", "sink_kitchen", "washing_machine", "curtains"]);
+/** habitable rooms (LDA: rooms for living and sleeping): a tall piece never stands across their window as a last
+ *  resort; a kitchen (its fridge), dressing, store or bath may still lose one */
+export const HABITABLE = new Set<string>(["master_bedroom", "bedroom", "guest_bedroom", "servant", "lounge", "drawing", "dining", "study", "prayer"]);
+/** The height (ft above the room floor) a piece blocks a window at: a TV unit counts with its TV. */
+export const blockHeight = (type: string, h: number): number => (type === "tv_unit" ? 5.6 : h);
+/** A tall piece (a wardrobe, a bookshelf, a fridge, a TV unit with its TV, a floor plant): never across a habitable
+ *  room's only window. Lower pieces (a bed's headboard, a dresser, a sofa) may still sit under one as a last resort. */
+export const TALL_H = 4.5;
+export const isTall = (type: string, h: number): boolean => !WINDOW_EXEMPT.has(type) && blockHeight(type, h) >= TALL_H;
+/** Does a piece of this type and height stand in a window's way when it is in front of it? */
+export function blocksWindow(type: string, h: number, z: Zone): boolean {
+  return z.kind === "window" && !WINDOW_EXEMPT.has(type) && blockHeight(type, h) > (z.sill ?? 3) + 0.5;
+}
+/**
+ * The windows of a room a tall piece may still stand in front of as a last resort: in a room people live in, only
+ * ventilators and the smallest window when there are two or more; elsewhere (dressing, store, bath) any.
+ */
+export function spareWindows(ctx: BuildCtx, room: RoomM): Set<string> | "all" {
+  if (!HABITABLE.has(room.type)) return "all";
+  const ws = keepOut(ctx, room).filter((z) => z.kind === "window");
+  const out = new Set<string>(ws.filter((z) => z.op === "ventilator").map((z) => z.id ?? ""));
+  const real = ws.filter((z) => z.op !== "ventilator").sort((a, b) => (a.width ?? 0) - (b.width ?? 0));
+  if (real.length >= 2 && real[0].id) out.add(real[0].id);
+  return out;
+}
 
 /**
  * EN-02: the clear zone a door, arch or sliding door keeps on one side (`into` = -1 the run's neg side, +1 its pos

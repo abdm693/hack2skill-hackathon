@@ -130,6 +130,10 @@ class Layout {
     return side === "front" || side === "back" ? this.D : this.W;
   }
 
+  /** a piece of this type already stands in the room */
+  has(type: string): boolean {
+    return this.ctx.items.some((it) => it.room === this.room.id && it.type === type);
+  }
   put(type: FurnitureType, o: Partial<FurnishOptions>): ReturnType<typeof furnishImpl> {
     return furnishImpl(this.ctx, type, { room: this.room.id, ...o } as FurnishOptions, this.style);
   }
@@ -467,6 +471,8 @@ class Layout {
       // shower in the corner of the far wall, away from the door
       const big = this.area >= 70 && this.room.rect.w >= 7 && this.room.rect.d >= 8 && this.room.id.includes("master");
       if (big) this.against("bathtub", far, fs[1] - 2.8);
+      // (a small bath takes a 2.6 ft tray, so its WC and basin still fit)
+      else if (this.area < 50) this.against("shower", far, fs[1] - 1.35, { size: { w_ft: 2.6, d_ft: 2.6 } });
       else this.against("shower", far, fs[1] - 1.55, { size: { w_ft: Math.min(3.2, fs[1] - fs[0]), d_ft: Math.min(3.2, this.depthFrom(far) * 0.45) } });
     }
     const sides = SIDES.filter((s) => s !== far).sort((p, q) => (q === OPP[far] ? 0 : 1) - (p === OPP[far] ? 0 : 1));
@@ -487,6 +493,17 @@ class Layout {
       if (vanityDone && wcDone) break;
     }
     if (!wcDone) this.put("wc", { at: this.center() });
+    // EN2-03: every wet room has a basin (a 1.5 × 1.2 ft wall-hung one where a vanity does not fit) and every bath a
+    // shower (a 2.6 ft tray on the far wall where the corner shower did not fit)
+    if (!this.has("vanity")) {
+      const c = SIDES.flatMap((x) => this.free(x, 3, 0.3).map((sp) => ({ x, sp }))).filter((q) => q.sp[1] - q.sp[0] >= 1.7).sort((a, b) => (a.x === far ? 1 : 0) - (b.x === far ? 1 : 0))[0];
+      this.against("vanity", c?.x ?? (this.entry && this.entry !== far ? OPP[far] : far), c ? (c.sp[0] + c.sp[1]) / 2 : (this.sides[far].lo + this.sides[far].hi) / 2, { size: { w_ft: 1.5, d_ft: 1.2 } });
+    }
+    if (!powder && !this.has("shower") && !this.has("bathtub")) {
+      const sp = this.free(far, 7, 0.3)[0];
+      const u = sp ? Math.max(sp[0] + 1.35, sp[1] - 1.35) : (this.sides[far].lo + this.sides[far].hi) / 2;
+      this.against("shower", far, u, { size: { w_ft: 2.6, d_ft: 2.6 } });
+    }
     if (!powder) {
       const tr = SIDES.flatMap((s) => this.free(s, 4.5, 0.3).map((sp) => ({ s, sp }))).find((c) => c.sp[1] - c.sp[0] > 2.2);
       if (tr) this.against("towel_rail", tr.s, tr.sp[0] + 1.1);
@@ -496,6 +513,11 @@ class Layout {
   dressing(): void {
     const ws = SIDES.flatMap((s) => this.free(s, 7.6, 0.3).map((sp) => ({ s, sp }))).filter((c) => c.sp[1] - c.sp[0] >= 2.5);
     for (const c of ws.slice(0, 2)) this.against("wardrobe", c.s, (c.sp[0] + c.sp[1]) / 2, { size: { w_ft: c.sp[1] - c.sp[0] - 0.1, d_ft: 1.9 } });
+    if (!this.has("wardrobe")) {
+      // EN2-03: a 1.6 ft deep hanging unit along the longest free wall (a dressing may cover its window)
+      const c = SIDES.flatMap((s) => this.free(s, 0.5, 0.3).map((sp) => ({ s, sp }))).filter((q) => q.sp[1] - q.sp[0] >= 2).sort((a, b) => b.sp[1] - b.sp[0] - (a.sp[1] - a.sp[0]))[0];
+      if (c) this.against("wardrobe", c.s, (c.sp[0] + c.sp[1]) / 2, { size: { w_ft: c.sp[1] - c.sp[0] - 0.1, d_ft: 1.6 } });
+    }
     if (this.W > 5 && this.D > 5) this.put("ottoman", { at: this.center() });
   }
 

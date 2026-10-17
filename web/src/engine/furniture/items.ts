@@ -740,9 +740,14 @@ function wc(b: ItemBuild): void {
 function vanity(b: ItemBuild): void {
   const { k, w, d, m } = b;
   const y0 = 0.36, y1 = 0.82;
-  k.box(m.woodDark, 0, (y0 + y1) / 2, -0.01, w, y1 - y0, d - 0.03);
-  const fr = fronts(k, m.main, -w / 2, w / 2, y0, y1, d / 2 - 0.025, Math.max(1, Math.round(w / 0.5)), 1, 0.003);
-  for (const f of fr) k.box(m.metal, f.cx, f.cy + f.h / 2 - 0.02, d / 2 + 0.003, f.w * 0.5, 0.01, 0.01);
+  if (w < 0.58) {
+    // EN2-03: a narrow wall-hung basin (no cabinet): a slim counter on two brackets, the bowl, the mirror
+    for (const s of [-1, 1]) k.box(m.metal, s * (w / 2 - 0.04), y1 - 0.08, -d / 2 + 0.12, 0.02, 0.14, 0.22);
+  } else {
+    k.box(m.woodDark, 0, (y0 + y1) / 2, -0.01, w, y1 - y0, d - 0.03);
+    const fr = fronts(k, m.main, -w / 2, w / 2, y0, y1, d / 2 - 0.025, Math.max(1, Math.round(w / 0.5)), 1, 0.003);
+    for (const f of fr) k.box(m.metal, f.cx, f.cy + f.h / 2 - 0.02, d / 2 + 0.003, f.w * 0.5, 0.01, 0.01);
+  }
   k.box(m.M.get("marble_white"), 0, y1 + 0.015, 0, w + 0.01, 0.03, d);
   const bx = 0;
   k.geo(m.ceramic, lathe("vessel", [[0, 0], [0.12, 0], [0.2, 0.06], [0.22, 0.14], [0.205, 0.14], [0.18, 0.07], [0.1, 0.02], [0, 0.02]], 36), mat4(bx, y1 + 0.03, 0.02));
@@ -757,6 +762,18 @@ function vanity(b: ItemBuild): void {
 
 function shower(b: ItemBuild): void {
   const { k, w, d, m } = b;
+  if (b.variant.includes("wet")) {
+    // EN2-03: a wet-area shower (a small bath's floor is the shower floor): rain head, arm and mixer on the wall, a
+    // hand shower, and a drain in the floor in front of them
+    k.box(m.metal, 0, 2.15, -d / 2 + 0.2, 0.025, 0.025, 0.4);
+    k.rbox(m.metal, 0, 2.12, -d / 2 + 0.36, 0.25, 0.012, 0.25, 0.004, 1);
+    k.cyl(m.metal, 0, 1.1, -d / 2 + 0.01, 0.06, 0.02, 20, PI / 2);
+    k.box(m.metal, 0.03, 1.1, -d / 2 + 0.04, 0.08, 0.015, 0.015);
+    k.cyl(m.metal, -0.25, 1.05, -d / 2 + 0.02, 0.012, 0.6, 10);
+    k.box(m.metal, 0, 0.003, -d / 2 + 0.45, 0.14, 0.006, 0.14);
+    k.box(m.dark, 0, 0.0065, -d / 2 + 0.45, 0.1, 0.002, 0.1);
+    return;
+  }
   const H = 2.0;
   k.rbox(m.ceramic, 0, 0.025, 0, w, 0.05, d, 0.01, 2);
   k.box(m.dark, 0, 0.051, 0, 0.1, 0.002, 0.1);

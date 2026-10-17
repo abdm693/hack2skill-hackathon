@@ -98,13 +98,23 @@ export function buildDropGuards(ctx: BuildCtx, type: RailType, m: RailMats): voi
     const [x0, y0, x1, y1] = e.axis === "x" ? [e.a - 0.1, c, e.b + 0.1, c] : [c, e.a - 0.1, c, e.b + 0.1];
     railing(k.kit, k.glass, type, x0, y0, lv.elev, x1, y1, lv.elev, GUARD_H, m, { handrailWood: true });
     ctx.guards.push({ level: e.level, axis: e.axis, c: e.c, a: e.a - 0.1, b: e.b + 0.1, h: GUARD_H });
+    void n;
+  });
+  // EN2-05: one note per floor, however many edges were guarded
+  for (const lvId of new Set(edges.map((e) => e.level))) {
+    const es = edges.filter((e) => e.level === lvId);
+    const lv = ctx.plan.levelById.get(lvId)!;
+    const len = es.reduce((a, e) => a + e.b - e.a, 0), drop = Math.max(...es.map((e) => e.drop));
     ctx.notes.add({
-      id: `asbuilt.guard_added:${e.level}:${n + 1}`,
+      id: `asbuilt.guard_added:${lvId}`,
       title: "Guard rail added",
       status: "warn",
-      message: `A ${(e.b - e.a).toFixed(1)} ft edge on the ${lv.name} with a ${e.drop.toFixed(1)} ft drop had no wall or railing; the engine added a 3.5 ft guard.`,
+      message:
+        es.length === 1
+          ? `A ${len.toFixed(1)} ft edge on the ${lv.name} with a ${drop.toFixed(1)} ft drop had no wall or railing; the engine added a 3.5 ft guard.`
+          : `${es.length} edges on the ${lv.name} (${len.toFixed(0)} ft in all, with drops of up to ${drop.toFixed(1)} ft) had no wall or railing; the engine added 3.5 ft guards.`,
     });
-  });
+  }
   for (const [lv, k] of byLevel) {
     if (!k.kit.empty) {
       const g = k.kit.build();
