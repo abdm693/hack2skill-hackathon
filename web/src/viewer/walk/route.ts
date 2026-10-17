@@ -9,8 +9,8 @@
 import * as THREE from "three";
 import type { BuildingPlan, Level, Opening, Room } from "@contracts/plan";
 import { FT, clamp, zOf } from "../core/units";
-import { NavGrid } from "./navgrid";
-import { EYE, type WalkController } from "./WalkController";
+import { BLOCK, NavGrid, type SolidClassifier } from "./navgrid";
+import { EYE, STEP_UP, type WalkController } from "./WalkController";
 
 export type NavTarget =
   | { kind: "room"; room: Room }
@@ -41,6 +41,15 @@ export interface RoutePlan {
   reason?: string;
 }
 
+/**
+ * Why no walk reaches a room: planting (a landscape solid) or furniture seals it off, something else solid does
+ * (a parked car, the water tank), or no door joins it (in the plan, or in the built house).
+ */
+export type BlockCause = "planting" | "furniture" | "other" | "nodoor";
+
+/** Outdoor areas that are a hole in an upper floor (a light court seen from the floor above), not a floor. */
+const VOID_TYPES = new Set(["open_space", "courtyard", "lawn", "driveway"]);
+
 interface StairPath {
   id: string;
   from: string;
@@ -55,7 +64,6 @@ const LOOK_PITCH = -0.06;
 /** Stairs are glided at well under half the floor speed (a quick glide down a flight is dizzying). */
 const STAIR_WEIGHT = 2.8;
 
-const _v = new THREE.Vector3();
 
 /** Low/high end centres of an invisible stair ramp (world), from its extreme vertices. */
 function rampEnds(m: THREE.Mesh) {
@@ -95,6 +103,10 @@ export class Navigator {
    * collider). Defaults to the walk collider.
    */
   sight: ((from: THREE.Vector3, dir: THREE.Vector3, max: number) => number) | null = null;
+  /** Tells planting from furniture where a solid blocks a grid cell (set by the viewer, which knows the elements). */
+  classify: SolidClassifier | null = null;
+  /** Where every walk starts: the main door approach (feet, world). The house's own circulation is what joins it. */
+  entry: THREE.Vector3 | null = null;
   private colliders: THREE.Mesh[] = [];
 
   constructor(
@@ -134,7 +146,7 @@ export class Navigator {
       g = new NavGrid(levelId, lvl.elevation_ft * FT, { x0: -0.4, x1: W * FT + 0.4, z0: zOf(D + 1), z1: zOf(y0) }, 0.2, lowest ? [-0.75, 0.4] : [-0.35, 0.35]);
       this.grids.set(levelId, g);
     }
-    g.build(this.walk, budgetMs);
+    g.build(this.walk, budgetMs, this.classify);
     return g.ready ? g : null;
   }
 
@@ -436,21 +448,7 @@ export class Navigator {
     const centre = new THREE.Vector3((rect.x0 + rect.x1) / 2, floorY, (rect.z0 + rect.z1) / 2);
     const g = this.grid(room.level);
     const inside = (p: THREE.Vector3) => p.x >= rect.x0 && p.x <= rect.x1 && p.z >= rect.z0 && p.z <= rect.z1 && Math.abs(p.y - floorY) < 0.8;
-    const faceFrom = (p: THREE.Vector3) => {
-      const d = _v.subVectors(centre, p);
-      d.y = 0;
-      if (d.length() > 1.0) return Math.atan2(-d.x, -d.z);
-      // standing near the middle: look at the farthest corner
-      let best = 0, bd = -1;
-      for (const [x, z] of [[rect.x0, rect.z0], [rect.x1, rect.z0], [rect.x0, rect.z1], [rect.x1, rect.z1]]) {
-        const dd = Math.hypot(x - p.x, z - p.z);
-        if (dd > bd) {
-          bd = dd;
-          best = Math.atan2(-(x - p.x), -(z - p.z));
-        }
-      }
-      return best;
-    };
+    const faceFrom = (p: THREE.Vector3) => faceInto(rect, p);
     if (g) {
       // the reachable free cell nearest the room's middle, preferring open floor (furniture can wall part of a
       // room off: then you stop where you can stand and still see the room)
@@ -497,12 +495,171 @@ export class Navigator {
         return { pts, end, yaw: faceFrom(end), rough: false };
       }
     }
-    // fallback: the plan's doors
-    const spot = this.walk.findFreeSpot(centre, floorY, 2.5) ?? centre;
+    // fallback: the plan's doors, to a spot inside the room (never one through its wall in the room next door)
+    const spot = this.roomStance(room)?.end ?? centre;
     const rough = roomGraphPath(this.plan, lvl, from, spot);
     if (!rough) return null;
     const pts = roundCorners(dedupe(rough), null);
     return { pts, end: pts[pts.length - 1].clone(), yaw: faceFrom(spot), rough: true };
+  }
+
+  /**
+   * A room you can't stand in: an outdoor area on an upper floor (the light court seen from above), or a room whose
+   * floor isn't there in the built house (open to the floor below).
+   */
+  isVoid(room: Room): boolean {
+    const lvl = this.plan.levels.find((l) => l.id === room.level);
+    if (!lvl) return false;
+    const lowest = this.levels[0];
+    if (lowest && lvl.index > lowest.index && VOID_TYPES.has(room.type)) return true;
+    // a stair hall is mostly stairwell: never call it a void
+    const g = this.walk.bvh && room.type !== "stair" ? this.grid(room.level) : null;
+    if (!g) return false;
+    const rect = roomWorldRect(room, Math.min(0.3, (Math.min(room.rect.w, room.rect.d) * FT) / 4));
+    let cells = 0, floor = 0;
+    for (let i = 0; i < g.free.length; i++) {
+      if (!g.inRect(i, rect)) continue;
+      cells++;
+      if (Number.isFinite(g.h[i])) floor++;
+    }
+    return cells > 4 && floor < cells * 0.2;
+  }
+
+  /**
+   * Where to stand when brought straight into a room (a crossfade): the free spot inside the room's rect nearest its
+   * middle with the most room around it, looking into the room. Null when nothing inside fits you.
+   */
+  roomStance(room: Room): { end: THREE.Vector3; yaw: number } | null {
+    const lvl = this.plan.levels.find((l) => l.id === room.level);
+    if (!lvl) return null;
+    const floorY = lvl.elevation_ft * FT;
+    const rect = roomWorldRect(room);
+    const inner = roomWorldRect(room, Math.min(0.35, (Math.min(room.rect.w, room.rect.d) * FT) / 4));
+    const centre = new THREE.Vector3((rect.x0 + rect.x1) / 2, floorY, (rect.z0 + rect.z1) / 2);
+    const within = (p: THREE.Vector3) => p.x >= rect.x0 && p.x <= rect.x1 && p.z >= rect.z0 && p.z <= rect.z1;
+    const fits = (p: THREE.Vector3) => within(p) && !this.walk.overlaps(p);
+    const g = this.walk.bvh ? this.grid(room.level) : null;
+    if (g) {
+      for (const area of [inner, rect]) {
+        const cand: [number, number][] = [];
+        for (let i = 0; i < g.free.length; i++) {
+          if (!g.free[i] || !g.inRect(i, area) || Math.abs(g.h[i] - floorY) > 0.8) continue;
+          cand.push([Math.hypot(g.cx(i) - centre.x, g.cz(i) - centre.z) - Math.min(g.clr[i], 3) * 0.35, i]);
+        }
+        cand.sort((a, b) => a[0] - b[0]);
+        for (const [, i] of cand.slice(0, 60)) {
+          const p = g.center(i);
+          if (fits(p)) return { end: p, yaw: faceInto(rect, p) };
+        }
+      }
+    }
+    // no grid (or nothing on it): spiral out from the middle, on whatever floor the room has, inside its walls
+    const top = floorY + STEP_UP + 0.02, bottom = floorY - 0.8;
+    const p = new THREE.Vector3();
+    const maxR = Math.hypot(rect.x1 - rect.x0, rect.z1 - rect.z0) / 2;
+    for (let r = 0; r <= maxR + 1e-4; r += 0.2) {
+      const n = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 0.3);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        p.set(centre.x + Math.cos(a) * r, floorY, centre.z + Math.sin(a) * r);
+        if (!within(p)) continue;
+        const gy = this.walk.groundAt(p, top, bottom);
+        if (gy === null) continue;
+        p.y = gy;
+        if (fits(p)) return { end: p.clone(), yaw: faceInto(rect, p) };
+      }
+    }
+    return null;
+  }
+
+  /** Free cells on a level that the house's circulation joins: the main door approach and the stair ends. */
+  private anchorCells(level: Level, g: NavGrid): number[] {
+    const out: number[] = [];
+    if (this.entry && this.levelAt(this.entry.y).id === level.id) {
+      const c = this.nearestReachable(g, this.entry, 2.0);
+      if (c >= 0) out.push(c);
+    }
+    for (const s of this.stairPaths()) {
+      const ends: [string, THREE.Vector3][] = [
+        [s.from, s.pts[0]],
+        [s.to, s.pts[s.pts.length - 1]],
+      ];
+      for (const [lv, p] of ends) {
+        if (lv !== level.id || !p) continue;
+        const c = this.nearestReachable(g, p, 1.2);
+        if (c >= 0) out.push(c);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * When `from` stands in a pocket the house's circulation doesn't reach (you were brought straight into a yard that
+   * planting seals off): the nearest connected spot to walk on from. Null when `from` is connected, or unknown.
+   */
+  escape(from: THREE.Vector3): THREE.Vector3 | null {
+    const lvl = this.levelAt(from.y);
+    const g = this.grid(lvl.id);
+    if (!g) return null;
+    const comp = g.components();
+    const main = new Set(this.anchorCells(lvl, g).map((c) => comp[c]).filter((c) => c >= 0));
+    if (!main.size) return null;
+    const s = this.nearestReachable(g, from);
+    if (s >= 0 && main.has(comp[s])) return null;
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < g.free.length; i++) {
+      if (!g.free[i] || g.clr[i] < 2 || !main.has(comp[i]) || Math.abs(g.h[i] - from.y) > 0.6) continue;
+      const d = Math.hypot(g.cx(i) - from.x, g.cz(i) - from.z);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    if (best < 0) return null;
+    const p = g.center(best);
+    if (!this.walk.overlaps(p)) return p;
+    const q = this.walk.findFreeSpot(p, p.y, 0.4);
+    return q && comp[g.cellAt(q.x, q.z)] === comp[best] ? q : p;
+  }
+
+  /**
+   * Why the grid finds no walk from `from` into `room`. "nodoor" when the plan joins the room to nothing you can
+   * reach (or, built, its door isn't there); otherwise the solids that seal it off: the room comes within reach once
+   * the planting (then the furniture, then anything solid) is taken away.
+   */
+  blockCause(room: Room, from: THREE.Vector3): BlockCause {
+    const lvl = this.plan.levels.find((l) => l.id === room.level);
+    if (!lvl) return "nodoor";
+    const fromLvl = this.levelAt(from.y);
+    // the plan: a door (or an open edge, or a yard) joins the room to where you can come from on its floor
+    const { at, adj } = planGraph(this.plan, lvl);
+    const lowest = this.levels[0]?.id === lvl.id;
+    const startRooms: string[] = [];
+    if (fromLvl.id === lvl.id) startRooms.push(at(from));
+    for (const s of this.stairPaths()) {
+      if (s.from === lvl.id && s.pts[0]) startRooms.push(at(s.pts[0]));
+      if (s.to === lvl.id && s.pts.length) startRooms.push(at(s.pts[s.pts.length - 1]));
+    }
+    if (lowest) startRooms.push("exterior");
+    if (this.entry && this.levelAt(this.entry.y).id === lvl.id) startRooms.push(at(this.entry));
+    if (!planBfs(adj, startRooms).has(room.id)) return "nodoor";
+    // the built house: take the solids away kind by kind
+    const g = this.grid(lvl.id);
+    if (!g) return "other";
+    const starts = fromLvl.id === lvl.id ? [this.nearestReachable(g, from)].filter((c) => c >= 0) : this.anchorCells(lvl, g);
+    if (!starts.length) return "other";
+    const rect = roomWorldRect(room);
+    const floorY = lvl.elevation_ft * FT;
+    const reaches = (allow: number) => {
+      const seen = g.reach(starts, allow);
+      for (let i = 0; i < seen.length; i++) if (seen[i] && g.inRect(i, rect) && Math.abs(g.h[i] - floorY) < 0.8) return true;
+      return false;
+    };
+    if (reaches(BLOCK.planting)) return "planting";
+    if (reaches(BLOCK.furniture)) return "furniture";
+    if (reaches(BLOCK.planting | BLOCK.furniture)) return "furniture";
+    if (reaches(BLOCK.planting | BLOCK.furniture | BLOCK.other)) return "other";
+    return "nodoor";
   }
 
   /**
@@ -569,6 +726,22 @@ export class Navigator {
 
 const angleWrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
+/** Which way to look from `p` into a room (world rect): toward its middle, or its farthest corner from near the middle. */
+function faceInto(rect: { x0: number; x1: number; z0: number; z1: number }, p: THREE.Vector3): number {
+  const cx = (rect.x0 + rect.x1) / 2, cz = (rect.z0 + rect.z1) / 2;
+  const dx = cx - p.x, dz = cz - p.z;
+  if (Math.hypot(dx, dz) > 1.0) return Math.atan2(-dx, -dz);
+  let best = 0, bd = -1;
+  for (const [x, z] of [[rect.x0, rect.z0], [rect.x1, rect.z0], [rect.x0, rect.z1], [rect.x1, rect.z1]]) {
+    const dd = Math.hypot(x - p.x, z - p.z);
+    if (dd > bd) {
+      bd = dd;
+      best = Math.atan2(-(x - p.x), -(z - p.z));
+    }
+  }
+  return best;
+}
+
 function dedupe(pts: THREE.Vector3[]) {
   const out: THREE.Vector3[] = [];
   for (const p of pts) if (!out.length || out[out.length - 1].distanceTo(p) > 0.02) out.push(p);
@@ -620,57 +793,82 @@ function roundCorners(pts: THREE.Vector3[], g: NavGrid | null): THREE.Vector3[] 
   return out;
 }
 
+interface PlanEdge {
+  to: string;
+  via: THREE.Vector3[];
+}
+
 /**
- * Fallback route from the plan alone: BFS over rooms on one level, connected by walkable openings, open-plan edges
- * and shared edges between outdoor areas. Waypoints are door centres (a short step either side of each door so the
- * glide crosses the wall square-on).
+ * The plan's walk graph on one level: rooms joined by walkable openings, open-plan edges and shared edges between
+ * outdoor areas. A door to "exterior" joins the outdoor area right outside it (a side yard, the porch); on the lowest
+ * level the outdoor areas along the road (and, on a corner plot, along the sides) join "exterior", the street. An
+ * outdoor area walled in by the house with no door (a light court) is joined to nothing.
  */
-function roomGraphPath(plan: BuildingPlan, level: Level, a: THREE.Vector3, b: THREE.Vector3): THREE.Vector3[] | null {
+function planGraph(plan: BuildingPlan, level: Level) {
   const y = level.elevation_ft * FT;
   const rooms = plan.rooms.filter((r) => r.level === level.id);
+  const byId = new Map(rooms.map((r) => [r.id, r]));
+  const lowest = level.index === Math.min(...plan.levels.map((l) => l.index));
   const at = (p: THREE.Vector3) => {
     const x = p.x / FT, yy = -p.z / FT;
     const hits = rooms.filter((r) => x >= r.rect.x - 0.3 && x <= r.rect.x + r.rect.w + 0.3 && yy >= r.rect.y - 0.3 && yy <= r.rect.y + r.rect.d + 0.3);
     hits.sort((p1, p2) => p1.rect.w * p1.rect.d - p2.rect.w * p2.rect.d);
     return hits[0]?.id ?? "exterior";
   };
-  const start = at(a), goal = at(b);
-  if (!rooms.length || start === goal) return [a.clone(), b.clone()];
-  type Edge = { to: string; via: THREE.Vector3[] };
-  const adj = new Map<string, Edge[]>();
+  const adj = new Map<string, PlanEdge[]>();
   const link = (p: string, q: string, via: THREE.Vector3[]) => {
+    if (p === q) return;
     (adj.get(p) ?? adj.set(p, []).get(p)!).push({ to: q, via });
     (adj.get(q) ?? adj.set(q, []).get(q)!).push({ to: p, via: [...via].reverse() });
   };
-  const isOutdoor = (id: string) => id === "exterior" || OUTDOOR.has(rooms.find((r) => r.id === id)?.type ?? "");
+  const isOutdoor = (id: string) => id === "exterior" || OUTDOOR.has(byId.get(id)?.type ?? "");
   const centreOf = (id: string) => {
-    const r = rooms.find((rr) => rr.id === id);
+    const r = byId.get(id);
     return r ? new THREE.Vector3((r.rect.x + r.rect.w / 2) * FT, y, zOf(r.rect.y + r.rect.d / 2)) : null;
+  };
+  /** The outdoor area a step outside `o` from `inside` ("exterior" when there is none: the street, the open plot). */
+  const outsideOf = (o: Opening, inside: Room | undefined): string => {
+    if (!inside) return "exterior";
+    const r = inside.rect, [ax, ay] = o.at;
+    const sides: [number, number, number][] = [
+      [Math.abs(ay - r.y), 0, -1],
+      [Math.abs(ay - (r.y + r.d)), 0, 1],
+      [Math.abs(ax - r.x), -1, 0],
+      [Math.abs(ax - (r.x + r.w)), 1, 0],
+    ];
+    sides.sort((a, b) => a[0] - b[0]);
+    const [, nx, ny] = sides[0];
+    const px = ax + nx * 1.2, py = ay + ny * 1.2;
+    const hit = rooms.find((q) => q.id !== inside.id && isOutdoor(q.id) && px >= q.rect.x - 0.1 && px <= q.rect.x + q.rect.w + 0.1 && py >= q.rect.y - 0.1 && py <= q.rect.y + q.rect.d + 0.1);
+    return hit?.id ?? "exterior";
   };
   for (const o of plan.openings ?? []) {
     if (o.level !== level.id || !WALKABLE_OPENINGS.has(o.type)) continue;
-    const [p, q] = o.between;
-    const pr = rooms.find((r) => r.id === p), qr = rooms.find((r) => r.id === q);
+    let [p, q] = o.between;
+    const pr = byId.get(p), qr = byId.get(q);
     if (!pr && p !== "exterior") continue;
     if (!qr && q !== "exterior") continue;
+    if (p === "exterior") p = outsideOf(o, qr);
+    if (q === "exterior") q = outsideOf(o, pr);
     // doors open across the wall: step 0.5 m either side, toward each room's middle
     const door = new THREE.Vector3(o.at[0] * FT, y, zOf(o.at[1]));
     const toward = (id: string) => {
       const c = centreOf(id);
-      if (!c) return door.clone();
+      const room = byId.get(id);
+      if (!c || !room) return door.clone();
       const d = c.sub(door);
       // keep only the component across the wall
-      const room = rooms.find((r) => r.id === id)!;
       const onX = Math.abs(o.at[1] - room.rect.y) < 0.6 || Math.abs(o.at[1] - (room.rect.y + room.rect.d)) < 0.6;
       if (onX) d.x = 0;
       else d.z = 0;
+      if (d.lengthSq() < 1e-8) return door.clone();
       return door.clone().addScaledVector(d.normalize(), 0.5);
     };
     link(p, q, [p === "exterior" ? door.clone() : toward(p), door, q === "exterior" ? door.clone() : toward(q)]);
   }
   for (const r of rooms)
     for (const id of r.open_to ?? []) {
-      const o = rooms.find((x) => x.id === id);
+      const o = byId.get(id);
       if (!o) continue;
       const mid = sharedEdgeMid(r, o);
       if (mid) link(r.id, o.id, [new THREE.Vector3(mid[0] * FT, y, zOf(mid[1]))]);
@@ -681,21 +879,48 @@ function roomGraphPath(plan: BuildingPlan, level: Level, a: THREE.Vector3, b: TH
       const mid = sharedEdgeMid(rooms[i], rooms[j]);
       if (mid) link(rooms[i].id, rooms[j].id, [new THREE.Vector3(mid[0] * FT, y, zOf(mid[1]))]);
     }
-  // outdoor areas are all "exterior"
-  for (const r of rooms) if (isOutdoor(r.id) && level.index === Math.min(...plan.levels.map((l) => l.index))) link(r.id, "exterior", [centreOf(r.id)!]);
-  const prev = new Map<string, { from: string; via: THREE.Vector3[] }>();
-  const q = [start];
-  const seen = new Set([start]);
+  if (lowest) {
+    const W = plan.site.plot.width_ft;
+    const corner = !!plan.site.plot.corner;
+    for (const r of rooms) {
+      if (!isOutdoor(r.id)) continue;
+      const street = r.rect.y <= 0.5 || (corner && (r.rect.x <= 0.5 || r.rect.x + r.rect.w >= W - 0.5));
+      if (street) link(r.id, "exterior", [centreOf(r.id)!]);
+    }
+  }
+  return { at, adj };
+}
+
+/** BFS over the plan graph: how each room reachable from `starts` is reached (null for the starts themselves). */
+function planBfs(adj: Map<string, PlanEdge[]>, starts: string[]) {
+  const prev = new Map<string, { from: string; via: THREE.Vector3[] } | null>();
+  const q: string[] = [];
+  for (const s of starts)
+    if (!prev.has(s)) {
+      prev.set(s, null);
+      q.push(s);
+    }
   while (q.length) {
     const cur = q.shift()!;
-    if (cur === goal) break;
     for (const e of adj.get(cur) ?? []) {
-      if (seen.has(e.to)) continue;
-      seen.add(e.to);
+      if (prev.has(e.to)) continue;
       prev.set(e.to, { from: cur, via: e.via });
       q.push(e.to);
     }
   }
+  return prev;
+}
+
+/**
+ * Fallback route from the plan alone (planGraph). Waypoints are door centres (a short step either side of each door
+ * so the glide crosses the wall square-on).
+ */
+function roomGraphPath(plan: BuildingPlan, level: Level, a: THREE.Vector3, b: THREE.Vector3): THREE.Vector3[] | null {
+  if (!plan.rooms.some((r) => r.level === level.id)) return [a.clone(), b.clone()];
+  const { at, adj } = planGraph(plan, level);
+  const start = at(a), goal = at(b);
+  if (start === goal) return [a.clone(), b.clone()];
+  const prev = planBfs(adj, [start]);
   if (!prev.has(goal)) return null;
   const via: THREE.Vector3[] = [];
   for (let c = goal; c !== start; ) {

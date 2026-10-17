@@ -23,7 +23,8 @@ import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, sm
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
 import { buildColliderBVH, disposeCollider, type ColliderBVH } from "../walk/collider";
-import { glideSeconds, Navigator, type RoutePlan } from "../walk/route";
+import { glideSeconds, Navigator, type BlockCause, type RoutePlan } from "../walk/route";
+import { BLOCK } from "../walk/navgrid";
 import { DRAG_SENS, EYE, LOCK_SENS, WalkController } from "../walk/WalkController";
 
 export type SuspendableControls = CameraControlsImpl & { suspended: boolean };
@@ -47,6 +48,12 @@ const IDLE_MS = 2500;
 const HINTS_KEY = "naqsha.walk.coachmark";
 
 const v3 = (v: THREE.Vector3): Vec3 => [round(v.x), round(v.y), round(v.z)];
+/** A room's name inside a sentence: "the family TV lounge", "the parents' bedroom" (acronyms keep their capitals). */
+const roomPhrase = (name: string) =>
+  name
+    .split(/(\s+)/)
+    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
+    .join("");
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const isEditable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -206,6 +213,8 @@ export class ViewerController {
       const hit = pick(rc, [this.holder], { far: max });
       return hit ? hit.distance : max;
     };
+    this.nav.classify = (p, r) => this.solidKindAt(p, r);
+    this.nav.entry = this.walk.spawn.feet;
     this.holder.name = "naqsha-house";
     this.raycaster.layers.enableAll();
     // the app's chrome can recede with the walk HUD: `:root[data-nq-walk-idle]` (viewer.css, DESIGN "after 2.5s idle")
@@ -1160,6 +1169,7 @@ export class ViewerController {
       return;
     }
     if (this.store.getState().mode === "walk") this.walkToRoom(room);
+    else if (this.nav.isVoid(room)) this.toast("That's open to the floor below");
     else this.frameRoom(room);
   }
 
@@ -1399,9 +1409,31 @@ export class ViewerController {
       return;
     }
     this.walk.cancelGlide();
-    const route = this.nav.route(this.walk.feet.clone(), { kind: "level", level: lvl });
-    if (route.ok && route.pts.length > 1) {
+    const feet = this.walk.feet.clone();
+    const route = this.nav.route(feet, { kind: "level", level: lvl });
+    const floorName = lvl.name.toLowerCase();
+    if (route.ok && route.pts.length > 1 && !route.rough) {
       this.startGlide(route);
+      return;
+    }
+    // sealed off where you stand (a yard you were brought into): walk on from the nearest connected spot
+    const out = route.rough || !route.ok ? this.nav.escape(feet) : null;
+    if (out) {
+      const alt = this.nav.route(out.clone(), { kind: "level", level: lvl });
+      if (alt.ok && alt.pts.length > 1 && !alt.rough) {
+        const a = alt.pts[0], b = alt.pts[Math.min(alt.pts.length - 1, 6)];
+        this.jumpTo(out, Math.hypot(b.x - a.x, b.z - a.z) > 0.05 ? Math.atan2(-(b.x - a.x), -(b.z - a.z)) : this.walk.yaw, -0.06);
+        this.toast(`Taking you to the ${floorName}`);
+        this.startGlide(alt);
+        return;
+      }
+    }
+    if (route.ok && route.pts.length > 1) {
+      // the way to the stair is only on the plan (furniture in it): never glide through anything at eye height
+      if (route.blocked) {
+        this.jumpTo(route.end, route.yaw, route.pitch);
+        this.toast(`Taking you to the ${floorName}`);
+      } else this.startGlide(route);
       return;
     }
     // no stair joins these floors: hop there directly (crossfade) to the stair hall or the biggest room
@@ -1428,34 +1460,59 @@ export class ViewerController {
     return this.walk.findFreeSpot(target, lvl.elevation_ft * FT) ?? this.walk.findFreeSpot(target.clone().setY(target.y + 0.3), lvl.elevation_ft * FT);
   }
 
+  /**
+   * Room navigator while walking: glide there along the walk grid. When no walk gets there, crossfade straight into
+   * the room (always inside its walls) and say why, naming the real cause: planting, furniture, or no door. Standing
+   * somewhere sealed off yourself (a yard you were brought into), walk on from the nearest connected spot.
+   */
   private walkToRoom(room: Room) {
     if (!this.camera) return;
     if (this.walk.transition) this.walk.transition.t = 1;
     this.ensureCollider();
     if (!this.walk.ready || !this.collider) return;
     this.walk.cancelGlide();
-    const route = this.nav.route(this.walk.feet.clone(), { kind: "room", room });
-    if (route.ok && route.pts.length > 1 && !route.blocked) {
-      this.startGlide(route, room.id);
+    const name = roomPhrase(room.name);
+    if (this.nav.isVoid(room)) {
+      this.toast("That's open to the floor below");
       return;
     }
-    if (route.ok && route.blocked) {
-      // furniture stands in the only doorway: say so, and step straight in
-      this.jumpTo(route.end, route.yaw, route.pitch);
-      this.toast(`Furniture blocks the way into the ${room.name.toLowerCase()}, so I've brought you straight in`);
+    const feet = this.walk.feet.clone();
+    const clean = (r: RoutePlan) => r.ok && !r.rough && !r.blocked;
+    const route = this.nav.route(feet, { kind: "room", room });
+    if (clean(route)) {
+      if (route.pts.length > 1) this.startGlide(route, room.id);
+      else this.walk.place(feet, route.yaw, route.pitch); // already there: just look into the room
       return;
     }
-    const lvl = this.plan.levels.find((l) => l.id === room.level)!;
-    const c = planToWorld(room.rect.x + room.rect.w / 2, room.rect.y + room.rect.d / 2, lvl.elevation_ft);
-    const spot = this.walk.findFreeSpot(c, lvl.elevation_ft * FT, Math.max(1.5, (Math.min(room.rect.w, room.rect.d) * FT) / 2));
-    if (!spot) {
-      this.toast(`There's no room to stand in the ${room.name.toLowerCase()}`);
+    // sealed off where you stand: hop to the nearest connected spot and walk on from there
+    const out = this.nav.escape(feet);
+    if (out) {
+      const alt = this.nav.route(out.clone(), { kind: "room", room });
+      if (clean(alt) && alt.pts.length > 1) {
+        const a = alt.pts[0], b = alt.pts[Math.min(alt.pts.length - 1, 6)];
+        this.jumpTo(out, Math.hypot(b.x - a.x, b.z - a.z) > 0.05 ? Math.atan2(-(b.x - a.x), -(b.z - a.z)) : this.walk.yaw, -0.06);
+        this.toast(`Taking you to the ${name}`);
+        this.startGlide(alt, room.id);
+        return;
+      }
+    }
+    const stance = this.nav.roomStance(room);
+    if (!stance) {
+      this.toast(`There's no room to stand in the ${name}`);
       return;
     }
-    const corner = planToWorld(room.rect.x + room.rect.w, room.rect.y + room.rect.d, 0);
-    const yaw = Math.atan2(-(corner.x - spot.x), -(corner.z - spot.z));
-    this.jumpTo(spot, yaw, -0.06);
-    this.toast(`No door reaches the ${room.name.toLowerCase()} yet, so I've brought you straight in`);
+    // why (asked from the connected spot when you stand sealed off: the room's own trouble, not yours)
+    const cause: BlockCause | "stair" = !route.ok && route.reason === "no stair" ? "stair" : this.nav.blockCause(room, out ?? feet);
+    this.jumpTo(stance.end, stance.yaw, -0.06);
+    const lvl = this.plan.levels.find((l) => l.id === room.level);
+    const why: Record<BlockCause | "stair", string> = {
+      planting: `Planting blocks the way into the ${name}`,
+      furniture: `Furniture blocks the way into the ${name}`,
+      other: `Something solid blocks the way into the ${name}`,
+      nodoor: `No door reaches the ${name} yet`,
+      stair: `No stair reaches the ${(lvl?.name ?? "floor").toLowerCase()} yet`,
+    };
+    this.toast(`${why[cause]}, so I've brought you straight in`);
   }
 
   /** Minimap click on open ground (no room there): walk to that spot. */
@@ -2063,6 +2120,7 @@ export class ViewerController {
     // shown (the Cars toggle) they are solid like furniture.
     const carsShown = this.vehicleTarget("walk") > 0;
     const solid = this.solidBoxes(res).filter((s) => !this.vis.hiddenByTags({ userData: { layer: s.layer, level: s.level } } as unknown as THREE.Object3D));
+    this.navSolids = solid;
     const boxes = solid.map((s) => s.box.clone());
     if (carsShown) boxes.push(...this.ctxfx.exclusionBoxes());
     // furniture the engine left out of the colliders (coffee tables, plants, outdoor chairs): its own triangles
@@ -2077,6 +2135,23 @@ export class ViewerController {
   }
 
   private solidBoxCache = new WeakMap<BuildResult, SolidBox[]>();
+  /** The solid elements in the current walk collider (for telling planting from furniture). */
+  private navSolids: SolidBox[] = [];
+
+  /**
+   * What solid a capsule standing at `p` (radius r) runs into, as a BLOCK mask: planting (landscape: trees, hedges,
+   * planters), furniture, or something else (the water tank, a shown car).
+   */
+  private solidKindAt(p: THREE.Vector3, r: number): number {
+    const lo = p.y + 0.03, hi = p.y + 1.78;
+    let mask = 0;
+    for (const s of this.navSolids) {
+      const b = s.box;
+      if (b.max.x < p.x - r || b.min.x > p.x + r || b.max.z < p.z - r || b.min.z > p.z + r || b.max.y < lo || b.min.y > hi) continue;
+      mask |= s.layer === "landscape" ? BLOCK.planting : s.layer === "furniture" ? BLOCK.furniture : BLOCK.other;
+    }
+    return mask || BLOCK.other;
+  }
 
   /**
    * World boxes of the elements that are solid from the floor up: furniture and fixtures (not rugs and mats), roof
