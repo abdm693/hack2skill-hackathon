@@ -261,8 +261,18 @@ interface AsBuiltSummary {
   where they were answered. `revise {comment_ids}` accepts open comments from any version.
 - **Brief PATCH**: `preferences` in `PATCH /projects/{pid} {brief}` replaces the list (`[]` clears it). Storeys are capped
   at the authority's maximum (DHA: 2). A name set with `PATCH {name}` is kept; an auto-made name follows plot changes.
-- **Review notes**: the self-review's unresolved issues are livable `warn` checks `review.<n>` in the version's report, and
-  the version summary ends with "· N review notes".
+- **Review notes**: the self-review's unresolved issues are livable `warn` checks `review.<n>` in the version's report (with
+  `severity` major/minor and `fix`), and the version summary ends with "· N review notes". A revision keeps the notes about
+  rooms it didn't change.
+- **New planning checks (round 1)**, all `category: "livable"`: `plan.stair.door_under_flight:<door>` (a door under a stair's
+  flights or mid-landing), `plan.opening.clash:<opening>` (two openings closer than 0.3 ft on one wall; fail with a door, else
+  warn), `plan.circulation.porch:<porch>` (fewer 9 × 18 ft bays than `car_porch:N`; `value`/`limit` in cars) and
+  `plan.circulation.porch_walkway:<porch>` (no 3′6″ path past the parked cars to the door), `plan.privacy.dressing:<room>`,
+  `plan.circulation.balcony_links_bedrooms:<deck>` (now a fail, over touching balconies and terraces),
+  `plan.open_space.covered:<room>` (a courtyard roofed over by a higher floor; its windows no longer count as daylight).
+  `room.vent:<bath>` is a fail with no opening at all (a warn under 2 sq ft). Check titles and messages never contain element
+  ids (they stay in `element_ids` and `fix`); LDA stair checks are titled "Ground → first stair" with "19 risers of 6.95 in,
+  3′6″ wide…"; `plan.roof.solar` reads "64% kept clear (min 55%)…" with `unit: "%"`.
 - **Clone**: `{fresh: true}` forces a new copy of a sample. Opening a sample again returns your copy (one copy, even from
   parallel requests); an untouched copy of an older sample (no messages, comments, versions or concepts of its own) is
   refreshed in place with the current sample.
