@@ -86,7 +86,7 @@ export function RoomNavigator({
   const first = groups[0]?.list[0];
   return (
     <div>
-      <div className="flex items-center gap-2 rounded-control bg-white/8 px-2.5">
+      <div className="nq-field flex items-center gap-2 rounded-control bg-white/8 px-2.5">
         <Search className="size-3.5 text-hud-ink-2" strokeWidth={1.75} />
         <input
           ref={search}

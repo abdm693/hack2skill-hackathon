@@ -65,7 +65,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-full font-medium outline-none",
+        "hit-44 relative inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-full font-medium outline-none",
         "transition-[background-color,color,box-shadow,transform,opacity] duration-(--dur-fast) ease-out active:scale-[0.97]",
         "focus-visible:shadow-focus disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         VARIANT[variant],
@@ -97,7 +97,7 @@ export function IconButton({
       title={label}
       aria-pressed={pressed}
       className={cn(
-        "inline-grid shrink-0 place-items-center rounded-full outline-none transition-[background-color,color,transform] duration-(--dur-fast) active:scale-95 focus-visible:shadow-focus disabled:opacity-40",
+        "hit-44 relative inline-grid shrink-0 place-items-center rounded-full outline-none transition-[background-color,color,transform] duration-(--dur-fast) active:scale-95 focus-visible:shadow-focus disabled:opacity-40",
         VARIANT[variant],
         className,
       )}
@@ -147,7 +147,7 @@ export function Chip({
       type="button"
       aria-pressed={selected}
       className={cn(
-        "inline-flex shrink-0 select-none items-center gap-1.5 rounded-chip font-medium outline-none transition-[background-color,box-shadow,color,transform] duration-(--dur-fast) ease-out active:scale-[0.97] focus-visible:shadow-focus disabled:opacity-45",
+        "hit-44 relative inline-flex shrink-0 select-none items-center gap-1.5 rounded-chip font-medium outline-none transition-[background-color,box-shadow,color,transform] duration-(--dur-fast) ease-out active:scale-[0.97] focus-visible:shadow-focus disabled:opacity-45",
         size === "md" ? "min-h-8 px-3 py-1 text-[13px]" : "min-h-7 px-2.5 py-0.5 text-[12px]",
         "max-w-full text-left leading-snug",
         tone === "hud"

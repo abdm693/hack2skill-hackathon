@@ -304,20 +304,8 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
 
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
-      <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
-        <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
-          <Suspense fallback={<ViewLoading tone={tone} />}>
-            {view !== "house" && <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />}
-            {(view === "house" || keepHouse) && (
-              <div className={cn("absolute inset-0", view !== "house" && "pointer-events-none invisible")} aria-hidden={view !== "house" || undefined}>
-                <HouseView project={project} onProjectChange={(p) => useProject.setState({ project: p })} active={view === "house"} />
-              </div>
-            )}
-          </Suspense>
-        </ErrorBoundary>
-      </main>
-
-      {/* Top: title capsule · view switch · people */}
+      {/* Top: title capsule · view switch · people. First in the DOM, so Tab reaches All homes, the title, the switch,
+          Comments and Share before the view's own HUD; z-30 keeps it painted above the view as before. */}
       {phone ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 px-3 pt-3">
           <div className="flex h-12 items-center justify-between gap-2">
@@ -340,6 +328,19 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           </div>
         </div>
       )}
+
+      <main className="absolute inset-0" aria-label={VIEWS.find((v) => v.id === view)?.label ?? "Versions"}>
+        <ErrorBoundary resetKey={view} tone={tone} label="This view didn't load">
+          <Suspense fallback={<ViewLoading tone={tone} />}>
+            {view !== "house" && <View project={project} onProjectChange={(p) => useProject.setState({ project: p })} />}
+            {(view === "house" || keepHouse) && (
+              <div className={cn("absolute inset-0", view !== "house" && "pointer-events-none invisible")} aria-hidden={view !== "house" || undefined}>
+                <HouseView project={project} onProjectChange={(p) => useProject.setState({ project: p })} active={view === "house"} />
+              </div>
+            )}
+          </Suspense>
+        </ErrorBoundary>
+      </main>
 
       {/* Dock */}
       {!anySheetOnPhone && (

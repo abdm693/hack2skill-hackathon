@@ -11,7 +11,7 @@ import { cn } from "@/app/lib/utils";
  */
 
 const chipBase =
-  "inline-flex shrink-0 select-none items-center gap-1.5 rounded-chip border text-left text-[13px] font-medium leading-none outline-none " +
+  "hit-44 relative inline-flex shrink-0 select-none items-center gap-1.5 rounded-chip border text-left text-[13px] font-medium leading-none outline-none " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease-out active:scale-[.97] " +
   "focus-visible:border-accent focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-45";
 
