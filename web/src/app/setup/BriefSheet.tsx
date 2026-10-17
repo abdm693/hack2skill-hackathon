@@ -12,6 +12,7 @@ import { Button, Dialog, EASE_OUT, Segmented } from "@/app/design/kit";
 import { LEVEL_LABEL, defaultProgram, levelsFor, roomsLine, toFloors, bedroomsIn, bathsIn, type Program } from "./catalogue";
 import { FacingPicker, FloorsEditor, PlotEditor, RoofEditor, StyleEditor, solarEstimate, useCurrentReport } from "./widgets";
 import { solarLabel, tankLabel } from "@/app/lib/roof";
+import { sentenceCase, untitle } from "@/app/plan/model";
 
 export type SaveBrief = (patch: Partial<Brief>, decided: string[]) => void;
 
@@ -91,7 +92,7 @@ export function BriefSheet({ brief, envelope, save, className }: { brief: Brief 
           {b?.solar && <span className="text-ink-2">{solarLabel(b.solar)}</span>}
         </Row>}
         {b?.style && <Row label="Style" empty={!b?.style} assumed={auto.has("style")} onEdit={() => setEditing("style")}>
-          {b?.style && <span>{b.style}</span>}
+          {b?.style && <span>{sentenceCase(b.style)}</span>}
         </Row>}
         {b?.budget && <Row label="Finishes" empty={!b?.budget} assumed={auto.has("budget")} onEdit={() => setEditing("budget")}>
           {b?.budget && <span>{BUDGET_LABEL[b.budget]}</span>}
@@ -218,7 +219,7 @@ function Wishes({ prefs, onChange }: { prefs: string[]; onChange: (p: string[]) 
         <AnimatePresence initial={false}>
           {prefs.map((p) => (
             <motion.span key={p} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="inline-flex min-h-8 max-w-full items-center gap-0.5 rounded-chip bg-surface-2 py-1 pl-2.5 text-[13px] leading-snug text-ink">
-              {p}
+              {untitle(p)}
               <button type="button" aria-label={`Remove ${p}`} onClick={() => onChange(prefs.filter((x) => x !== p))} className="grid size-6 shrink-0 place-items-center rounded-full text-ink-4 hover:bg-surface-3 hover:text-ink">
                 <X className="size-3" strokeWidth={2} />
               </button>

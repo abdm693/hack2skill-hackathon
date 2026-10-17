@@ -435,7 +435,7 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       className={phone && !tight && openComments.length > 0 ? "px-3" : undefined}
     >
       <MessageSquarePlus className={phone ? "size-[18px]" : "size-4"} strokeWidth={1.75} />
-      <span className="max-sm:hidden">{commentMode ? "Click to pin" : "Comment"}</span>
+      <span className="max-sm:hidden">{commentMode ? (touch ? "Tap to pin" : "Click to pin") : "Comment"}</span>
       {openComments.length > 0 &&
         (phone && tight ? (
           // A dot on the narrowest phones; the count is in the button's name and the Comments sheet.
@@ -864,7 +864,7 @@ function VersionMenu({ project, current, onPick, onRevisions }: { project: Proje
   const list = [...project.versions].sort((a, b) => b.n - a.n);
   return (
     <div>
-      <p className="px-2 pb-1 pt-1 text-[12px] text-hud-ink-2">Versions · the camera stays put</p>
+      <p className="px-2 pb-1 pt-1 text-[12px] text-hud-ink-2">Versions</p>
       <ul>
         {list.map((v) => (
           <li key={v.id}>

@@ -196,7 +196,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
       case "concepts":
         if (conceptsRunning) return null;
         if (!project.concepts.length) return "Your brief is ready. Shall I sketch four exteriors?";
-        if (!project.selected_concept_id) return "Tap the one you like. Ask for a change and I'll draw variations.";
+        if (!project.selected_concept_id) return `${touch ? "Tap" : "Click"} the one you like. Ask for a change and I'll draw variations.`;
         if (current) return "Your plan follows the concept marked Chosen. Open another to plan it instead.";
         return "Good choice. I'll plan the floors around it next.";
       case "plan":
@@ -207,12 +207,12 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
         const shownId = resolveVersion(project, params.get("v")).id;
         if (shownId && shownId !== current) return "This is an earlier version. Switch to the latest to pin notes.";
         if (openCount) return openCount === 1 ? "1 note so far. I'll turn it into the next version." : `${openCount} notes so far. I'll turn them into the next version.`;
-        return phone ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
+        return touch ? "Look around, then tap Comment to pin a note anywhere." : "Look around, then press C to pin a note anywhere.";
       }
       case "revisions":
         return null;
     }
-  }, [view, project, versions, asBuilt, lastLine, conceptsRunning, current, editor, openCount, params, phone]);
+  }, [view, project, versions, asBuilt, lastLine, conceptsRunning, current, editor, openCount, params, touch]);
 
   const defaultSuggestions = useMemo(() => {
     if (!editor) return [];

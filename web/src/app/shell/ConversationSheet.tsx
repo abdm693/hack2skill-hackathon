@@ -16,6 +16,7 @@ import { Sheet } from "@/app/ui/Sheet";
 import { useAsk } from "./ask";
 import { plain } from "./narration";
 import { useShell } from "./state";
+import { untitle } from "@/app/plan/model";
 
 export function ConversationSheet({ project, view }: { project: Project; view: string }) {
   const open = useShell((s) => s.left === "chat");
@@ -150,7 +151,7 @@ function Facts({ label, items, assumed }: { label: string; items: string[]; assu
       <p className="mb-1.5 text-[12px] font-medium text-ink-3">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {items.map((t) => (
-          <FactToken key={t} assumed={assumed}>{t}</FactToken>
+          <FactToken key={t} assumed={assumed}>{untitle(t)}</FactToken>
         ))}
       </div>
     </div>

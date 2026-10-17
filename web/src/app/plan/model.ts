@@ -72,6 +72,21 @@ export function sentenceCase(name: string): string {
   return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : keep(w) ? w : w.toLowerCase())).join(" ");
 }
 
+/** Places that keep their capitals inside display text ("Johar Town", "DHA Phase 6"). */
+const PLACE = /\b(Town|Phase|Lahore|Gulberg|Bahria|Johar|Defence|Cantt|Avenue|Garden|Colony|Society|Valley|City)\b/;
+
+/**
+ * Display text in sentence case when it arrived in Title Case ("Modern Contemporary" → "Modern contemporary",
+ * "Separate Dirty Kitchen" → "Separate dirty kitchen"); mixed text, place names and acronyms are left as they are.
+ */
+export function untitle(text: string): string {
+  const t = text.trim();
+  const words = t.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w));
+  if (words.length < 2 || PLACE.test(t)) return t;
+  const titled = words.every((w) => /^[A-Z]/.test(w) || /^(and|or|of|the|a|an|in|on|to|with|for)$/.test(w));
+  return titled ? sentenceCase(t) : t;
+}
+
 /**
  * A name inside a sentence: "Master Bedroom" → "master bedroom", "TV Lounge" → "TV lounge". The first letter is
  * lowered only when the second isn't a capital (so "TV" stays).

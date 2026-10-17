@@ -9,7 +9,7 @@ import { MessageSquare } from "lucide-react";
 import type { Comment } from "@contracts/api-types";
 import { api, ApiError } from "@/api/client";
 import { cn } from "@/app/lib/utils";
-import { isTyping, usePhone } from "@/app/lib/hooks";
+import { isTyping, useMediaQuery, usePhone } from "@/app/lib/hooks";
 import { setNameAsker, useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
 import { CommentsSheet } from "@/app/comments/CommentsSheet";
@@ -135,6 +135,8 @@ function ClientShell({ token }: { token: string }) {
   const addComment = useProject((s) => s.addComment);
   const [params, setParams] = useSearchParams();
   const phone = usePhone();
+  // Touch screens say "Tap", never "Click".
+  const touch = useMediaQuery("(pointer: coarse)");
   const ask = useAsk();
   const right = useShell((s) => s.right);
   const focusComment = useShell((s) => s.focusComment);
@@ -351,7 +353,7 @@ function ClientShell({ token }: { token: string }) {
                 approved && version
                   ? `You approved version ${version.n}. ${sharedBy ?? "The owner"} can see it in the comments.`
                   : tab === "house"
-                    ? "Click a spot on the house to leave a note, or walk through it room by room."
+                    ? `${touch ? "Tap" : "Click"} a spot on the house to leave a note, or walk through it room by room.`
                     : `This is version ${version?.n ?? 1}, checked against LDA rules.`
               }
               defaultPlaceholder={`Leave a note for ${owner}`}
@@ -371,7 +373,7 @@ function ClientShell({ token }: { token: string }) {
         project={project}
         clientView
         focusId={focusComment}
-        emptyHint={`Click anywhere on the house to pin a note for ${owner}, or type one below.`}
+        emptyHint={`${touch ? "Tap" : "Click"} anywhere on the house to pin a note for ${owner}, or type one below.`}
         onShow={(c: Comment) => setParams({ comment: c.id })}
       />
 

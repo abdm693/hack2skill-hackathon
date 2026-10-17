@@ -12,7 +12,7 @@ import type { DesignSectionSrc } from "@/engine";
 import { HouseViewer, type ViewerHandle } from "@/viewer/HouseViewer";
 import { api } from "@/api/client";
 import { cn } from "@/app/lib/utils";
-import { isTyping, usePhone } from "@/app/lib/hooks";
+import { isTyping, useMediaQuery, usePhone } from "@/app/lib/hooks";
 import { roleOf } from "@/app/lib/views";
 import { useProject } from "@/app/store/project";
 import { toast } from "@/app/store/toast";
@@ -43,6 +43,7 @@ export function HouseStage({
 }) {
   const [params, setParams] = useSearchParams();
   const phone = usePhone();
+  const touch = useMediaQuery("(pointer: coarse)");
   const comments = useProject((s) => s.comments);
   const addComment = useProject((s) => s.addComment);
   const patchProject = useProject((s) => s.patchProject);
@@ -181,7 +182,7 @@ export function HouseStage({
           {!phone && <Kbd tone="hud">M</Kbd>}
         </button>
         {(
-          <Tooltip content={mode === "walk" ? "Pin a comment where you look" : commentMode ? "Click anywhere on the house" : "Pin a comment"} shortcut={["C"]}>
+          <Tooltip content={mode === "walk" ? "Pin a comment where you look" : commentMode ? (touch ? "Tap anywhere on the house" : "Click anywhere on the house") : "Pin a comment"} shortcut={["C"]}>
             <button
               type="button"
               onClick={comment}
@@ -193,7 +194,7 @@ export function HouseStage({
               )}
             >
               <MessageSquarePlus className="size-4" strokeWidth={1.75} />
-              <span className={phone ? "sr-only" : ""}>{commentMode ? "Click to pin" : "Comment"}</span>
+              <span className={phone ? "sr-only" : ""}>{commentMode ? (touch ? "Tap to pin" : "Click to pin") : "Comment"}</span>
               {!phone && !commentMode && <Kbd tone="hud">C</Kbd>}
             </button>
           </Tooltip>

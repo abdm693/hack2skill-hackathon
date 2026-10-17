@@ -30,7 +30,9 @@ export function DetailsDialog({ open, onClose, project }: { open: boolean; onClo
   if (e) {
     rows.push([`${e.authority ?? "LDA"} rules`, `${e.band}: ${e.max_coverage_pct}% coverage, ${e.max_height_ft} ft high, setbacks ${e.setbacks_ft.front}′ front and ${e.setbacks_ft.rear}′ rear`]);
   }
-  rows.push(["Versions", project.versions.length ? `${project.versions.length}` : "None yet"]);
+  // The latest version and its age, said the same way as the Versions popover ("v2 · 2 hours ago").
+  const latestV = [...project.versions].sort((a, b) => b.n - a.n)[0];
+  rows.push(["Versions", latestV ? `${project.versions.length} · latest v${latestV.n}, ${relativeTime(latestV.created_at)}` : "None yet"]);
   rows.push(["Started", relativeTime(project.created_at)]);
   rows.push(["Last change", relativeTime(project.updated_at)]);
 

@@ -209,7 +209,8 @@ export function roomsLine(rooms: Record<string, number> | undefined): string {
     return n > 1 ? `${n} ${short === "Bed" ? "beds" : short.toLowerCase()}` : short === "Bed" ? "1 bed" : short;
   });
   for (const x of extrasOf(rooms)) parts.push(x.n > 1 ? `${x.n} ${x.label.toLowerCase()}` : x.label);
-  return parts.join(", ");
+  // A list after "Ground:" reads in sentence case: "1 bed, drawing, TV lounge, kitchen, dirty kitchen".
+  return parts.map((p) => (/^.[A-Z]/.test(p) ? p : p.charAt(0).toLowerCase() + p.slice(1))).join(", ");
 }
 
 /**
