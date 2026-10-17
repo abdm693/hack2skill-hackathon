@@ -105,6 +105,8 @@ export interface Version {
    *  "review.<n>" (plain words, never all-clear while any remain). */
   review?: { verdict: "approve" | "revise" | "skipped"; summary: string; applied?: boolean; open_issues?: number;
              rejected_because?: string[];
+             /** "skipped_time": a late run got the critique only (no revision); reason "timeout": the critique ran over */
+             revision?: "skipped_time"; reason?: "time" | "timeout";
              issues: { severity: "major" | "minor"; rooms?: string[]; problem: string; fix?: string }[] };
   /** The floor drawings the review looked at, one PNG per level. */
   plan_images?: { level: string; name: string; url: string }[];

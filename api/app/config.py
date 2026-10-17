@@ -23,8 +23,12 @@ SELF_REVIEW = os.environ.get("SELF_REVIEW", "1") not in ("0", "false", "no")
 REVIEW_BUDGET_S = float(os.environ.get("REVIEW_BUDGET_S", "150"))  # the optional post-review revision never costs more
 # The post-review revision edits a checked plan against a concrete list, and is checked again: it thinks less to land in time.
 REVIEW_THINKING = os.environ.get("REVIEW_THINKING", "LOW") or None
-# The review is skipped when planning already took this long or used every attempt (the checked plan is built as it is).
+# When planning already took this long or used every attempt, the review still critiques the drawings (its open issues are
+# listed with the checks) but makes no revision: the checked plan is built as it is.
 REVIEW_SKIP_AFTER_S = float(os.environ.get("REVIEW_SKIP_AFTER_S", "360"))
+# The critique (Argon looking at the drawn floors) has its own timeout; it overlaps the 3D build, and the run goes on without
+# it when it runs over.
+REVIEW_CRITIQUE_S = float(os.environ.get("REVIEW_CRITIQUE_S", "90"))
 
 # Identity Platform (email + password). The browser key is public by design (it identifies the project, not a secret),
 # but it is still never committed: it comes from the environment.

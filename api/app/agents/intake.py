@@ -26,7 +26,7 @@ FACINGS = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
 FACING_WORDS = {"north": "N", "northeast": "NE", "north-east": "NE", "east": "E", "southeast": "SE", "south-east": "SE",
                 "south": "S", "southwest": "SW", "south-west": "SW", "west": "W", "northwest": "NW", "north-west": "NW"}
 SPACE_IDS = {"drawing", "tv_lounge", "dining", "kitchen", "dirty_kitchen", "servant_quarter", "lawn", "prayer", "store",
-             "laundry", "roof_terrace", "study", "gym"}
+             "laundry", "roof_terrace", "study", "gym", "motorbike"}
 BUDGETS = ["economy", "standard", "premium", "luxury"]
 ESSENTIAL = ["authority", "plot", "storeys", "bedrooms", "bathrooms", "style"]
 # The order questions are asked in. Optional ones (corner, facing, floors, water_tank, solar) are asked once, unless already
@@ -287,6 +287,15 @@ FLOOR_SPACE = {"drawing": "drawing", "drawing_room": "drawing", "lounge": "tv_lo
                "terrace": "roof_terrace", "roof_terrace": "roof_terrace", "lawn": "lawn"}
 
 
+def floor_space(level: str | None, token) -> str | None:
+    """The brief space a per-floor room token stands for. A "terrace" is a roof terrace only on the roof: on the first or
+    second floor it is a terrace on that floor (its own program), never a roof terrace."""
+    name = str(token).split(":")[0].strip().lower()
+    if name == "terrace" and str(level or "").lower() != "roof":
+        return None
+    return FLOOR_SPACE.get(name)
+
+
 def _derive_from_floors(out: dict, patch: dict) -> None:
     """The per-floor program implies totals and spaces: keep them consistent unless the family gave totals themselves."""
     from ..compliance.planning import BED_KEYS, parse_program
@@ -297,9 +306,8 @@ def _derive_from_floors(out: dict, patch: dict) -> None:
         beds += sum(n for k, n in prog.items() if k in BED_KEYS)
         baths += sum(n for k, n in prog.items() if k in ("bath", "bathroom", "baths", "powder", "powder_room"))
         for tok in f.get("rooms") or []:
-            name = str(tok).split(":")[0]
-            if name in FLOOR_SPACE:
-                spaces.append(FLOOR_SPACE[name])
+            if (sp := floor_space(f.get("level"), tok)):
+                spaces.append(sp)
     if beds and not patch.get("bedrooms"):
         out["bedrooms"] = beds
     if baths and not patch.get("bathrooms"):
@@ -512,6 +520,83 @@ def storey_cap(brief: dict) -> tuple[int, str]:
 
 
 def clamp_storeys(brief: dict) -> tuple[dict, str | None]:
+    """Keep the brief within the authority's storeys (DHA: 2): never more storeys than allowed, and at the limit no enclosed
+    room on the roof (the authority counts it as one more storey). Returns (brief, a sentence or two of pushback, or None)."""
+    b, said = _cap_storeys(brief)
+    b, moved = roof_rooms_down(b)
+    return b, " ".join(x for x in (said, moved) if x) or None
+
+
+# On the roof only the stair tower (mumty), the water tank, solar and open terraces are exempt from the storey count; any
+# other room there is enclosed and counts as one more storey (lda.py counts every level with an enclosed room).
+ROOF_OPEN = {"terrace", "roof_terrace", "balcony", "sitting", "sitting_area", "seating", "garden", "roof_garden", "lawn",
+             "solar", "panels", "solar_panels", "tank", "water_tank", "mumty", "stair", "stairs", "stair_tower"}
+ROOF_TO_GROUND = {"laundry", "store", "storage", "servant", "servant_quarter", "dirty_kitchen", "utility"}  # service rooms
+
+
+def _room_phrase(tok: str) -> str:
+    name, _, n = str(tok).partition(":")
+    try:
+        k = int(float(n)) if n else 1
+    except ValueError:
+        k = 1
+    one, many = ROOM_WORD.get(name, (name.replace("_", " "), name.replace("_", " ") + "s"))
+    return f"the {one}" if k == 1 else f"{k} {many}"
+
+
+def roof_rooms_down(brief: dict) -> tuple[dict, str | None]:
+    """A brief at its authority's storey limit keeps no enclosed room (laundry, store, servant, gym, kitchenette...) on the
+    roof: every authority counts a roof room as a storey (only the mumty is excluded), so the design would fail "Number of
+    storeys" and the per-floor rule would fight it in every fix round. Service rooms go down to the ground floor, the rest
+    to the top floor. Returns (brief, one sentence saying so, or None). Under the limit the roof room stays."""
+    s = brief.get("storeys")
+    floors = [f for f in brief.get("floors") or [] if isinstance(f, dict)]
+    roof = next((f for f in floors if f.get("level") == "roof"), None)
+    if not s or not roof or not roof.get("rooms"):
+        return brief, None
+    cap, _ = storey_cap(brief)
+    if int(s) < cap:
+        return brief, None
+    keep, down, up = [], [], []
+    for tok in roof["rooms"]:
+        name = str(tok).split(":")[0].strip().lower()
+        (keep if name in ROOF_OPEN else down if name in ROOF_TO_GROUND else up).append(str(tok))
+    if not down and not up:
+        return brief, None
+    top = STOREY_LEVELS[max(1, min(int(s), len(STOREY_LEVELS))) - 1]
+    out = [dict(f) for f in floors if f.get("level") != "roof"]
+
+    def add(level: str, toks: list[str]) -> None:
+        tgt = next((f for f in out if f.get("level") == level), None)
+        if tgt is None:
+            tgt = {"level": level, "rooms": []}
+            out.append(tgt)
+        tgt["rooms"] = _sum_tokens(list(tgt.get("rooms") or []) + toks)
+    if down:
+        add("ground", down)
+    if up:
+        add(top, up)
+    if keep:
+        out.append({"level": "roof", "rooms": keep})
+    auth = str(brief.get("authority") or "LDA").upper()
+    ground = {str(t).split(":")[0] for f in out if f.get("level") == "ground" for t in f.get("rooms") or []}
+    parts = []
+    if down:
+        what = _and_words([_room_phrase(t) for t in down])
+        near = " by the dirty kitchen" if "dirty_kitchen" in ground and "dirty_kitchen" not in {t.split(":")[0] for t in down} \
+            else " by the kitchen" if "kitchen" in ground else " on the ground floor"
+        parts.append(f"put {what}{near}")
+    if up:
+        parts.append(f"put {_and_words([_room_phrase(t) for t in up])} on the {top} floor")
+    said = f"{AUTHORITY_NAME.get(auth, auth)} counts a roof room as a storey, so I've {' and '.join(parts)}."
+    return {**brief, "floors": merge_floors([], out)}, said
+
+
+def _and_words(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" and {items[-1]}"
+
+
+def _cap_storeys(brief: dict) -> tuple[dict, str | None]:
     """Keep the brief within the authority's storeys (DHA: 2). Rooms planned for a floor that isn't allowed move to the top
     allowed floor. Returns (brief, one sentence of pushback, or None)."""
     s = brief.get("storeys")
@@ -630,7 +715,8 @@ def question(field: str, brief: dict) -> dict:
 
 SPACE_LABEL = {"drawing": "drawing room", "tv_lounge": "TV lounge", "dining": "dining", "kitchen": "kitchen",
                "dirty_kitchen": "dirty kitchen", "servant_quarter": "servant quarter", "lawn": "lawn", "prayer": "prayer room",
-               "store": "store", "laundry": "laundry", "roof_terrace": "roof terrace", "study": "study", "gym": "gym"}
+               "store": "store", "laundry": "laundry", "roof_terrace": "roof terrace", "study": "study", "gym": "gym",
+               "motorbike": "space for a motorbike"}
 TANK_LABEL = {"concrete": "Concrete water tank in the stair tower", "plastic": "Blue plastic water tank"}
 SOLAR_LABEL = {"ready": "Roof kept clear for solar", "panels": "Solar frame on the roof", "none": "No solar for now"}
 FIELD_LABEL = {"authority": "authority", "plot": "plot size", "facing": "facing", "storeys": "number of floors",
@@ -693,7 +779,7 @@ def _fact_items(brief: dict) -> list[tuple[str, str]]:
         items.append(("bathrooms", f"{brief['bathrooms']} baths"))
     for f in brief.get("floors") or []:
         items.append(("floors", _floor_line(f)))
-    on_floors = {FLOOR_SPACE.get(str(t).split(":")[0]) for f in brief.get("floors") or [] for t in f.get("rooms") or []}
+    on_floors = {floor_space(f.get("level"), t) for f in brief.get("floors") or [] for t in f.get("rooms") or []}
     sp = [SPACE_LABEL.get(s.split(":")[0], s.replace("_", " ")) if not s.startswith("car_porch") else
           f"{s.split(':')[1] if ':' in s else 1}-car porch" for s in brief.get("spaces") or [] if s not in on_floors]
     if sp:

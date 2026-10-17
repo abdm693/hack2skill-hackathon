@@ -285,6 +285,23 @@ interface AsBuiltSummary {
   when the authority capped the count (`storeys_asked` holds what they asked for; the card reads "Kept to 2 storeys: DHA's
   limit"), and "porch" when the car porch came with Naqsha's default spaces. The brief panel's whole-brief PATCH counts only
   changed fields, and facts whose mark it removed, as the family's word.
+- **Round 3**:
+  - New fail `plan.privacy.wc_on_entry:<bath>`: a powder room or common bath door that faces the main door across the room it
+    opens into, or sits within 30° of the main door's line and within 15 ft ("From the main door you look straight into the
+    Powder Room…"). New warns `plan.circulation.lobby_crowded:<lobby>` (the lobby inside the main door is under 5 ft deep
+    with 4 or more doors) and `plan.circulation.porch_bike:<porch>` (the brief mentions a motorbike and no 3 × 7 ft bay is
+    left beside the cars and the walkway).
+  - `plan.circulation.porch` counts bays as the engine parks them: a bay may be 14 ft deep where the car's tail can stand
+    up to 4 ft out over the porch's open drive-in edge.
+  - The brief may hold the space `motorbike`. A "terrace" in a first- or second-floor program is a terrace on that floor,
+    never `roof_terrace`.
+  - At the authority's storey limit, every brief write (setup turns, the brief PATCH, the start of a design) moves enclosed
+    roof rooms down (laundry, store and servant rooms to the ground floor; gym, kitchenette and the rest to the top floor),
+    with one sentence ("DHA counts a roof room as a storey, so I've put the laundry by the dirty kitchen.").
+  - `Version.review` is stored on every design run. A run that used every plan attempt (or ran long) gets the critique only:
+    `{verdict, summary, issues, applied: false, open_issues, revision: "skipped_time"}`, with its open issues as
+    `review.<n>` rows. A critique past its timeout (`REVIEW_CRITIQUE_S`, 90 s) is `{verdict: "skipped", reason:
+    "timeout"}`, and the run goes on. Fix-round stages read "Fixing N problems (round 1 of 2)…".
 - **Clone**: `{fresh: true}` forces a new copy of a sample. Opening a sample again returns your copy (one copy, even from
   parallel requests); an untouched copy of an older sample (no messages, comments, versions or concepts of its own) is
   refreshed in place with the current sample.

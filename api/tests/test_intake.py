@@ -293,3 +293,94 @@ def test_brief_panel_round_trip_keeps_assumptions():
     assert out["plot"]["corner"] is True and out["corner_stated"] is True and "corner" not in out["auto_filled"]
     # server-kept marks never come from a patch
     assert "corner_stated" not in intake.merge_brief(intake.empty_brief(), {"corner_stated": True})
+
+
+# --- BE3-03: at the authority's storey limit, no enclosed room on the roof ------------------------------------------------------
+DHA_FLOORS = ["floor:ground=drawing,dining,kitchen,dirty_kitchen,lounge,store,bed", "floor:first=master,bed:3,lounge,balcony",
+              "floor:roof=laundry"]
+
+
+def dha_brief():
+    """'1 kanal DHA Phase 6, 3 storeys': kept to DHA's 2."""
+    b = intake.merge_brief(intake.empty_brief(), {"authority": "DHA", "scheme": "DHA Phase 6", "plot": {"width_ft": 50, "depth_ft": 90},
+                                                  "storeys": 3, "bedrooms": 5}, spaces_mode="union")
+    return intake.clamp_storeys(b)[0]
+
+
+def test_roof_laundry_moves_down_at_the_storey_cap():
+    patch, _ = intake.parse_chips(DHA_FLOORS)
+    b = intake.merge_brief(dha_brief(), patch, spaces_mode="replace")
+    out, said = intake.clamp_storeys(b)
+    assert said == "DHA counts a roof room as a storey, so I've put the laundry by the dirty kitchen."
+    levels = {f["level"]: f["rooms"] for f in out["floors"]}
+    assert "laundry" in levels["ground"] and "roof" not in levels
+    assert intake.clamp_storeys(out) == (out, None)                     # idempotent: said once
+    # open things stay on the roof; a gym or kitchenette goes to the top floor, a store or servant room downstairs
+    b2 = intake.merge_brief(dha_brief(), {"floors": ["ground=drawing,kitchen,lounge", "first=bedroom:3",
+                                                     "roof=terrace,gym,store,kitchenette"]}, spaces_mode="replace")
+    out2, said2 = intake.clamp_storeys(b2)
+    lv = {f["level"]: f["rooms"] for f in out2["floors"]}
+    assert lv["roof"] == ["terrace"] and "store" in lv["ground"] and {"gym", "kitchenette"} <= set(lv["first"])
+    assert said2 == ("DHA counts a roof room as a storey, so I've put the store by the kitchen and put the gym and the "
+                     "kitchenette on the first floor.")
+
+
+def test_roof_laundry_stays_under_the_storey_cap():
+    """LDA 10 marla allows 3 storeys: a 2-storey house keeps its roof laundry (it is the third storey, within the limit)."""
+    b = full_brief(floors=[{"level": "ground", "rooms": ["drawing", "kitchen"]}, {"level": "first", "rooms": ["bedroom:3", "bath:3"]},
+                           {"level": "roof", "rooms": ["laundry"]}])
+    out, said = intake.clamp_storeys(b)
+    assert said is None and out["floors"][-1] == {"level": "roof", "rooms": ["laundry"]}
+    # the same house at LDA's limit of 3 storeys: the laundry comes down
+    b3 = {**b, "storeys": 3, "floors": b["floors"][:2] + [{"level": "second", "rooms": ["bedroom:1"]}, b["floors"][2]]}
+    out3, said3 = intake.clamp_storeys(b3)
+    assert said3.startswith("LDA counts a roof room as a storey") and "roof" not in {f["level"] for f in out3["floors"]}
+
+
+def test_dha_repro_use_these_floors_then_decide_everything(monkeypatch):
+    """Retest #4: '1 kanal DHA Phase 6, 3 storeys' -> 'Use these floors' -> 'Decide everything for me' leaves no roof room."""
+    Msgs(monkeypatch)
+    p = {"id": "p1", "name": "x", "brief": dha_brief()}
+    evs = turn(p, chips=DHA_FLOORS)
+    b = brief_of(evs)
+    assert "DHA counts a roof room as a storey, so I've put the laundry by the dirty kitchen." in last_msg(evs)["text"]
+    p["brief"] = b
+    evs = turn(p, action="skip_all")
+    b = brief_of(evs)
+    assert b["storeys"] == 2 and not [f for f in b["floors"] if f["level"] == "roof" and f["rooms"]]
+    assert any("laundry" in f["rooms"] for f in b["floors"] if f["level"] == "ground")
+
+
+def test_plan_prompt_says_the_roof_is_open_at_the_cap():
+    from app.agents import architect
+    from app.compliance import lda
+    s = " ".join(architect.PLAN_SYSTEM.split())
+    assert "the roof holds only the stair tower, the water tank, solar and open terraces" in s
+    assert architect.storey_limit_note({"storeys": 2}, lda.envelope(50, 90, "DHA", False)).startswith("STOREY LIMIT")
+    assert architect.storey_limit_note({"storeys": 2}, lda.envelope(35, 65, "LDA", False)) == ""
+
+
+# --- BE3-07: a stair to the roof is not a roof terrace ---------------------------------------------------------------------------
+def test_floor_terrace_is_a_terrace_on_that_floor():
+    b = intake.merge_brief(intake.empty_brief(), {"floors": ["ground=drawing,kitchen", "first=bedroom:3,terrace"]})
+    assert "roof_terrace" not in b["spaces"]
+    assert {f["level"]: f["rooms"] for f in b["floors"]}["first"] == ["bedroom:3", "terrace"]
+    r = intake.merge_brief(intake.empty_brief(), {"floors": ["ground=drawing", "roof=terrace"]})
+    assert "roof_terrace" in r["spaces"]
+
+
+def test_setup_agent_records_no_roof_terrace_for_a_stair_to_the_roof():
+    from app.agents import setup_agent
+    said = "10 marla, 2 storeys, a stair going all the way up to the roof with a mumty"
+    assert not setup_agent.terrace_said(said)
+    t = setup_agent.Turn(intake.empty_brief(), intake.empty_brief(), said)
+    update_brief = t.tools()[0]
+    update_brief(spaces=["drawing", "roof_terrace"], floors=["ground=drawing,kitchen", "roof=terrace"])
+    assert "roof_terrace" not in t.brief["spaces"] and "drawing" in t.brief["spaces"]
+    assert not [f for f in t.brief.get("floors") or [] if f["level"] == "roof"]
+    # asked for: a sitting area on the roof
+    asked = "and a terrace on the roof where we can sit in the evening"
+    assert setup_agent.terrace_said(asked)
+    t2 = setup_agent.Turn(intake.empty_brief(), intake.empty_brief(), asked)
+    t2.tools()[0](spaces=["roof_terrace"])
+    assert "roof_terrace" in t2.brief["spaces"]

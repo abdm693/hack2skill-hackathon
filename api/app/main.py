@@ -610,8 +610,12 @@ async def design(pid: str, me: Identity = Depends(auth.identity)):
         raise HTTPException(400, "finish the setup first")
     if (run := runs.active(pid)):  # already designing or revising: attach and replay instead of starting another
         return _attach(run)
-    if intake.missing(p["brief"]) or not p["brief"].get("plot"):
-        brief, _ = intake.defaults_for(p["brief"])
+    brief = p["brief"]
+    if intake.missing(brief) or not brief.get("plot"):
+        brief, _ = intake.defaults_for(brief)
+    # within the authority's storeys, and at the limit no enclosed room on the roof (a brief saved before that rule)
+    brief, _ = intake.clamp_storeys(brief)
+    if brief != p["brief"]:
         p = await db.update_project(pid, brief=brief, envelope=intake.envelope_for(brief))
     return _attach(runs.start(pid, "design", lambda: architect.design(p)))
 

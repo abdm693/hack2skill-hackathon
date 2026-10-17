@@ -214,7 +214,8 @@ export function roomsLine(rooms: Record<string, number> | undefined): string {
 
 /**
  * A sensible first program from the brief, the way most Lahore families arrange it: guests and the kitchen
- * downstairs (with a parents' room if asked), bedrooms and a family lounge upstairs, laundry on the roof.
+ * downstairs (with a parents' room if asked), bedrooms and a family lounge upstairs, laundry on the roof (or downstairs
+ * when the house is already at the authority's storey limit, since a roof room counts as a storey).
  */
 export function defaultProgram(brief: Brief | null, env: Envelope | null): Program {
   if (brief?.floors?.length) return fromFloors(brief.floors);
@@ -268,7 +269,8 @@ export function defaultProgram(brief: Brief | null, env: Envelope | null): Progr
   if (spaces.has("gym")) p[top ?? "ground"]!.gym = 1;
   if (spaces.has("kitchenette") && top) p[top]!.kitchenette = 1;
   if (spaces.has("powder") || spaces.has("powder_room")) g.powder = 1;
-  if (spaces.has("laundry") || marla >= 7) p.roof!.laundry = 1;
+  // a roof laundry is one more storey: only under the authority's limit, otherwise by the dirty kitchen downstairs
+  if (spaces.has("laundry") || marla >= 7) (storeys < (env?.max_storeys ?? 3) ? p.roof! : g).laundry = 1;
   if (spaces.has("roof_terrace")) p.roof!.terrace = 1;
   for (const l of Object.keys(p) as LevelId[]) {
     const rooms = p[l]!;

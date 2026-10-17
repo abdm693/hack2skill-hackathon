@@ -607,8 +607,9 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
         log.exception("planning index failed")
         out.add("plan.malformed", "Plan structure", "fail", f"The plan could not be read ({type(e).__name__}).")
         return out.checks
-    for rule in (_openings, _clash, _open_to, _privacy, _baths, _reach, _routes, _main_door, _widths, _dead_ends, _porch,
-                 _solid_walls, _bath_sizes, _dressing_sizes, _covered_open, _stairs, _mumty, _roof_services, _program, _wet_over_dry):
+    for rule in (_openings, _clash, _open_to, _privacy, _baths, _wc_on_entry, _reach, _routes, _main_door, _widths, _dead_ends,
+                 _porch, _solid_walls, _bath_sizes, _dressing_sizes, _covered_open, _stairs, _mumty, _roof_services, _program,
+                 _wet_over_dry):
         try:
             if rule in (_roof_services, _program, _porch):
                 rule(ix, out, brief or {})
@@ -866,6 +867,87 @@ def _baths(ix: PlanIndex, out: _Out) -> None:
                     ref=f"{REF} P-06")
 
 
+# P-06b ---------------------------------------------------------------------------------------------------------------
+WC_CONE_DEG, WC_CONE_FT = 30.0, 15.0  # a WC door this close to the main door's line of sight is in view from the porch
+# an entrance lobby shallower than this, with this many doors or more (the main door included), is a pinch point
+LOBBY_MIN_DEPTH, LOBBY_DOORS = 5.0, 4
+
+
+def _span(o: dict, axis: str) -> tuple[float, float]:
+    u = float(o["at"][0]) if axis == "x" else float(o["at"][1])
+    w = float(o.get("width_ft") or 0)
+    return u - w / 2, u + w / 2
+
+
+def _wc_on_entry(ix: PlanIndex, out: _Out) -> None:
+    """P-06b (purdah): from the open main door, guests on the porch must not look straight into a WC. A powder room or common
+    bath whose door opens into the room the main door opens into (the lobby, lounge or drawing room) fails when that door
+    faces the main door from the opposite wall with the two door spans overlapping across the room, or lies within about 30°
+    of the main door's line and within 15 ft of it."""
+    mains = [o for o in _main_doors(ix) if o.get("level") == ix.ground and ix.info[o["id"]]["valid"]]
+    if not mains:
+        return
+    m = mains[0]
+    inside = _inside_of(ix, m)
+    line = _wall_line(ix, m)
+    if not inside or not line:
+        return
+    axis, c = line
+    ir = ix.R[inside]
+    # the main door's line of sight: square to its wall, into the room it opens into
+    if axis == "x":
+        n = (0.0, 1.0 if (ir[1] + ir[3]) / 2 > c else -1.0)
+    else:
+        n = (1.0 if (ir[0] + ir[2]) / 2 > c else -1.0, 0.0)
+    mx, my = float(m["at"][0]), float(m["at"][1])
+    m0, m1 = _span(m, axis)
+    for o in ix.door_ops.get(inside, []):
+        if o is m or o.get("type") not in DOORS:
+            continue
+        inf = ix.info[o["id"]]
+        if inf["kind"] != "pair":
+            continue
+        wc = next((r for r in inf["rooms"] if r != inside), None)
+        if not wc or ix.type(wc) not in WET:
+            continue  # its door opens into the entry room, so it is a powder room or a common bath, never an attached one
+        dl = _wall_line(ix, o)
+        if not dl:
+            continue
+        dx, dy = float(o["at"][0]), float(o["at"][1])
+        vx, vy = dx - mx, dy - my
+        fwd = vx * n[0] + vy * n[1]
+        if fwd <= 0.5:
+            continue  # on the main door's own wall, or behind it
+        facing = False
+        if dl[0] == axis:  # a parallel wall across the room: the two door spans overlap when projected across it
+            d0, d1 = _span(o, axis)
+            facing = min(m1, d1) - max(m0, d0) > 0.05
+        dist = math.hypot(vx, vy)
+        angle = math.degrees(math.atan2(abs(vx * n[1] - vy * n[0]), fwd))
+        in_line = dist <= WC_CONE_FT + 1e-6 and angle <= WC_CONE_DEG + 1e-6
+        if not (facing or in_line):
+            continue
+        wn, rn = ix.name(wc), ix.name(inside)
+        where = (f"its door faces the main door across the {rn}" if facing else
+                 f"its door is {ft(dist)} from the main door, almost in line with it, in the {rn}")
+        out.add(f"plan.privacy.wc_on_entry:{wc}", "Toilet in view of the main door", "fail",
+                f"From the main door you look straight into the {wn}: {where}, so guests at the door see the WC.",
+                ids=[wc, o["id"], m["id"], inside],
+                fix=f"Move the {wn} door to a side wall of the {rn}, out of the main door's line of sight (or round a corner), "
+                    f"or turn the lobby so the two doors don't face each other; from the porch, guests should see a wall.",
+                ref=f"{REF} P-06")
+    if ix.type(inside) == "lobby":
+        x0, y0, x1, y1 = ir
+        doors = [o for o in ix.door_ops.get(inside, []) if o.get("type") in DOORS]
+        depth = min(x1 - x0, y1 - y0)
+        if depth + 1e-6 < LOBBY_MIN_DEPTH and len(doors) >= LOBBY_DOORS:
+            out.add(f"plan.circulation.lobby_crowded:{inside}", "Entrance lobby", "warn",
+                    f"The {ix.name(inside)} is only {fmt(depth)} deep but {len(doors)} doors open off it; their swings meet and "
+                    f"there is no room to greet a guest or put down a bag.", ids=[inside, *[o["id"] for o in doors]],
+                    fix="Make the entrance lobby at least 5 ft deep, or move one of its doors to the lounge or a passage.",
+                    ref=f"{REF} P-13")
+
+
 # P-08 ----------------------------------------------------------------------------------------------------------------
 def _reach(ix: PlanIndex, out: _Out) -> None:
     terminal = {r["id"] for r in ix.rooms if r.get("type") in PRIVATE | WET | {"dressing"}}
@@ -1008,12 +1090,52 @@ def _dead_ends(ix: PlanIndex, out: _Out) -> None:
 
 # P-15 (lite) ---------------------------------------------------------------------------------------------------------
 CAR_W, CAR_L, WALK = 9.0, 18.0, 3.5  # a parking bay per car, and the walkway past the cars to the door
+# The 3D engine (web/src/engine/furniture/parking.ts porchBays, contracts/engine-notes.md) lets a parked car's tail stand up to
+# 4 ft out over the porch's open drive-in edge (onto the driveway or the front open space), so a row of cars fits a porch
+# 14 ft deep there; the plan rule counts bays the same way, so the compliance sheet and the as-built note agree.
+OVERHANG = 4.0
+BIKE_W, BIKE_L = 3.0, 7.0  # a motorbike bay, clear of the cars and the walkway
+OUTDOOR = {"lawn", "driveway", "open_space", "courtyard"}  # the engine's "outdoor" rooms (plan/model.ts roomCat)
 
 
 def bays(w: float, d: float) -> int:
     """How many 9 × 18 ft car bays fit in a w × d rect (cars side by side and/or one behind the other, either way round)."""
     f = lambda a, b: int((a + 1e-6) // CAR_W) * int((b + 1e-6) // CAR_L)  # noqa: E731
     return max(f(w, d), f(d, w))
+
+
+def edge_bays(along: float, deep: float, overhang: float = 0.0) -> int:
+    """Bays for cars driving in across a porch edge `along` ft long into a porch `deep` ft deep, as the engine lays them out:
+    9 ft wide each; one row 18 ft deep, or deep - overhang with the tails standing out over the open edge (at most 4 ft); two
+    rows nose to tail in a porch 36 ft deep."""
+    across = int((along + 1e-6) // CAR_W)
+    rows = 2 if deep + 1e-6 >= 2 * CAR_L else 1 if deep + min(max(overhang, 0.0), OVERHANG) + 1e-6 >= CAR_L else 0
+    return across * rows
+
+
+def _edge_probe(r: Rect, side: str) -> tuple[float, float]:
+    x0, y0, x1, y1 = r
+    return {"front": ((x0 + x1) / 2, y0 - 0.5), "back": ((x0 + x1) / 2, y1 + 0.5), "left": (x0 - 0.5, (y0 + y1) / 2),
+            "right": (x1 + 0.5, (y0 + y1) / 2)}[side]
+
+
+def car_edge(ix: PlanIndex, rid: str) -> tuple[str, float, str | None] | None:
+    """The porch edge cars drive in across, picked as the engine does (parking.ts porchBays: a driveway beyond it scores
+    best, then open ground, the front edge preferred; an enclosed room beyond rules it out); how far a car's tail may stand
+    out over it (up to 4 ft, within the plot); and the type of room beyond it (None: open ground). None when no edge is
+    open."""
+    x0, y0, x1, y1 = ix.R[rid]
+    room = {"front": y0 - 0.3, "back": (ix.D - y1) if ix.D else OVERHANG, "left": x0, "right": (ix.W - x1) if ix.W else OVERHANG}
+    best = None
+    for side in ("front", "back", "left", "right"):  # the engine's order on a tie
+        o = ix.room_at(ix.ground, *_edge_probe(ix.R[rid], side), exclude=[rid])
+        t = ix.type(o) if o else None
+        score = ((6 if t == "driveway" else 2) + (3 if side == "front" else 0)) if o is None or t in OUTDOOR else -10
+        if best is None or score > best[0]:
+            best = (score, side, t)
+    if best[0] < 0:
+        return None
+    return best[1], max(0.0, min(OVERHANG, room[best[1]])), best[2]
 
 
 def brief_cars(brief: dict) -> int:
@@ -1029,6 +1151,17 @@ def brief_cars(brief: dict) -> int:
     return n
 
 
+BIKE_RE = re.compile(r"motor\s*-?\s*(bike|cycle)|\bbikes?\b|scooty|scooter", re.I)
+
+
+def brief_bike(brief: dict) -> bool:
+    """Whether the family wants a motorbike parked in the porch ("porch for 1 car plus a motorbike")."""
+    if any(str(s).split(":")[0].strip().lower() in ("motorbike", "bike", "motorcycle") for s in brief.get("spaces") or []):
+        return True
+    said = " ".join([str(p) for p in brief.get("preferences") or []] + [str(brief.get("notes") or "")])
+    return bool(BIKE_RE.search(said))
+
+
 def _named_cars(r: dict) -> int:
     name = str(r.get("name") or "").lower()
     m = re.search(r"(\d)\s*-?\s*car", name)
@@ -1037,32 +1170,38 @@ def _named_cars(r: dict) -> int:
     return 1 if r.get("type") == "garage" or re.search(r"\bcar|garage|parking", name) else 0
 
 
-def _door_reachable(ix: PlanIndex, pr: Rect, door: dict, cars: int) -> bool:
-    """Whether `cars` 9 × 18 ft bays (cars nose-in from the road, side by side) fit in the porch while a 3′6″ path along its
-    depth stays clear and reaches `door` (at least 3 ft of the door's width on the path)."""
+def _door_reachable(ix: PlanIndex, pr: Rect, door: dict, cars: int, edge: tuple | None = None) -> bool:
+    """Whether `cars` bays (cars nose-in across the drive-in edge `edge`, side by side; the road edge when not given) fit in
+    the porch while a 3′6″ path along its depth stays clear and reaches `door` (at least 3 ft of the door's width on the
+    path)."""
     x0, y0, x1, y1 = pr
-    W, D = x1 - x0, y1 - y0
-    if D + 1e-6 < CAR_L:  # cars can't park nose-in: only the area test applies
+    side, oh = (edge[0], edge[1]) if edge else ("front", 0.0)
+    along_x = side in ("front", "back")
+    lo, hi_ = (x0, x1) if along_x else (y0, y1)
+    deep = (y1 - y0) if along_x else (x1 - x0)
+    if deep + min(oh, OVERHANG) + 1e-6 < CAR_L:  # cars can't park nose-in: only the area test applies
         return True
     inf = ix.info.get(door["id"]) or {}
     w = float(door.get("width_ft") or 0)
-    x = float(door["at"][0])
-    on_side = (inf.get("edge") or ("x",))[0] == "y" if inf.get("kind") == "pair" else inf.get("side") in ("left", "right")
-    if on_side:  # a door on the porch's side wall: the path runs along that side
-        return int((W - WALK + 1e-6) // CAR_W) >= cars
+    u = float(door["at"][0] if along_x else door["at"][1])
+    wall = (inf.get("edge") or ("x",))[0] if inf.get("kind") == "pair" else ("y" if inf.get("side") in ("left", "right") else "x")
+    if wall == ("y" if along_x else "x"):  # a door on a wall the cars drive in along: the path runs along that side
+        return int((hi_ - lo - WALK + 1e-6) // CAR_W) >= cars
     need = min(3.0, w)
-    c, hi = max(x0, x - w / 2 + need - WALK), min(x1 - WALK, x + w / 2 - need)
+    c, hi = max(lo, u - w / 2 + need - WALK), min(hi_ - WALK, u + w / 2 - need)
     while c <= hi + 1e-6:
-        if int((c - x0 + 1e-6) // CAR_W) + int((x1 - c - WALK + 1e-6) // CAR_W) >= cars:
+        if int((c - lo + 1e-6) // CAR_W) + int((hi_ - c - WALK + 1e-6) // CAR_W) >= cars:
             return True
         c += 0.25
     return False
 
 
 def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
-    """P-15: the car porch parks every car the family asked for (9 × 18 ft a car), with a 3′6″ walkway past them to the
-    door."""
+    """P-15: the car porch parks every car the family asked for (9 × 18 ft a car, or 14 ft deep where the tail stands out
+    over the open drive-in edge, as the engine parks it), with a 3′6″ walkway past them to the door, and a 3 × 7 ft motorbike
+    bay clear of both when the brief mentions a motorbike."""
     want = brief_cars(brief)
+    bike = brief_bike(brief)
     porches = [r for r in ix.level_rooms(ix.ground) if r.get("type") in ("porch", "garage")]
     cars_for = {r["id"]: _named_cars(r) for r in porches}
     car_porches = [r for r in porches if cars_for[r["id"]]]
@@ -1078,20 +1217,31 @@ def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
         cars = max(1, cars_for[r["id"]])
         x0, y0, x1, y1 = ix.R[r["id"]]
         width, depth = x1 - x0, y1 - y0
-        fits = bays(width, depth)
+        edge = car_edge(ix, r["id"])
+        if edge:
+            along, deep = (width, depth) if edge[0] in ("front", "back") else (depth, width)
+            oh = edge[1]
+            fits = edge_bays(along, deep, oh)
+            room_ok = edge_bays(along - WALK, deep, oh) >= cars or edge_bays(along, deep - WALK) >= cars
+        else:  # no open edge to drive in across: the plain area test
+            along, deep, oh = width, depth, 0.0
+            fits = bays(width, depth)
+            room_ok = bays(width - WALK, depth) >= cars or bays(width, depth - WALK) >= cars
         plural = "s" if cars > 1 else ""
+        bike_ft = " (plus 3 ft for the motorbike)" if bike and r is big else ""
         if fits < cars:
+            short = (f" ({fmt(CAR_L - oh)} deep where its tail can stand out over the "
+                     f"{'driveway' if edge[2] == 'driveway' else 'open front'})") if edge and oh >= 1.0 and deep + 1e-6 < CAR_L else ""
             out.add(f"plan.circulation.porch:{r['id']}", "Car porch", "fail",
                     f"{r['name']} is {fmt(width)} × {fmt(depth)}, so it parks {fits} of the {cars} car{plural} asked for; each "
-                    f"car needs a 9 × 18 ft bay.", ids=[r["id"]],
-                    fix=f"Make {r['id']} at least {cars * CAR_W + WALK:g} ft wide × {CAR_L:g} ft deep ({cars} car{plural} side by "
-                        f"side plus a 3.5 ft walkway), or {CAR_W + WALK:g} ft wide × {cars * CAR_L:g} ft deep for cars one behind "
-                        f"the other.", ref=f"{REF} P-15", value=fits, limit=cars, unit="cars")
+                    f"car needs a 9 × 18 ft bay{short}.", ids=[r["id"]],
+                    fix=f"Make {r['name']} at least {cars * CAR_W + WALK:g} ft wide × {CAR_L:g} ft deep ({cars} car{plural} side "
+                        f"by side plus a 3.5 ft walkway){bike_ft}, or {CAR_W + WALK:g} ft wide × {cars * CAR_L:g} ft deep for cars "
+                        f"one behind the other.", ref=f"{REF} P-15", value=fits, limit=cars, unit="cars")
             continue
         doors = [o for o in ix.door_ops.get(r["id"], []) if o.get("type") in HINGED]
         mains = [o for o in doors if o.get("type") == "main_door"]
-        if doors and not (bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars) and \
-                not any(_door_reachable(ix, ix.R[r["id"]], o, cars) for o in mains or doors):
+        if doors and room_ok and not any(_door_reachable(ix, ix.R[r["id"]], o, cars, edge) for o in mains or doors):
             d = (mains or doors)[0]
             on = ix.oname(d)
             out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
@@ -1101,7 +1251,7 @@ def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
                         f"porch's side wall, so the car{plural} park beside a 3.5 ft path that reaches the door.",
                     ref=f"{REF} P-15")
             continue
-        if doors and bays(width - WALK, depth) < cars and bays(width, depth - WALK) < cars:
+        if doors and not room_ok:
             out.add(f"plan.circulation.porch_walkway:{r['id']}", "Walkway past the car", "fail",
                     f"{r['name']} is {fmt(width)} × {fmt(depth)}: {cars} car{plural} plus a 3′6″ walkway to {ix.oname(doors[0])} "
                     f"need {fmt(cars * CAR_W + WALK)} × {fmt(CAR_L)} (or {fmt(cars * CAR_W)} × {fmt(CAR_L + WALK)}).",
@@ -1109,6 +1259,18 @@ def _porch(ix: PlanIndex, out: _Out, brief: dict) -> None:
                     fix=f"Widen {r['id']} to {cars * CAR_W + WALK:g} ft (or deepen it to {CAR_L + WALK:g} ft) so a 3.5 ft path runs "
                         f"past the parked car{plural} to the door; keep the door on that path, not behind a bay.",
                     ref=f"{REF} P-15")
+            continue
+        if bike and r is big:
+            rows = 2 if cars > max(1, int((along - WALK + 1e-6) // CAR_W)) else 1
+            beside = along - math.ceil(cars / rows) * CAR_W - WALK + 1e-6 >= BIKE_W and deep + 1e-6 >= BIKE_L
+            behind = deep - rows * CAR_L + 1e-6 >= BIKE_W and along + 1e-6 >= BIKE_L
+            if not (beside or behind):
+                out.add(f"plan.circulation.porch_bike:{r['id']}", "Motorbike in the porch", "warn",
+                        f"{r['name']} ({fmt(width)} × {fmt(depth)}) has no 3 × 7 ft space left for the motorbike once the "
+                        f"car{plural} and the 3′6″ walkway to the door are in.", ids=[r["id"]],
+                        fix=f"Make {r['name']} 3 ft wider (at least {cars * CAR_W + WALK + BIKE_W:g} ft for {cars} car{plural} side "
+                            f"by side, the walkway and a motorbike) or 3 ft deeper than the car{plural} need ({CAR_L + BIKE_W:g} ft), "
+                            f"so a 3 × 7 ft motorbike bay sits clear of the cars and the walkway.", ref=f"{REF} P-15")
 
 
 # P-16b ---------------------------------------------------------------------------------------------------------------
