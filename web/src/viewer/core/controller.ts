@@ -18,7 +18,7 @@ import { ghostBox, heroPose, houseBox, plotBox, roomPose, type SafeArea } from "
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
-import { displayLabel, humanLabel, resolveHitTags, roomName, type PartRange } from "./tags";
+import { displayLabel, humanLabel, inSentence, resolveHitTags, roomName, type PartRange } from "./tags";
 import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, smoothstep, worldToPlan, zOf } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
@@ -49,12 +49,6 @@ const IDLE_MS = 2500;
 const HINTS_KEY = "naqsha.walk.coachmark";
 
 const v3 = (v: THREE.Vector3): Vec3 => [round(v.x), round(v.y), round(v.z)];
-/** A room's name inside a sentence: "the family TV lounge", "the parents' bedroom" (acronyms keep their capitals). */
-const roomPhrase = (name: string) =>
-  name
-    .split(/(\s+)/)
-    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
-    .join("");
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const isEditable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -1581,7 +1575,7 @@ export class ViewerController {
     this.ensureCollider();
     if (!this.walk.ready || !this.collider) return;
     this.walk.cancelGlide();
-    const name = roomPhrase(room.name);
+    const name = inSentence(room.name);
     if (this.nav.isVoid(room)) {
       this.toast("That's open to the floor below");
       return;
