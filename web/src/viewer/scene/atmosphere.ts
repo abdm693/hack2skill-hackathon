@@ -87,8 +87,11 @@ function nightDome(): THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
       float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       void main() {
         float h = clamp(vDir.y, -1.0, 1.0);
-        vec3 zenith = vec3(0.010, 0.014, 0.032);
-        vec3 horizon = vec3(0.060, 0.078, 0.135);
+        // full night: a blue-hour sky (the concepts' night renders), so the house's lit facade reads against it, not
+        // lost in black; the dusk blend (low uAlpha) keeps the deeper dusk colours it always had
+        float deep = smoothstep(0.35, 1.0, uAlpha);
+        vec3 zenith = mix(vec3(0.010, 0.014, 0.032), vec3(0.014, 0.026, 0.078), deep);
+        vec3 horizon = mix(vec3(0.060, 0.078, 0.135), vec3(0.070, 0.098, 0.195), deep);
         vec3 col = mix(horizon, zenith, pow(max(h, 0.0), 0.45));
         // the city's glow along the horizon
         col += vec3(0.075, 0.055, 0.040) * exp(-max(h, 0.0) * 14.0);
@@ -122,6 +125,8 @@ function nightDome(): THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
 const MOON_DIR = new THREE.Vector3(0.45, 0.8, -0.4).normalize();
 const MOON_COLOR = new THREE.Color("#a9bcff");
 const NIGHT_FOG = new THREE.Color("#0e1322");
+/** Full night's haze: the blue-hour sky's horizon (dusk keeps the darker one it always had). */
+const DEEP_NIGHT_FOG = new THREE.Color("#1d2740");
 const NIGHT_HEMI_SKY = new THREE.Color("#25324f");
 const NIGHT_HEMI_GROUND = new THREE.Color("#0a0b0e");
 
@@ -336,6 +341,8 @@ export class Atmosphere {
    */
   applyNightMode(n: number, light: THREE.DirectionalLight | null, hemi: THREE.HemisphereLight | null, root: THREE.Object3D | null) {
     n = Math.min(1, Math.max(0, n));
+    // how far into full night (View > Night): the blue-hour sky, haze and a softer flood; dusk's blend stays as it was
+    const deep = smoothstep(0.35, 1, n);
     this.nightness = n;
     {
       // aim the flood at the front of the house box (the road is at +z)
@@ -345,7 +352,7 @@ export class Atmosphere {
       this.facadeLight.target.position.set(cx, top * 0.42, front - 1.5);
       this.facadeLight.angle = Math.min(1.1, Math.atan2(width * 0.62, 9));
       this.facadeLight.target.updateMatrixWorld();
-      this.facadeLight.intensity = 120 * n * n;
+      this.facadeLight.intensity = lerp(120, 105, deep) * n * n;
     }
     this.night.visible = n > 0.001;
     this.night.material.uniforms.uAlpha.value = n;
@@ -377,7 +384,7 @@ export class Atmosphere {
       hemi.groundColor.lerp(NIGHT_HEMI_GROUND, n);
       hemi.intensity = hemi.intensity + (0.06 * ((hemi.userData.intensityScale as number) ?? 1) - hemi.intensity) * n;
     }
-    (this.scene.fog as THREE.Fog).color.lerp(NIGHT_FOG, n);
+    (this.scene.fog as THREE.Fog).color.lerp(NIGHT_FOG.clone().lerp(DEEP_NIGHT_FOG, deep), n);
     this.scene.environmentIntensity = lerp(this.scene.environmentIntensity, 0.015, n);
     this.exposure = lerp(this.exposure, 1.05, n);
     (this.ground.material as THREE.MeshStandardMaterial).color.lerp(new THREE.Color("#8d8f94"), n);

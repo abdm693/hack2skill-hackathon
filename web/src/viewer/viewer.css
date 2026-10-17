@@ -66,7 +66,7 @@
 }
 .nq-btn:hover { background: var(--nq-accent-press); }
 .nq-btn:active { transform: scale(0.97); }
-.nq-btn:focus-visible, .nq-icon:focus-visible, .nq-prompt-main:focus-visible, .nq-mini-floor:focus-visible, .nq-pin:focus-visible {
+.nq-btn:focus-visible, .nq-icon:focus-visible, .nq-prompt-main:focus-visible, .nq-mini-which:focus-visible, .nq-pin:focus-visible {
   outline: none; box-shadow: 0 0 0 2px var(--nq-hud), 0 0 0 4px var(--nq-hud-accent);
 }
 .nq-icon {
@@ -189,17 +189,17 @@
 }
 .nq-mini[data-help="1"] { visibility: hidden; }
 .nq-mini-head { display: flex; align-items: center; gap: 6px; margin: 0 0 7px; }
-.nq-mini-floors { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: rgb(255 255 255 / 0.06); }
-.nq-mini-floor {
-  appearance: none; border: 0; cursor: pointer; width: 22px; height: 20px; border-radius: 999px; padding: 0; position: relative;
-  font: 500 11px/1 var(--font-mono, "Geist Mono", ui-monospace, Menlo, monospace); color: var(--nq-ink-2); background: transparent;
-  transition: color 160ms, background-color 160ms;
+/* which floor's map: plain text that steps through the maps (a preview), never a second floor stack */
+.nq-mini-which {
+  appearance: none; border: 0; background: transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 6px; margin-left: -2px; border-radius: 8px;
+  font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: 0.01em; color: var(--nq-ink-2); transition: color 160ms, background-color 160ms;
 }
-.nq-mini-floor:hover { color: var(--nq-ink); }
-.nq-mini-floor[aria-pressed="true"] { color: var(--nq-ink); background: rgb(255 255 255 / 0.16); }
-.nq-mini-floor[data-here="1"]::after {
-  content: ""; position: absolute; left: 50%; bottom: -1px; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: var(--nq-hud-accent);
-}
+span.nq-mini-which { cursor: default; }
+button.nq-mini-which:hover { color: var(--nq-ink); background: rgb(255 255 255 / 0.08); }
+.nq-mini-which svg { opacity: 0.8; }
+.nq-mini-which[data-preview="1"] { color: var(--nq-hud-accent); }
+.nq-mini-preview { color: var(--nq-hud-accent); font-weight: 500; }
 .nq-mini-north { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; color: var(--nq-ink-2); }
 .nq-mini-map { display: block; margin: 0 auto; cursor: pointer; overflow: visible; }
 .nq-mini-plot { fill: rgb(255 255 255 / 0.03); stroke: rgb(255 255 255 / 0.22); stroke-width: 0.35; stroke-dasharray: 1.2 1; }
@@ -255,6 +255,12 @@
 .nq-touch-zone { position: absolute; bottom: 0; top: 30%; touch-action: none; pointer-events: auto; }
 .nq-joy { position: absolute; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 50%; border: 1.5px solid rgb(255 255 255 / 0.35); background: rgb(0 0 0 / 0.16); }
 .nq-joy i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgb(255 255 255 / 0.85); }
+/* the joystick at rest (no thumb on it): a faint ring low on the left, above the app's dock */
+.nq-joy-rest {
+  left: max(84px, calc(var(--nq-edge) + 52px)); top: auto; bottom: calc(var(--dock-h, 96px) + 36px); margin: 0 0 0 -52px;
+  opacity: 0.3; pointer-events: none; animation: nq-joy-rest 400ms var(--nq-ease); transition: opacity 600ms var(--nq-ease);
+}
+@keyframes nq-joy-rest { from { opacity: 0; } }
 .nq-touch-pin {
   position: absolute; right: var(--nq-edge); top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
   border: 0; display: grid; place-items: center; pointer-events: auto; cursor: pointer;

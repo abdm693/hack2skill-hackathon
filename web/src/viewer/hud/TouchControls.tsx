@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useStore } from "zustand";
 import type { ViewerController } from "../core/controller";
 import { DRAG_SENS } from "../walk/WalkController";
 
@@ -21,6 +22,9 @@ export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
   const joyRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const lookRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const input = ctrl.walk.input;
+  // after the one-time "Left thumb to move" hint, a faint ring keeps saying where the joystick lives
+  const hints = useStore(ctrl.store, (s) => s.hints);
+  const gliding = useStore(ctrl.store, (s) => s.gliding);
 
   const endJoy = () => {
     joyRef.current = null;
@@ -60,10 +64,16 @@ export function TouchControls({ ctrl }: { ctrl: ViewerController }) {
         }}
         onPointerCancel={endJoy}
       >
-        {joy && (
+        {joy ? (
           <div className="nq-joy" style={{ left: joy.x, top: joy.y }}>
             <i style={{ transform: `translate(${joy.kx}px, ${joy.ky}px)` }} />
           </div>
+        ) : (
+          !hints && !gliding && (
+            <div className="nq-joy nq-joy-rest" aria-hidden>
+              <i />
+            </div>
+          )
         )}
       </div>
       <div

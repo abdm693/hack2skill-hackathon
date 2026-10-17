@@ -13,8 +13,8 @@ import { BuildManager } from "./build";
 import { ContextFX, ghostAt, GHOST } from "./context";
 import { engineExtras } from "./engineExtras";
 import { grabCanvas, projectToNdc } from "./capture";
-import { FloorLift, levelForKey } from "./floors";
-import { ghostBox, heroPose, houseBox, plotBox, roomPose } from "./framing";
+import { FloorLift, floorList, isFloorNumberKey, levelForKey } from "./floors";
+import { ghostBox, heroPose, houseBox, plotBox, roomPose, type SafeArea } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
 import { sunState, type Facing } from "./sun";
@@ -22,6 +22,7 @@ import { displayLabel, humanLabel, resolveHitTags, roomName, type PartRange } fr
 import { FT, clamp, damp, isCoarsePointer, planToWorld, prefersReducedMotion, smoothstep, worldToPlan, zOf } from "./units";
 import { VisibilityController, type LevelBand } from "./visibility";
 import { Atmosphere } from "../scene/atmosphere";
+import { WindowGlow } from "../scene/windowGlow";
 import { buildColliderBVH, disposeCollider, type ColliderBVH } from "../walk/collider";
 import { glideSeconds, Navigator, type BlockCause, type RoutePlan } from "../walk/route";
 import { BLOCK } from "../walk/navgrid";
@@ -133,6 +134,8 @@ export class ViewerController {
   readonly holder = new THREE.Group();
   readonly ctxfx = new ContextFX();
   readonly lift = new FloorLift();
+  /** Night: warm light in every outside window. */
+  readonly glow = new WindowGlow();
   readonly nav: Navigator;
   props: HouseViewerProps;
 
@@ -303,6 +306,7 @@ export class ViewerController {
     this.collider = null;
     this.builds.disposeAll();
     this.ctxfx.dispose();
+    this.glow.dispose();
     this.result = null;
     for (const t of [this.toastTimer, this.draftTimer, this.hintsTimer, this.routeTimer, this.promptTimer, this.pinnedTimer]) window.clearTimeout(t);
     window.clearTimeout(this.glideTimer);
@@ -310,6 +314,10 @@ export class ViewerController {
     this.xfade = null;
     this.hiddenObs?.disconnect();
     this.hiddenObs = null;
+    this.resizeObs?.disconnect();
+    this.resizeObs = null;
+    this.probeEl?.remove();
+    this.probeEl = null;
     if (import.meta.env.DEV && (window as unknown as { __viewerDebug?: { ctrl?: unknown } }).__viewerDebug?.ctrl === this) {
       delete (window as unknown as { __viewerDebug?: unknown }).__viewerDebug;
     }
@@ -320,7 +328,7 @@ export class ViewerController {
     this.scene = t.scene;
     this.camera = t.camera;
     this.r3fInvalidate = t.invalidate;
-    t.scene.add(this.holder);
+    t.scene.add(this.holder, this.glow.group);
     t.gl.shadowMap.autoUpdate = false;
     t.gl.shadowMap.needsUpdate = true;
     t.gl.localClippingEnabled = false;
@@ -340,6 +348,12 @@ export class ViewerController {
     const plotCenter = plotBox(this.plan).getCenter(new THREE.Vector3());
     this.atmosphere.ground.position.set(plotCenter.x, -0.06, plotCenter.z);
     this.atmosphere.configureShadow(this.atmosphere.fallbackSun, this.store.getState().quality);
+    if (this.engineSun) {
+      // the house (and its own sun) landed before the canvas existed: never light it with a second, day sun
+      this.atmosphere.baseIntensity(this.engineSun);
+      this.atmosphere.setFallbackActive(false);
+      this.atmosphere.configureShadow(this.engineSun, this.store.getState().quality);
+    }
     this.syncGhostBox();
     this.syncSun();
     this.syncSectionCut();
@@ -352,6 +366,7 @@ export class ViewerController {
 
   detachThree() {
     this.holder.removeFromParent();
+    this.glow.group.removeFromParent();
     this.atmosphere?.dispose();
     this.atmosphere = null;
     this.gl = null;
@@ -377,7 +392,10 @@ export class ViewerController {
     const b = plotBox(this.plan).expandByScalar(18);
     b.min.y = -2;
     c.setBoundary(b);
-    c.addEventListener("controlstart", () => this.clearHover());
+    c.addEventListener("controlstart", () => {
+      this.clearHover();
+      this.leaveHero();
+    });
     this.placeHero(false);
   }
 
@@ -404,7 +422,13 @@ export class ViewerController {
     }
     this.container = el;
     this.watchHidden(el);
+    this.resizeObs?.disconnect();
+    this.resizeObs = null;
     if (!el) return;
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObs = new ResizeObserver(() => this.onResize());
+      this.resizeObs.observe(el);
+    }
     el.addEventListener("pointerdown", this.onPointerDown);
     el.addEventListener("pointermove", this.onPointerMove);
     el.addEventListener("pointerup", this.onPointerUp);
@@ -653,6 +677,9 @@ export class ViewerController {
     if (replacing && this.props.preserveCamera === false) {
       if (walking) this.spawnWalker(true);
       else this.placeHero(true);
+    } else if (!walking && this.heroPristine) {
+      // the app's chrome (the dock) has settled by the time the house is up: frame it against what's really there
+      this.placeHero(false, true);
     }
     this.pinEls.clear();
     this.markDirty();
@@ -858,6 +885,7 @@ export class ViewerController {
     } else this.configureVisibility();
     const after = this.shownLevels();
     if (root) this.vis.apply(root);
+    this.glow.syncVisibility((o) => this.vis.hiddenByTags(o));
     if (animate) {
       if (liftMeshes.length && this.scene) this.lift.liftAway(liftMeshes, this.scene);
       const arriving = [...after].filter((id) => !before.has(id));
@@ -969,6 +997,10 @@ export class ViewerController {
     const n = this.props.night ? 1 : fromSun;
     atm.daylightNight = 1 - smoothstep(-2, 16, altDeg);
     atm.applyNightMode(n, this.engineSun ?? atm.fallbackSun, this.engineHemi, root);
+    this.glow.build(this.plan);
+    // windows glow at full night (View > Night, the slider well past dusk); Day and Dusk keep their look
+    this.glow.setNight(root ? smoothstep(0.35, 1, n) : 0);
+    this.glow.syncVisibility((o) => this.vis.hiddenByTags(o));
     this.markDirty();
   }
 
@@ -1102,17 +1134,90 @@ export class ViewerController {
   // ───────────────────────────── orbit ─────────────────────────────
 
   /** The hero 3/4 aerial front view, on the sunny side of the house. */
-  placeHero(animate: boolean) {
+  placeHero(animate: boolean, refit = false) {
     const c = this.controls, cam = this.camera;
-    if (!c || !cam || (this.heroDone && !animate)) return;
+    if (!c || !cam || (this.heroDone && !animate && !refit)) return;
     this.heroDone = true;
+    this.syncAspect(cam);
     const facing = (this.plan.site?.facing ?? "N") as Facing;
     const sun = sunState(this.props.sunHour ?? 16.5, facing);
     const side: 1 | -1 = sun.dir.x >= 0 ? 1 : -1;
-    const pose = heroPose(this.plan, cam, side);
+    const pose = heroPose(this.plan, cam, side, 30, 31, this.heroSafe());
     c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, animate);
+    // until you move the camera yourself, the hero view follows the screen's shape (rotating a phone, a resize)
+    this.heroPristine = true;
+    this.heroSize = this.canvasSize();
     this.invalidate();
   }
+
+  /** The hero view is on screen and you haven't moved the camera since (a resize then re-frames it). */
+  private heroPristine = false;
+  private heroSize = "";
+  private resizeObs: ResizeObserver | null = null;
+  private probeEl: HTMLDivElement | null = null;
+
+  private canvasSize() {
+    const el = this.gl?.domElement;
+    return el ? `${el.clientWidth}x${el.clientHeight}` : "";
+  }
+
+  /** The camera's aspect from the canvas itself, so a fit never uses a stale shape (the first fit on a phone). */
+  private syncAspect(cam: THREE.PerspectiveCamera) {
+    const el = this.gl?.domElement;
+    const w = el?.clientWidth ?? 0, h = el?.clientHeight ?? 0;
+    if (w > 0 && h > 0 && Math.abs(cam.aspect - w / h) > 1e-3) {
+      cam.aspect = w / h;
+      cam.updateProjectionMatrix();
+    }
+  }
+
+  /** The camera moved for another reason (you, a room, a comment): stop re-framing the hero view on resize. */
+  private leaveHero() {
+    this.heroPristine = false;
+  }
+
+  /** A CSS length the app's shell publishes (e.g. --chrome-top, --dock-h), in px, or the fallback. */
+  private cssLength(name: string, fallback: number): number {
+    const host = this.container;
+    if (!host || typeof document === "undefined") return fallback;
+    if (!this.probeEl || this.probeEl.parentElement !== host) {
+      this.probeEl = document.createElement("div");
+      this.probeEl.setAttribute("aria-hidden", "true");
+      this.probeEl.style.cssText = "position:absolute;left:0;top:0;width:0;visibility:hidden;pointer-events:none";
+      host.appendChild(this.probeEl);
+    }
+    this.probeEl.style.height = `var(${name}, ${fallback}px)`;
+    const h = this.probeEl.getBoundingClientRect().height;
+    return Number.isFinite(h) ? h : fallback;
+  }
+
+  /**
+   * Phones (a canvas under 768 px wide): the part of the canvas the hero view may use, clear of the app's top chrome
+   * (its row and view switch) and the dock, with 16 px at the sides. Null on wider screens (the usual margins).
+   */
+  private heroSafe(): SafeArea | null {
+    const el = this.gl?.domElement;
+    if (!el) return null;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!w || !h || w >= 768) return null;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight || h;
+    const chromeBottom = this.cssLength("--chrome-top", 120);
+    const dockTop = vh - this.cssLength("--dock-h", 96);
+    const top = Math.max(0, chromeBottom - r.top) + 8;
+    const bottom = Math.max(0, r.bottom - dockTop) + 8;
+    // never squeeze the house into a sliver if the chrome is unusually tall
+    if (h - top - bottom < h * 0.35) return { w, h, top: h * 0.2, bottom: h * 0.2, left: 16, right: 16 };
+    return { w, h, top, bottom, left: 16, right: 16 };
+  }
+
+  /** The canvas changed shape: re-frame the hero view if it's still the one on screen. */
+  private onResize = () => {
+    const size = this.canvasSize();
+    if (!size || size === this.heroSize) return;
+    if (this.heroPristine && this.store.getState().mode === "orbit" && this.camera) this.placeHero(false, true);
+    else this.heroSize = size;
+  };
 
   focusAt(clientX: number, clientY: number) {
     const c = this.controls;
@@ -1123,6 +1228,7 @@ export class ViewerController {
     const dist = THREE.MathUtils.clamp(cam.position.distanceTo(hit.point) * 0.45, 2.5, 14);
     const pos = hit.point.clone().addScaledVector(dir, dist);
     pos.y = Math.max(pos.y, hit.point.y + 0.4);
+    this.leaveHero();
     c.setLookAt(pos.x, pos.y, pos.z, hit.point.x, hit.point.y, hit.point.z, true);
   }
 
@@ -1142,6 +1248,7 @@ export class ViewerController {
     this.setOrbitFloor(top && top.id === lvl.id ? null : lvl.id);
     const az = c.azimuthAngle;
     const pose = roomPose(room.rect, lvl.elevation_ft, az);
+    this.leaveHero();
     c.setLookAt(pose.position.x, pose.position.y, pose.position.z, pose.target.x, pose.target.y, pose.target.z, !prefersReducedMotion());
     if (this.scene) {
       const f = roomFrame(room.rect, lvl.elevation_ft);
@@ -1190,6 +1297,7 @@ export class ViewerController {
   }
 
   private enterWalk(initial: boolean) {
+    this.leaveHero();
     this.store.setState({ mode: "walk", walk: "intro", target: null, hover: null, idle: false, help: false });
     const cam = this.camera, c = this.controls;
     if (!cam) return; // attachThree() calls back once the canvas exists
@@ -1341,9 +1449,11 @@ export class ViewerController {
         else azDeg = clamp(Math.abs(azDeg), 18, 40) * (azDeg < 0 ? -1 : 1);
         // and never from over (or inside) a neighbouring house: try the mirror view, then the sunny one
         const candidates = [azDeg, -azDeg, sunny, -sunny, 0];
-        let pose = heroPose(this.plan, cam, 1, azDeg, 32);
+        this.syncAspect(cam);
+        const safe = this.heroSafe();
+        let pose = heroPose(this.plan, cam, 1, azDeg, 32, safe);
         for (const az of candidates) {
-          const p = heroPose(this.plan, cam, 1, az, 32);
+          const p = heroPose(this.plan, cam, 1, az, 32, safe);
           if (!this.overNeighbour(p.position)) {
             pose = p;
             break;
@@ -1756,12 +1866,15 @@ export class ViewerController {
         } else if (e.code === "Space") e.preventDefault();
         break;
       default: {
-        // floors by the floor stack's own labels: G (or 0), 1, 2…, R, B; a key no floor carries does nothing
+        // floors by the floor stack's own labels: G (or 0), 1, 2…, R, B; a number no floor carries says which exist
         if (!walking) break;
         const lvl = levelForKey(e.code, this.plan.levels);
         if (lvl) {
           consume();
           this.setFloor(lvl.id);
+        } else if (isFloorNumberKey(e.code)) {
+          consume();
+          this.toast(`This home has ${floorList(this.plan.levels)}`);
         }
       }
     }
@@ -2380,7 +2493,7 @@ export class ViewerController {
     // untagged hits: infer level/room from the plan, but only when the point is inside a room (not a street tree)
     const level = tags.level ?? (where.room ? where.level : undefined), room = tags.room ?? where.room;
     // one human label: "TV in the upper family lounge", "Floor plant in the drawing room"
-    const label = humanLabel(tags.kind, tags.label, roomName(this.plan, room));
+    const label = humanLabel(tags.kind, tags.label, roomName(this.plan, room), this.plan.levels.map((l) => l.name));
     if (level) anchor.level = level;
     if (room) anchor.room = room;
     if (tags.id) anchor.element_id = tags.id;
@@ -2436,6 +2549,7 @@ export class ViewerController {
       const want = this.plan.levels.find((l) => l.id === lvl), cur = this.plan.levels.find((l) => l.id === orbitFloor);
       if (want && cur && want.index > cur.index) this.setOrbitFloor(want.id);
     }
+    this.leaveHero();
     this.controls?.setLookAt(pos.x, pos.y, pos.z, tgt.x, tgt.y, tgt.z, true);
     this.flashPin(comment.id);
     this.invalidate();

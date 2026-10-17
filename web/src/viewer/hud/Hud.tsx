@@ -94,7 +94,8 @@ function WalkHud({ ctrl, plan, commentMode }: { ctrl: ViewerController; plan: Bu
         </div>
       )}
       {phase === "look" && target && !gliding && <div className="nq-target">{target.title}</div>}
-      {!touch && walking && <MiniMap ctrl={ctrl} plan={plan} />}
+      {/* from the moment you enter Walk (it fades in with the fly-in), then it recedes with the rest of the HUD */}
+      {!touch && (walking || phase === "intro") && <MiniMap ctrl={ctrl} plan={plan} />}
       <Prompt ctrl={ctrl} plan={plan} />
       {/* only once the note is saved (the composer is open while commenting) */}
       {pinned && (

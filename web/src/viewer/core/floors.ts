@@ -38,6 +38,17 @@ export function levelForKey(code: string, levels: Level[]): Level | null {
   return (label === "B" ? hits[hits.length - 1] : hits[0]) ?? null;
 }
 
+/** A number key (top row or keypad): it always means a floor, so one no floor carries deserves an answer. */
+export function isFloorNumberKey(code: string): boolean {
+  return /^(?:Digit|Numpad)[0-9]$/.test(code);
+}
+
+/** "G, 1 and R": the floor stack's labels, ground first, as a phrase. */
+export function floorList(levels: Level[]): string {
+  const keys = levelShorts(levels).filter((k, i, all) => all.indexOf(k) === i);
+  return keys.length > 1 ? `${keys.slice(0, -1).join(", ")} and ${keys[keys.length - 1]}` : (keys[0] ?? "one floor");
+}
+
 const LIFT = 1.5;
 const DUR = 420;
 
