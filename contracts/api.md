@@ -177,6 +177,7 @@ interface AsBuiltSummary {
 | PATCH / DELETE | `/api/projects/{pid}/members/{email}` | `{role}` | |
 | POST | `/api/projects/{pid}/share` | `{enabled}` | `{enabled, token, url}` |
 | GET | `/api/share/{token}` | | `{project (public fields), version, comments, role: "client"}` |
+| GET | `/api/share/{token}/meta` | | `{current_version_id, versions: [{id, n}]}` (no plan, no comments; what the client link polls) |
 | POST | `/api/share/{token}/comments` | `{author_name, text, anchor, camera, snapshot_data_url?}` | Comment |
 | POST | `/api/projects/{pid}/comments/{cid}/replies` (and `/api/share/{token}/comments/{cid}/replies`) | `{text, author_name?}` | Comment |
 | POST | `/api/projects/{pid}/revise` | adds `{instruction?: string}` | Conversational edits without pins ("make the kitchen bigger") |
@@ -257,7 +258,8 @@ interface AsBuiltSummary {
 - **Approvals**: `POST /api/share/{token}/comments` takes `kind: "approval"` (the client's "Approve vN"; the text
   "Approved version N." on a general anchor is also recognised). It is stored `status: "resolved"`, `kind: "approval"`: never
   counted as open, never pre-ticked, applied or revised. General notes (no `room` / `element_id` in the anchor) are nudged
-  sideways so their pins don't stack.
+  sideways so their pins don't stack: 0, +1.6, -1.6, +3.2 m along x from the anchor, then the next four 1.4 m higher (a slot
+  within 1.2 m of another general pin is taken).
 - **Open comments follow new versions**: when a design or revise run saves a new current version, every comment still
   `open` on the version it replaces (including ones posted while the run was going) moves to the new version, keeping its
   anchor and thread, with `from_version_id` = the version it was written on. Resolved, partial and rejected threads stay
@@ -276,6 +278,13 @@ interface AsBuiltSummary {
   `room.vent:<bath>` is a fail with no opening at all (a warn under 2 sq ft). Check titles and messages never contain element
   ids (they stay in `element_ids` and `fix`); LDA stair checks are titled "Ground → first stair" with "19 risers of 6.95 in,
   3′6″ wide…"; `plan.roof.solar` reads "64% kept clear (min 55%)…" with `unit: "%"`.
+- **Round 2 checks and brief marks**: `plan.privacy.wc_into_dining:<bath>` is now a fail (a powder room or common bath whose
+  only door opens into the dining room); new fail `plan.room.dressing_size:<dressing>` (short side under 5 ft or under
+  25 sq ft; `value`/`limit`/`unit` give the failing figure). The setup keeps `auto_filled` honest for "You said": "corner"
+  is in it from the moment the plot is known until the family says corner or mid-row (`corner_stated: true`), "storeys"
+  when the authority capped the count (`storeys_asked` holds what they asked for; the card reads "Kept to 2 storeys: DHA's
+  limit"), and "porch" when the car porch came with Naqsha's default spaces. The brief panel's whole-brief PATCH counts only
+  changed fields, and facts whose mark it removed, as the family's word.
 - **Clone**: `{fresh: true}` forces a new copy of a sample. Opening a sample again returns your copy (one copy, even from
   parallel requests); an untouched copy of an older sample (no messages, comments, versions or concepts of its own) is
   refreshed in place with the current sample.

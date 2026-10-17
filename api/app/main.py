@@ -9,6 +9,7 @@ import copy
 import hashlib
 import hmac
 import logging
+import math
 import os
 import re
 from pathlib import Path
@@ -387,6 +388,14 @@ async def share_view(token: str, me: Identity = Depends(maybe_identity)):
             "comments": comments_out(p["id"], await db.list_comments(p["id"]), me), "role": "client"}
 
 
+@app.get("/api/share/{token}/meta")
+async def share_meta(token: str):
+    """What the client link polls (every 30 s): the current version and the version list, without the plan or comments."""
+    p = await _shared(token)
+    return {"current_version_id": p.get("current_version_id"),
+            "versions": [{"id": v["id"], "n": v.get("n")} for v in p.get("versions") or [] if isinstance(v, dict) and v.get("id")]}
+
+
 @app.get("/api/share/{token}/versions/{vid}")
 async def share_version(token: str, vid: str):
     p = await _shared(token)
@@ -434,14 +443,30 @@ async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
     except (TypeError, ValueError):
         return anchor
     others = [c for c in await db.list_comments(pid, version_id) if _general(c.get("anchor") or {})]
-    taken = {tuple(round(float(v), 2) for v in (c.get("anchor") or {}).get("position") or []) for c in others}
-    step = 0.9  # metres
-    for k in range(0, 40):
-        dx = step * ((k + 1) // 2) * (1 if k % 2 else -1) if k else 0.0
-        cand = [round(p0[0] + dx, 2), round(p0[1], 2), round(p0[2], 2)]
-        if tuple(cand) not in taken:
+    taken = []
+    for c in others:
+        try:
+            q = [float(v) for v in (c.get("anchor") or {}).get("position") or []]
+        except (TypeError, ValueError):
+            continue
+        if len(q) == 3:
+            taken.append(q)
+    for cand in spread_slots(p0):
+        if all(math.dist(cand, q) >= SPREAD_CLEAR - 1e-6 for q in taken):
             return {**anchor, "position": cand}
     return anchor
+
+
+SPREAD_STEP, SPREAD_ROW, SPREAD_PER_ROW = 1.6, 1.4, 4  # metres; a 24 px pin is ~1.25 m across at the default hero view
+SPREAD_CLEAR = 1.2  # a slot closer than this to another general pin is taken
+
+
+def spread_slots(p0: list[float]):
+    """Where general pins go: 0, +1.6, -1.6, +3.2 m along x, then the same four 1.4 m higher, and so on."""
+    for row in range(10):
+        for k in range(SPREAD_PER_ROW):
+            dx = SPREAD_STEP * ((k + 1) // 2) * (1 if k % 2 else -1)
+            yield [round(p0[0] + dx, 2), round(p0[1] + SPREAD_ROW * row, 2), round(p0[2], 2)]
 
 
 async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera: dict, snapshot: str | None, author: dict,
