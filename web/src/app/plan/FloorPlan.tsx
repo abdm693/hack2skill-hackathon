@@ -68,7 +68,46 @@ export function stairAvoid(plan: BuildingPlan, levelId: string, ppf: number): Bo
     const hw = 16 / ppf;
     out.push({ x0: sx - hw, y0: sy - 22 / ppf, x1: sx + hw, y1: sy + 14 / ppf });
   }
+  return [...out, ...swingAvoid(plan, levelId), ...gateAvoid(plan, levelId, ppf)];
+}
+
+/**
+ * Every door's swing on a level, as boxes in plan feet (y up): the quarter circle a leaf sweeps, so no room name or
+ * size is ever printed across an arc.
+ */
+export function swingAvoid(plan: BuildingPlan, levelId: string): Box[] {
+  const building = plan.rooms.filter((r) => r.level === levelId && !SITE_TYPES.has(r.type));
+  if (!building.length) return [];
+  const { walls, boundaries } = deriveWalls(building);
+  const placed = placeOpenings(plan.openings.filter((o) => o.level === levelId), building, walls, boundaries);
+  const out: Box[] = [];
+  for (const p of placed) {
+    const t = p.opening.type;
+    if (t !== "door" && t !== "main_door" && t !== "double_door") continue;
+    const L = p.b - p.a;
+    const leaves: [number, number][] = t === "double_door" ? [[p.a, p.a + L / 2], [p.b - L / 2, p.b]] : [p.hingeAtA ? [p.a, p.a + L] : [p.b - L, p.b]];
+    for (const [u0, u1] of leaves) {
+      const len = u1 - u0;
+      const n0 = p.swingDir > 0 ? p.c + p.thick / 2 : p.c - p.thick / 2 - len;
+      const n1 = n0 + len;
+      out.push(p.orient === "h" ? { x0: u0, y0: n0, x1: u1, y1: n1 } : { x0: n0, y0: u0, x1: n1, y1: u1 });
+    }
+  }
   return out;
+}
+
+/** The "Gate" and "Car gate" captions on the front boundary (ground floor), so site labels (Lawn, Driveway) miss them. */
+function gateAvoid(plan: BuildingPlan, levelId: string, ppf: number): Box[] {
+  const lv = plan.levels.find((l) => l.id === levelId);
+  if (!lv || lv.index !== 0) return [];
+  return plan.site.gates.flatMap((g) => {
+    const w = measure(g.kind === "pedestrian" ? "Gate" : "Car gate", 10) / ppf;
+    const cx = g.at[0];
+    const caption = { x0: cx - w / 2 - 3 / ppf, y0: 0, x1: cx + w / 2 + 3 / ppf, y1: 19 / ppf };
+    // A hinged gate's leaf sweeps into the plot (drawn as an arc): keep labels off it too.
+    const swing = g.kind === "sliding" ? [] : [{ x0: cx - g.width_ft / 2, y0: 0, x1: cx + g.width_ft / 2, y1: g.width_ft }];
+    return [caption, ...swing];
+  });
 }
 
 // ── The drawing ─────────────────────────────────────────────────────────────────────────────────────
@@ -390,24 +429,28 @@ function RoomLabel({ l, Y, px }: { l: Label; Y: (y: number) => number; px: (n: n
   const cx = l.cx;
   const cy = Y(l.cy);
   if (l.kind === "key") {
+    // A lettered square, so a room key never reads as a numbered comment pin (round).
     return (
       <g transform={`translate(${cx} ${cy})`}>
-        <circle r={px(8)} fill="#fff" stroke={INK2} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <rect x={-px(7.5)} y={-px(7.5)} width={px(15)} height={px(15)} rx={px(3.5)} fill="#fff" stroke={INK2} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         <text y={px(3.6)} textAnchor="middle" fontSize={px(10)} fontWeight={600} fill={INK} style={{ fontFamily: SANS }}>
-          {l.n}
+          {l.letter}
         </text>
       </g>
     );
   }
-  const lines = l.dims ? 2 : 1;
-  const nameY = lines === 2 ? -px(l.dimFs * 0.55) : 0;
+  // The block is centred on (cx, cy): the name's line(s), then the size line.
+  const nameH = l.fs * 1.2 * l.lines.length;
+  const top = -(nameH + (l.dims ? l.dimFs * 1.3 : 0)) / 2;
   return (
     <g transform={`translate(${cx} ${cy})${l.vertical ? " rotate(-90)" : ""}`} textAnchor="middle">
-      <text y={nameY + px(l.fs * 0.36)} fontSize={px(l.fs)} fontWeight={500} fill={INK} style={{ fontFamily: SANS }}>
-        {l.name}
-      </text>
+      {l.lines.map((line, i) => (
+        <text key={i} y={px(top + l.fs * 1.2 * i + l.fs * 0.93)} fontSize={px(l.fs)} fontWeight={500} fill={INK} style={{ fontFamily: SANS }}>
+          {line}
+        </text>
+      ))}
       {l.dims && (
-        <text y={nameY + px(l.fs * 0.6 + l.dimFs * 1.05)} fontSize={px(l.dimFs)} fontWeight={500} fill={INK3} style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
+        <text y={px(top + nameH + l.dimFs * 1.02)} fontSize={px(l.dimFs)} fontWeight={500} fill={INK3} style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
           {l.dims}
           {l.delta && <tspan fill={ACCENT} fontWeight={600}>{` · ${l.delta}`}</tspan>}
         </text>
@@ -810,7 +853,8 @@ function Dimensions({ W, D, sb, px }: { W: number; D: number; sb: { front: numbe
       {chainY.map(([a]) => a > 0 && <line key={a} x1={W + 0.6} y1={a} x2={rightRow + 0.6} y2={a} {...ext} />)}
       <line x1={W + 0.6} y1={0} x2={rightRow + 0.6} y2={0} {...ext} />
       <line x1={W + 0.6} y1={D} x2={rightRow + 0.6} y2={D} {...ext} />
-      {chainX.length > 1 && chainX.map(([a, b]) => <Dim key={`x${a}`} x1={a} y1={topRow} x2={b} y2={topRow} label={feetInches(b - a)} px={px} />)}
+      {/* At a small scale (the A4 cover's site plan) the inner row would overprint the plot width: drop it. */}
+      {chainX.length > 1 && (topRow - topOuter) / px(1) >= 15 && chainX.map(([a, b]) => <Dim key={`x${a}`} x1={a} y1={topRow} x2={b} y2={topRow} label={feetInches(b - a)} px={px} />)}
       <Dim x1={0} y1={topOuter} x2={W} y2={topOuter} label={feetInches(W)} px={px} />
       <Dim x1={leftRow} y1={0} x2={leftRow} y2={D} label={feetInches(D)} px={px} />
       {chainY.map(([a, b]) => <Dim key={`y${a}`} x1={rightRow} y1={a} x2={rightRow} y2={b} label={feetInches(b - a)} px={px} side={1} />)}
@@ -888,7 +932,7 @@ export interface FloorPlanProps {
   /** "sheet" fits the drawing with its dimensions and road; "plot" fits the plot itself (small screens). */
   fit?: "sheet" | "plot";
   /** Called with the label layout so the parent can show the numbered-key legend. */
-  onKeys?: (keys: { n: number; room: Room }[]) => void;
+  onKeys?: (keys: { n: number; letter: string; room: Room }[]) => void;
   /** What changed in a room since the last version, shown in its card ("Widened the window"). */
   notes?: Map<string, string[]>;
   children?: ReactNode;
@@ -1049,6 +1093,14 @@ export function FloorPlan({
     }
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    // A mouse with no button held is never dragging: forget a press whose release we never saw (released outside
+    // the window, or lost capture), so hover cards keep working.
+    if (e.pointerType === "mouse" && e.buttons === 0 && pointers.current.has(e.pointerId)) {
+      pointers.current.delete(e.pointerId);
+      gesture.current = null;
+      if (!pointers.current.size) setDragging(false);
+      return;
+    }
     const prev = pointers.current.get(e.pointerId);
     if (!prev) return;
     const cur = { x: e.clientX, y: e.clientY };
@@ -1125,7 +1177,8 @@ export function FloorPlan({
   useEffect(() => setTapped(null), [level, plan]);
   const card = hover ?? tapped;
   const onHover = useCallback((room: Room | null, e: React.PointerEvent) => {
-    if (e.pointerType === "touch" || pointers.current.size) return;
+    // Touch shows the card on a tap instead; a mouse shows it on hover unless a button is held (a pan).
+    if (e.pointerType === "touch" || (e.pointerType === "mouse" ? e.buttons !== 0 : pointers.current.size > 0)) return;
     const r = box.current?.getBoundingClientRect();
     if (!room || !r) return setHover(null);
     setHover({ room, x: e.clientX - r.left, y: e.clientY - r.top });
@@ -1153,8 +1206,8 @@ export function FloorPlan({
     return layoutLabels(labelled, labelPpf || 1, { avoid, site: new Set(site.map((r) => r.id)), deltas: deltaStrings(deltas) });
   }, [plan, level, rooms, labelPpf, fontTick, deltas, measured]);
   useEffect(() => {
-    const keys = labels.filter((l): l is Extract<Label, { kind: "key" }> => l.kind === "key").map((l) => ({ n: l.n, room: l.room }));
-    const k = keys.map((x) => `${x.n}:${x.room.id}`).join("|");
+    const keys = labels.filter((l): l is Extract<Label, { kind: "key" }> => l.kind === "key").map((l) => ({ n: l.n, letter: l.letter, room: l.room })).sort((a, b) => a.n - b.n);
+    const k = keys.map((x) => `${x.letter}:${x.room.id}`).join("|");
     if (k !== keysRef.current) {
       keysRef.current = k;
       onKeys?.(keys);
@@ -1173,6 +1226,11 @@ export function FloorPlan({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onLostPointerCapture={(e) => {
+        pointers.current.delete(e.pointerId);
+        if (pointers.current.size < 2) gesture.current = null;
+        if (!pointers.current.size) setDragging(false);
+      }}
       onPointerLeave={() => setHover(null)}
       onDoubleClick={(e) => {
         const r = box.current!.getBoundingClientRect();

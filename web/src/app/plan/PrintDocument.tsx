@@ -185,7 +185,7 @@ function Header({ project, title }: { project: Project; title: string }) {
   );
 }
 
-type ScheduleRow = { id: string; name: string; size: string; area: number; key?: number };
+type ScheduleRow = { id: string; name: string; size: string; area: number; key?: string };
 
 function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: BuildingPlan; level: Level; scale: number; project: Project; sidebar: number; children: ReactNode }) {
   const mm = useMm();
@@ -205,7 +205,7 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
     .sort((a, b) => area(b) - area(a))
     .map((r) => {
       const key = keys.find((k) => k.room.id === r.id);
-      return { id: r.id, name: sentenceCase(r.name), size: `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`, area: area(r), key: key && key.kind === "key" ? key.n : undefined };
+      return { id: r.id, name: sentenceCase(r.name), size: `${feetInches(r.rect.w)} × ${feetInches(r.rect.d)}`, area: area(r), key: key && key.kind === "key" ? key.letter : undefined };
     });
   // The roof: what stands on it (the stair tower is its covered area), the tank and the solar area.
   if (roof) {
@@ -247,7 +247,7 @@ function FloorSheet({ plan, level, scale, project, sidebar, children }: { plan: 
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    {r.key ? <span style={{ display: "inline-block", width: mm(3.6), height: mm(3.6), lineHeight: mm(3.6), textAlign: "center", border: "0.2mm solid #46464B", borderRadius: "50%", fontSize: mm(2.2), marginRight: "1.2mm" }}>{r.key}</span> : null}
+                    {r.key ? <span style={{ display: "inline-block", width: mm(3.6), height: mm(3.6), lineHeight: mm(3.6), textAlign: "center", border: "0.2mm solid #46464B", borderRadius: "0.8mm", fontSize: mm(2.2), marginRight: "1.2mm" }}>{r.key}</span> : null}
                     {r.name}
                   </td>
                   <td className="mono" style={{ textAlign: "right", whiteSpace: "nowrap", paddingLeft: "2mm" }}>{r.size}</td>

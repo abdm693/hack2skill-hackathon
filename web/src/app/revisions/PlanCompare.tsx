@@ -11,7 +11,7 @@ import { PlanDefs, PlanSheet, deltaStrings, sheetBounds, stairAvoid } from "@/ap
 import { stairDrawing } from "@/app/plan/geometry";
 import { layoutLabels, type Box, type Label } from "@/app/plan/labels";
 import { SITE_TYPES, areaDeltas, levelKey, levelName, levelsOf } from "@/app/plan/model";
-import { feetInches } from "@/app/lib/utils";
+import { RoomKeyRow } from "@/app/plan/RoomKey";
 
 export function PlanCompare({
   before,
@@ -101,9 +101,20 @@ export function PlanCompare({
           />
         )}
       </div>
+      {/* Before / After ride either side of the wipe line, in a strip above the drawing: never over its dimensions. */}
+      {before && (
+        <div className="relative mt-2 h-6" aria-hidden>
+          {wipe > 0 && wipe < 100 && (
+            <>
+              <span className="pointer-events-none absolute top-0 -translate-x-full rounded-full bg-surface px-2.5 py-0.5 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.max(64, cutPx - 6) }}>Before</span>
+              <span className="pointer-events-none absolute top-0 rounded-full bg-surface px-2.5 py-0.5 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.min(size.w - 60, cutPx + 6) }}>After</span>
+            </>
+          )}
+        </div>
+      )}
       <div
         ref={box}
-        className={cn("relative mt-3 select-none overflow-hidden rounded-card bg-surface shadow-e1", compact ? "h-[280px] shrink-0 touch-pan-y" : "min-h-[360px] flex-1 touch-none")}
+        className={cn("relative select-none overflow-hidden rounded-card bg-surface shadow-e1", before ? "mt-1" : "mt-3", compact ? "h-[280px] shrink-0 touch-pan-y" : "min-h-[360px] flex-1 touch-none")}
         onPointerDown={(e) => {
           if (!before) return;
           dragging.current = true;
@@ -143,21 +154,11 @@ export function PlanCompare({
           )}
           {before && wipe > 0 && wipe < 100 && <line x1={cutX} y1={B.y} x2={cutX} y2={B.y + B.h} stroke="#2747F5" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
         </svg>
-        {before && wipe > 0 && wipe < 100 && (
-          <>
-            <span className="pointer-events-none absolute top-3 -translate-x-full rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.max(64, cutPx - 8) }}>Before</span>
-            <span className="pointer-events-none absolute top-3 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-e1" style={{ left: Math.min(size.w - 60, cutPx + 8) }}>After</span>
-          </>
-        )}
       </div>
       {keys.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-3" aria-label="Room key">
-          {keys.map((k) => (
-            <li key={k.room.id} className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="grid size-4 place-items-center rounded-full border border-ink-2 bg-white text-[10px] font-semibold text-ink">{k.n}</span>
-              <span className="text-ink-2">{k.room.name}</span>
-              <span className="font-mono tabular-nums">{feetInches(k.room.rect.w)} × {feetInches(k.room.rect.d)}</span>
-            </li>
+          {[...keys].sort((a, b) => a.n - b.n).map((k) => (
+            <RoomKeyRow key={k.room.id} letter={k.letter} room={k.room} />
           ))}
         </ul>
       )}

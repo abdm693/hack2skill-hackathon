@@ -4,7 +4,7 @@
  * useAskContext({ next }); this is the default for each view.
  */
 import { useMemo, useSyncExternalStore } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Project } from "@contracts/api-types";
 import { canEdit, hasVersion, roleOf, type ViewId } from "@/app/lib/views";
 import { useProject } from "@/app/store/project";
@@ -47,6 +47,8 @@ export function useDefaultNext(view: ViewId, project: Project | null): NextMove 
   const reviseRunning = useProject((s) => s.revise.status === "running");
   const conceptsRunning = useProject((s) => !!s.conceptRun?.running);
   const seen = useSeen();
+  const [params] = useSearchParams();
+  const mode = params.get("mode");
 
   return useMemo<NextMove | null>(() => {
     if (!project) return null;
@@ -106,13 +108,24 @@ export function useDefaultNext(view: ViewId, project: Project | null): NextMove 
           };
         }
         if (latest?.n > 1 && latest.id === current && !seen.includes(latest.id)) {
+          // A fresh copy of a sample: walk it first (the house is the point), then see what its revision changed.
+          if (project.cloned_from && mode !== "walk") return { label: "Walk through it", run: () => to("house", "?mode=walk") };
           return { label: "See what changed", run: () => to("revisions") };
         }
         if (roleOf(project) === "owner") return { label: "Share", run: () => void startShare() };
         return null;
       case "revisions":
         if (reviseRunning) return null;
-        return hasVersion(project) ? { label: "Walk through it", run: () => to("house", "?mode=walk") } : null;
+        // The page's one "Walk through it": into the version on screen (?v=), the latest by default.
+        return hasVersion(project)
+          ? {
+              label: "Walk through it",
+              run: () => {
+                const v = new URLSearchParams(window.location.search).get("v");
+                to("house", v && v !== current ? `?mode=walk&v=${encodeURIComponent(v)}` : "?mode=walk");
+              },
+            }
+          : null;
     }
-  }, [project, view, comments, designRunning, reviseRunning, conceptsRunning, seen, navigate]);
+  }, [project, view, comments, designRunning, reviseRunning, conceptsRunning, seen, navigate, mode]);
 }
