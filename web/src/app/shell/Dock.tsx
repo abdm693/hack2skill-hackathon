@@ -35,7 +35,7 @@ export interface DockProps {
   defaultPlaceholder: string;
   defaultSuggestions: string[];
   /** What Ask does when the view registers nothing. */
-  defaultSubmit: (text: string) => void | Promise<void>;
+  defaultSubmit: (text: string) => void | boolean | Promise<void | boolean>;
   commands: Command[];
   /** Whether Naqsha's line opens the conversation sheet (false where there is none, e.g. the client view). */
   conversation?: boolean;
@@ -83,7 +83,15 @@ export function Dock(props: DockProps) {
     setDraft("");
     setPaletteOpen(false);
     const fn = activeAskContext().onSubmit ?? defaultSubmit;
-    void fn(t);
+    // A send that fails keeps what was typed: the text comes back unless something new was typed meanwhile.
+    const restore = () => {
+      if (!useAskStore.getState().draft) setDraft(text);
+    };
+    try {
+      void Promise.resolve(fn(t)).then((ok) => ok === false && restore(), restore);
+    } catch {
+      restore();
+    }
   };
 
   // useAsk().submit from views

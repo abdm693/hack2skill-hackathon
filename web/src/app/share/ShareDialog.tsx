@@ -147,7 +147,14 @@ export function ShareDialog({ open, onClose, project }: { open: boolean; onClose
             <span className="block text-[14px] font-semibold text-ink">Client link</span>
             <span className="block text-[13px] leading-[18px] text-ink-3">Anyone with the link can view and comment.</span>
           </label>
-          <Switch id={switchId} checked={share.enabled} onChange={(on) => void toggleLink(on)} disabled={toggling || status === "loading"} />
+          {/* Until /members answers, the link's state isn't known: a spinner, never a switch that reads "off". */}
+          {status === "loading" || status === "idle" ? (
+            <span className="grid h-6 w-10 shrink-0 place-items-center" role="status" aria-label="Checking the client link">
+              <Spinner />
+            </span>
+          ) : (
+            <Switch id={switchId} checked={share.enabled} onChange={(on) => void toggleLink(on)} disabled={toggling} />
+          )}
         </div>
         {share.enabled && url && (
           <div className="mt-3 flex items-center gap-2">

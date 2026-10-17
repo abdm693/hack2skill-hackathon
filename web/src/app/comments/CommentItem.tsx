@@ -9,6 +9,7 @@ import type { Comment } from "@contracts/api-types";
 import { assetUrl } from "@/api/client";
 import { cn, relativeTime } from "@/app/lib/utils";
 import { useProject } from "@/app/store/project";
+import { useMembers } from "@/app/store/members";
 import { Avatar, authorColor } from "@/app/ui/Avatar";
 import { Button } from "@/app/ui/Button";
 import { StatusChip } from "@/app/ui/Chip";
@@ -55,13 +56,17 @@ export const CommentItem = forwardRef<
   const updateComment = useProject((s) => s.updateComment);
   const deleteComment = useProject((s) => s.deleteComment);
   const reply = useProject((s) => s.replyToComment);
-  const author = authorOf(c);
-  const mine = isMine(author, me, c.mine);
+  // The owner is named when the project knows their name (older comments were saved as just "Owner").
+  const ownerName = useMembers((s) => s.members.find((m) => m.role === "owner")?.name?.trim());
+  const raw = authorOf(c);
+  const author = raw.role === "owner" && raw.name.trim().toLowerCase() === "owner" && ownerName ? { ...raw, name: ownerName } : raw;
+  const mine = isMine(raw, me, c.mine);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(c.text);
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
   const [sending, setSending] = useState(false);
+  const [snap, setSnap] = useState<"loading" | "loaded" | "failed">("loading");
   const editRef = useRef<HTMLTextAreaElement>(null);
   const replyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -205,15 +210,18 @@ export const CommentItem = forwardRef<
           <p className="whitespace-pre-wrap text-[14px] leading-5 text-ink">{c.text}</p>
         )}
 
-        {c.snapshot_url && !editing && (
+        {/* The snapshot shows only once its image has loaded: never an empty box (and nothing when it fails). */}
+        {c.snapshot_url && !editing && snap !== "failed" && (
           <button
             type="button"
             onClick={() => onShow?.(c)}
             disabled={!onShow}
-            className="mt-2 block overflow-hidden rounded-[12px] shadow-e1 outline-none focus-visible:shadow-focus disabled:cursor-default"
+            className={cn("mt-2 overflow-hidden rounded-[12px] shadow-e1 outline-none focus-visible:shadow-focus disabled:cursor-default", snap === "loaded" ? "block" : "absolute h-0 w-0 opacity-0")}
             aria-label="Show where this comment was pinned"
+            tabIndex={snap === "loaded" ? undefined : -1}
+            aria-hidden={snap === "loaded" ? undefined : true}
           >
-            <img src={assetUrl(c.snapshot_url)} alt="" loading="lazy" className="aspect-[16/9] w-40 object-cover" />
+            <img src={assetUrl(c.snapshot_url)} alt="" loading="lazy" onLoad={() => setSnap("loaded")} onError={() => setSnap("failed")} className="aspect-[16/9] w-40 object-cover" />
           </button>
         )}
 

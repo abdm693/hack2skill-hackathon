@@ -14,6 +14,20 @@ export const FILTERS: { id: CommentFilter; label: string }[] = [
   { id: "resolved", label: "Resolved" },
 ];
 
+/** Two groups that combine: who wrote it, and whether it is still open ("Client" and "Open" at once). */
+export type WhoFilter = "all" | "mine" | "team" | "client";
+export type StatusFilter = "any" | "open" | "resolved";
+export const WHO_FILTERS: { id: WhoFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "mine", label: "Mine" },
+  { id: "team", label: "Team" },
+  { id: "client", label: "Client" },
+];
+export const STATUS_FILTERS: { id: Exclude<StatusFilter, "any">; label: string }[] = [
+  { id: "open", label: "Open" },
+  { id: "resolved", label: "Resolved" },
+];
+
 export const STATUS_LABEL: Record<Comment["status"], string> = {
   open: "Open",
   resolved: "Done",

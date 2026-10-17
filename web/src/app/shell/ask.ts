@@ -44,8 +44,8 @@ export interface Command {
 export interface AskContext {
   /** The Ask field's placeholder in this view. */
   placeholder?: string;
-  /** What Ask does with plain text here. */
-  onSubmit?: (text: string) => void | Promise<void>;
+  /** What Ask does with plain text here (false, or a throw, means it didn't go: the dock puts the text back). */
+  onSubmit?: (text: string) => void | boolean | Promise<void | boolean>;
   /** 2–3 suggestion chips under Naqsha's line (a tap sends it). */
   suggestions?: string[];
   /** Naqsha's line above the field (null hides it). */
