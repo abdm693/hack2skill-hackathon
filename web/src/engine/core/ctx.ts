@@ -26,6 +26,9 @@ export interface PlacedItem {
   rot?: number;
   /** the variant it was furnished with (e.g. "noHob" for a counter without a hob) */
   variant?: string;
+  /** EN3-01: what furnish() was asked (colour, material, size...) and the style, to build a smaller version of it */
+  opts?: Record<string, unknown>;
+  style?: string;
 }
 
 /** A guard (railing) along a straight, axis-aligned line on a level: runs along `axis` at `c`, from a to b. */
@@ -71,6 +74,8 @@ export class BuildCtx {
   readonly notes = new NoteLog();
   /** facade elements registered as mounting surfaces for lights */
   readonly facadeSurfs: { side: string; plane: number; u0: number; u1: number; h0: number; h1: number }[] = [];
+  /** EN3-02: every walk-colliding facade member as built (plan ft box, absolute heights), for the walkway checks */
+  readonly facadeBlocks: { kind: string; x0: number; x1: number; y0: number; y1: number; h0: number; h1: number }[] = [];
   /** callbacks run at the end of the current section (e.g. auto dining chairs) */
   readonly endOfSection: (() => void)[] = [];
   /** structure options remembered for later sections */

@@ -9,6 +9,7 @@ import { Kit } from "./core/shapes";
 import { FT, clamp, color, colorHex, num, warn } from "./core/util";
 import { makeCanvas } from "./materials/gen";
 import { levelAtHeight } from "./lights";
+import { carWays, openPoints, parking, type Parking } from "./furniture/parking";
 
 const SIDES: Side[] = ["front", "back", "left", "right"];
 export function side(s: unknown): Side {
@@ -45,17 +46,75 @@ function region(o: Partial<FacadeRegion>): Reg {
   return { side: s, u0: clamp(u0, -60, 400), u1: clamp(u1, -60, 400), h0: clamp(h0, -2, 80), h1: clamp(h1, -2, 90) };
 }
 
+/** A face-space box (u along the face, p across it) as a plan box (ft). */
+function planBox(s: Side, u0: number, u1: number, p0: number, p1: number): Box2 {
+  const [a0, a1] = [Math.min(u0, u1), Math.max(u0, u1)];
+  const [b0, b1] = [Math.min(p0, p1), Math.max(p0, p1)];
+  return s === "front" || s === "back" ? { x0: a0, x1: a1, y0: b0, y1: b1 } : { x0: b0, x1: b1, y0: a0, y1: a1 };
+}
+type Box2 = { x0: number; x1: number; y0: number; y1: number };
+
+/** EN3-02: a facade member lower than this above the ground under it is something a walker or a car runs into */
+const LOW_FT = 7;
+
 export function facadeAPI(ctx: BuildCtx) {
   const M = ctx.mats;
   // Projections never cross a party-wall plot edge and reach at most 1.5 / 3 ft into open setbacks
   // (StructureModel.envelope); geometry beyond that is cut off with a warning.
   let clipped = false;
+  // EN3-02: the members built since the last finish(), as plan boxes (ctx.facadeBlocks keeps the colliding ones)
+  let members: (Box2 & { h0: number; h1: number })[] = [];
   const fbox = (mb: MeshBuilder, s: Side, u0: number, u1: number, p0: number, p1: number, h0: number, h1: number): void => {
     const axis = s === "front" || s === "back" ? "x" : "y";
     const c = ctx.model.clipRunBox(axis, u0, u1, p0, p1);
     const lo = (a: number, b: number) => Math.min(a, b), hi = (a: number, b: number) => Math.max(a, b);
     if (!c || c[0] > lo(u0, u1) + 1e-3 || c[1] < hi(u0, u1) - 1e-3 || c[2] > lo(p0, p1) + 1e-3 || c[3] < hi(p0, p1) - 1e-3) clipped = true;
-    if (c) faceBox(mb, s, c[0], c[1], c[2], c[3], h0, h1);
+    if (c) {
+      faceBox(mb, s, c[0], c[1], c[2], c[3], h0, h1);
+      members.push({ ...planBox(s, c[0], c[1], c[2], c[3]), h0: Math.min(h0, h1), h1: Math.max(h0, h1) });
+    }
+  };
+  /**
+   * EN3-02: where a low facade member may not stand: each parking bay and the way its car drives in (the bay's width
+   * less 1 ft a side, from the plot edge it is entered from to its far end), 3 ft in front of every ground-floor door
+   * to the outside or onto a porch (± 0.3 ft), 3 ft inside every gate, and the 3 ft walkway from the gate to the main
+   * door. Computed once, on the first member that needs it.
+   */
+  let keep: { zones: Box2[]; walk: Parking | null } | null = null;
+  const keepClear = (): { zones: Box2[]; walk: Parking | null } => {
+    if (keep) return keep;
+    const zones: Box2[] = [];
+    let walk: Parking | null = null;
+    if (ctx.structureBuilt) {
+      const plan = ctx.plan;
+      const g = plan.levels[0];
+      walk = parking(ctx);
+      zones.push(...carWays(walk, plan.plotW, plan.plotD));
+      for (const o of ctx.model.openings) {
+        if (!o.isDoor || o.op.level !== g.id) continue;
+        const run = o.run;
+        for (const [r, into] of [[run.neg, -1], [run.pos, 1]] as const) {
+          if (r ? r.cat === "enclosed" : run.out !== into) continue;
+          const c0 = run.c + (into * run.t) / 2, c1 = c0 + into * 3;
+          zones.push(run.axis === "x" ? { x0: o.u0 - 0.3, x1: o.u1 + 0.3, y0: Math.min(c0, c1), y1: Math.max(c0, c1) } : { x0: Math.min(c0, c1), x1: Math.max(c0, c1), y0: o.u0 - 0.3, y1: o.u1 + 0.3 });
+        }
+      }
+      for (const gt of plan.plan.site?.gates ?? []) {
+        const gx = Number(gt?.at?.[0]), gy = Number(gt?.at?.[1]), w = Number(gt?.width_ft) || 4;
+        if (!Number.isFinite(gx) || !Number.isFinite(gy) || gy > 1) continue;
+        zones.push({ x0: gx - w / 2, x1: gx + w / 2, y0: 0, y1: 3 });
+      }
+    }
+    return (keep = { zones, walk });
+  };
+  /** Does a facade member with this plan footprint, starting at h0, stand in a way that must stay clear? (only its
+   *  part out in the open counts, see openPoints) */
+  const inTheWay = (b: Box2, h0: number): boolean => {
+    if (!ctx.structureBuilt) return false;
+    const floor = floorBelow(ctx, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, h0 + 0.5);
+    if (h0 >= floor + LOW_FT) return false;
+    const K = keepClear();
+    return openPoints(ctx, b).some(([x, y]) => K.zones.some((z) => x > z.x0 + 0.02 && x < z.x1 - 0.02 && y > z.y0 + 0.02 && y < z.y1 - 0.02) || (!!K.walk && K.walk.onWalkway(x, y)));
   };
   const plane = (r: Reg, withExtras = false): number => {
     const p = ctx.model.outerPlane(r.side, r.u0, r.u1, r.h0, r.h1, withExtras ? ctx.facadeSurfs : undefined);
@@ -74,6 +133,8 @@ export function facadeAPI(ctx: BuildCtx) {
     ctx.add(g, tag(kind, label, r.h0, r.h1));
     if (collide) g.traverse((o) => (o as THREE.Mesh).isMesh && ctx.collider(o as THREE.Mesh));
     else g.traverse((o) => (o.userData.collide = false));
+    if (collide) for (const m of members) ctx.facadeBlocks.push({ kind: `facade:${kind}`, ...m });
+    members = [];
     return g;
   };
   const register = (r: Reg, p: number) => ctx.facadeSurfs.push({ side: r.side, plane: p, u0: r.u0, u1: r.u1, h0: r.h0, h1: r.h1 });
@@ -106,8 +167,12 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "stone_cladding");
     const kit = new Kit();
     const mb = kit.mb(mat);
+    members = [];
     for (const rr of g.rects((v) => v === true)) fbox(mb, r.side, rr.x, rr.x + rr.w, p, p + sgn * depth, rr.y, rr.y + rr.d);
-    if (kit.empty) return;
+    if (kit.empty) {
+      members = [];
+      return;
+    }
     finish(kit, "cladding", "Facade cladding", r);
     register(r, p + sgn * depth);
   }
@@ -122,16 +187,23 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "wood_teak");
     const kit = new Kit();
     const mb = kit.mb(mat);
+    members = [];
     const gap = 0.06;
     const span = r.u1 - r.u0;
     for (let k = 0; k < n; k++) {
       const c = n === 1 ? (r.u0 + r.u1) / 2 : r.u0 + w / 2 + ((span - w) * k) / (n - 1);
       fbox(mb, r.side, c - w / 2, c + w / 2, p + sgn * gap, p + sgn * (gap + d), r.h0, r.h1);
     }
-    // slim top + bottom carrier rails behind the fins
+    // slim top + bottom carrier rails behind the fins (EN3-02: a rail lower than 7 ft is left off where it would
+    // cross a porch's car way, a door or gate, or the walkway)
     const rail = M.get("metal_black");
-    fbox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h1 - 0.1, r.h1);
-    fbox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), r.h0, r.h0 + 0.1);
+    const railFoot = planBox(r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12));
+    let dropped = 0;
+    for (const [h0, h1] of [[r.h1 - 0.1, r.h1], [r.h0, r.h0 + 0.1]]) {
+      if (inTheWay(railFoot, h0)) dropped++;
+      else fbox(kit.mb(rail), r.side, r.u0, r.u1, p + sgn * 0.02, p + sgn * (gap + 0.12), h0, h1);
+    }
+    if (dropped) warn(`facade.fins on the ${r.side}: ${dropped === 1 ? "a carrier rail" : "the carrier rails"} left off to keep a door, the walkway or the car way clear`);
     finish(kit, "fins", "Vertical fins", r);
     register(r, p + sgn * (gap + d));
   }
@@ -146,13 +218,33 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "wood_teak");
     const kit = new Kit();
     const mb = kit.mb(mat);
+    members = [];
     const span = r.h1 - r.h0;
+    // EN3-02: slats and posts lower than 7 ft are left off where they would cross a porch's car way, a door or gate,
+    // or the walkway
+    let dropped = 0;
+    const slatFoot = planBox(r.side, r.u0, r.u1, p + sgn * 0.05, p + sgn * (0.05 + d));
     for (let k = 0; k < n; k++) {
       const hc = n === 1 ? (r.h0 + r.h1) / 2 : r.h0 + t / 2 + ((span - t) * k) / (n - 1);
+      if (inTheWay(slatFoot, hc - t / 2)) {
+        dropped++;
+        continue;
+      }
       fbox(mb, r.side, r.u0, r.u1, p + sgn * 0.05, p + sgn * (0.05 + d), hc - t / 2, hc + t / 2);
     }
     const post = M.get("metal_black");
-    for (const u of [r.u0, r.u1]) fbox(kit.mb(post), r.side, u - 0.06, u + 0.06, p, p + sgn * (0.05 + d * 0.6), r.h0, r.h1);
+    for (const u of [r.u0, r.u1]) {
+      if (inTheWay(planBox(r.side, u - 0.06, u + 0.06, p, p + sgn * (0.05 + d * 0.6)), r.h0)) {
+        dropped++;
+        continue;
+      }
+      fbox(kit.mb(post), r.side, u - 0.06, u + 0.06, p, p + sgn * (0.05 + d * 0.6), r.h0, r.h1);
+    }
+    if (dropped) warn(`facade.louvers on the ${r.side}: ${dropped} low slat(s) or post(s) left off to keep a door, the walkway or the car way clear`);
+    if (kit.empty) {
+      members = [];
+      return;
+    }
     finish(kit, "louvers", "Horizontal louvers", r);
     register(r, p + sgn * (0.05 + d));
   }
@@ -166,10 +258,42 @@ export function facadeAPI(ctx: BuildCtx) {
     const mat = M.get(o?.material, "plaster_white");
     const kit = new Kit();
     const mb = kit.mb(mat);
-    fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h1 - t, r.h1);
-    fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h0, r.h0 + t);
-    fbox(mb, r.side, r.u0, r.u0 + t, p, p + sgn * d, r.h0 + t, r.h1 - t);
-    fbox(mb, r.side, r.u1 - t, r.u1, p, p + sgn * d, r.h0 + t, r.h1 - t);
+    members = [];
+    // EN3-02: a frame standing on the ground (its bottom within 1 ft of the ground or plinth under it) is built as a
+    // U, with no sill member to trip over or close a porch; and no member lower than 7 ft crosses a porch's car way, a
+    // door or gate opening, or the gate-to-door walkway: such a sill or head is left off, and such a post slides in
+    // along the frame until it is clear (or is left off)
+    const foot = (u0: number, u1: number) => planBox(r.side, u0, u1, p, p + sgn * d);
+    const whole = foot(r.u0, r.u1);
+    const ground = Math.max(floorBelow(ctx, (whole.x0 + whole.x1) / 2, (whole.y0 + whole.y1) / 2, r.h0 + 0.5), ctx.plan.levels[0]?.elev ?? ctx.plan.grade);
+    const sill = !(r.h0 <= ground + 1 + 1e-6) && !inTheWay(whole, r.h0);
+    const head = !inTheWay(whole, r.h1 - t);
+    // (a U's posts stand on the ground under them, not on the plinth level the frame was drawn from)
+    const postFrom = sill ? r.h0 + t : r.h0 <= ground + 1 + 1e-6 ? Math.min(r.h0, floorBelow(ctx, (whole.x0 + whole.x1) / 2, (whole.y0 + whole.y1) / 2, r.h0 + 0.5)) : r.h0;
+    const notes: string[] = [];
+    if (!sill) notes.push("built as a U (no bottom member)");
+    if (head) fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h1 - t, r.h1);
+    else notes.push("head left off");
+    if (sill) fbox(mb, r.side, r.u0, r.u1, p, p + sgn * d, r.h0, r.h0 + t);
+    const slide = Math.max(0, (r.u1 - r.u0) / 2 - t);
+    for (const k of [1, -1]) {
+      let at: number | null = null;
+      for (let s = 0; s <= slide + 1e-6 && at === null; s += 0.25) {
+        const a = k > 0 ? r.u0 + s : r.u1 - s - t;
+        if (!inTheWay(foot(a, a + t), postFrom)) at = a;
+      }
+      if (at === null) {
+        notes.push(`${k > 0 ? "first" : "second"} post left off`);
+        continue;
+      }
+      if (Math.abs(at - (k > 0 ? r.u0 : r.u1 - t)) > 1e-6) notes.push(`${k > 0 ? "first" : "second"} post moved ${Math.abs(at - (k > 0 ? r.u0 : r.u1 - t)).toFixed(2)} ft in`);
+      fbox(mb, r.side, at, at + t, p, p + sgn * d, postFrom, r.h1 - t);
+    }
+    if (notes.length) warn(`facade.frame on the ${r.side}: ${notes.join(", ")} (it stands on the ground, or across a door, the walkway or the car way)`);
+    if (kit.empty) {
+      members = [];
+      return;
+    }
     finish(kit, "frame", "Projecting frame", r);
     register(r, p + sgn * d);
   }

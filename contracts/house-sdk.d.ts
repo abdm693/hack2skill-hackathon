@@ -178,11 +178,16 @@ export interface HouseSDK {
   facade: {
     /** Clad a rectangle of the outer wall on one side (thin panel, 0.1 ft proud of the wall). */
     cladding(o: FacadeRegion & { depth_ft?: number }): void;
-    /** Vertical fins/battens across a region: count, width and depth (proud of wall). */
+    /** Vertical fins/battens across a region: count, width and depth (proud of wall). A carrier rail lower than 7 ft is
+     *  left off where it would cross a porch's car way, a door or gate opening, or the gate-to-main-door walkway. */
     fins(o: FacadeRegion & { count: number; width_ft?: number; depth_ft?: number }): void;
-    /** Horizontal louvers across a region. */
+    /** Horizontal louvers across a region. Slats and posts lower than 7 ft are left off where they would cross a porch's
+     *  car way, a door or gate opening, or the walkway. */
     louvers(o: FacadeRegion & { count: number; depth_ft?: number; thickness_ft?: number }): void;
-    /** Projecting box frame (picture frame); the region is the frame's OUTER bounds. Same projection limits as canopy. */
+    /** Projecting box frame (picture frame); the region is the frame's OUTER bounds. Same projection limits as canopy.
+     *  A frame standing on the ground (its bottom within 1 ft of the ground or plinth) is built as a U, posts down to the
+     *  ground and no bottom member; no member lower than 7 ft crosses a porch's car way, a door or gate opening, or the
+     *  walkway: a post there slides in along the frame until it is clear (or is left off). */
     frame(o: FacadeRegion & { thickness_ft?: number; depth_ft?: number }): void;
     /** Flat projecting slab (canopy/chajja/cantilever) over a plan rect; h_ft = height of its TOP surface. LDA: never past a
      *  zero-setback (party-wall) edge; into an open setback at most 1.5 ft (space < 10 ft) or 3 ft (space ≥ 10 ft). */
@@ -219,13 +224,21 @@ export interface HouseSDK {
    * wet-area shower on the wall), plants and chairs give way, and if it still has no place the build reports a fail.
    * curtains always hang centred on a window or sliding door (the one on that wall nearest along_ft, else the room's
    * largest), never over a door; a room with no window gets none.
-   * Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on solid wall, never over a door or window;
+   * Wall items (tv, painting, mirror_wall, ac_split, towel_rail) go only on solid wall, never over a door or window
+   * (a picture that would end up over one when its piece moves is re-centred on solid wall, or taken down);
    * a tv lines up over its tv_unit, a mirror over a dresser or vanity, a painting over a sofa or sideboard. A
-   * tv_unit keeps 1.5 ft from every door frame; in a bedroom it goes only on the wall the bed faces. side_tables
+   * tv_unit keeps 1.5 ft from every door frame and is never on the wall a living room is entered through (the main
+   * door's, or the door from the lobby, porch or corridor on the way in: the TV group turns to face the opposite wall
+   * when it fits there); in a bedroom it goes only on the wall the bed faces. side_tables
    * stand on the two sides of the bed; table_lamp, hob, sink_kitchen and microwave stand on a nightstand or counter.
    * Cars go into 9 × 18 ft parking bays (8.5 ft wide at the least) that keep the gate-to-main-door walkway clear: one
    * per car the design parks, and as many as the plan's porch asks for ("Car porch (2 cars)"); a car that does not
-   * fit is reported. After each section every door and stair landing keeps a 3 ft path.
+   * fit is reported. After each section, in every room each door (entry, attached bath, dressing, balcony) and stair
+   * landing joins the others by a 3 ft path, and a long side of every bed and the approach to every window can be
+   * reached: the engine moves the pieces in the way, then uses a smaller version (a queen becomes a single, a
+   * wardrobe narrower, then shallower), then leaves out the least-needed piece with a note ("the wardrobe was left out
+   * to keep the way to the bath clear"); a bed whose only spot runs its long side along a window is a smaller bed
+   * clear of it. A door no one can get to at all is a fail ("door unreachable").
    */
   furnish(item: FurnitureType, o: FurnishOptions): THREE_NS.Object3D;
   /** Sensible default layout for a room by its type (use when no specific intent). */
