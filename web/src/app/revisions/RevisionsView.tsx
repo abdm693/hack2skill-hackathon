@@ -183,7 +183,7 @@ function LiveRevision({ run, base, compare, onWalk, onPlan }: { run: Run; base?:
   return (
     <div>
       <p className="text-label text-ink-3">{running ? `Revising version ${base?.n ?? ""}` : run.version ? `Version ${run.version.n} · ready` : "Revision"}</p>
-      <h1 className="mt-1 text-title text-ink">
+      <h1 className="mt-1 text-title text-ink max-sm:text-[22px] max-sm:leading-[28px]">
         {running ? <>Working on {run.instruction ? `“${asked}”` : asked}</> : run.version ? storyTitle(run.version.n, run.instruction, undefined, run.version.changes ?? run.changes ?? []) : "The revision stopped"}
       </h1>
       {!running && run.version && (
@@ -307,7 +307,7 @@ function VersionStory({ project, version, parent, run, compare, onWalk, onPlan }
       <p className="text-label text-ink-3">
         Version {version.n} · {relativeTime(version.created_at)}
       </p>
-      <h1 className="mt-1 text-title text-ink">{first ? "The first design, drawn from your brief." : storyTitle(version.n, source?.instruction, summary, changes)}</h1>
+      <h1 className="mt-1 text-title text-ink max-sm:text-[22px] max-sm:leading-[28px]">{first ? "The first design, drawn from your brief." : storyTitle(version.n, source?.instruction, summary, changes)}</h1>
       {/* "Walk through it" is the dock's Next pill on this page: one of it, not two. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button variant="secondary" iconRight={<ArrowRight className="size-4" strokeWidth={1.75} />} onClick={onPlan}>
