@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useStore } from "zustand";
 import type { BuildingPlan, Level, Room } from "@contracts/plan";
 import type { ViewerController } from "../core/controller";
+import { levelShort } from "../core/floors";
 
 const OUTDOOR = new Set(["porch", "balcony", "terrace", "lawn", "driveway", "courtyard", "open_space", "garage"]);
 const WET = new Set(["bath", "powder", "laundry", "kitchen", "dirty_kitchen"]);
@@ -16,15 +17,6 @@ function sentence(name: string): string {
     .split(/\s+/)
     .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : /^[A-Z]{2,}$/.test(w) || /\d/.test(w) ? w : w.toLowerCase()))
     .join(" ");
-}
-
-/** "G", "1", "2", "R", "B": the floor stack's own short names. */
-export function levelShort(l: Level, levels: Level[]): string {
-  const sorted = [...levels].sort((a, b) => a.index - b.index);
-  if (/roof/i.test(l.id) || /roof/i.test(l.name) || (l === sorted[sorted.length - 1] && sorted.length > 1 && !/floor/i.test(l.name))) return "R";
-  if (l.index < 0) return "B";
-  if (l.index === 0) return "G";
-  return String(l.index);
 }
 
 /**

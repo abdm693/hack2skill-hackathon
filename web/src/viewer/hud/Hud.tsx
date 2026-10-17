@@ -7,10 +7,11 @@
  * - top-right, 72 px down (under the app's people capsule): the 168 px minimap with its ? help
  * - phone: no minimap; the joystick and look pad fill the lower screen above the app's dock
  */
-import { useCallback, useEffect, useRef } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
 import type { BuildingPlan } from "@contracts/plan";
 import type { ViewerController } from "../core/controller";
+import { levelShorts } from "../core/floors";
 import { sectionStage } from "../core/tags";
 import { MiniMap } from "./MiniMap";
 import { TouchControls } from "./TouchControls";
@@ -116,7 +117,8 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
   const hints = useStore(ctrl.store, (s) => s.hints);
   const help = useStore(ctrl.store, (s) => s.help);
   const gliding = useStore(ctrl.store, (s) => s.gliding);
-  const floors = plan.levels.length;
+  // the floor keys, by the floor stack's own labels (G, 1, R…)
+  const floorKeys = useMemo(() => levelShorts(plan.levels).filter((k, i, all) => all.indexOf(k) === i), [plan]);
   // "Click to look around" (or "Drag…" when the pointer can't be locked) for 4 s after you start walking or let go of
   // the mouse; gone at the first look, step or glide. It is the only place that says how to look (no toast as well).
   const showPrompt = prompt && phase === "free" && !gliding && !touch;
@@ -186,11 +188,17 @@ function Prompt({ ctrl, plan }: { ctrl: ViewerController; plan: BuildingPlan }) 
             <dd>
               <Kbd>M</Kbd> or the map
             </dd>
-            {floors > 1 && (
+            {plan.levels.length > 1 && (
               <>
                 <dt>Floors</dt>
                 <dd>
-                  <Kbd>1</Kbd>–<Kbd>{String(Math.min(9, floors))}</Kbd> or <Kbd>[</Kbd>
+                  {floorKeys.map((k, i) => (
+                    <Fragment key={k}>
+                      {i > 0 && ", "}
+                      <Kbd>{k}</Kbd>
+                    </Fragment>
+                  ))}{" "}
+                  or <Kbd>[</Kbd>
                   <Kbd>]</Kbd>
                 </dd>
               </>

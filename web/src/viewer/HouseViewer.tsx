@@ -89,6 +89,12 @@ export interface HouseViewerProps {
   onRoomChange?: (roomId: string | null, levelId: string | null) => void;
   /** Keep the camera when plan/sections change (version switch); default true. */
   preserveCamera?: boolean;
+  /**
+   * The viewer is on screen (default true). Pass false while keeping it mounted but hidden behind another view; the
+   * viewer also notices an ancestor hidden with visibility: hidden or display: none by itself. While inactive it
+   * renders only on demand (never every frame, even in walk mode), ignores the keyboard and its pins stay hidden.
+   */
+  active?: boolean;
 }
 
 /**
@@ -118,6 +124,7 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
   const quality = useStore(ctrl.store, (s) => s.quality);
   const idle = useStore(ctrl.store, (s) => s.idle);
   const gliding = useStore(ctrl.store, (s) => s.gliding);
+  const active = useStore(ctrl.store, (s) => s.active);
 
   useEffect(() => {
     ctrl.mount();
@@ -159,6 +166,10 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
     ctrl.syncContext();
   }, [ctrl, props.ghostContext, props.hideVehicles]);
 
+  useEffect(() => {
+    ctrl.syncActive();
+  }, [ctrl, props.active]);
+
   return (
     <div
       ref={ctrl.setContainer}
@@ -169,13 +180,14 @@ export const HouseViewer = forwardRef<ViewerHandle, HouseViewerProps>(function H
       data-drag={lockRefused ? "1" : "0"}
       data-idle={idle ? "1" : "0"}
       data-gliding={gliding ? "1" : "0"}
+      data-active={active ? "1" : "0"}
     >
       <Canvas
         shadows="percentage"
         dpr={DPR[quality]}
         gl={GL_PROPS}
         camera={{ fov: 50, near: 0.08, far: 3000, position: [30, 22, 26] }}
-        frameloop={mode === "walk" ? "always" : "demand"}
+        frameloop={mode === "walk" && active ? "always" : "demand"}
       >
         <SceneRoot ctrl={ctrl} />
         <OrbitRig ctrl={ctrl} />

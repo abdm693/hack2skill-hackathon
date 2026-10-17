@@ -13,7 +13,7 @@ import { BuildManager } from "./build";
 import { ContextFX, ghostAt, GHOST } from "./context";
 import { engineExtras } from "./engineExtras";
 import { grabCanvas, projectToNdc } from "./capture";
-import { FloorLift } from "./floors";
+import { FloorLift, levelForKey } from "./floors";
 import { ghostBox, heroPose, houseBox, plotBox, roomPose } from "./framing";
 import { hitNormal, pick, accelerateLater } from "./pick";
 import { makeViewerStore, type BuildState, type Quality, type ViewerMode, type ViewerStore } from "./store";
@@ -186,9 +186,13 @@ export class ViewerController {
   private walkerOnFallback = false;
   private navWarm = false;
   private ghostTarget = 1;
-  private lastRoomId: string | null | undefined = undefined;
+  /** the (room, level) last told to the app through onRoomChange */
+  private lastRoomKey: string | undefined = undefined;
   private xfade: HTMLCanvasElement | null = null;
   private frames: { mesh: THREE.Mesh; start: number }[] = [];
+  /** watches the container's ancestors: the app hides a kept-mounted House with a class (visibility: hidden) */
+  private hiddenObs: MutationObserver | null = null;
+  private cssHidden = false;
   result: BuildResult | null = null;
 
   constructor(props: HouseViewerProps) {
@@ -256,7 +260,8 @@ export class ViewerController {
 
   /** Moving the mouse anywhere (the app's chrome too) brings a receded walk HUD back. */
   private onDocPointerMove = (e: PointerEvent) => {
-    if (e.pointerType === "touch" || this.store.getState().mode !== "walk") return;
+    const s = this.store.getState();
+    if (e.pointerType === "touch" || s.mode !== "walk" || !s.active) return;
     const now = performance.now();
     if (now - this.lastDocMove < 100) return;
     this.lastDocMove = now;
@@ -294,6 +299,8 @@ export class ViewerController {
     window.clearTimeout(this.glideTimer);
     this.xfade?.remove();
     this.xfade = null;
+    this.hiddenObs?.disconnect();
+    this.hiddenObs = null;
     if (import.meta.env.DEV && (window as unknown as { __viewerDebug?: { ctrl?: unknown } }).__viewerDebug?.ctrl === this) {
       delete (window as unknown as { __viewerDebug?: unknown }).__viewerDebug;
     }
@@ -387,6 +394,7 @@ export class ViewerController {
       c.removeEventListener("contextmenu", this.onContextMenu);
     }
     this.container = el;
+    this.watchHidden(el);
     if (!el) return;
     el.addEventListener("pointerdown", this.onPointerDown);
     el.addEventListener("pointermove", this.onPointerMove);
@@ -400,6 +408,48 @@ export class ViewerController {
 
   invalidate() {
     this.r3fInvalidate?.();
+  }
+
+  // ───────────────────────────── on screen / hidden ─────────────────────────────
+
+  /**
+   * The app keeps House mounted but hidden behind Plan, Concepts and Revisions (an ancestor with visibility: hidden,
+   * toggled by class). Watch the ancestors' class/style so the viewer knows without the app having to say so.
+   */
+  private watchHidden(el: HTMLElement | null) {
+    this.hiddenObs?.disconnect();
+    this.hiddenObs = null;
+    if (!el || typeof MutationObserver === "undefined") return;
+    const obs = new MutationObserver(() => this.syncActive());
+    for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+      obs.observe(p, { attributes: true, attributeFilter: ["class", "style", "hidden"] });
+    }
+    this.hiddenObs = obs;
+    this.syncActive();
+  }
+
+  /** `active` prop or the container's own visibility changed. */
+  syncActive() {
+    const el = this.container;
+    if (el && el.isConnected) {
+      const cs = getComputedStyle(el);
+      this.cssHidden = cs.visibility === "hidden" || cs.display === "none" || el.getClientRects().length === 0;
+    } else this.cssHidden = false;
+    const active = this.props.active !== false && !this.cssHidden;
+    const s = this.store.getState();
+    if (s.active === active) return;
+    if (!active) {
+      // hidden mid-walk: no key stays held, the pointer is let go, and the app's chrome never stays receded
+      this.onBlur();
+      if (this.isLocked()) document.exitPointerLock?.();
+      this.clearHover();
+      this.hudHover = this.hudPointer = this.hudFocus = false;
+      this.store.setState({ active, idle: false });
+    } else {
+      this.lastInput = performance.now();
+      this.store.setState({ active });
+    }
+    this.invalidate();
   }
 
   markDirty() {
@@ -488,7 +538,7 @@ export class ViewerController {
     // the HUD steps back when nothing happens for a while
     if (Math.hypot(this.walk.vel.x, this.walk.vel.z) > 0.05 || this.walk.glide) this.lastInput = now;
     // never while the pointer rests on (or focus is in) the minimap or the help card: "click to go" must still work
-    const idle = (s.walk === "free" || s.walk === "look") && !this.hudHover && !s.help && now - this.lastInput > IDLE_MS;
+    const idle = (s.walk === "free" || s.walk === "look") && s.active && !this.hudHover && !s.help && now - this.lastInput > IDLE_MS;
     if (idle !== s.idle) this.store.setState({ idle });
   }
 
@@ -1151,7 +1201,7 @@ export class ViewerController {
     this.walk.enabled = false;
     this.walk.beginTransition(cam, initial || prefersReducedMotion() ? 0.01 : 1.15);
     this.perf.settleUntil = performance.now() + 2500;
-    this.lastRoomId = undefined;
+    this.lastRoomKey = undefined;
     this.markDirty();
   }
 
@@ -1428,6 +1478,9 @@ export class ViewerController {
     this.hideLookPrompt();
     this.walk.input.look.dx = this.walk.input.look.dy = 0;
     this.store.setState({ route: { id, byLevel: route.byLevel, to: toRoom }, gliding: true, mapLevel: null, idle: false });
+    // the app's room pill reads the destination until arrival (endGlide names the room actually reached)
+    const dest = this.placeAt(route.end, toRoom);
+    this.fireRoomChange(dest.roomId, dest.levelId);
     if (prefersReducedMotion()) {
       this.jumpTo(route.end, route.yaw, route.pitch);
       this.endGlide(id);
@@ -1587,7 +1640,7 @@ export class ViewerController {
 
   private onKeyDown = (e: KeyboardEvent) => {
     const s = this.store.getState();
-    if (s.mode !== "walk" || isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (s.mode !== "walk" || !s.active || isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     let walking = s.walk === "free" || s.walk === "look";
     const consume = () => {
       e.preventDefault();
@@ -1645,14 +1698,15 @@ export class ViewerController {
           this.requestLock();
         } else if (e.code === "Space") e.preventDefault();
         break;
-      default:
-        if (/^Digit[1-9]$/.test(e.code) && walking) {
-          const lvl = this.levelsSorted[Number(e.code.slice(5)) - 1];
-          if (lvl) {
-            consume();
-            this.setFloor(lvl.id);
-          }
+      default: {
+        // floors by the floor stack's own labels: G (or 0), 1, 2…, R, B; a key no floor carries does nothing
+        if (!walking) break;
+        const lvl = levelForKey(e.code, this.plan.levels);
+        if (lvl) {
+          consume();
+          this.setFloor(lvl.id);
         }
+      }
     }
   };
 
@@ -1660,7 +1714,7 @@ export class ViewerController {
   private onKeyDownLate = (e: KeyboardEvent) => {
     if (e.code !== "Escape" || e.defaultPrevented || isEditable(e.target)) return;
     const s = this.store.getState();
-    if (s.mode !== "walk") return;
+    if (s.mode !== "walk" || !s.active) return;
     // the Esc that released the pointer lock is not also "leave walk"
     if (this.isLocked() || performance.now() - this.unlockedAt < 400) return;
     if (s.help) return this.setHelp(false);
@@ -1945,8 +1999,10 @@ export class ViewerController {
   }
 
   private fireRoomChange(roomId: string | null, levelId: string | null) {
-    if (this.lastRoomId === roomId) return;
-    this.lastRoomId = roomId;
+    // the level counts too: from the street (no room) up to the roof (no room) is still a change of place
+    const key = `${roomId ?? ""}|${levelId ?? ""}`;
+    if (this.lastRoomKey === key) return;
+    this.lastRoomKey = key;
     try {
       this.props.onRoomChange?.(roomId, levelId);
     } catch (e) {
@@ -1954,17 +2010,27 @@ export class ViewerController {
     }
   }
 
-  private updateRoomLabel() {
-    const where = this.locate(new THREE.Vector3(this.walk.feet.x, this.walk.feet.y + 0.05, this.walk.feet.z), 0.45);
-    const lvl = this.plan.levels.find((l) => l.id === where.level);
+  /** The room (and level) at a feet position, or `roomId` itself when given (a glide's destination). */
+  private placeAt(feet: THREE.Vector3, roomId?: string): { room: string; roomId: string | null; levelId: string | null } {
+    const where = this.locate(new THREE.Vector3(feet.x, feet.y + 0.05, feet.z), 0.45);
+    const roomObj = this.plan.rooms.find((r) => r.id === (roomId ?? where.room));
+    const levelId = roomObj?.level ?? where.level ?? null;
+    const lvl = this.plan.levels.find((l) => l.id === levelId);
     const lowest = Math.min(...this.plan.levels.map((l) => l.index));
     // no room rect here: outdoors on the ground, otherwise name the level (roof terrace, open first-floor area…)
-    const roomObj = where.room ? this.plan.rooms.find((r) => r.id === where.room) : undefined;
     const room = roomObj?.name ?? (lvl && lvl.index > lowest ? lvl.name : "Outside");
+    return { room, roomId: roomObj?.id ?? null, levelId };
+  }
+
+  /**
+   * Where the walker is. The minimap follows it live, gliding too (its floor and "you are here"); the app's room pill
+   * (onRoomChange) does not during a glide: startGlide named the destination, and endGlide names the room reached.
+   */
+  private updateRoomLabel() {
+    const { room, roomId, levelId } = this.placeAt(this.walk.feet);
     const s = this.store.getState();
-    const roomId = roomObj?.id ?? null;
-    if (s.room !== room || s.level !== (where.level ?? null) || s.roomId !== roomId) this.store.setState({ room, roomId, level: where.level ?? null });
-    if (this.lastRoomId !== roomId || this.lastRoomId === undefined) this.fireRoomChange(roomId, where.level ?? null);
+    if (s.room !== room || s.level !== levelId || s.roomId !== roomId) this.store.setState({ room, roomId, level: levelId });
+    if (!s.gliding && !this.walk.glide) this.fireRoomChange(roomId, levelId);
   }
 
   private updateCrosshairTarget() {
@@ -2361,7 +2427,22 @@ export class ViewerController {
     if (tex) await Promise.race([tex.catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
     this.builds.finishAnims();
     this.lift.finish();
-    return this.snapshot({ width: opts?.width, height: opts?.height });
+    // The image goes to an AI render that keeps the street "as massed": a ghosted neighbour would come back as a glass
+    // building (with the trees and tank behind it showing through). Draw the neighbours solid for this one frame, and
+    // leave out the fading room-frame accent; snapshot() already hides the pins and the outline.
+    const cam = this.camera;
+    if (cam) this.ctxfx.updateNear(cam, this.ghostTarget > 0);
+    const frames = this.frames.filter((f) => f.mesh.visible);
+    for (const f of frames) f.mesh.visible = false;
+    GHOST.nqCapture.value = 1;
+    try {
+      return this.snapshot({ width: opts?.width, height: opts?.height });
+    } finally {
+      GHOST.nqCapture.value = 0;
+      for (const f of frames) f.mesh.visible = true;
+      // orbit ghosting is back on the next frame
+      this.invalidate();
+    }
   }
 
   // ───────────────────────────── misc ─────────────────────────────

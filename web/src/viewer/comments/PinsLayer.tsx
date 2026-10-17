@@ -108,7 +108,9 @@ export function PinAnchors({ ctrl, comments }: { ctrl: ViewerController; comment
       el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
       // Nearer pins on top (the overlay is its own stacking context).
       el.style.zIndex = String(Math.round((1 - tmp.z) * 50000));
-      if (el.style.visibility !== "visible") el.style.visibility = "visible";
+      // Shown = inherit (""), never an explicit "visible": the app keeps a hidden House mounted (visibility: hidden)
+      // behind Plan, Concepts and Revisions, and "visible" would float these pins over that view and steal its clicks.
+      if (el.style.visibility) el.style.visibility = "";
     }
   });
 
