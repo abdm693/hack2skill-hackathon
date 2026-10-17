@@ -51,6 +51,9 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
   const roof = level && !rooms.length ? plan.roof : null;
   const line = route && level ? route.byLevel[level.id] : undefined;
   const onWalkerLevel = level?.id === walkerLevel;
+  const previewing = !!level && !!walkerLevel && !onWalkerLevel;
+  // the map button steps up through the floors, then back to the lowest
+  const nextLevel = level ? (levels[(levels.indexOf(level) + 1) % levels.length] ?? null) : null;
 
   const planAt = (e: React.PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -75,21 +78,28 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
       }}
     >
       <div className="nq-mini-head">
-        <div className="nq-mini-floors" role="group" aria-label="Map floor">
-          {levels.length > 1 &&
-            [...levels].reverse().map((l) => (
-              <button
-                key={l.id}
-                className="nq-mini-floor"
-                aria-pressed={l.id === level?.id}
-                data-here={l.id === walkerLevel ? "1" : "0"}
-                title={l.id === walkerLevel ? `${sentence(l.name)} (you're here)` : `Show the ${l.name.toLowerCase()} map`}
-                onClick={() => ctrl.setMapLevel(l.id === walkerLevel ? null : l.id)}
-              >
-                {levelShort(l, levels)}
-              </button>
-            ))}
-        </div>
+        {/*
+         * Which floor's MAP this shows: a quiet text button that steps through the floors' maps (a preview; it never
+         * moves you). Changing floors is the app's floor stack, so this must not look like a second one.
+         */}
+        {levels.length > 1 && level ? (
+          <button
+            className="nq-mini-which"
+            data-preview={previewing ? "1" : "0"}
+            title={nextLevel ? `Preview the ${nextLevel.name.toLowerCase()} map` : undefined}
+            aria-label={`Map: ${sentence(level.name)}${previewing ? " (preview)" : ""}. Show the ${nextLevel?.name.toLowerCase() ?? "next"} map`}
+            onClick={() => nextLevel && ctrl.setMapLevel(nextLevel.id === walkerLevel ? null : nextLevel.id)}
+          >
+            Map: {levelShort(level, levels)}
+            <svg width="8" height="10" viewBox="0 0 8 10" aria-hidden>
+              <path d="M1.5 3.5L4 1l2.5 2.5M1.5 6.5L4 9l2.5-2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : (
+          <span className="nq-mini-which" aria-hidden>
+            Map
+          </span>
+        )}
         <span className="nq-mini-north" title="North">
           <svg width="11" height="11" viewBox="-6 -6 12 12" aria-hidden>
             <path d="M0,-5 L3,3 L0,1.6 L-3,3 Z" transform={`rotate(${north})`} fill="currentColor" />
@@ -176,7 +186,10 @@ export const MiniMap = memo(function MiniMap({ ctrl, plan }: { ctrl: ViewerContr
             <span>{hover.id === roomId && onWalkerLevel ? "You're here" : "Click to go"}</span>
           </>
         ) : (
-          <span>{level ? sentence(level.name) : null}</span>
+          <>
+            <span>{level ? sentence(level.name) : null}</span>
+            {previewing && <span className="nq-mini-preview">Preview</span>}
+          </>
         )}
       </div>
     </div>

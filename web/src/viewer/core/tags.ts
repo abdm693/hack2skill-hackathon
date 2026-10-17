@@ -120,7 +120,7 @@ const KIND_WORDS: Record<string, string> = {
 };
 
 /** Words that keep their capitals inside a sentence. */
-const KEEP_CAPS = /^(TV|WC|AC|LED|LDA|UPS|[A-Z]{2,}\d*)$/;
+const KEEP_CAPS = /^(TV|WC|AC|LED|LDA|UPS|W|kW|[A-Z]{2,}\d*)$/;
 
 /** "furniture:sofa_3" → "3-seat sofa", "facade:fins" → "Fins", "stair_ramp" → "Stair ramp". */
 export function humanizeKind(kind?: string): string {
@@ -157,12 +157,28 @@ export function theRoom(name: string): string {
 /** First letter up, the rest as written. */
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+/** A floor named in brackets: "(Ground Floor)", "(roof)", "(first)", "(level 2)", "(mumty)". */
+const LEVEL_WORDS = /\b(floor|storey|story|level|roof|ground|first|second|third|fourth|basement|mumty|upper|lower)\b/i;
+
+/**
+ * Engine labels carry their floor in brackets ("Exterior walls (Ground Floor)", "Roof (Roof)", "Ceiling (First
+ * Floor)"); the floor is already the label's subtitle, so it goes. Other brackets ("Solar panels (12 × ~550 W)") stay.
+ */
+export function stripLevel(label: string, levelNames: string[] = []): string {
+  const m = /\s*\(([^()]*)\)\s*$/.exec(label);
+  if (!m) return label;
+  const inner = m[1].trim().toLowerCase();
+  const isLevel = LEVEL_WORDS.test(inner) || levelNames.some((n) => n.trim().toLowerCase() === inner);
+  return isLevel ? label.slice(0, m.index).trim() : label;
+}
+
 /**
  * The one human label for a thing in the house: "TV in the upper family lounge", "Floor plant in the drawing room",
  * "Wall in bedroom 2", "Water tank". Engine labels that only repeat "<Room name> <type>" are rebuilt from the kind;
  * hand-written labels ("AC outdoor unit", "Palm") are kept, sentence-cased.
  */
-export function humanLabel(kind?: string, label?: string, room?: string): string {
+export function humanLabel(kind?: string, label?: string, room?: string, levelNames: string[] = []): string {
+  label = label === undefined ? undefined : stripLevel(label, levelNames) || undefined;
   const last = (kind ?? "").split(":").pop() ?? "";
   const typeWords = last.replace(/[_-]+/g, " ").trim().toLowerCase();
   let auto = !label;
@@ -223,5 +239,5 @@ export function levelName(plan: BuildingPlan | undefined, levelId?: string): str
 /** Hover / anchor label: "TV in the upper family lounge", with the floor underneath. */
 export function displayLabel(t: Omit<ResolvedTags, "element">, plan?: BuildingPlan): { title: string; subtitle?: string } {
   const rn = roomName(plan, t.room);
-  return { title: humanLabel(t.kind, t.label, rn), subtitle: levelName(plan, t.level) };
+  return { title: humanLabel(t.kind, t.label, rn, plan?.levels.map((l) => l.name) ?? []), subtitle: levelName(plan, t.level) };
 }

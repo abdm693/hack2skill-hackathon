@@ -201,6 +201,13 @@ export class WalkController {
     return this.capsuleHits(this.bvh, feet, STEP_UP, r) || (!!this.solid && this.capsuleHits(this.solid, feet, SOLID_FROM, r));
   }
 
+  /** What a capsule at `feet` overlaps: 0 nothing, 1 walls and other structure, 2 only solids (furniture, planting…). */
+  overlapKind(feet: THREE.Vector3, r = RADIUS): 0 | 1 | 2 {
+    if (!this.bvh) return 0;
+    if (this.capsuleHits(this.bvh, feet, STEP_UP, r)) return 1;
+    return this.solid && this.capsuleHits(this.solid, feet, SOLID_FROM, r) ? 2 : 0;
+  }
+
   private capsuleHits(bvh: MeshBVH, feet: THREE.Vector3, from: number, r: number): boolean {
     _seg.start.set(feet.x, feet.y + from + r, feet.z);
     _seg.end.set(feet.x, feet.y + HEAD - r, feet.z);

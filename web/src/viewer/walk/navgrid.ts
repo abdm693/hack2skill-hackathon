@@ -12,14 +12,26 @@ const MAX_CLR = 4;
 
 export interface GridBounds { x0: number; z0: number; x1: number; z1: number }
 
+/**
+ * Why a floor cell is not free (a bit mask in `NavGrid.blk`): walls and other structure, or a solid of some kind.
+ * The room navigator relaxes solid kinds to tell what seals a room off (planting vs furniture) from a missing door.
+ */
+export const BLOCK = { wall: 1, planting: 2, furniture: 4, other: 8 } as const;
+
+/** Classifies the solids a capsule standing at `p` (radius r) overlaps, as a mask of BLOCK.planting/furniture/other. */
+export type SolidClassifier = (p: THREE.Vector3, r: number) => number;
+
 export class NavGrid {
   readonly nx: number;
   readonly nz: number;
   readonly free: Uint8Array;
   readonly h: Float32Array;
   readonly clr: Uint8Array;
+  /** For floor cells that are not free: what blocks them (BLOCK mask); 0 for free cells and cells with no floor. */
+  readonly blk: Uint8Array;
   private built = false;
   private cursor = 0;
+  private comps: Int32Array | null = null;
 
   constructor(
     readonly levelId: string,
@@ -35,6 +47,7 @@ export class NavGrid {
     this.free = new Uint8Array(n);
     this.h = new Float32Array(n).fill(NaN);
     this.clr = new Uint8Array(n);
+    this.blk = new Uint8Array(n);
   }
 
   get ready() {
@@ -67,7 +80,7 @@ export class NavGrid {
    * Probe cells for up to `budgetMs` (all of them when budgetMs is Infinity). Returns true once the grid is complete.
    * Cheap enough per floor (~5–12k cells) to finish in a few idle frames after the walk collider is built.
    */
-  build(walk: WalkController, budgetMs = Infinity): boolean {
+  build(walk: WalkController, budgetMs = Infinity, classify?: SolidClassifier | null): boolean {
     if (this.built) return true;
     const t0 = performance.now();
     const n = this.nx * this.nz;
@@ -81,7 +94,9 @@ export class NavGrid {
       if (g !== null && g >= this.floorY + this.band[0] && g <= this.floorY + this.band[1]) {
         this.h[i] = g;
         p.set(x, g, z);
-        if (!walk.overlaps(p, PROBE_R)) this.free[i] = 1;
+        const hit = walk.overlapKind(p, PROBE_R);
+        if (!hit) this.free[i] = 1;
+        else this.blk[i] = hit === 1 ? BLOCK.wall : (classify?.(p, PROBE_R) || BLOCK.other);
       }
       if ((i & 63) === 0 && performance.now() - t0 > budgetMs) return false;
     }
@@ -249,6 +264,69 @@ export class NavGrid {
         }
     }
     return { cost, came };
+  }
+
+  /**
+   * Connected-component label of every free cell (−1 for cells you can't stand on). Two cells share a label when a
+   * walk joins them (the same moves as findPath: diagonals never cut a corner, so 4-neighbour connectivity).
+   */
+  components(): Int32Array {
+    if (this.comps) return this.comps;
+    const { nx, nz } = this;
+    const n = nx * nz;
+    const comp = new Int32Array(n).fill(-1);
+    const q = new Int32Array(n);
+    let label = 0;
+    for (let s = 0; s < n; s++) {
+      if (!this.free[s] || comp[s] >= 0) continue;
+      let head = 0, tail = 0;
+      q[tail++] = s;
+      comp[s] = label;
+      while (head < tail) {
+        const i = q[head++];
+        const ix = i % nx, iz = (i / nx) | 0;
+        for (const [jx, jz] of [[ix - 1, iz], [ix + 1, iz], [ix, iz - 1], [ix, iz + 1]]) {
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (comp[j] >= 0 || !this.passable(i, j)) continue;
+          comp[j] = label;
+          q[tail++] = j;
+        }
+      }
+      label++;
+    }
+    this.comps = comp;
+    return comp;
+  }
+
+  /**
+   * Cells reachable from `starts` when floor cells blocked only by the solid kinds in `allow` (a BLOCK mask) count as
+   * free: "if the planting weren't there, could you get in?"
+   */
+  reach(starts: number[], allow: number): Uint8Array {
+    const { nx, nz } = this;
+    const n = nx * nz;
+    const seen = new Uint8Array(n);
+    const open = (j: number) => this.free[j] === 1 || (this.blk[j] !== 0 && (this.blk[j] & ~allow) === 0);
+    const q = new Int32Array(n);
+    let head = 0, tail = 0;
+    for (const s of starts) {
+      if (s < 0 || seen[s] || !open(s)) continue;
+      seen[s] = 1;
+      q[tail++] = s;
+    }
+    while (head < tail) {
+      const i = q[head++];
+      const ix = i % nx, iz = (i / nx) | 0;
+      for (const [jx, jz] of [[ix - 1, iz], [ix + 1, iz], [ix, iz - 1], [ix, iz + 1]]) {
+        if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+        const j = jz * nx + jx;
+        if (seen[j] || !open(j) || Math.abs(this.h[i] - this.h[j]) > STEP_UP) continue;
+        seen[j] = 1;
+        q[tail++] = j;
+      }
+    }
+    return seen;
   }
 
   /** Cell path start → goal from a flood's `came` links (null when unreached). */
