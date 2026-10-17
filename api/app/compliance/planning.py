@@ -1356,35 +1356,43 @@ def _covered_open(ix: PlanIndex, out: _Out) -> None:
 SOLID_TARGET = {"lounge": 8.0, "drawing": 8.0, "bedroom": 9.0, "guest_bedroom": 9.0, "master_bedroom": 10.0}
 
 
+def longest_solid_wall(ix: PlanIndex, rid: str) -> float:
+    """The longest run of solid wall in a room (feet): each side less its doors and windows (with 6 in of frame each side)
+    and its open-plan edges."""
+    r = ix.by_id[rid]
+    best = 0.0
+    for side, (axis, c, lo, hi, _) in sides(ix.R[rid]).items():
+        cuts = []
+        for o in ix.openings:
+            if rid not in o["between"] or o.get("level") != r.get("level"):
+                continue
+            x, y = float(o["at"][0]), float(o["at"][1])
+            across, along = (abs(y - c), x) if axis == "x" else (abs(x - c), y)
+            if across <= 0.75 and lo - 0.5 <= along <= hi + 0.5:
+                w = float(o.get("width_ft") or 0)
+                cuts.append((along - w / 2 - 0.5, along + w / 2 + 0.5))
+        for (a, b), res in ix.open_pairs.items():
+            if rid in (a, b) and res.get("edge") and res["valid"]:
+                eax, ec, elo, ehi = res["edge"]
+                if eax == axis and abs(ec - c) < 0.1:
+                    cuts.append((elo, ehi))
+        cur = lo
+        for a, b in sorted(cuts):
+            if a > cur:
+                best = max(best, min(a, hi) - cur)
+            cur = max(cur, b)
+        if hi > cur:
+            best = max(best, hi - cur)
+    return best
+
+
 def _solid_walls(ix: PlanIndex, out: _Out) -> None:
     for r in ix.rooms:
         target = SOLID_TARGET.get(r.get("type", ""))
         if not target:
             continue
         rid = r["id"]
-        best = 0.0
-        for side, (axis, c, lo, hi, _) in sides(ix.R[rid]).items():
-            cuts = []
-            for o in ix.openings:
-                if rid not in o["between"] or o.get("level") != r.get("level"):
-                    continue
-                x, y = float(o["at"][0]), float(o["at"][1])
-                across, along = (abs(y - c), x) if axis == "x" else (abs(x - c), y)
-                if across <= 0.75 and lo - 0.5 <= along <= hi + 0.5:
-                    w = float(o.get("width_ft") or 0)
-                    cuts.append((along - w / 2 - 0.5, along + w / 2 + 0.5))
-            for (a, b), res in ix.open_pairs.items():
-                if rid in (a, b) and res.get("edge") and res["valid"]:
-                    eax, ec, elo, ehi = res["edge"]
-                    if eax == axis and abs(ec - c) < 0.1:
-                        cuts.append((elo, ehi))
-            cur = lo
-            for a, b in sorted(cuts):
-                if a > cur:
-                    best = max(best, min(a, hi) - cur)
-                cur = max(cur, b)
-            if hi > cur:
-                best = max(best, hi - cur)
+        best = longest_solid_wall(ix, rid)
         if best + 1e-6 < target:
             out.add(f"plan.room.solid_wall:{rid}", "Wall for the bed or TV", "fail" if best < 7 - 1e-6 else "warn",
                     f"{r['name']}'s longest solid wall is {fmt(best)}; the {'bed' if 'bed' in r['type'] else 'TV and sofa'} "
@@ -2076,6 +2084,7 @@ def _bath_sizes(ix: PlanIndex, out: _Out) -> None:
 
 # P-28b (Naqsha): a walk-in dressing you can furnish ------------------------------------------------------------------------
 DRESSING_MIN = (25.0, 5.0)  # sq ft, short side: a 2 ft wardrobe run + a 3 ft aisle in front of it
+WARDROBE_WALL = 4.0  # one solid wall this long takes a two-door wardrobe
 
 
 def _dressing_sizes(ix: PlanIndex, out: _Out) -> None:
@@ -2087,6 +2096,14 @@ def _dressing_sizes(ix: PlanIndex, out: _Out) -> None:
         w, d = x1 - x0, y1 - y0
         a, narrow = w * d, min(w, d)
         if a + 1e-6 >= need_a and narrow + 1e-6 >= need_w:
+            solid = longest_solid_wall(ix, r["id"])
+            if solid + 1e-6 < WARDROBE_WALL:  # big enough, but doors and glass leave no wall for the wardrobe
+                out.add(f"plan.room.dressing_wall:{r['id']}", "Wardrobe wall", "warn",
+                        f"{r['name']} has no solid wall for a wardrobe: its longest is {fmt(solid)} and a wardrobe needs "
+                        f"{fmt(WARDROBE_WALL)}.", ids=[r["id"]],
+                        fix=f"Keep one wall of {r['name']} at least {WARDROBE_WALL:g} ft long with no door or window in it "
+                            f"(move a door to a corner, or the window to another wall).",
+                        ref=f"{REF} P-28", value=round(solid, 2), limit=WARDROBE_WALL, unit="ft")
             continue
         what = f"{fmt(narrow)} wide" if narrow + 1e-6 < need_w else f"{a:.0f} sq ft"
         out.add(f"plan.room.dressing_size:{r['id']}", "Dressing size", "fail",

@@ -24,7 +24,8 @@ from ..compliance import lda
 from ..gemini import RETRY
 from ..store import db
 from .architect import BUILD_SYSTEM, CONTRACTS, _read, prepare
-from .reviser import apply_ops, comment_brief, finalize, merge_sections, new_failures, reading_line, snapshot_parts
+from .reviser import (ANSWER_RULES, apply_ops, comment_brief, context_text, finalize, merge_sections, new_failures, reading_line,
+                      snapshot_parts, solar_text)
 
 APP = "naqsha-reviser"
 
@@ -43,6 +44,10 @@ Work quickly and in as few steps as possible, calling independent tools together
 4. Finish with ONE finish call: the list of changes and one friendly resolution (one or two sentences) per comment.
 Make the smallest change that satisfies each note and keep everything else identical. The `structure` section rebuilds walls,
 openings, stairs and slabs from the plan automatically; only rewrite it to change structural materials.
+EARLIER ANSWERS (when listed) are what earlier comments and requests already got: keep them unless the new request conflicts;
+if it does, say which one and why in the resolution. A window or room an earlier answer changed is put back automatically if
+you shrink it without being asked.
+""" + ANSWER_RULES + """
 
 design.js section rules (for write_section): """ + BUILD_SYSTEM.split("Rules:")[-1]
 
@@ -129,7 +134,11 @@ class Workspace:
             """
             ws.events.append(("stage", {"stage": "compliance", "message": "Checking the change against the LDA and livability rules…"}))
             _, rep, broken = ws._check(ops)
+            had = {c["id"] for c in ws.base_report["checks"] if c["status"] != "pass"}
+            softer = [c for c in rep["checks"] if c["status"] == "warn" and c["id"] not in had]
             return {"ok": not broken, "new_problems": [f"{c['message']} Fix: {c.get('fix', '')}" for c in broken],
+                    # allowed, but tell the family (or fix them): e.g. a dressing left with no wall for the wardrobe
+                    "new_warnings": [f"{c['message']} Fix: {c.get('fix', '')}" for c in softer],
                     "already_there_before": len([c for c in rep["checks"] if c["status"] == "fail"]) - len(broken)}
 
         def apply_plan_ops(ops: list[dict]) -> dict:
@@ -236,7 +245,8 @@ async def revise(project: dict, version: dict, comments: list[dict], instruction
     text = (f"LDA ENVELOPE: {json.dumps({k: env.get(k) for k in ('setbacks_ft', 'max_coverage_pct', 'max_height_ft', 'max_storeys', 'buildable_rect')})}\n"
             f"BRIEF: {json.dumps({k: brief.get(k) for k in ('storeys', 'bedrooms', 'floors', 'preferences', 'style', 'water_tank', 'solar') if brief.get(k)})}\n"
             f"ROOMS: {json.dumps([{k: r[k] for k in ('id', 'name', 'type', 'level', 'rect')} for r in ws.plan['rooms']], separators=(',', ':'))}\n"
-            f"SECTIONS: {', '.join(s['name'] for s in ws.sections)}\n\n"
+            f"SECTIONS: {', '.join(s['name'] for s in ws.sections)}\n"
+            + solar_text(ws.plan) + "\n" + await context_text(pid, version)
             + (f"WALKTHROUGH COMMENTS:\n{json.dumps(comment_brief(comments), indent=1)}\n\n" if comments else "")
             + (f"REQUEST (comment_id \"request\"): {instruction}\n\n" if instruction else "")
             + "Revise the design now.")
