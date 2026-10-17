@@ -238,7 +238,7 @@ async def patch_project(pid: str, body: PatchProject, me: Identity = Depends(aut
     if body.brief is not None:
         before = p.get("brief") or intake.empty_brief()
         # The brief panel sends whole lists: preferences are replaced (an empty list clears them), not appended.
-        brief = intake.merge_brief(before, body.brief, [], spaces_mode="replace", prefs_mode="replace")
+        brief = intake.merge_brief(before, intake.panel_patch(before, body.brief), [], spaces_mode="replace", prefs_mode="replace")
         brief, _ = intake.clamp_storeys(brief)
         fields.update(brief=brief, envelope=intake.envelope_for(brief), stage=intake.next_stage(p, bool(p.get("intake_complete"))))
         if p.get("versions") and intake._design_fields(before) != intake._design_fields(brief):

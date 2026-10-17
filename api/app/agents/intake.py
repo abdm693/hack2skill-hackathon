@@ -155,6 +155,32 @@ def _drop_prefs(cur: list, remove: list) -> list:
                                             for g in gone)]
 
 
+# Kept by the server from what was said (never taken from a patch): whether the family stated corner/mid-row, whether that
+# question is still open, and the storeys they asked for before clamp_storeys capped them.
+SERVER_KEYS = ("corner_stated", "corner_open", "storeys_asked")
+
+
+def panel_patch(before: dict, sent: dict) -> dict:
+    """The brief panel PATCHes the whole brief back. Only what changed counts as the family's word: an unchanged plot must
+    not turn Naqsha's mid-row assumption into "You said: Mid-row", nor an unchanged storey count undo the authority cap.
+    auto_filled is the panel's (it drops the marks of facts the family confirmed)."""
+    out = {k: v for k, v in (sent or {}).items() if k not in SERVER_KEYS and (k == "auto_filled" or v != before.get(k))}
+    if "auto_filled" in out:
+        was, now = set(before.get("auto_filled") or []), set(out.get("auto_filled") or [])
+        p0, p1 = before.get("plot") or {}, (sent or {}).get("plot") or {}
+        if "corner" in was and "corner" not in now or "corner" in p1 and bool(p1.get("corner")) != bool(p0.get("corner")):
+            out["plot"] = {**p0, **p1, "corner": bool(p1.get("corner", p0.get("corner")))}  # confirmed or changed: said
+            out["auto_filled"] = sorted(now - {"corner"})
+        elif "corner" in was:  # still Naqsha's assumption (a new plot size alone doesn't state it)
+            out["auto_filled"] = sorted(now | {"corner"})
+            if isinstance(out.get("plot"), dict):
+                out["plot"] = {k: v for k, v in out["plot"].items() if k != "corner"}
+        if "storeys" in was and "storeys" not in now and "storeys" not in out and before.get("storeys"):
+            out["storeys"] = before["storeys"]  # confirmed: no longer Naqsha's change
+        out["auto_filled"] = sorted(set(out["auto_filled"]) | ({"porch"} & was))
+    return out
+
+
 def merge_brief(brief: dict, patch: dict, auto: list[str] | None = None, spaces_mode: str = "replace",
                 prefs_mode: str = "append") -> dict:
     """Merge a patch into the brief. notes are appended, never overwritten; preferences are appended (the agent adds what
@@ -162,21 +188,29 @@ def merge_brief(brief: dict, patch: dict, auto: list[str] | None = None, spaces_
     contradicted wishes; floors merge per level; spaces replace (widgets send the whole set) or union (the agent adds what
     was mentioned)."""
     out = {**(brief or empty_brief())}
-    patch = dict(patch or {})
+    patch = {k: v for k, v in (patch or {}).items() if k not in SERVER_KEYS}
     if str(patch.get("style", "")).upper() in AUTHORITIES:  # model slip: an authority answer filed under style
         patch.setdefault("authority", str(patch.pop("style")).upper())
     if prefs_mode == "replace" and isinstance(patch.get("preferences"), list):
         out["preferences"] = _append_unique([], patch.pop("preferences"))
+    if isinstance(patch.get("auto_filled"), list):  # the panel's marks first; the fields below then adjust them
+        out["auto_filled"] = [str(a) for a in patch.pop("auto_filled")]
     for k, v in patch.items():
         if v in (None, "", [], {}):
             continue
         if k == "plot":
             if isinstance(v, dict) and "corner" in v and v["corner"] is not None:
                 out["corner_stated"] = True  # the family said corner or mid-row
+                out.pop("corner_open", None)
                 auto = [a for a in auto or [] if a != "corner"]
                 out["auto_filled"] = [a for a in out.get("auto_filled") or [] if a != "corner"]
-            elif out.get("corner_stated") is None:
-                out["corner_stated"] = False  # not said yet: Naqsha asks "Corner or mid-row?"
+            elif out.get("corner_stated") is not True:
+                # Not said: mid-row is Naqsha's assumption (in auto_filled, so it never reads as "You said"), and
+                # "Corner or mid-row?" stays open (corner_open) until they answer or skip it.
+                out["corner_stated"] = False
+                if "corner" not in (out.get("auto_filled") or []):
+                    out["auto_filled"] = [*(out.get("auto_filled") or []), "corner"]
+                    out["corner_open"] = True
             v = _normalize_plot({**(out.get("plot") or {}), **{a: b for a, b in v.items() if b is not None}})
             if not v:
                 continue
@@ -186,6 +220,7 @@ def merge_brief(brief: dict, patch: dict, auto: list[str] | None = None, spaces_
                 continue
         elif k == "storeys":
             v = max(1, min(3, int(v)))
+            out.pop("storeys_asked", None)  # said again: clamp_storeys records it anew if it is still too many
         elif k in ("bedrooms", "bathrooms"):
             v = max(1, min(12, int(v)))
         elif k == "facing":
@@ -211,6 +246,14 @@ def merge_brief(brief: dict, patch: dict, auto: list[str] | None = None, spaces_
         elif k == "floors":
             v = merge_floors(out.get("floors"), v if isinstance(v, list) else [v])
         elif k == "spaces":
+            # "porch" in auto_filled: the car porch is Naqsha's default, so it never reads as "You said: 2-car porch"
+            porch_new = next((str(s) for s in v if str(s).startswith("car_porch")), None)
+            porch_cur = next((str(s) for s in out.get("spaces") or [] if str(s).startswith("car_porch")), None)
+            if "spaces" in (auto or []):
+                if porch_new:
+                    auto = [*(auto or []), "porch"]
+            elif porch_new and (spaces_mode != "replace" or porch_new != porch_cur):  # the family named the porch
+                out["auto_filled"] = [a for a in out.get("auto_filled") or [] if a != "porch"]
             v = list(v) if spaces_mode == "replace" else _merge_spaces(out.get("spaces") or [], v)
         elif k == "remove_spaces":
             out["spaces"] = _merge_spaces(out.get("spaces") or [], [], v)
@@ -360,13 +403,17 @@ def defaults_for(brief: dict) -> tuple[dict, list[str]]:
         spaces += ["servant_quarter", "prayer", "roof_terrace"]
         spaces = [s if not s.startswith("car_porch") else "car_porch:2" for s in spaces]
     put("spaces", spaces)
+    if "spaces" in auto:
+        auto.append("porch")  # the car porch in the default spaces is Naqsha's choice too
     put("style", "Modern Contemporary")
     put("facing", "N")
     put("budget", "standard")
     put("water_tank", "concrete")
     put("solar", "ready")
-    if not b.get("corner_stated") and "corner" not in (b.get("auto_filled") or []):
-        auto.append("corner")  # mid-row unless they said corner: shown under "I assumed"
+    if not b.get("corner_stated"):
+        if "corner" not in (b.get("auto_filled") or []):
+            auto.append("corner")  # mid-row unless they said corner: shown under "I assumed"
+        b.pop("corner_open", None)  # decided for them: no longer asked
     if floors_missing(b) and "floors" not in (b.get("auto_filled") or []):
         auto.append("floors")  # Naqsha places the rooms on the floors that have none yet
     b["auto_filled"] = sorted(set(b.get("auto_filled") or []) | set(auto))
@@ -384,7 +431,9 @@ def skip_field(brief: dict, field: str | None) -> dict:
     if field == "floors":
         return merge_brief(brief, {}, ["floors"])
     if field == "corner":  # mid-row, the usual Lahore plot
-        return merge_brief({**brief, "plot": {**(brief.get("plot") or {}), "corner": False}}, {}, ["corner"])
+        out = merge_brief({**brief, "plot": {**(brief.get("plot") or {}), "corner": False}}, {}, ["corner"])
+        out.pop("corner_open", None)
+        return out
     if field in DEFAULT_FOR_FIELD:
         return merge_brief(brief, {field: DEFAULT_FOR_FIELD[field]}, [field])
     filled, auto = defaults_for(brief)
@@ -430,8 +479,8 @@ def to_ask(brief: dict) -> list[str]:
                 continue
             if ((brief.get("storeys") or 1) >= 2 and not brief.get("floors")) or floors_missing(brief):
                 out.append(k)
-        elif k == "corner":
-            if brief.get("plot") and brief.get("corner_stated") is False and "corner" not in auto:
+        elif k == "corner":  # not said: asked once (the assumption is still open), unless they skipped it
+            if brief.get("plot") and brief.get("corner_stated") is False and ("corner" not in auto or brief.get("corner_open")):
                 out.append(k)
         elif not brief.get(k) and k not in auto:
             out.append(k)
@@ -471,7 +520,10 @@ def clamp_storeys(brief: dict) -> tuple[dict, str | None]:
     cap, said = storey_cap(brief)
     if int(s) <= cap:
         return brief, None
-    b = {**brief, "storeys": cap}
+    # Naqsha changed it: recorded in auto_filled with what they asked for, so the card reads "Kept to 2 storeys: DHA's
+    # limit" under "I assumed" and never "You said: 2 storeys".
+    b = {**brief, "storeys": cap, "storeys_asked": int(s),
+         "auto_filled": sorted(set(brief.get("auto_filled") or []) | {"storeys"})}
     keep = set(STOREY_LEVELS[:cap]) | {"basement", "roof"}
     floors = [dict(f) for f in brief.get("floors") or [] if isinstance(f, dict)]
     extra = [t for f in floors if f.get("level") not in keep for t in f.get("rooms") or []]
@@ -612,6 +664,15 @@ def _floor_line(f: dict) -> str:
     return f"{f['level'].capitalize()} floor: " + ", ".join(parts)
 
 
+def storeys_kept(brief: dict) -> str | None:
+    """ "Kept to 2 storeys: DHA's limit" when Naqsha capped the storeys the family asked for (clamp_storeys), else None."""
+    asked, s = brief.get("storeys_asked"), brief.get("storeys")
+    if not asked or not s or int(asked) <= int(s) or "storeys" not in (brief.get("auto_filled") or []):
+        return None
+    auth = str(brief.get("authority") or "LDA").upper()
+    return f"Kept to {s} storey{'s' if int(s) != 1 else ''}: {AUTHORITY_NAME.get(auth, auth)}'s limit"
+
+
 def _fact_items(brief: dict) -> list[tuple[str, str]]:
     """(field, line) for every fact on the "Here's what I understood" card, in card order. One place builds these lines, so
     "Don't assume: <line>" maps back to its field exactly."""
@@ -624,8 +685,8 @@ def _fact_items(brief: dict) -> list[tuple[str, str]]:
     if brief.get("facing"):
         items.append(("facing", f"Front faces {FACING_NAME.get(brief['facing'], brief['facing'])}"))
     if brief.get("storeys"):
-        items.append(("storeys", {1: "Single storey", 2: "Two storeys", 3: "Three storeys"}.get(brief["storeys"], f"{brief['storeys']} storeys")
-                      + (" plus a basement" if brief.get("basement") else "")))
+        items.append(("storeys", (storeys_kept(brief) or {1: "Single storey", 2: "Two storeys", 3: "Three storeys"}.get(
+            brief["storeys"], f"{brief['storeys']} storeys")) + (" plus a basement" if brief.get("basement") else "")))
     if brief.get("bedrooms"):
         items.append(("bedrooms", f"{brief['bedrooms']} bedrooms"))
     if brief.get("bathrooms"):
@@ -667,12 +728,19 @@ def understood(brief: dict, agent: dict | None = None) -> dict:
     auto = set(brief.get("auto_filled") or [])
     prefs, assumed = [], []
     # corner/mid-row counts as said only when the family stated it (a chip or their words); otherwise it's an assumption
-    corner_said = "corner" not in auto and (brief.get("corner_stated") is True or brief.get("corner_stated") is None)
+    corner_said = "corner" not in auto and brief.get("corner_stated") is True
     for field, line in _fact_items(brief):
         if field == "corner":
             (prefs if corner_said else assumed).append(line)
         elif field == "floors":
             prefs.append(line)
+        elif field == "spaces" and "porch" in auto and "spaces" not in auto:  # their rooms, Naqsha's default porch
+            parts = line.split(", ")
+            porch = [x for x in parts if x.endswith("-car porch")]
+            rest = [x for x in parts if x not in porch]
+            if rest:
+                prefs.append(rest[0][:1].upper() + ", ".join(rest)[1:])
+            assumed += [x[:1].upper() + x[1:] for x in porch]
         else:
             (assumed if field in auto else prefs).append(line)
     prefs += [str(x)[:1].upper() + str(x)[1:] for x in brief.get("preferences") or []]
@@ -800,14 +868,22 @@ def unset_fields(brief: dict, fields: list[str]) -> tuple[dict, list[str]]:
     done = []
     for f in fields:
         f = UNSET_ALIAS.get(f, f)
-        if f == "corner":
+        if f == "corner":  # asked again; meanwhile mid-row stays Naqsha's assumption
             b["corner_stated"] = False
             if b.get("plot"):
                 b["plot"] = {**b["plot"], "corner": False}
+                b["corner_open"] = True
+                auto.add("corner")
+                done.append(f)
+                continue
         elif f in ("spaces", "floors"):
             b[f] = []
+            if f == "spaces":
+                auto.discard("porch")
         elif f in ("plot", "bedrooms", "bathrooms", "storeys", "facing", "water_tank", "solar", "style", "budget", "authority"):
             b[f] = None
+            if f == "storeys":
+                b.pop("storeys_asked", None)
         else:
             continue
         auto.discard(f)

@@ -36,7 +36,10 @@ interface Brief {
   inspiration_image_url?: string;
   budget?: "economy" | "standard" | "premium" | "luxury";
   notes?: string;
-  auto_filled: string[];        // fields the agent chose because the user skipped
+  auto_filled: string[];        // facts Naqsha chose: fields the user skipped or Naqsha changed, plus "corner" (assumed
+                                // mid-row), "storeys" (also when capped) and "porch" (the default car porch)
+  corner_stated?: boolean;      // true only when the family said corner or mid-row
+  storeys_asked?: number;       // what they asked for when the authority capped storeys
 }
 
 interface Envelope {            // from the LDA engine, as soon as the plot is known

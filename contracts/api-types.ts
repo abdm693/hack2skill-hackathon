@@ -24,7 +24,16 @@ export interface Brief {
   inspiration_image_url?: string;
   budget?: "economy" | "standard" | "premium" | "luxury";
   notes?: string;
+  /**
+   * Facts Naqsha chose, not the family: field names, plus "corner" (plot.corner is an assumed mid-row until
+   * corner_stated), "storeys" (also when the authority capped the count: see storeys_asked) and "porch" (the car porch
+   * in spaces is Naqsha's default). Show a fact under "You said" only when it isn't here.
+   */
   auto_filled: string[];
+  /** True only when the family said corner or mid-row (a chip, the panel or their words); otherwise plot.corner is assumed. */
+  corner_stated?: boolean;
+  /** The storeys the family asked for when the authority's limit kept the brief lower ("Kept to 2 storeys: DHA's limit"). */
+  storeys_asked?: number;
   /** Per-floor program, e.g. [{level:"ground", rooms:["drawing","kitchen","bedroom:1","bath:2"]}]. */
   floors?: { level: string; rooms: string[] }[];
   water_tank?: "plastic" | "concrete";
