@@ -99,6 +99,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   const applyMode = useShell((s) => s.applyMode);
   const focusComment = useShell((s) => s.focusComment);
   const viewSheet = useShell((s) => s.viewSheet);
+  const switchHidden = useShell((s) => s.switchHidden);
   const { toggleChat, openComments, closeComments, setShare, setApplyMode } = useShell.getState();
   const versions = useProject((s) => s.versions);
   const loadVersion = useProject((s) => s.loadVersion);
@@ -323,7 +324,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} compact view={view} />
             <People project={project} tone={tone} compact />
           </div>
-          <ViewSwitch project={project} view={view} tone={tone} fill />
+          {!switchHidden && <ViewSwitch project={project} view={view} tone={tone} fill />}
         </div>
       ) : (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-[var(--chrome)]">

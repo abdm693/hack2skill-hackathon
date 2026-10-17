@@ -347,6 +347,29 @@ export function HouseView({ project, onProjectChange, active = true }: { project
   const [viewOpen, setViewOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
 
+  // Phones: the room list is a full-height sheet. The view switch steps aside while it is open, and Back closes it
+  // (opening it adds one history entry with the same address; Back pops that entry, never the page).
+  const roomsSheet = phone && navOpen && active;
+  useEffect(() => {
+    useShell.getState().setSwitchHidden(roomsSheet);
+    return () => useShell.getState().setSwitchHidden(false);
+  }, [roomsSheet]);
+  useEffect(() => {
+    if (!roomsSheet) return;
+    let popped = false;
+    window.history.pushState({ ...(window.history.state ?? {}), nqRooms: true }, "");
+    const onPop = () => {
+      popped = true;
+      setNavOpen(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed some other way (Close, Escape, a room picked): the extra entry stays but no longer means "open".
+      if (!popped && window.history.state?.nqRooms) window.history.replaceState({ ...window.history.state, nqRooms: false }, "");
+    };
+  }, [roomsSheet]);
+
   if (!shown || !plan) {
     return (
       <div className="grid h-full place-items-center bg-hud text-hud-ink-2">
@@ -455,7 +478,8 @@ export function HouseView({ project, onProjectChange, active = true }: { project
       </div>
 
       {/* Left edge: floors */}
-      {levels.length > 1 && built && (
+      {/* Phones: the stack steps aside while a bottom sheet (View, Versions, Rooms) is open, so they never overlap. */}
+      {levels.length > 1 && built && !(phone && (viewOpen || versionOpen || navOpen)) && (
         <div data-nq-recede="" className={cn("absolute left-3 z-20 sm:left-4", phone ? "top-[calc(var(--chrome-top)+12px)]" : "top-1/2 -translate-y-1/2")}>
           <FloorStack items={items} value={mode === "walk" ? room.level ?? floor : floor} onChange={setFloor} tone="hud" extra={mode === "orbit" ? { id: "all", key: "All", name: "Whole house" } : undefined} />
         </div>
@@ -612,14 +636,25 @@ export function HouseView({ project, onProjectChange, active = true }: { project
         side="top"
         align="end"
         tone="hud"
-        className="w-[300px]"
+        // Phones: with the view switch stepped aside, the sheet starts right under the title row.
+        className={cn("w-[300px]", phone && "!top-[68px]")}
         sheetBelow={768}
         sheetFull
         label="Rooms"
         avoid={() => [document.querySelector(".nq-house .nq-mini")]}
       >
+        {phone && (
+          <div className="-mt-1 mb-2 flex items-center justify-between">
+            <span className="w-11" aria-hidden />
+            <span className="h-1 w-9 rounded-full bg-white/25" aria-hidden />
+            <IconButton label="Close the room list" size={44} className="-mr-1 text-hud-ink hover:bg-white/10" onClick={() => setNavOpen(false)}>
+              <X className="size-[18px]" strokeWidth={1.75} />
+            </IconButton>
+          </div>
+        )}
         <RoomNavigator
           plan={plan}
+          onClose={() => setNavOpen(false)}
           open={navOpen}
           current={room.id}
           currentLevel={mode === "walk" ? room.level : null}
@@ -791,7 +826,8 @@ function ViewPanel({
           Cars
         </Toggle>
       </div>
-      <div className="border-t border-white/10 px-2 pt-2">
+      {/* Same inset as the rows above: the Toggle carries its own px-2, so the wrapper adds none. */}
+      <div className="border-t border-white/10 pt-2">
         <Toggle on={cutFt != null} onChange={(v) => onCut(v ? Math.round(topFt * 0.42) : null)}>
           Cut away
         </Toggle>
