@@ -164,7 +164,7 @@ export function PlotEditor({ brief, onDone, doneLabel, onSkip, disabled }: { bri
           />
         </label>
         <span className="text-[13px] text-ink-3">ft</span>
-        <span className="ml-auto font-mono text-[12.5px] tabular-nums text-ink-3">{valid ? `${num(width * depth)} sq ft · ${num(marla, 1)} marla` : "225 sq ft = 1 marla"}</span>
+        <span className="ml-auto whitespace-nowrap font-mono text-[12.5px] tabular-nums text-ink-3">{valid ? `${num(width * depth)} sq ft · ${num(marla, 1)} marla` : "225 sq ft = 1 marla"}</span>
       </div>
       {/* Why Save is off: say the range plainly. */}
       <p className={cn("mt-1.5 text-[12.5px]", (w || d) && !valid ? "text-warn" : "text-ink-3")} aria-live="polite">

@@ -57,7 +57,7 @@ export function People({ project, tone, compact }: { project: Project; tone: "li
             onClick={() => (right === "comments" ? closeComments() : openComments())}
             aria-pressed={right === "comments"}
             aria-label={`Comments${count ? `, ${count} open` : ""}`}
-            className={cn(btn, right === "comments" && (hud ? "bg-white/10" : "bg-surface-2"), compact && "px-2.5")}
+            className={cn(btn, right === "comments" && (hud ? "bg-white/10" : "bg-surface-2"), compact && "hit-44 relative px-2.5")}
           >
             <MessageSquare className="size-4" strokeWidth={1.75} />
             {!compact && <span>Comments</span>}
@@ -75,11 +75,12 @@ export function People({ project, tone, compact }: { project: Project; tone: "li
           className={cn(
             "inline-flex h-9 items-center gap-2 rounded-full px-4 text-[14px] font-medium outline-none transition-colors focus-visible:shadow-focus",
             hud ? "bg-hud-ink text-ink hover:bg-white" : "bg-ink text-white hover:bg-ink-2",
-            compact && "px-3",
+            // Phones: the icon alone, so the home's name keeps its room in the title capsule.
+            compact && "hit-44 relative w-9 justify-center px-0",
           )}
         >
           <Share2 className="size-4" strokeWidth={1.75} />
-          <span>Share</span>
+          {!compact && <span>Share</span>}
         </button>
       )}
     </div>
