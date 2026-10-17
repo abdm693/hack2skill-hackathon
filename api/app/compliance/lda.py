@@ -383,16 +383,35 @@ def violations_text(report: dict, warns: bool = True) -> str:
     return "\n".join(out) or "(none)"
 
 
+def is_review(c: dict) -> bool:
+    """An architect's review note (review.<n>), kept apart from the rules in every count."""
+    return str(c.get("id", "")).startswith("review.")
+
+
 def counts(report: dict) -> dict:
-    """{"fail": n, "warn": n, "lda": {"pass": n, "total": n}, "livable": {...}} for scoring attempts and status lines."""
-    out: dict = {"fail": 0, "warn": 0}
+    """{"fail": n, "warn": n, "lda": {"pass": n, "total": n}, "livable": {...}, "review": n} for scoring attempts and status
+    lines, with the app's one definition (web/src/app/plan/compliance.ts summarize): a warning is not a pass, and the
+    architect's review notes are not rules: they are counted on their own (`review`, the open ones), never in livable."""
+    out: dict = {"fail": 0, "warn": 0, "lda": {"pass": 0, "total": 0}, "livable": {"pass": 0, "total": 0}, "review": 0}
     for c in report.get("checks", []):
+        if is_review(c):
+            out["review"] += c.get("status") != "pass"
+            continue
         d = out.setdefault(c.get("category", "lda"), {"pass": 0, "total": 0})
         d["total"] += 1
-        d["pass"] += c["status"] != "fail"
+        d["pass"] += c["status"] == "pass"
         if c["status"] in ("fail", "warn"):
             out[c["status"]] += 1
     return out
+
+
+def status_line(report: dict) -> str:
+    """"36/36 LDA · 10/12 livable · 2 architect's notes": the version rail, the samples and the landing all quote this."""
+    c = counts(report)
+    line = f"{c['lda']['pass']}/{c['lda']['total']} LDA · {c['livable']['pass']}/{c['livable']['total']} livable"
+    if c["review"]:
+        line += f" · {c['review']} architect's note{'s' if c['review'] != 1 else ''}"
+    return line
 
 
 def check_asbuilt(plan: dict, summary: dict) -> dict:

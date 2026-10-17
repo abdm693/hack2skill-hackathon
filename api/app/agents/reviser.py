@@ -16,7 +16,7 @@ from google.genai import types
 from .. import config, llm
 from ..compliance import lda
 from ..store import blobs, db
-from .architect import BUILD_SYSTEM, CONTRACTS, _read, _status, changed_rooms, prepare, review_note_count
+from .architect import BUILD_SYSTEM, CONTRACTS, _read, _status, changed_rooms, prepare, tidy_notes
 
 log = logging.getLogger("naqsha.reviser")
 NAQSHA = {"id": "naqsha", "name": "Naqsha", "role": "agent"}
@@ -132,13 +132,13 @@ def comment_brief(comments: list[dict]) -> list[dict]:
 def carry_review_notes(version: dict, plan: dict, report: dict) -> dict:
     """The architect's open review notes (review.<n> warnings) stay on the revised version unless the revision changed the
     rooms they are about, so the house never looks all-clear while they are still open."""
-    notes = [c for c in (version.get("compliance") or {}).get("checks", []) if str(c.get("id", "")).startswith("review.")]
+    notes = [c for c in (version.get("compliance") or {}).get("checks", []) if lda.is_review(c)]
     if not notes:
         return report
     changed = changed_rooms(version.get("plan") or {}, plan)
     keep = [c for c in notes if not (changed and (not c.get("element_ids") or set(c["element_ids"]) & changed))]
-    rest = [c for c in report.get("checks", []) if not str(c.get("id", "")).startswith("review.")]
-    return {**report, "checks": rest + keep}
+    rest = [c for c in report.get("checks", []) if not lda.is_review(c)]
+    return {**report, "checks": rest + tidy_notes(keep, plan, {"checks": rest})}
 
 
 async def finalize(project: dict, version: dict, plan: dict, sections: list[dict], report: dict, changes: list[dict],
@@ -176,8 +176,6 @@ async def finalize(project: dict, version: dict, plan: dict, sections: list[dict
     src = (f"From {len(comments)} comment{'s' if len(comments) != 1 else ''}" if comments else "") + \
           ((" and your request" if comments else f"“{instruction[:60]}”") if instruction else "")
     summary = f"{src} · {_status(report)}" if src else _status(report)
-    if (notes := review_note_count(report)):
-        summary += f" · {notes} review note{'s' if notes != 1 else ''}"
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": new_v["id"], "n": n, "created_at": new_v["created_at"],
                                                                            "status": "ready", "summary": summary}],
                             current_version_id=new_v["id"], stage="ready", brief_changed=False)

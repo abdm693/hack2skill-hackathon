@@ -639,7 +639,43 @@ def check(plan: dict, brief: dict | None = None) -> list[dict]:
     for cid, title, prefixes, msg in families:
         if not any(f.startswith(prefixes) for f in failed):
             out.add(cid, title, "pass", msg)
+    try:
+        _promised(ix, out)
+    except Exception:
+        log.exception("planning rule _promised failed")
     return out.checks
+
+
+def sentence_case(name: str) -> str:
+    """"Master Bedroom" -> "Master bedroom", "TV Lounge" -> "TV lounge", "Bath 2" stays (web/src/app/plan/model.ts)."""
+    words = str(name or "").strip().split()
+
+    def keep(w: str) -> bool:
+        letters = re.sub(r"[^A-Za-z]", "", w)
+        return (len(letters) >= 2 and letters == letters.upper()) or bool(re.search(r"\d", w))
+    return " ".join(w[:1].upper() + w[1:] if i == 0 else w if keep(w) else w.lower() for i, w in enumerate(words))
+
+
+def in_sentence(name: str) -> str:
+    """A room name inside a sentence: "Master Bedroom" -> "master bedroom", "TV Lounge" -> "TV lounge"."""
+    s = sentence_case(name)
+    return s if re.match(r"^.[A-Z]", s) else s[:1].lower() + s[1:]
+
+
+def _promised(ix: PlanIndex, out: _Out) -> None:
+    """The livable rules DESIGN.md promises on every plan that the app would otherwise derive itself
+    (web/src/app/plan/compliance.ts livableChecks: same ids, titles and messages), so the server and the app count the same
+    rows. Railings and door swings are the engine's guarantees; passages are read from the plan."""
+    out.add("livable.railings", "Every stair edge and void has a railing", "pass",
+            "A 3′6″ railing is built along every stair edge, void and balcony.", ids=[s["id"] for s in ix.stairs])
+    out.add("livable.doors", "Doors are clear of furniture", "pass", "Furniture keeps out of every door swing.")
+    narrow = [r for r in ix.rooms if r.get("type") in ("corridor", "lobby")
+              and min(ix.R[r["id"]][2] - ix.R[r["id"]][0], ix.R[r["id"]][3] - ix.R[r["id"]][1]) < 3]
+    out.add("livable.paths", "A clear 3 ft path to every door", "fail" if narrow else "pass",
+            ", ".join(f"{sentence_case(r.get('name') or r['id'])} is "
+                      f"{fmt(min(ix.R[r['id']][2] - ix.R[r['id']][0], ix.R[r['id']][3] - ix.R[r['id']][1]))} wide"
+                      for r in narrow) + " (needs 3 ft)." if narrow else "Every passage is at least 3 ft wide.",
+            ids=[r["id"] for r in narrow], fix="Make every corridor and lobby at least 4 ft wide." if narrow else None)
 
 
 # P-01 .. P-03 ---------------------------------------------------------------------------------------------------------
@@ -949,6 +985,24 @@ def _wc_on_entry(ix: PlanIndex, out: _Out) -> None:
 
 
 # P-08 ----------------------------------------------------------------------------------------------------------------
+VOID_TYPES = {"open_space", "courtyard"}
+
+
+def is_void(ix: PlanIndex, rid: str) -> bool:
+    """An upper-floor open_space (or courtyard) over a court: at least half of it lies over open-to-sky ground below (an
+    open_space or courtyard on a lower level, itself possibly a void). It is a hole in the floor with a railing, not a
+    floor, so it needs no way in (the engine's definition: it builds no slab there and rails its edges)."""
+    r = ix.by_id.get(rid)
+    if not r or r.get("type") not in VOID_TYPES or ix.level_index(r.get("level")) <= ix.level_index(ix.ground):
+        return False
+    a = ix.R[rid]
+    lid_i = ix.level_index(r.get("level"))
+    below = [ix.R[x["id"]] for x in ix.rooms
+             if x.get("type") in VOID_TYPES and ix.level_index(x.get("level")) < lid_i and x["id"] != rid]
+    over = union_area([i for b in below if (i := inter(a, b))])
+    return area(a) > 0 and over >= 0.5 * area(a)
+
+
 def _reach(ix: PlanIndex, out: _Out) -> None:
     terminal = {r["id"] for r in ix.rooms if r.get("type") in PRIVATE | WET | {"dressing"}}
     free = ix.bfs([EXT], terminal=terminal)
@@ -966,6 +1020,8 @@ def _reach(ix: PlanIndex, out: _Out) -> None:
             continue  # a bedroom's own balcony
         if t in OPEN and r.get("level") == ix.ground:
             continue
+        if is_void(ix, rid):
+            continue  # open to the court below: nobody walks on it (the engine rails its edges)
         if rid in anyway:
             path, cur = [], anyway[rid]
             while cur and cur != EXT:

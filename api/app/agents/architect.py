@@ -256,9 +256,8 @@ def _user_turn(text: str) -> types.Content:
 
 
 def _status(report: dict) -> str:
-    c = lda.counts(report)
-    lda_c, liv = c.get("lda", {"pass": 0, "total": 0}), c.get("livable", {"pass": 0, "total": 0})
-    return f"{lda_c['pass']}/{lda_c['total']} LDA · {liv['pass']}/{liv['total']} livable"
+    """'A/B LDA · C/D livable · N architect's notes' (a warning is not a pass; review notes are counted on their own)."""
+    return lda.status_line(report)
 
 
 async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
@@ -336,9 +335,14 @@ drawings (road at the bottom of each sheet) with the room table and the adjacenc
 Name sides as front, back, left and right: the road is the front, at the bottom of every sheet, and left and right are as seen
 from the road. Never use compass points (north, south-east...) for a side of the house or a room.
 Call an issue "major" only if the family would suffer from it every day; don't nitpick taste or ask for things outside the brief.
+The software's own findings are listed with the plan and the family already sees them: never repeat one (the same rooms and
+the same problem); add only what software can't judge.
 Each fix must be concrete (which room, which wall, how many feet) and must keep the plan inside the setbacks.
+Write for the family in plain British English: each problem is ONE short sentence (at most 25 words) naming rooms by their
+names, never ids; the fix says what to change. Sizes in feet and inches (12′ × 6′6″), never decimal feet.
 Return JSON: {"verdict": "approve" | "revise", "summary": "<one calm sentence for the family: what you would improve, or what
-works>", "issues": [{"severity": "major" | "minor", "rooms": ["<room ids>"], "problem": "...", "fix": "..."}]}"""
+works>", "issues": [{"severity": "major" | "minor", "rooms": ["<room ids, the room the problem is about first>"],
+"problem": "...", "fix": "..."}]}"""
 
 
 def room_table(plan: dict) -> str:
@@ -368,11 +372,13 @@ async def review(project: dict, plan: dict, report: dict) -> dict:
     parts: list = []
     for lid, lname, png in drawing.render_all(plan):
         parts += [types.Part.from_text(text=f"{lname} plan:"), types.Part.from_bytes(data=png, mime_type="image/png")]
-    remaining = [f"- [{c['status'].upper()}] {c['message']}" for c in report["checks"] if c["status"] in ("fail", "warn")]
+    remaining = [f"- [{c['status'].upper()}] {c['message']}" + (f" (ids: {', '.join(c['element_ids'])})" if c.get("element_ids") else "")
+                 for c in report["checks"] if c["status"] in ("fail", "warn") and not lda.is_review(c)]
     text = (f"ORIENTATION: {orientation(brief, plan)}\n\n"
             f"THE FAMILY'S BRIEF:\n{json.dumps(_brief_for_prompt(brief))}\n\nROOMS (feet):\n{room_table(plan)}\n\n"
             f"STAIRS: {json.dumps(plan.get('stairs'))}\nROOF: {json.dumps(plan.get('roof'))}\n\n"
-            f"ISSUES THE SOFTWARE STILL REPORTS:\n{chr(10).join(remaining) or '(none)'}\n\nReview the plan now.")
+            f"ISSUES THE SOFTWARE ALREADY REPORTS (the family sees these; don't repeat them):\n{chr(10).join(remaining) or '(none)'}"
+            f"\n\nReview the plan now.")
     parts.append(types.Part.from_text(text=text))
     out = None
     async for kind, val in llm.stream_json(config.MODEL_REVIEW, [types.Content(role="user", parts=parts)], REVIEW_SYSTEM,
@@ -421,35 +427,139 @@ def addresses(issue: dict, changed: set[str]) -> bool:
     return bool(changed) and (not rooms or any(r in changed for r in rooms))
 
 
-def review_checks(issues: list[dict], plan: dict) -> list[dict]:
-    """Open review issues as livable warnings for the compliance sheet and the dock, in plain words (no element ids)."""
+NOTE_MAX = 160  # one sentence a family reads at a glance; the suggestion goes in `fix`
+_NUM = r"(\d+(?:\.\d+)?)"
+_FT = r"[\s-]*(?:ft|feet|foot)\b"
+_FT_PAIR = re.compile(_NUM + r"(?:" + _FT + r")?\s*(?:x|×|X|by)\s*" + _NUM + _FT)
+_FT_ONE = re.compile(_NUM + _FT)
+
+
+def feet(v: float) -> str:
+    """Feet and inches the way the app writes them: 15′3″, 12′, 6″."""
+    f, i = int(v + 1e-9), round((v - int(v + 1e-9)) * 12)
+    if i == 12:
+        f, i = f + 1, 0
+    return f"{f}′{i}″" if f and i else f"{f}′" if f else f"{i}″"
+
+
+def feet_text(text: str) -> str:
+    """'15.25 ft' -> 15′3″, '12 x 6.5 ft' -> 12′ × 6′6″ (square feet stay as they are)."""
+    text = _FT_PAIR.sub(lambda m: f"{feet(float(m.group(1)))} × {feet(float(m.group(2)))}", text)
+    return _FT_ONE.sub(lambda m: feet(float(m.group(1))), text)
+
+
+def one_sentence(text: str, limit: int = NOTE_MAX) -> str:
+    """The first sentence, cut at a clause break (or a word) to fit `limit` characters, ending with a full stop."""
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    m = re.search(r"(?<=[.!?])\s+(?=[A-Z0-9“\"'(])", text)
+    s = (text[:m.start()] if m else text).strip()
+    if len(s) > limit:
+        cut = -1
+        tiers = ((("; ", ": ", " — ", "—", " – "), 0.25), ((", ",), 0.35),  # the strongest break that leaves a real sentence
+                 ((" and ", " so ", " which ", " where ", " meaning ", " because ", " while ", " but ", " with "), 0.4),
+                 ((" ",), 0.0))
+        for seps, least in tiers:
+            cut = max(s.rfind(sep, 0, limit - 1) for sep in seps)
+            if cut > 0 and cut >= least * limit:
+                break
+        s = s[:cut].rstrip(" ,;:—–") if cut > 0 else s[:limit - 1].rstrip()
+    return s if s.endswith((".", "!", "?")) else s.rstrip(".") + "."
+
+
+ROOM_WORDS = ("Room", "Rooms", "Bedroom", "Bedrooms", "Lounge", "Kitchen", "Bath", "Bathroom", "Hall", "Lobby", "Passage",
+              "Corridor", "Quarter", "Dining", "Porch", "Veranda", "Terrace", "Balcony", "Store", "Laundry", "Dressing", "Study",
+              "Yard", "Court", "Space", "Stair", "Stairs")
+_ROOM_PHRASE = re.compile(r"\b((?:(?:[A-Z][a-z']+|[A-Z]{2,})\s+)*(?:" + "|".join(ROOM_WORDS) + r"))\b")
+
+
+def sentence_case_rooms(text: str, names: list[str]) -> str:
+    """Room names inside a sentence in sentence case ("the Drawing Room" -> "the drawing room", "TV Lounge" -> "TV
+    lounge"), the plan's names first, then any title-case phrase ending in a room word; each sentence starts with a capital."""
+    by_lower = {n.lower(): n for n in names}
+    if names:
+        name_re = re.compile(r"(?<![\w'])(" + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True)) + r")(?!\w)", re.I)
+        text = name_re.sub(lambda m: planning.in_sentence(by_lower.get(m.group(0).lower(), m.group(0))), text)
+    text = _ROOM_PHRASE.sub(lambda m: planning.in_sentence(m.group(0)), text)
+    text = re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+    return text
+
+
+# A note names the same rooms as a rule the software already reports, about the same thing: the rule's row is the one shown.
+_TOPICS = (
+    ("plan.structure.wet_over_dry", r"\b(over|above|below|pipes?|leak\w*|ceiling|plumbing|drains?)\b"),
+    ("plan.room.", r"\b(narrow|long|tunnel|strip|wide|cramped|small|tight|size|proportion\w*|wasted?)\b"),
+    ("room.size", r"\b(narrow|small|cramped|tight|size|wide)\b"),
+    ("room.light", r"\b(window\w*|light|dark|daylight|gloomy)\b"),
+    ("room.vent", r"\b(vent\w*|air|stuffy|window\w*)\b"),
+    ("plan.circulation", r"\b(through|reach\w*|access\w*|way in|route|walk\w*|door\w*|enter\w*)\b"),
+    ("plan.privacy", r"\b(through|privacy|private|opens?|door\w*|view)\b"),
+)
+
+
+def duplicates_rule(issue: dict, rules: list[dict], room_ids: set[str]) -> bool:
+    """Whether a review issue repeats an open rule (warn or fail): the rule's rooms are among the issue's, the issue is
+    mainly about one of them (its first room), and it is about the same thing (10 marla: "Bath 2 sits over the drawing
+    room" and plan.structure.wet_over_dry:f_bath2)."""
+    rooms = [r for r in issue.get("rooms") or [] if r in room_ids]
+    if not rooms:
+        return False
+    text = f"{issue.get('problem') or ''} {issue.get('fix') or ''}".lower()
+    for c in rules:
+        own = {x for x in c.get("element_ids") or [] if x in room_ids}
+        if not own or rooms[0] not in own or not own <= set(rooms):
+            continue
+        topic = next((pat for prefix, pat in _TOPICS if str(c.get("id", "")).startswith(prefix)), None)
+        if topic is None or re.search(topic, text):
+            return True
+    return False
+
+
+def review_checks(issues: list[dict], plan: dict, report: dict | None = None) -> list[dict]:
+    """Open review issues as livable warnings for the compliance sheet and the dock: one plain sentence of at most 160
+    characters (rooms by name in sentence case, feet and inches), the suggestion only in `fix`. A note that repeats a rule
+    the report already shows open is left out (the rule's row says it)."""
     ix = planning.PlanIndex(plan)
     names = {r["id"]: r.get("name") or r["id"] for r in ix.rooms}
     names |= {o["id"]: ix.oname(o) for o in ix.openings} | {s["id"]: ix.sname(s).lower() for s in ix.stairs}
+    room_names = [r["name"] for r in ix.rooms if r.get("name")]
+    rules = [c for c in (report or {}).get("checks", []) if c.get("status") in ("warn", "fail") and not lda.is_review(c)]
 
     def plain(text: str) -> str:
         text = re.sub(r"\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b", lambda m: names.get(m.group(0), m.group(0).replace("_", " ")), str(text or ""))
-        return re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"\s+", " ", feet_text(text)).strip()
+        return sentence_case_rooms(text, room_names)
     out = []
     for n, i in enumerate(issues, 1):
         problem, fix = plain(i.get("problem")), plain(i.get("fix"))
-        if not problem:
+        if not problem or duplicates_rule(i, rules, set(ix.by_id)):
             continue
         major = i.get("severity") == "major"
         c = {"id": f"review.{n}", "title": "Architect's review" + (": needs a change" if major else ""), "status": "warn",
-             "category": "livable", "message": problem[:1].upper() + problem[1:] + (f" Suggested: {fix}" if fix else ""),
-             "rule_ref": "Naqsha architect's review of the drawings", "severity": "major" if major else "minor",
-             "element_ids": [r for r in i.get("rooms") or [] if r in ix.by_id]}
+             "category": "livable", "message": one_sentence(problem), "rule_ref": "Naqsha architect's review of the drawings",
+             "severity": "major" if major else "minor", "element_ids": [r for r in i.get("rooms") or [] if r in ix.by_id]}
         if fix:
-            c["fix"] = fix
+            c["fix"] = fix if fix.endswith((".", "!", "?")) else fix + "."
         out.append(c)
+    return out
+
+
+def tidy_notes(rows: list[dict], plan: dict, report: dict) -> list[dict]:
+    """Stored review rows (older ones read "<problem> Suggested: <fix>") in today's form, keeping their ids; a row that now
+    repeats an open rule of `report` is dropped."""
+    out = []
+    for c in rows:
+        issue = {"severity": c.get("severity"), "rooms": c.get("element_ids") or [],
+                 "problem": str(c.get("message") or "").split(" Suggested: ")[0], "fix": c.get("fix")}
+        got = review_checks([issue], plan, report)
+        if got:
+            out.append({**got[0], "id": c["id"]})
     return out
 
 
 def with_review(report: dict, issues: list[dict], plan: dict) -> dict:
     """The report plus the review's open issues (as warnings), replacing any earlier review notes."""
-    keep = [c for c in report.get("checks", []) if not str(c.get("id", "")).startswith("review.")]
-    return {**report, "checks": keep + review_checks(issues, plan)}
+    keep = [c for c in report.get("checks", []) if not lda.is_review(c)]
+    return {**report, "checks": keep + review_checks(issues, plan, {"checks": keep})}
 
 
 async def _critique(project: dict, plan: dict, report: dict) -> dict:
@@ -746,7 +856,7 @@ class Background:
 
 
 def review_note_count(report: dict) -> int:
-    return sum(1 for c in report.get("checks", []) if str(c.get("id", "")).startswith("review.") and c.get("status") != "pass")
+    return lda.counts(report)["review"]
 
 
 async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
@@ -804,10 +914,10 @@ async def design(project: dict) -> AsyncIterator[tuple[str, dict]]:
     parent = fresh.get("current_version_id")
     version = {"id": db.new_id("v_"), "n": n, "created_at": db.now(), "parent_id": parent,
                "plan": plan, "sections": sections, "compliance": report, "changes": [], "status": "ready",
-               "fix_history": history, "review": rev, "plan_images": images, "brief_snapshot": fresh.get("brief")}
+               "fix_history": history, "review": rev, "plan_images": images, "brief_snapshot": fresh.get("brief"),
+               "summary": _status(report)}  # the version rail's label, also on the `version` event
+    summary = version["summary"]
     await db.save_version(pid, version)
-    notes = review_note_count(report)
-    summary = _status(report) + (f" · {notes} review note{'s' if notes != 1 else ''}" if notes else "")
     await db.update_project(pid, versions=(fresh.get("versions") or []) + [{"id": version["id"], "n": n, "created_at": version["created_at"],
                                                                            "status": "ready", "summary": summary}],
                             current_version_id=version["id"], stage="ready", brief_changed=False)
