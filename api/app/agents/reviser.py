@@ -142,14 +142,25 @@ def comment_brief(comments: list[dict]) -> list[dict]:
              **({"replies": [r.get("text") for r in c.get("replies") or []][-3:]} if c.get("replies") else {})} for c in comments]
 
 
+def note_addressed(note: dict, changed: set[str]) -> bool:
+    """Whether a revision changed what a review note is about: at least half of the rooms it names (a door moved on one of
+    three rooms is not an answer), or anything at all when it names none."""
+    rooms = [r for r in note.get("element_ids") or [] if isinstance(r, str)]
+    if not changed:
+        return False
+    if not rooms:
+        return True
+    return 2 * len(set(rooms) & changed) >= len(set(rooms))
+
+
 def carry_review_notes(version: dict, plan: dict, report: dict) -> dict:
-    """The architect's open review notes (review.<n> warnings) stay on the revised version unless the revision changed the
-    rooms they are about, so the house never looks all-clear while they are still open."""
+    """The architect's open review notes (review.<n> warnings) stay on the revised version unless the revision changed what
+    they are about, so the house never looks all-clear while they are still open."""
     notes = [c for c in (version.get("compliance") or {}).get("checks", []) if lda.is_review(c)]
     if not notes:
         return report
     changed = changed_rooms(version.get("plan") or {}, plan)
-    keep = [c for c in notes if not (changed and (not c.get("element_ids") or set(c["element_ids"]) & changed))]
+    keep = [c for c in notes if not note_addressed(c, changed)]
     rest = [c for c in report.get("checks", []) if not lda.is_review(c)]
     return {**report, "checks": rest + tidy_notes(keep, plan, {"checks": rest})}
 

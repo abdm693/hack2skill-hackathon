@@ -22,9 +22,10 @@ from ..store import blobs, db
 
 log = logging.getLogger("naqsha.concepts")
 
-CAMERA_MIDROW = ("Camera: straight-on front elevation from across the road at eye level, 24mm lens, the whole house and its "
-                 "boundary wall in frame, centred, with a slice of each neighbouring house at the frame edges; never a corner or "
-                 "three-quarter view. Light: golden hour, low warm sun from the side, soft long shadows, clear sky.")
+CAMERA_MIDROW = ("Camera: straight-on front elevation from across the road at eye level, 35mm lens, the whole house and its "
+                 "boundary wall in frame, centred, the neighbouring houses filling the left and right edges of the frame; no "
+                 "street, lane or open ground visible beside the house; never a corner or three-quarter view. Light: golden hour, "
+                 "low warm sun from the side, soft long shadows, clear sky.")
 CAMERA_CORNER = ("Camera: three-quarter view from the street corner at eye level, 24mm lens, both road-facing facades in frame. "
                  "Light: golden hour, low warm sun, soft long shadows, clear sky.")
 
@@ -120,8 +121,9 @@ def concept_prompt(brief: dict, take: dict | None = None, instruction: str | Non
     extra = f" Additional direction: {instruction}." if instruction else ""
     camera = CAMERA_CORNER if p.get("corner") else CAMERA_MIDROW
     width = p.get("width_ft", 35)
+    row = "" if p.get("corner") else ", one house in a continuous row of houses (a mid-row plot),"
     return (
-        f"Photorealistic architectural photograph of a {style} {storeys} family house on a {width:g} ft wide plot in {where}, "
+        f"Photorealistic architectural photograph of a {style} {storeys} family house{row} on a {width:g} ft wide plot in {where}, "
         f"Pakistan. Style language: {hints}.{direction} Typical Lahore layout: boundary wall with a sliding gate, a "
         f"{cars}-car porch within the building line, a small front lawn. {_roof_sentence(brief)} {_site_sentence(brief)} "
         f"{camera} High-end real-estate photography, realistic materials and proportions. No people. Absolutely no text, "
@@ -187,6 +189,10 @@ SIDE_ROAD_ASK = ("This is a photo of a house that should stand in a row: neighbo
                  "beside the house or curving away past one of its sides, or a side lawn or open gap between the house and a "
                  "neighbour? The road directly in front of the house does not count. Return JSON: {\"side_road\": true | false}")
 SIDE_ROAD_S = 25.0  # the check never holds a concept up longer than this; on a timeout or an error it is skipped
+SIDE_ROAD_FIX = ("Edit this photograph: this house stands mid-row. Replace any road, street, lane, side lawn or open gap beside "
+                 "the house (to its left or right) with the neighbouring houses, plain and muted, built right up against this "
+                 "house's side walls. Keep this house, its boundary wall, the road in front, the camera, the light and the "
+                 "framing exactly the same. Photorealistic. No people, no text, numbers or signs.")
 
 
 async def side_road(image: tuple[bytes, str]) -> bool | None:
@@ -225,11 +231,11 @@ async def _generate_one(pid: str, prompt: str, ref: tuple[bytes, str] | None = N
         t0 = time.monotonic()
         beside = await side_road(got)
         check = {"side_road": beside, "regenerated": False}
-        if beside:
-            again = f"{prompt} IMPORTANT, the site again: {site}"
-            retry = await _image_call([*contents[:-1], again])
+        if beside:  # made once more as an edit of this image (same house and camera), the site sentence repeated
+            retry = await _image_call([types.Part.from_bytes(data=got[0], mime_type=got[1]), f"{SIDE_ROAD_FIX} {site}"],
+                                      aspect=None)
             if (got2 := _image_bytes(retry)):
-                resp, got, prompt = retry, got2, again
+                resp, got = retry, got2
                 check["regenerated"] = True
         check["seconds"] = round(time.monotonic() - t0, 1)
         log.info("mid-row check for %s: side road %s, regenerated %s, +%.1fs", pid, beside, check["regenerated"], check["seconds"])

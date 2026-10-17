@@ -6,6 +6,8 @@ up: a copy made before the sample's new updated_at is refreshed on its next open
         concept at them (same id, same title; the project thumbnail follows when it showed the old image).
     uv run python scripts/promote_round2.py captions SAMPLE [--apply]
         BE-F1: plain British English captions (concept.summary) from CAPTIONS.
+    uv run python scripts/promote_round2.py floors SAMPLE [--apply]
+        BE-F5: the Brief's per-floor program from FLOORS (the upstairs master named), refused if it adds a problem.
     uv run python scripts/promote_round2.py version SAMPLE STAGING_PID VERSION_ID [--summary="..."] [--strict] [--apply]
         BE2-03: copy a passing version from a staging copy of SAMPLE into SAMPLE and make it current (its compliance is
         rechecked with today's rules first, keeping its open architect's notes; refuses a version with any LDA or livable
@@ -88,6 +90,34 @@ async def concept(pid: str, cid: str, day: str, night: str):
         fields["thumbnail_url"] = day_url
     await db.update_project(pid, **fields)
     say("done; selected concept is still", p.get("selected_concept_id"))
+
+
+# Round 4 (BE-F5): the Brief's per-floor program names the upstairs master (the app's format: master_bedroom:1, bedroom:2).
+FLOORS = {
+    "p_5a5893a2bcaa": {"first": ["master_bedroom:1", "bedroom:2", "bath:3"]},
+    "p_1a42e70989af": {"first": ["master_bedroom:1", "bedroom:2", "bath:3"]},
+}
+
+
+async def floors(pid: str):
+    """brief.floors from FLOORS (only the levels named there), re-checked against the current version (no new fails)."""
+    p = await sample(pid)
+    brief = {**(p.get("brief") or {})}
+    new = [{**f, "rooms": FLOORS[pid][f["level"]]} if f.get("level") in FLOORS.get(pid, {}) else f for f in brief.get("floors") or []]
+    for a, b in zip(brief.get("floors") or [], new):
+        if a != b:
+            say("floors", a.get("level"), a.get("rooms"), "->", b.get("rooms"))
+    v = await db.get_version(pid, p["current_version_id"])
+    before, after = lda.check(v["plan"], brief), lda.check(v["plan"], {**brief, "floors": new})
+    bad = [c["id"] for c in after["checks"] if c["status"] != "pass" and c["id"] not in
+           {x["id"] for x in before["checks"] if x["status"] != "pass"}]
+    say("current version", v["id"], lda.status_line(after), "new problems:", bad)
+    if bad:
+        raise SystemExit("refusing floors that add a problem on the current version")
+    if not APPLY:
+        return
+    await db.update_project(pid, brief={**brief, "floors": new}, envelope=intake.envelope_for({**brief, "floors": new}))
+    say("done")
 
 
 async def captions(pid: str):
@@ -204,5 +234,5 @@ async def verify(pid: str):
 
 if __name__ == "__main__":
     cmd = ARGS[0]
-    fn = {"concept": concept, "captions": captions, "version": version, "chat": chat, "verify": verify}[cmd]
+    fn = {"concept": concept, "captions": captions, "floors": floors, "version": version, "chat": chat, "verify": verify}[cmd]
     asyncio.run(fn(*ARGS[1:]))

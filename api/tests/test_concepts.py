@@ -36,6 +36,13 @@ def test_panels_stand_on_a_raised_frame():
     assert "rows of solar panels on a raised steel frame" in concepts.concept_prompt(MIDROW)
 
 
+def test_a_mid_row_prompt_says_so_first():
+    p = concepts.concept_prompt(MIDROW)
+    assert p.index("continuous row of houses") < p.index("Style language") and "35mm lens" in p
+    corner = concepts.concept_prompt({**MIDROW, "plot": {**MIDROW["plot"], "corner": True}})
+    assert "continuous row" not in corner and "three-quarter view from the street corner" in corner
+
+
 class _Resp:
     def __init__(self, tag):
         self.tag = tag
@@ -61,7 +68,8 @@ def test_a_mid_row_image_with_a_side_road_is_made_once_more(monkeypatch):
     monkeypatch.setattr(concepts.blobs, "put", put)
     site = concepts._site_sentence(MIDROW)
     c = asyncio.run(concepts._generate_one("p1", "PROMPT", None, site))
-    assert len(calls) == 2 and calls[1].startswith("PROMPT IMPORTANT, the site again: It is a MID-ROW plot")
+    # made once more as an edit of the day image (same house and camera), with the site sentence repeated
+    assert len(calls) == 2 and calls[1].startswith(concepts.SIDE_ROAD_FIX) and "It is a MID-ROW plot" in calls[1]
     assert stored == [b"img2"] and c["midrow_check"]["side_road"] is True and c["midrow_check"]["regenerated"] is True
     # a clean image is kept as it is; a corner plot (site None) is never checked
     calls.clear(), stored.clear()
