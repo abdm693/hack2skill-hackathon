@@ -157,7 +157,7 @@ def test_fix_rounds_are_numbered_from_one(plans, monkeypatch):
     async def go():
         return [ev async for ev in architect.make_plan({"id": "p1", "brief": brief})]
     fixes = [d["message"] for e, d in asyncio.run(go()) if e == "stage" and d["stage"] == "fix"]
-    assert len(fixes) == 2 and fixes[0].endswith("(round 1 of 2)…") and fixes[1].endswith("(round 2 of 2)…")
+    assert len(fixes) == 2 and fixes[0].endswith("(round 1)…") and fixes[1].endswith("(round 2)…")
     assert fixes[0].startswith("Fixing 1 problem ")
 
 

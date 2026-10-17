@@ -269,14 +269,17 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
     first = types.Content(role="user", parts=([concept] if concept else []) + [types.Part.from_text(text=_plan_prompt(brief, env, concept))])
     contents = [first]
     best, history = None, []
+    loop = asyncio.get_running_loop()
+    t0, stalled = loop.time(), False
 
-    for attempt in range(1, config.PLAN_MAX_ATTEMPTS + 1):
+    for attempt in range(1, max(config.PLAN_MAX_ATTEMPTS, config.PLAN_MAX_ATTEMPTS_HARD) + 1):
+        if attempt > config.PLAN_MAX_ATTEMPTS and (stalled or loop.time() - t0 > config.PLAN_EXTRA_BUDGET_S):
+            break  # extra rounds only while each one still improves, and within the time budget
         if attempt == 1:
             yield "stage", {"stage": "plan", "message": "Laying out the floors…"}
         else:
             k = best[0][0]
-            yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt - 1} of "
-                                                      f"{config.PLAN_MAX_ATTEMPTS - 1})…"}
+            yield "stage", {"stage": "fix", "message": f"Fixing {k} problem{'s' if k != 1 else ''} (round {attempt - 1})…"}
         obj = None
         try:
             # a fix round edits a plan we already have: one try, and if the model stalls we keep the best plan so far
@@ -303,7 +306,9 @@ async def make_plan(project: dict) -> AsyncIterator[tuple[str, dict]]:
                         "fail": fails, "failed": [c["id"] for c in report["checks"] if c["status"] == "fail"], "repairs": repairs})
         yield "compliance", {"report": report, "attempt": attempt}
         worse = fails if best is not None and fails > best[0][0] else None
-        if best is None or (fails, warns) < best[0]:
+        improved = best is None or (fails, warns) < best[0]
+        stalled = not improved
+        if improved:
             best = ((fails, warns), plan, report, attempt)
         if report["ok"]:
             break

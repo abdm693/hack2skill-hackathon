@@ -16,6 +16,10 @@ MODEL_REVIEW = os.environ.get("MODEL_REVIEW", MODEL_ARCHITECT)      # the archit
 MODEL_SETUP = os.environ.get("MODEL_SETUP", MODEL_INTAKE)           # the conversational setup agent (ADK)
 
 PLAN_MAX_ATTEMPTS = int(os.environ.get("PLAN_MAX_ATTEMPTS", "3"))
+# Big briefs: keep fixing past PLAN_MAX_ATTEMPTS (up to the hard cap) while every extra round still improves the best plan,
+# and only within the planning time budget.
+PLAN_MAX_ATTEMPTS_HARD = int(os.environ.get("PLAN_MAX_ATTEMPTS_HARD", "5"))
+PLAN_EXTRA_BUDGET_S = float(os.environ.get("PLAN_EXTRA_BUDGET_S", "420"))
 # Thinking level for fix rounds ("" = the model's default). MEDIUM was tried: a 1 kanal fix round came back fast but with 45
 # failures, so fix rounds keep full thinking; time is saved by fewer rounds, the shorter review and the parallel build.
 FIX_THINKING = os.environ.get("FIX_THINKING", "") or None
