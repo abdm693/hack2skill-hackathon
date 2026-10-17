@@ -305,9 +305,9 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
   return (
     <div className={cn("relative h-[100dvh] overflow-hidden", tone === "hud" ? "bg-hud" : "bg-canvas")} style={shellVars}>
       {/* Top: title capsule · view switch · people. First in the DOM, so Tab reaches All homes, the title, the switch,
-          Comments and Share before the view's own HUD; z-30 keeps it painted above the view as before. */}
+          Comments and Share before the view's own HUD. z-[31]: now that it comes first, it still paints over the view's z-30 layers exactly as it did when it came after them. */}
       {phone ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 px-3 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[31] flex flex-col gap-2 px-3 pt-3">
           <div className="flex h-12 items-center justify-between gap-2">
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} compact view={view} />
             <People project={project} tone={tone} compact />
@@ -315,7 +315,7 @@ function Shell({ project, view }: { project: Project; view: ViewId }) {
           {!switchHidden && <ViewSwitch project={project} view={view} tone={tone} fill />}
         </div>
       ) : (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-[var(--chrome)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[31] grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-[var(--chrome)]">
           <div className="flex min-w-0 justify-start">
             <TitleCapsule project={project} tone={tone} onDetails={() => setDetails(true)} />
           </div>
