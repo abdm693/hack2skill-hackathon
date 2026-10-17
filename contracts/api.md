@@ -258,8 +258,8 @@ interface AsBuiltSummary {
 - **Approvals**: `POST /api/share/{token}/comments` takes `kind: "approval"` (the client's "Approve vN"; the text
   "Approved version N." on a general anchor is also recognised). It is stored `status: "resolved"`, `kind: "approval"`: never
   counted as open, never pre-ticked, applied or revised. General notes (no `room` / `element_id` in the anchor) are nudged
-  sideways so their pins don't stack: 0, +1.6, -1.6, +3.2 m along x from the anchor, then the next four 1.4 m higher (a slot
-  within 1.2 m of another general pin is taken).
+  sideways so their pins don't stack: 0, +s, -s, +2s along x from the anchor, then the next four 0.9 s higher, with s a quarter
+  of the plot width (2.67 m on a 35 ft plot, at least 1.6 m); a slot within 0.75 s of another general pin is taken.
 - **Open comments follow new versions**: when a design or revise run saves a new current version, every comment still
   `open` on the version it replaces (including ones posted while the run was going) moves to the new version, keeping its
   anchor and thread, with `from_version_id` = the version it was written on. Resolved, partial and rejected threads stay

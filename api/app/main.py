@@ -433,8 +433,9 @@ def _general(anchor: dict) -> bool:
     return not (anchor or {}).get("room") and not (anchor or {}).get("element_id")
 
 
-async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
-    """General notes ("Whole home", "This view") share one anchor point; nudge each new one sideways so pins don't stack."""
+async def _spread(pid: str, version_id: str, anchor: dict, plot_w_ft: float | None = None) -> dict:
+    """General notes ("Whole home", "This view") share one anchor point; move each new one to the first free slot so pins
+    don't stack (see spread_slots)."""
     pos = (anchor or {}).get("position")
     if not _general(anchor) or not (isinstance(pos, list) and len(pos) == 3):
         return anchor
@@ -451,22 +452,31 @@ async def _spread(pid: str, version_id: str, anchor: dict) -> dict:
             continue
         if len(q) == 3:
             taken.append(q)
-    for cand in spread_slots(p0):
-        if all(math.dist(cand, q) >= SPREAD_CLEAR - 1e-6 for q in taken):
+    step = spread_step(plot_w_ft)
+    for cand in spread_slots(p0, step):
+        if all(math.dist(cand, q) >= 0.75 * step - 1e-6 for q in taken):
             return {**anchor, "position": cand}
     return anchor
 
 
-SPREAD_STEP, SPREAD_ROW, SPREAD_PER_ROW = 1.6, 1.4, 4  # metres; a 24 px pin is ~1.25 m across at the default hero view
-SPREAD_CLEAR = 1.2  # a slot closer than this to another general pin is taken
+def spread_step(plot_w_ft: float | None) -> float:
+    """Metres between general pins: a quarter of the plot's width (at least 1.6 m). The hero view frames the whole plot, so
+    this is the same on-screen gap on any plot: ~50 px on a 35 ft plot at the default view, wider than a pin (24 px on a
+    desktop, ~48 px on a phone)."""
+    try:
+        w = float(plot_w_ft or 35.0)
+    except (TypeError, ValueError):
+        w = 35.0
+    return round(max(1.6, 0.25 * w * 0.3048), 2)
 
 
-def spread_slots(p0: list[float]):
-    """Where general pins go: 0, +1.6, -1.6, +3.2 m along x, then the same four 1.4 m higher, and so on."""
+def spread_slots(p0: list[float], step: float):
+    """Where general pins go: 0, +step, -step, +2 step along x, then the same four 0.9 step higher, and so on (a slot within
+    0.75 step of another general pin is taken)."""
     for row in range(10):
-        for k in range(SPREAD_PER_ROW):
-            dx = SPREAD_STEP * ((k + 1) // 2) * (1 if k % 2 else -1)
-            yield [round(p0[0] + dx, 2), round(p0[1] + SPREAD_ROW * row, 2), round(p0[2], 2)]
+        for k in range(4):
+            dx = step * ((k + 1) // 2) * (1 if k % 2 else -1)
+            yield [round(p0[0] + dx, 2), round(p0[1] + 0.9 * step * row, 2), round(p0[2], 2)]
 
 
 async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera: dict, snapshot: str | None, author: dict,
@@ -476,7 +486,7 @@ async def _new_comment(p: dict, version_id: str, text: str, anchor: dict, camera
     if snapshot:
         data, mime = blobs.decode_data_url(snapshot)
         snap = await blobs.put(f"projects/{p['id']}/comments/{cid}.{'jpg' if 'jpeg' in mime else 'png'}", data, mime)
-    anchor = await _spread(p["id"], version_id, anchor)
+    anchor = await _spread(p["id"], version_id, anchor, ((p.get("brief") or {}).get("plot") or {}).get("width_ft"))
     c = {"id": cid, "version_id": version_id, "text": text.strip(), "anchor": anchor, "camera": camera, "snapshot_url": snap,
          "created_at": db.now(), "status": "open", "author": author, "replies": []}
     if kind == "approval":  # a sign-off, not a change request: closed from the start, so Revise and Apply leave it out
